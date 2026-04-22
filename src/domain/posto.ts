@@ -2,7 +2,7 @@
  * Entidade Posto Hidrológico — espelho dos 37 campos da planilha oficial SPÁguas.
  *
  * Todos os campos (exceto `prefixo`) são opcionais por invariante do domínio
- * (ver spec.md §3.3 INV-02). Campos originalmente datados na planilha vêm
+ * (ver docs/spec.md §3.3 INV-02). Campos originalmente datados na planilha vêm
  * como string por tolerância a formatos heterogêneos.
  */
 export interface Posto {

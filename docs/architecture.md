@@ -8,7 +8,7 @@
 | Data | 2026-04-22 |
 | Status | Rascunho — atualizado com documentação oficial do cliente (22/04/2026) |
 | Especificação de referência | `./spec.md` (Camila) — v1.2 |
-| ADRs relacionadas | `./docs/adr/0001-stack-inicial.md`, `./docs/adr/0002-db-client-postgres-js.md`, `./docs/adr/0003-modulo-desconformidade.md` |
+| ADRs relacionadas | `./adr/0001-stack-inicial.md`, `./adr/0002-db-client-postgres-js.md`, `./adr/0003-modulo-desconformidade.md` |
 
 ---
 

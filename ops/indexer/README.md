@@ -18,7 +18,7 @@ python ops/indexer/index_fs.py --root "\\\\servidor\\postos"
 
 ## Estratégia de match de prefixo
 
-Em vez de regex, o worker usa lookup contra a lista real de prefixos (2.484 valores na planilha atual). Razão: a planilha oficial apresenta 6 formatos distintos de prefixo, e não há regex único que cubra todos sem falso-positivo. Detalhes em `../../architecture.md` §8.3 e `../../spec.md` §4.2.1.
+Em vez de regex, o worker usa lookup contra a lista real de prefixos (2.484 valores na planilha atual). Razão: a planilha oficial apresenta 6 formatos distintos de prefixo, e não há regex único que cubra todos sem falso-positivo. Detalhes em `../../docs/architecture.md` §8.3 e `../../docs/spec.md` §4.2.1.
 
 ## Reconstrução por lote
 

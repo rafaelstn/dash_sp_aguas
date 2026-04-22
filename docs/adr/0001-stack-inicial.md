@@ -4,7 +4,7 @@
 **Status:** Aceita
 **Projeto:** SPÁguas — Ficha Técnica de Postos Hidrológicos
 **Responsável:** Bruno — PO Engenharia (Damasceno Dev OS)
-**Documentos relacionados:** `../../spec.md` (Camila), `../../architecture.md` (Bruno)
+**Documentos relacionados:** `../spec.md` (Camila), `../architecture.md` (Bruno)
 
 ---
 

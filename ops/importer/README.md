@@ -30,7 +30,7 @@ pip install -e .
 A partir da raiz do projeto:
 
 ```bash
-python ops/importer/import_csv.py --csv "./Postos_PLU_FLU_PIEZO_CIAS_BAT_MUNIC_UGRHI_SUB_OTTO-18-03-26a-csv.csv"
+python ops/importer/import_csv.py --csv "./data/Postos_PLU_FLU_PIEZO_CIAS_BAT_MUNIC_UGRHI_SUB_OTTO-18-03-26a-csv.csv"
 ```
 
 Ou com o caminho vindo do `.env.local` (`IMPORTER_CSV_PATH`):

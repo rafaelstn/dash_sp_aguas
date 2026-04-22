@@ -5,7 +5,7 @@
 | Status | Aceito |
 | Data | 2026-04-22 |
 | Autor | Lucas — PO Backend (Damasceno Dev OS) |
-| Referência | `../../architecture.md` §4 (Abstração da camada de dados) |
+| Referência | `../architecture.md` §4 (Abstração da camada de dados) |
 
 ---
 
