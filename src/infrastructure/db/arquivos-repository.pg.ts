@@ -3,7 +3,10 @@ import type {
   ArquivosRepository,
   GrupoArquivosPorTipo,
 } from '@/application/ports/arquivos-repository';
-import type { ArquivoIndexado } from '@/domain/arquivo-indexado';
+import type {
+  ArquivoIndexado,
+  FormatoNomeArquivo,
+} from '@/domain/arquivo-indexado';
 import { FalhaRepositorio } from '@/domain/errors';
 import type { CodigoTipoDado } from '@/domain/tipo-dado';
 import {
@@ -28,6 +31,7 @@ type LinhaArquivo = {
   data_documento: Date | null;
   parte_opcional: string | null;
   nome_valido: boolean;
+  formato_nome: FormatoNomeArquivo;
 };
 
 function mapear(linha: LinhaArquivo): ArquivoIndexado {
@@ -50,6 +54,7 @@ function mapear(linha: LinhaArquivo): ArquivoIndexado {
     dataDocumento: linha.data_documento,
     parteOpcional: linha.parte_opcional,
     nomeValido: linha.nome_valido,
+    formatoNome: linha.formato_nome,
   };
 }
 
@@ -57,7 +62,7 @@ const COLUNAS = sql`
   id, prefixo, nome_arquivo, caminho_absoluto, tamanho_bytes,
   data_modificacao, hash_conteudo, indexado_em, lote_indexacao,
   tipo_dado, cod_tipo_documento, cod_encarregado, data_documento,
-  parte_opcional, nome_valido
+  parte_opcional, nome_valido, formato_nome
 `;
 
 export const arquivosRepository: ArquivosRepository = {

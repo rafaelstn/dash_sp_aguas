@@ -1,4 +1,7 @@
-import type { ArquivoIndexado } from '@/domain/arquivo-indexado';
+import type {
+  ArquivoIndexado,
+  FormatoNomeArquivo,
+} from '@/domain/arquivo-indexado';
 import type { GrupoArquivosPorTipo } from '@/application/ports/arquivos-repository';
 import { formatarDataHora, formatarTamanho, formatarValor } from '@/lib/format';
 import { Alerta } from '@/components/ui/Alerta';
@@ -79,7 +82,10 @@ function LinhaArquivo({ arquivo }: { arquivo: ArquivoIndexado }) {
 
   return (
     <li className="border border-gov-borda rounded p-4 bg-white">
-      <p className="font-medium text-gov-texto break-words">{arquivo.nomeArquivo}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-medium text-gov-texto break-words">{arquivo.nomeArquivo}</p>
+        <BadgeFormatoNome formato={arquivo.formatoNome} />
+      </div>
       <dl className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gov-muted">
         {dataDocumento && (
           <div>
@@ -112,5 +118,26 @@ function LinhaArquivo({ arquivo }: { arquivo: ArquivoIndexado }) {
         <CaminhoRede caminho={arquivo.caminhoAbsoluto} />
       </div>
     </li>
+  );
+}
+
+/**
+ * Badge suave indicando o formato do nome do arquivo. Só aparece para
+ * formatos não-COMPLETO (o COMPLETO é o padrão, não precisa de marcação).
+ * PARCIAL e LEGADO são CONFORMES — o badge é informativo, não de alerta.
+ */
+function BadgeFormatoNome({ formato }: { formato: FormatoNomeArquivo }) {
+  if (formato === 'COMPLETO') return null;
+
+  const rotulo =
+    formato === 'PARCIAL' ? 'sem cód. encarregado' : 'arquivo histórico';
+
+  return (
+    <span
+      className="inline-flex items-center rounded-full bg-gov-fundo-suave border border-gov-borda px-2 py-0.5 text-xs font-medium text-gov-muted"
+      title={`Formato ${formato.toLowerCase()}`}
+    >
+      {rotulo}
+    </span>
   );
 }

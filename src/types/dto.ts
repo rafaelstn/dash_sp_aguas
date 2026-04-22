@@ -1,5 +1,10 @@
 import type { Posto } from '@/domain/posto';
-import type { ArquivoIndexado } from '@/domain/arquivo-indexado';
+import type {
+  ArquivoIndexado,
+  FormatoNomeArquivo,
+} from '@/domain/arquivo-indexado';
+
+export type { FormatoNomeArquivo };
 
 /** Resposta paginada de /api/postos/search */
 export interface RespostaBusca {

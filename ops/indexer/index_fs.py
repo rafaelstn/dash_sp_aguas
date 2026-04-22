@@ -1,21 +1,37 @@
 """
-Worker de indexação do HD de rede SPÁguas (v1.2 — padrão oficial do cliente).
+Worker de indexação do HD de rede SPÁguas (v1.3 — 3 formatos de nome aceitos).
 
-Estratégia (ver architecture.md §8.2 v1.2):
+Estratégia (ver architecture.md §8.2 v1.3):
   1. Determina `tipo_dado` pela pasta raiz da varredura (5 categorias oficiais:
      Fluviometria, Fluviometria/ANA, Fluviometria/QualiAgua, Piezometria,
      Pluviometria, QualiAgua).
-  2. Aplica a regex oficial ao nome do arquivo:
-       ^(?P<prefixo>[^ ]+)\\s+(?P<cod_doc>\\d{2})\\s+(?P<cod_enc>\\d{2})
-         (?:\\s+(?P<opcional>.+?))?\\s+(?P<data>\\d{4}\\s+\\d{2}\\s+\\d{2})\\.pdf$
-  3. Valida o prefixo capturado contra a regex do `tipo_dado` (tabela `tipos_dado`).
-  4. Faz lookup do prefixo em `postos`:
+  2. Normaliza whitespace múltiplo no nome do arquivo (2+ espaços -> 1).
+  3. Tenta bater o nome, em ordem de especificidade, contra 3 regexes:
+       a. COMPLETO  — padrão oficial novo (apenas 7,88% da base histórica):
+          {Prefixo} {CodDoc:2d} {CodEnc:2d} [opcional] {AAAA MM DD}.pdf
+       b. PARCIAL   — prefixo + codigo de documento + data (caso mais comum
+          em documentos antigos; ex.: "1D-002 01 1960 08 26.pdf"):
+          {Prefixo} {CodDoc:2d} {AAAA MM DD}.pdf
+       c. LEGADO    — prefixo + data (documentos históricos sem metadados):
+          {Prefixo} {AAAA MM DD}.pdf
+     Arquivos PARCIAL e LEGADO são CONFORMES; só vão para `arquivos_orfaos`
+     com categoria NOME_FORA_DO_PADRAO se nenhum dos 3 formatos bater.
+  4. Valida o prefixo capturado contra a regex do `tipo_dado` (tabela `tipos_dado`).
+  5. Faz lookup do prefixo em `postos`:
      - Para `FluviometriaANA`: compara `LPAD(prefixo_ana, 8, '0')`.
      - Demais: igualdade exata contra `postos.prefixo`.
-  5. 3 buckets:
-     a. Nome parseado + prefixo encontrado -> arquivos_indexados (completo).
+  6. 3 buckets:
+     a. Nome parseado + prefixo encontrado -> arquivos_indexados (com
+        `formato_nome` indicando COMPLETO|PARCIAL|LEGADO).
      b. Nome parseado + prefixo desconhecido -> arquivos_orfaos (PREFIXO_DESCONHECIDO).
-     c. Nome fora do padrão -> arquivos_orfaos (NOME_FORA_DO_PADRAO).
+     c. Nome fora dos 3 padrões -> arquivos_orfaos (NOME_FORA_DO_PADRAO).
+
+Casos de parsing (documentação — sem infra pytest no projeto):
+  "1D-008 03 45 2020 03 15.pdf"                   -> COMPLETO, opcional=None
+  "1D-008 03 45 relatorio mensal 2020 03 15.pdf"  -> COMPLETO, opcional="relatorio mensal"
+  "1D-002 01 1960 08 26.pdf"                      -> PARCIAL
+  "1D-002 1960 08 26.pdf"                         -> LEGADO
+  "1D-002.pdf"                                    -> sem match, vai pra orfão
 
 Uso:
   python index_fs.py [--root PATH]
@@ -49,13 +65,74 @@ log = structlog.get_logger(__name__)
 
 EXTENSOES_ACEITAS = {".pdf"}
 
-# Regex oficial do nome de arquivo (documentação do cliente, 22/04/2026).
-# Grupos nomeados: prefixo, cod_doc, cod_enc, opcional (lazy), data.
-REGEX_NOME = re.compile(
-    r"^(?P<prefixo>[^ ]+)\s+(?P<cod_doc>\d{2})\s+(?P<cod_enc>\d{2})"
+# Whitespace múltiplo para normalização (2+ espaços/tabs -> 1 espaço).
+RX_WHITESPACE = re.compile(r"\s{2,}")
+
+# Formato 1 — COMPLETO (padrão oficial novo).
+# {Prefixo} {CodDoc:2d} {CodEnc:2d} [opcional] {AAAA MM DD}.pdf
+RX_COMPLETO = re.compile(
+    r"^(?P<prefixo>\S+)\s+(?P<cod_doc>\d{2})\s+(?P<cod_enc>\d{2})"
     r"(?:\s+(?P<opcional>.+?))?\s+(?P<data>\d{4}\s+\d{2}\s+\d{2})\.pdf$",
     flags=re.IGNORECASE,
 )
+
+# Formato 2 — PARCIAL (prefixo + cod_doc + data, sem cod_enc nem opcional).
+# {Prefixo} {CodDoc:2d} {AAAA MM DD}.pdf
+RX_PARCIAL = re.compile(
+    r"^(?P<prefixo>\S+)\s+(?P<cod_doc>\d{2})\s+(?P<data>\d{4}\s+\d{2}\s+\d{2})\.pdf$",
+    flags=re.IGNORECASE,
+)
+
+# Formato 3 — LEGADO (apenas prefixo + data; documentos históricos).
+# {Prefixo} {AAAA MM DD}.pdf
+RX_LEGADO = re.compile(
+    r"^(?P<prefixo>\S+)\s+(?P<data>\d{4}\s+\d{2}\s+\d{2})\.pdf$",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalizar_nome(nome: str) -> str:
+    """Colapsa whitespace múltiplo em espaço único (preserva extensão)."""
+    return RX_WHITESPACE.sub(" ", nome).strip()
+
+
+def _parse_nome(nome: str) -> tuple[str, dict] | None:
+    """Tenta bater o nome contra COMPLETO -> PARCIAL -> LEGADO.
+
+    Retorna (formato, grupos) ou None se nenhum formato bater.
+    Grupos ausentes em formatos mais curtos retornam None na dict.
+    """
+    m = RX_COMPLETO.match(nome)
+    if m is not None:
+        return "COMPLETO", {
+            "prefixo": m.group("prefixo"),
+            "cod_doc": m.group("cod_doc"),
+            "cod_enc": m.group("cod_enc"),
+            "opcional": m.group("opcional"),
+            "data": m.group("data"),
+        }
+
+    m = RX_PARCIAL.match(nome)
+    if m is not None:
+        return "PARCIAL", {
+            "prefixo": m.group("prefixo"),
+            "cod_doc": m.group("cod_doc"),
+            "cod_enc": None,
+            "opcional": None,
+            "data": m.group("data"),
+        }
+
+    m = RX_LEGADO.match(nome)
+    if m is not None:
+        return "LEGADO", {
+            "prefixo": m.group("prefixo"),
+            "cod_doc": None,
+            "cod_enc": None,
+            "opcional": None,
+            "data": m.group("data"),
+        }
+
+    return None
 
 # Mapeamento de nome de pasta (case-insensitive) para tipo_dado.
 # As pastas de ANA e QualiAgua dentro de Fluviometria são tratadas como tipos
@@ -200,8 +277,9 @@ def executar(raiz: Path, conn_str: str) -> int:
 
                     tipo_dado = _detectar_tipo_dado(arquivo, raiz)
 
-                    match = REGEX_NOME.match(nome)
-                    if match is None:
+                    nome_norm = _normalizar_nome(nome)
+                    parsed = _parse_nome(nome_norm)
+                    if parsed is None:
                         _insert_orfao(
                             cur, nome, arquivo, stat.st_size, mtime, lote,
                             categoria="NOME_FORA_DO_PADRAO",
@@ -210,11 +288,12 @@ def executar(raiz: Path, conn_str: str) -> int:
                         orfaos_malformados += 1
                         continue
 
-                    prefixo_capturado = match.group("prefixo")
-                    cod_doc_raw = match.group("cod_doc")
-                    cod_enc = match.group("cod_enc")
-                    opcional = match.group("opcional")
-                    data_documento = _parse_data(match.group("data"))
+                    formato_nome, grupos = parsed
+                    prefixo_capturado = grupos["prefixo"]
+                    cod_doc_raw = grupos["cod_doc"]
+                    cod_enc = grupos["cod_enc"]
+                    opcional = grupos["opcional"]
+                    data_documento = _parse_data(grupos["data"])
 
                     # Valida prefixo contra a regex do tipo_dado.
                     if tipo_dado is None or tipo_dado not in tipos_dado:
@@ -236,19 +315,24 @@ def executar(raiz: Path, conn_str: str) -> int:
                         orfaos_malformados += 1
                         continue
 
-                    # Valida cod_doc (01..07).
-                    try:
-                        cod_doc = int(cod_doc_raw)
-                    except ValueError:
-                        cod_doc = 0
-                    if cod_doc < 1 or cod_doc > 7:
-                        _insert_orfao(
-                            cur, nome, arquivo, stat.st_size, mtime, lote,
-                            categoria="NOME_FORA_DO_PADRAO",
-                            tipo_dado=tipo_dado,
-                        )
-                        orfaos_malformados += 1
-                        continue
+                    # Valida cod_doc (01..07) apenas quando capturado (COMPLETO/PARCIAL).
+                    # LEGADO não tem cod_doc -> cod_doc = None.
+                    if cod_doc_raw is not None:
+                        try:
+                            cod_doc_int = int(cod_doc_raw)
+                        except ValueError:
+                            cod_doc_int = 0
+                        if cod_doc_int < 1 or cod_doc_int > 7:
+                            _insert_orfao(
+                                cur, nome, arquivo, stat.st_size, mtime, lote,
+                                categoria="NOME_FORA_DO_PADRAO",
+                                tipo_dado=tipo_dado,
+                            )
+                            orfaos_malformados += 1
+                            continue
+                        cod_doc: int | None = cod_doc_int
+                    else:
+                        cod_doc = None
 
                     # Lookup do prefixo.
                     if cfg_tipo["usa_prefixo_ana"]:
@@ -276,8 +360,8 @@ def executar(raiz: Path, conn_str: str) -> int:
                           (prefixo, nome_arquivo, caminho_absoluto, tamanho_bytes,
                            data_modificacao, lote_indexacao,
                            tipo_dado, cod_tipo_documento, cod_encarregado,
-                           data_documento, parte_opcional, nome_valido)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                           data_documento, parte_opcional, nome_valido, formato_nome)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s)
                         ON CONFLICT (caminho_absoluto) DO UPDATE SET
                           prefixo              = EXCLUDED.prefixo,
                           nome_arquivo         = EXCLUDED.nome_arquivo,
@@ -290,6 +374,7 @@ def executar(raiz: Path, conn_str: str) -> int:
                           data_documento       = EXCLUDED.data_documento,
                           parte_opcional       = EXCLUDED.parte_opcional,
                           nome_valido          = true,
+                          formato_nome         = EXCLUDED.formato_nome,
                           indexado_em          = NOW()
                         """,
                         (
@@ -304,6 +389,7 @@ def executar(raiz: Path, conn_str: str) -> int:
                             cod_enc,
                             data_documento,
                             opcional,
+                            formato_nome,
                         ),
                     )
                     indexados += 1
