@@ -79,14 +79,6 @@ function Invoke-BrowserRefreshOrOpen {
     $titleMatches = @('localhost:3000', 'SPAguas', 'SPAGUAS', 'Ficha Tecnica', 'SPÁguas')
     $browserNames = @('chrome', 'msedge', 'brave', 'opera', 'firefox')
 
-    $target = Get-Process -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.MainWindowTitle -and
-            ($browserNames -contains $_.ProcessName) -and
-            ($titleMatches | Where-Object { $_ -and ($target_title = $_); $false } | Out-Null; $false)
-        }
-
-    # filtragem direta (evita scoping do Where-Object aninhado)
     $target = Get-Process -ErrorAction SilentlyContinue | Where-Object {
         if (-not $_.MainWindowTitle) { return $false }
         if (-not ($browserNames -contains $_.ProcessName)) { return $false }
