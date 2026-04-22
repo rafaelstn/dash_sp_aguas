@@ -1,0 +1,29 @@
+# Ambiente local opcional — PostgreSQL para desenvolvimento desconectado do Supabase.
+# Use quando quiser testar migrations/importer/indexer sem depender de rede.
+#
+# Subir:   docker compose up -d
+# Derrubar: docker compose down -v   (remove volumes — perde dados)
+#
+# Depois de subir, apontar .env.local para:
+#   DATABASE_URL=postgresql://spaguas:spaguas@localhost:5432/spaguas_dev
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: spaguas-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: spaguas_dev
+      POSTGRES_USER: spaguas
+      POSTGRES_PASSWORD: spaguas
+    ports:
+      - "5432:5432"
+    volumes:
+      - spaguas_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spaguas -d spaguas_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  spaguas_pg_data:

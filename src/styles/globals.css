@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Foco visível coerente em todo elemento interativo — requisito WCAG 2.4.7 */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  :focus-visible {
+    outline: 3px solid theme('colors.gov.azul');
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Remove motion para quem pede */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  body {
+    color: theme('colors.gov.texto');
+    background-color: theme('colors.gov.superficie');
+    font-family: theme('fontFamily.sans');
+  }
+}
+
+/* Classe utilitária para ocultar visualmente mantendo acessível a leitores de tela */
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

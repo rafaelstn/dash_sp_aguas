@@ -1,0 +1,14 @@
+[project]
+name = "spaguas-importer"
+version = "0.1.0"
+description = "Script one-shot de importação do CSV oficial SPÁguas para o PostgreSQL."
+requires-python = ">=3.12"
+dependencies = [
+  "psycopg[binary]>=3.2",
+  "python-dotenv>=1.0",
+  "structlog>=24.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
