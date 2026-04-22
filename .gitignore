@@ -42,6 +42,9 @@ next-env.d.ts
 .next/
 tsconfig.tsbuildinfo
 
+# Runtime do start.ps1 (PID, logs)
+.run/
+
 # Data dumps / planilhas originais (governo — não subir em repo público)
 # comentar se for repo privado e quiser versionar a planilha base
 # *.csv
