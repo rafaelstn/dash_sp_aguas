@@ -5,7 +5,7 @@ import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Alerta } from '@/components/ui/Alerta';
 import { buscarPostos } from '@/application/use-cases/buscar-postos';
-import { postosRepository } from '@/infrastructure/db/postos-repository.pg';
+import { postosRepository } from '@/infrastructure/repositories';
 import { TermoBuscaInvalido } from '@/domain/errors';
 
 export const dynamic = 'force-dynamic';

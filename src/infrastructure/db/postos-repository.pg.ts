@@ -96,24 +96,31 @@ function mapear(linha: LinhaPosto): Posto {
   };
 }
 
-const COLUNAS = sql`
-  id, prefixo, mantenedor, prefixo_ana, nome_estacao,
-  operacao_inicio_ano, operacao_fim_ano, latitude, longitude,
-  municipio, municipio_alt, bacia_hidrografica,
-  ugrhi_nome, ugrhi_numero, sub_ugrhi_nome, sub_ugrhi_numero,
-  rede, proprietario, tipo_posto, area_km2, btl, cia_ambiental,
-  cobacia, observacoes, tempo_transmissao, status_pcd,
-  ultima_transmissao, convencional, logger_eqp, telemetrico,
-  nivel, vazao, ficha_inspecao, ultima_data_fi, ficha_descritiva,
-  ultima_atualizacao_fd, aquifero, altimetria,
-  created_at, updated_at
-`;
+// Criado sob demanda para que o módulo possa ser importado em modo demo
+// sem instanciar a conexão PG (ver infrastructure/db/client.ts).
+let _colunas: ReturnType<typeof sql> | null = null;
+function colunas() {
+  if (_colunas) return _colunas;
+  _colunas = sql`
+    id, prefixo, mantenedor, prefixo_ana, nome_estacao,
+    operacao_inicio_ano, operacao_fim_ano, latitude, longitude,
+    municipio, municipio_alt, bacia_hidrografica,
+    ugrhi_nome, ugrhi_numero, sub_ugrhi_nome, sub_ugrhi_numero,
+    rede, proprietario, tipo_posto, area_km2, btl, cia_ambiental,
+    cobacia, observacoes, tempo_transmissao, status_pcd,
+    ultima_transmissao, convencional, logger_eqp, telemetrico,
+    nivel, vazao, ficha_inspecao, ultima_data_fi, ficha_descritiva,
+    ultima_atualizacao_fd, aquifero, altimetria,
+    created_at, updated_at
+  `;
+  return _colunas;
+}
 
 export const postosRepository: PostosRepository = {
   async buscarPorPrefixo(prefixo) {
     try {
       const linhas = await sql<LinhaPosto[]>`
-        SELECT ${COLUNAS} FROM postos WHERE prefixo = ${prefixo} LIMIT 1
+        SELECT ${colunas()} FROM postos WHERE prefixo = ${prefixo} LIMIT 1
       `;
       return linhas[0] ? mapear(linhas[0]) : null;
     } catch (e) {
@@ -129,7 +136,7 @@ export const postosRepository: PostosRepository = {
         const padrao = params.prefixoComecaCom.toUpperCase() + '%';
         const [linhas, contagem] = await Promise.all([
           sql<LinhaPosto[]>`
-            SELECT ${COLUNAS} FROM postos
+            SELECT ${colunas()} FROM postos
             WHERE prefixo ILIKE ${padrao}
             ORDER BY prefixo
             LIMIT ${params.porPagina} OFFSET ${offset}
@@ -149,7 +156,7 @@ export const postosRepository: PostosRepository = {
         const termoTsquery = params.termo.trim().split(/\s+/).filter(Boolean).join(' & ');
         const [linhas, contagem] = await Promise.all([
           sql<LinhaPosto[]>`
-            SELECT ${COLUNAS} FROM postos
+            SELECT ${colunas()} FROM postos
             WHERE busca_tsv @@ to_tsquery('portuguese', unaccent(${termoTsquery}))
             ORDER BY prefixo
             LIMIT ${params.porPagina} OFFSET ${offset}

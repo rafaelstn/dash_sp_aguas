@@ -3,6 +3,7 @@ import Link from 'next/link';
 import '@/styles/globals.css';
 import { SkipLink } from '@/components/a11y/SkipLink';
 import { BadgeDesconformidades } from '@/components/features/desconformidades/BadgeDesconformidades';
+import { modoDemoAtivo } from '@/infrastructure/repositories';
 
 export const metadata: Metadata = {
   title: 'Ficha Técnica de Postos Hidrológicos — SPÁguas',
@@ -16,6 +17,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body className="min-h-screen">
         <SkipLink />
+        {modoDemoAtivo ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="bg-amber-100 text-amber-900 border-b border-amber-300"
+          >
+            <div className="max-w-5xl mx-auto px-4 py-2 text-sm">
+              <strong className="font-semibold">Modo demonstração.</strong>{' '}
+              Os dados exibidos são fixtures em memória, sem conexão com o
+              banco. Para utilizar o banco real, preencha{' '}
+              <code className="font-mono">DATABASE_URL</code> no arquivo{' '}
+              <code className="font-mono">.env.local</code> e reinicie o
+              serviço.
+            </div>
+          </div>
+        ) : null}
         <header className="bg-gov-azul text-white">
           <div className="max-w-5xl mx-auto px-4 py-4">
             <p className="text-sm text-white/80">Governo do Estado de São Paulo · SPÁguas</p>

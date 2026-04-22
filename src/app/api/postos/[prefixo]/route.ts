@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
-import { postosRepository } from '@/infrastructure/db/postos-repository.pg';
-import { auditoriaRepository } from '@/infrastructure/db/auditoria-repository.pg';
+import { postosRepository, auditoriaRepository } from '@/infrastructure/repositories';
 import { PostoNaoEncontrado } from '@/domain/errors';
 import type { RespostaErro, RespostaFicha } from '@/types/dto';
 

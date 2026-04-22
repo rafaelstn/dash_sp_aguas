@@ -8,9 +8,11 @@ import { Alerta } from '@/components/ui/Alerta';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
 import { listarArquivosAgrupados } from '@/application/use-cases/listar-arquivos-agrupados';
-import { postosRepository } from '@/infrastructure/db/postos-repository.pg';
-import { arquivosRepository } from '@/infrastructure/db/arquivos-repository.pg';
-import { auditoriaRepository } from '@/infrastructure/db/auditoria-repository.pg';
+import {
+  postosRepository,
+  arquivosRepository,
+  auditoriaRepository,
+} from '@/infrastructure/repositories';
 import { PostoNaoEncontrado } from '@/domain/errors';
 
 export const dynamic = 'force-dynamic';

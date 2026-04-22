@@ -58,6 +58,27 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 
 ---
 
+## Modo demo (preview sem banco)
+
+O dashboard possui um modo de demonstração para preview rápido das telas sem depender da conexão com o PostgreSQL do cliente. É útil quando a VPN do setor ainda não está disponível ou para apresentações internas.
+
+**Como ativar:** basta executar `start.ps1` (ou `npm run dev`) com `DATABASE_URL` ausente ou vazia no `.env.local`. O sistema sobe normalmente e exibe um aviso no topo da tela indicando que os dados são fixtures em memória.
+
+**O que está disponível em modo demo:**
+
+- 12 postos reais copiados do CSV oficial (Fluviometria, Pluviometria, Piezometria) + 2 registros sintéticos para demonstrar a aba de desconformidades cadastrais.
+- 10 arquivos indexados cobrindo os três formatos de nome aceitos pelo indexer (`COMPLETO`, `PARCIAL`, `LEGADO`).
+- 4 arquivos órfãos/malformados e uma revisão pré-marcada.
+
+**Restrições:**
+
+- Modo demo é bloqueado em `NODE_ENV=production`. Qualquer tentativa resulta em erro explícito no boot.
+- Alterações feitas via UI (por exemplo, marcar uma desconformidade como revisada) persistem apenas na memória do processo e são perdidas ao reiniciar o servidor.
+
+Para voltar ao comportamento normal, preencha `DATABASE_URL` em `.env.local` e reinicie.
+
+---
+
 ## Setup de desenvolvimento
 
 ### 1. Instalar dependências do dashboard

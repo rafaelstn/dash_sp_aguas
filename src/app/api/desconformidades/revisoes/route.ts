@@ -1,7 +1,7 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { revisoesRepository } from '@/infrastructure/db/revisoes-repository.pg';
+import { revisoesRepository } from '@/infrastructure/repositories';
 import { marcarRevisaoDesconformidade } from '@/application/use-cases/marcar-revisao-desconformidade';
 import type { CategoriaDesconformidade } from '@/domain/desconformidade';
 import type { TipoEntidadeRevisada } from '@/domain/revisao-desconformidade';

@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { listarArquivos } from '@/application/use-cases/listar-arquivos';
-import { arquivosRepository } from '@/infrastructure/db/arquivos-repository.pg';
-import { auditoriaRepository } from '@/infrastructure/db/auditoria-repository.pg';
+import { arquivosRepository, auditoriaRepository } from '@/infrastructure/repositories';
 import type { RespostaArquivos, RespostaErro } from '@/types/dto';
 
 export async function GET(

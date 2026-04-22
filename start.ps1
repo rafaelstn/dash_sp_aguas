@@ -137,11 +137,11 @@ if (-not (Test-Path $envFile)) {
 
 $envContent = Get-Content $envFile -Raw
 if ($envContent -notmatch '(?m)^\s*DATABASE_URL\s*=\s*\S+') {
-    Write-Err "DATABASE_URL esta vazio no .env.local. Preencha antes de iniciar."
-    Write-Host "Edite: $envFile" -ForegroundColor Yellow
-    exit 1
+    Write-Warn "DATABASE_URL vazio no .env.local -- iniciando em MODO DEMO (dados mockados em memoria)."
+    Write-Warn "Para usar banco real, preencha DATABASE_URL em: $envFile"
+} else {
+    Write-Ok ".env.local presente com DATABASE_URL preenchido"
 }
-Write-Ok ".env.local presente com DATABASE_URL preenchido"
 
 if (-not (Test-Path (Join-Path $ProjectRoot 'node_modules'))) {
     Write-Step "node_modules ausente. Rodando npm install (primeira execucao)..."

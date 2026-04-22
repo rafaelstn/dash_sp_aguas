@@ -1,4 +1,4 @@
-import { desconformidadesRepository } from '@/infrastructure/db/desconformidades-repository.pg';
+import { desconformidadesRepository } from '@/infrastructure/repositories';
 import { TabelaPrefixosPrincipais } from '@/components/features/desconformidades/TabelaPrefixosPrincipais';
 import { Alerta } from '@/components/ui/Alerta';
 

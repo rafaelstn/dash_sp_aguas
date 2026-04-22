@@ -58,18 +58,25 @@ function mapear(linha: LinhaArquivo): ArquivoIndexado {
   };
 }
 
-const COLUNAS = sql`
-  id, prefixo, nome_arquivo, caminho_absoluto, tamanho_bytes,
-  data_modificacao, hash_conteudo, indexado_em, lote_indexacao,
-  tipo_dado, cod_tipo_documento, cod_encarregado, data_documento,
-  parte_opcional, nome_valido, formato_nome
-`;
+// Criado sob demanda para que o módulo possa ser importado em modo demo
+// sem instanciar a conexão PG (ver infrastructure/db/client.ts).
+let _colunas: ReturnType<typeof sql> | null = null;
+function colunas() {
+  if (_colunas) return _colunas;
+  _colunas = sql`
+    id, prefixo, nome_arquivo, caminho_absoluto, tamanho_bytes,
+    data_modificacao, hash_conteudo, indexado_em, lote_indexacao,
+    tipo_dado, cod_tipo_documento, cod_encarregado, data_documento,
+    parte_opcional, nome_valido, formato_nome
+  `;
+  return _colunas;
+}
 
 export const arquivosRepository: ArquivosRepository = {
   async listarPorPrefixo(prefixo) {
     try {
       const linhas = await sql<LinhaArquivo[]>`
-        SELECT ${COLUNAS}
+        SELECT ${colunas()}
           FROM arquivos_indexados
          WHERE prefixo = ${prefixo}
          ORDER BY data_modificacao DESC
@@ -96,7 +103,7 @@ export const arquivosRepository: ArquivosRepository = {
   async listarAgrupadosPorTipo(prefixo) {
     try {
       const linhas = await sql<LinhaArquivo[]>`
-        SELECT ${COLUNAS}
+        SELECT ${colunas()}
           FROM arquivos_indexados
          WHERE prefixo = ${prefixo}
          ORDER BY cod_tipo_documento ASC NULLS LAST,

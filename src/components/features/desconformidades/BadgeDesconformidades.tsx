@@ -1,4 +1,4 @@
-import { desconformidadesRepository } from '@/infrastructure/db/desconformidades-repository.pg';
+import { desconformidadesRepository } from '@/infrastructure/repositories';
 import { contarDesconformidades } from '@/application/use-cases/listar-desconformidades';
 
 /**

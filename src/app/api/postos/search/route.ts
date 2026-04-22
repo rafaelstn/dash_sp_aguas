@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { buscarPostos } from '@/application/use-cases/buscar-postos';
-import { postosRepository } from '@/infrastructure/db/postos-repository.pg';
+import { postosRepository } from '@/infrastructure/repositories';
 import { TermoBuscaInvalido } from '@/domain/errors';
 import type { RespostaBusca, RespostaErro } from '@/types/dto';
 
