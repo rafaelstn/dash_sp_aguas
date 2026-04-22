@@ -45,6 +45,9 @@ tsconfig.tsbuildinfo
 # Runtime do start.ps1 (PID, logs)
 .run/
 
+# Manuais originais do cliente (prints expõem IP interno do DAEE — tratar como sensível até confirmação)
+docs/manuais-cliente/
+
 # Data dumps / planilhas originais (governo — não subir em repo público)
 # comentar se for repo privado e quiser versionar a planilha base
 # *.csv
