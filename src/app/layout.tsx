@@ -6,6 +6,7 @@ import { BadgeDesconformidades } from '@/components/features/desconformidades/Ba
 import { modoDemoAtivo } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { Sidenav } from '@/components/layout/Sidenav';
+import { AtalhosTeclado } from '@/components/layout/AtalhosTeclado';
 
 export const metadata: Metadata = {
   title: 'Ficha Técnica de Postos Hidrológicos — SPÁguas',
@@ -20,6 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="pt-BR">
       <body className="min-h-screen bg-gov-superficie">
         <SkipLink />
+        <AtalhosTeclado />
         {modoDemoAtivo ? (
           <div
             role="status"
