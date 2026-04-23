@@ -5,9 +5,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // O cliente postgres.js roda apenas no servidor; evita bundling acidental no navegador.
   serverExternalPackages: ['postgres'],
-  experimental: {
-    typedRoutes: true,
-  },
+  // typedRoutes desabilitado: Turbopack (Next 15.2) ainda nao suporta.
+  // Reativar quando o Turbopack estabilizar; ate la, o typecheck normal do tsc
+  // cobre os href <Link> suficientemente.
   // Cabeçalho de idioma pt-BR é requisito WCAG / e-MAG.
   async headers() {
     return [
