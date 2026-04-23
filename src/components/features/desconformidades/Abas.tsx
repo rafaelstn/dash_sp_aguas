@@ -11,12 +11,20 @@ interface Aba {
   chaveContagem: keyof ContagensDesconformidade;
 }
 
-const ABAS: readonly Aba[] = [
+const ABAS = [
   { slug: 'prefixo-principal',   rotulo: 'Prefixo principal desconforme', chaveContagem: 'prefixoPrincipal' },
   { slug: 'prefixo-ana',         rotulo: 'Prefixo ANA desconforme',       chaveContagem: 'prefixoAna' },
   { slug: 'arquivos-orfaos',     rotulo: 'Arquivos órfãos',               chaveContagem: 'arquivosOrfaos' },
   { slug: 'arquivos-malformados', rotulo: 'Arquivos malformados',          chaveContagem: 'arquivosMalformados' },
-] as const;
+] as const satisfies readonly Aba[];
+
+function abaEm(indice: number): Aba {
+  const ref = ABAS[((indice % ABAS.length) + ABAS.length) % ABAS.length];
+  if (!ref) {
+    throw new Error(`indice de aba fora de ABAS: ${indice}`);
+  }
+  return ref;
+}
 
 export interface AbasProps {
   contagens: ContagensDesconformidade;
@@ -34,7 +42,7 @@ export function Abas({ contagens }: AbasProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
   const abaAtivaSlug =
-    ABAS.find((a) => pathname?.includes(a.slug))?.slug ?? ABAS[0].slug;
+    ABAS.find((a) => pathname?.includes(a.slug))?.slug ?? abaEm(0).slug;
   const abaAtivaIndex = ABAS.findIndex((a) => a.slug === abaAtivaSlug);
 
   function focarAba(indice: number) {
@@ -50,21 +58,21 @@ export function Abas({ contagens }: AbasProps) {
       e.preventDefault();
       const prox = (atual + 1) % total;
       focarAba(prox);
-      router.push(`/desconformidades/${ABAS[prox].slug}`);
+      router.push(`/desconformidades/${abaEm(prox).slug}`);
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       const ant = (atual - 1 + total) % total;
       focarAba(ant);
-      router.push(`/desconformidades/${ABAS[ant].slug}`);
+      router.push(`/desconformidades/${abaEm(ant).slug}`);
     } else if (e.key === 'Home') {
       e.preventDefault();
       focarAba(0);
-      router.push(`/desconformidades/${ABAS[0].slug}`);
+      router.push(`/desconformidades/${abaEm(0).slug}`);
     } else if (e.key === 'End') {
       e.preventDefault();
       const ultimo = total - 1;
       focarAba(ultimo);
-      router.push(`/desconformidades/${ABAS[ultimo].slug}`);
+      router.push(`/desconformidades/${abaEm(ultimo).slug}`);
     }
   }
 
@@ -73,6 +81,7 @@ export function Abas({ contagens }: AbasProps) {
       ref={listRef}
       role="tablist"
       aria-label="Categorias de desconformidade"
+      tabIndex={-1}
       onKeyDown={aoPressionarTecla}
       className="flex flex-wrap gap-1 border-b border-gov-borda"
     >

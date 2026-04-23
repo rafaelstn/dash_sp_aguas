@@ -4,7 +4,7 @@ import type {
   RevisaoDesconformidade,
 } from '@/domain/revisao-desconformidade';
 
-export interface EntradaMarcarRevisao extends ParametrosNovaRevisao {}
+export type EntradaMarcarRevisao = ParametrosNovaRevisao;
 
 /**
  * Grava (ou atualiza) um registro em `revisoes_desconformidade` com status

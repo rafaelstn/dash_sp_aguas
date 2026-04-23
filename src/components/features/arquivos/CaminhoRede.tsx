@@ -18,7 +18,7 @@ export function CaminhoRede({ caminho }: { caminho: string }) {
       setCopiado(true);
       setErro(null);
       setTimeout(() => setCopiado(false), 2000);
-    } catch (e) {
+    } catch {
       setErro('Não foi possível copiar automaticamente. Selecione o texto manualmente.');
     }
   }

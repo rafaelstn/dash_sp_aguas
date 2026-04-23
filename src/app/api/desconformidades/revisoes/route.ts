@@ -12,7 +12,7 @@ interface Payload {
   tipoEntidade: TipoEntidadeRevisada;
   idEntidade: string;
   categoria: CategoriaDesconformidade;
-  nota?: string | null;
+  nota: string | null;
 }
 
 const CATEGORIAS_VALIDAS: readonly CategoriaDesconformidade[] = [
