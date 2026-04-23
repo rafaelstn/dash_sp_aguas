@@ -12,10 +12,12 @@
     "test": "echo \"(reservado para Thiago — testes ainda não configurados)\" && exit 0"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.104.1",
     "next": "15.2.0",
+    "postgres": "3.4.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "postgres": "3.4.5",
     "zod": "3.24.1"
   },
   "devDependencies": {

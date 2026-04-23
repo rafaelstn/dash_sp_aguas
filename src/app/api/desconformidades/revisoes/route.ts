@@ -5,6 +5,7 @@ import { revisoesRepository } from '@/infrastructure/repositories';
 import { marcarRevisaoDesconformidade } from '@/application/use-cases/marcar-revisao-desconformidade';
 import type { CategoriaDesconformidade } from '@/domain/desconformidade';
 import type { TipoEntidadeRevisada } from '@/domain/revisao-desconformidade';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,8 @@ export async function POST(request: Request) {
     h.get('x-real-ip') ??
     null;
 
+  const usuario = await obterUsuarioAtual();
+
   try {
     const revisao = await marcarRevisaoDesconformidade(revisoesRepository, {
       tipoEntidade: payload.tipoEntidade,
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
       categoria: payload.categoria,
       nota: payload.nota,
       ip,
+      usuarioId: usuario?.id ?? null,
     });
     return NextResponse.json({ revisao }, { status: 200 });
   } catch {

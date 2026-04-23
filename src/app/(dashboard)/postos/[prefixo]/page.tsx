@@ -14,6 +14,7 @@ import {
   auditoriaRepository,
 } from '@/infrastructure/repositories';
 import { PostoNaoEncontrado } from '@/domain/errors';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,12 +29,13 @@ async function BlocoArquivos({ prefixo }: { prefixo: string }) {
     h.get('x-real-ip') ??
     null;
   const userAgent = h.get('user-agent');
+  const usuario = await obterUsuarioAtual();
 
   try {
     const { grupos, total, prefixoJaIndexado } = await listarArquivosAgrupados(
       arquivosRepository,
       auditoriaRepository,
-      { prefixo, ip, userAgent, usuarioId: null },
+      { prefixo, ip, userAgent, usuarioId: usuario?.id ?? null },
     );
     return (
       <ListaArquivos
@@ -61,13 +63,14 @@ export default async function PaginaPosto({ params }: PageProps) {
     h.get('x-real-ip') ??
     null;
   const userAgent = h.get('user-agent');
+  const usuario = await obterUsuarioAtual();
 
   try {
     const posto = await obterFicha(postosRepository, auditoriaRepository, {
       prefixo,
       ip,
       userAgent,
-      usuarioId: null,
+      usuarioId: usuario?.id ?? null,
     });
 
     return (

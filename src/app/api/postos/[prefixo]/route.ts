@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
 import { postosRepository, auditoriaRepository } from '@/infrastructure/repositories';
 import { PostoNaoEncontrado } from '@/domain/errors';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import type { RespostaErro, RespostaFicha } from '@/types/dto';
 
 export async function GET(
@@ -16,13 +17,14 @@ export async function GET(
     request.headers.get('x-real-ip') ??
     null;
   const userAgent = request.headers.get('user-agent');
+  const usuario = await obterUsuarioAtual();
 
   try {
     const posto = await obterFicha(postosRepository, auditoriaRepository, {
       prefixo,
       ip,
       userAgent,
-      usuarioId: null,
+      usuarioId: usuario?.id ?? null,
     });
     const body: RespostaFicha = posto;
     return NextResponse.json(body);

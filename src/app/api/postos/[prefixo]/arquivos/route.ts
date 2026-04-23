@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { listarArquivos } from '@/application/use-cases/listar-arquivos';
 import { arquivosRepository, auditoriaRepository } from '@/infrastructure/repositories';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import type { RespostaArquivos, RespostaErro } from '@/types/dto';
 
 export async function GET(
@@ -15,13 +16,14 @@ export async function GET(
     request.headers.get('x-real-ip') ??
     null;
   const userAgent = request.headers.get('user-agent');
+  const usuario = await obterUsuarioAtual();
 
   try {
     const resultado = await listarArquivos(arquivosRepository, auditoriaRepository, {
       prefixo,
       ip,
       userAgent,
-      usuarioId: null,
+      usuarioId: usuario?.id ?? null,
     });
     const body: RespostaArquivos = resultado;
     return NextResponse.json(body);
