@@ -267,10 +267,12 @@ Stop-TrackedNext
 
 Write-Step "Iniciando Next.js oculto em segundo plano (porta $Port)..."
 
-# '-p $Port' forca a porta: sem fallback silencioso pra portas diferentes.
+# '-p $Port' forca a porta (sem fallback silencioso).
+# '--turbopack' ativa o compilador Turbopack (Next.js 15), 5-10x mais rapido
+# que o webpack em dev — reduz a primeira compilacao de ~60-90s para ~10-20s.
 $startArgs = @{
     FilePath         = 'npm.cmd'
-    ArgumentList     = @('run','dev','--','-p',"$Port")
+    ArgumentList     = @('run','dev','--','-p',"$Port",'--turbopack')
     WorkingDirectory = $ProjectRoot
     WindowStyle      = 'Hidden'
     PassThru         = $true
