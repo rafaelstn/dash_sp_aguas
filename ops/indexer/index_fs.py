@@ -244,8 +244,16 @@ def _detectar_modelo(caminho: Path, raiz: Path) -> str:
 
 
 def _detectar_tipo_dado(caminho: Path, raiz: Path) -> str | None:
-    """Determina tipo_dado pela posição na hierarquia (Modelo A)."""
-    partes = [_norm(p) for p in _partes_relativas(caminho, raiz)]
+    """Determina tipo_dado pela posição na hierarquia (Modelo A).
+
+    Considera tanto as partes RELATIVAS (subpastas abaixo da raiz) quanto as
+    partes DA RAIZ — isso permite apontar --root pra uma subpasta (ex.:
+    Y:\\Fluviometria\\1D-008\\) sem perder o contexto de TipoDado. Útil para
+    cargas seletivas.
+    """
+    partes_raiz = [_norm(p) for p in raiz.parts]
+    partes_rel = [_norm(p) for p in _partes_relativas(caminho, raiz)]
+    partes = partes_raiz + partes_rel
     if not partes:
         return None
 
