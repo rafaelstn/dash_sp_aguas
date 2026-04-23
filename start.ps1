@@ -36,12 +36,64 @@ param(
     # Portas candidatas, em ordem de preferencia. Primeira livre e escolhida.
     # Passe -Ports 3000 para forcar apenas uma.
     [int[]]$Ports = @(3000, 3001),
-    [int]$WaitSeconds = 120
+    [int]$WaitSeconds = 120,
+    # Pula a verificacao de drive de rede (apenas depuracao).
+    [switch]$AllowNetworkDrive
 )
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
+
+# --------------------------------------------------------------------------
+# 0. Se o script esta em drive de rede (SMB/UNC), redireciona para clone local.
+# --------------------------------------------------------------------------
+# Next.js com .next/ em drive de rede gera 'Slow filesystem detected' — cada
+# modulo/chunk passa por SMB e a compilacao trava. O canonico e rodar num
+# disco local. Este bloco detecta a situacao e chama o start.ps1 de
+# C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica\ (se existir), passando os
+# mesmos parametros. Contornavel via -AllowNetworkDrive.
+
+if (-not $AllowNetworkDrive) {
+    $ehRede = $false
+    if ($ProjectRoot.StartsWith('\\')) {
+        $ehRede = $true
+    } else {
+        try {
+            $drive = (Get-Item $ProjectRoot).PSDrive
+            if ($drive -and $drive.DisplayRoot -and $drive.DisplayRoot.StartsWith('\\')) {
+                $ehRede = $true
+            }
+        } catch { }
+    }
+
+    if ($ehRede) {
+        $cloneLocal = 'C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica'
+        $startLocal = Join-Path $cloneLocal 'start.ps1'
+        Write-Host "==> Projeto esta em drive de rede ($ProjectRoot)." -ForegroundColor Yellow
+        Write-Host "    Next.js fica inutilizavel com .next/ em SMB (Slow filesystem)." -ForegroundColor Yellow
+
+        if (Test-Path $startLocal) {
+            Write-Host "    Redirecionando para o clone local: $cloneLocal" -ForegroundColor Cyan
+            Write-Host ""
+            & $startLocal @PSBoundParameters
+            exit $LASTEXITCODE
+        }
+
+        Write-Host "    Clone local nao encontrado em: $cloneLocal" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "    Rode uma vez, em qualquer PowerShell:" -ForegroundColor Cyan
+        Write-Host "      mkdir 'C:\Projetos\Clientes\GOV' -Force"
+        Write-Host "      git clone https://github.com/rafaelstn/dash_sp_aguas.git 'C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica'"
+        Write-Host "      copy '$ProjectRoot\.env.local' 'C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica\.env.local'"
+        Write-Host "      cd 'C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica'"
+        Write-Host "      .\start.ps1"
+        Write-Host ""
+        Write-Host "    Para forcar execucao mesmo em drive de rede (nao recomendado):" -ForegroundColor DarkGray
+        Write-Host "      .\start.ps1 -AllowNetworkDrive" -ForegroundColor DarkGray
+        exit 2
+    }
+}
 
 $RunDir   = Join-Path $ProjectRoot '.run'
 $PidFile  = Join-Path $RunDir 'next.pid'
