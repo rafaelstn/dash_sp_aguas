@@ -131,48 +131,88 @@ export const postosRepository: PostosRepository = {
   async pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa> {
     const offset = (params.pagina - 1) * params.porPagina;
 
+    const termoTsquery = params.termo
+      ? params.termo.trim().split(/\s+/).filter(Boolean).join(' & ')
+      : null;
+    const padraoPrefixo = params.prefixoComecaCom
+      ? params.prefixoComecaCom.toUpperCase() + '%'
+      : null;
+
+    // Compose WHERE em fragments. postgres.js permite interpolar `sql`frag``
+    // dentro de outra query; `sql` vazio é a forma idiomática de "nada".
+    const condTermo = termoTsquery
+      ? sql`AND busca_tsv @@ to_tsquery('portuguese', f_unaccent(${termoTsquery}))`
+      : sql``;
+    const condPrefixo = padraoPrefixo
+      ? sql`AND prefixo ILIKE ${padraoPrefixo}`
+      : sql``;
+    const condUgrhi = params.ugrhiNumero
+      ? sql`AND ugrhi_numero = ${params.ugrhiNumero}`
+      : sql``;
+    const condMunicipio = params.municipio
+      ? sql`AND f_unaccent(lower(municipio)) = f_unaccent(lower(${params.municipio}))`
+      : sql``;
+    const condBacia = params.baciaHidrografica
+      ? sql`AND f_unaccent(lower(bacia_hidrografica)) = f_unaccent(lower(${params.baciaHidrografica}))`
+      : sql``;
+    const condTipo = params.tipoPosto
+      ? sql`AND tipo_posto = ${params.tipoPosto}`
+      : sql``;
+    const condFD = params.temFichaDescritiva
+      ? sql`AND ficha_descritiva IS NOT NULL AND ficha_descritiva <> ''`
+      : sql``;
+    const condFI = params.temFichaInspecao
+      ? sql`AND ficha_inspecao IS NOT NULL AND ficha_inspecao <> ''`
+      : sql``;
+    const condTelem = params.temTelemetrico
+      ? sql`AND telemetrico IS NOT NULL AND telemetrico <> ''`
+      : sql``;
+    const condFavoritos =
+      params.apenasFavoritos && params.usuarioId
+        ? sql`AND EXISTS (
+            SELECT 1 FROM postos_favoritos f
+             WHERE f.prefixo = postos.prefixo
+               AND f.usuario_id = ${params.usuarioId}::uuid
+          )`
+        : sql``;
+
     try {
-      if (params.prefixoComecaCom) {
-        const padrao = params.prefixoComecaCom.toUpperCase() + '%';
-        const [linhas, contagem] = await Promise.all([
-          sql<LinhaPosto[]>`
-            SELECT ${colunas()} FROM postos
-            WHERE prefixo ILIKE ${padrao}
-            ORDER BY prefixo
-            LIMIT ${params.porPagina} OFFSET ${offset}
-          `,
-          sql<{ total: string }[]>`
-            SELECT COUNT(*)::text AS total FROM postos
-            WHERE prefixo ILIKE ${padrao}
-          `,
-        ]);
-        return {
-          total: Number(contagem[0]?.total ?? 0),
-          itens: linhas.map(mapear),
-        };
-      }
-
-      if (params.termo) {
-        const termoTsquery = params.termo.trim().split(/\s+/).filter(Boolean).join(' & ');
-        const [linhas, contagem] = await Promise.all([
-          sql<LinhaPosto[]>`
-            SELECT ${colunas()} FROM postos
-            WHERE busca_tsv @@ to_tsquery('portuguese', unaccent(${termoTsquery}))
-            ORDER BY prefixo
-            LIMIT ${params.porPagina} OFFSET ${offset}
-          `,
-          sql<{ total: string }[]>`
-            SELECT COUNT(*)::text AS total FROM postos
-            WHERE busca_tsv @@ to_tsquery('portuguese', unaccent(${termoTsquery}))
-          `,
-        ]);
-        return {
-          total: Number(contagem[0]?.total ?? 0),
-          itens: linhas.map(mapear),
-        };
-      }
-
-      return { total: 0, itens: [] };
+      const [linhas, contagem] = await Promise.all([
+        sql<LinhaPosto[]>`
+          SELECT ${colunas()} FROM postos
+           WHERE true
+           ${condTermo}
+           ${condPrefixo}
+           ${condUgrhi}
+           ${condMunicipio}
+           ${condBacia}
+           ${condTipo}
+           ${condFD}
+           ${condFI}
+           ${condTelem}
+           ${condFavoritos}
+           ORDER BY prefixo
+           LIMIT ${params.porPagina} OFFSET ${offset}
+        `,
+        sql<{ total: string }[]>`
+          SELECT COUNT(*)::text AS total FROM postos
+           WHERE true
+           ${condTermo}
+           ${condPrefixo}
+           ${condUgrhi}
+           ${condMunicipio}
+           ${condBacia}
+           ${condTipo}
+           ${condFD}
+           ${condFI}
+           ${condTelem}
+           ${condFavoritos}
+        `,
+      ]);
+      return {
+        total: Number(contagem[0]?.total ?? 0),
+        itens: linhas.map(mapear),
+      };
     } catch (e) {
       throw new FalhaRepositorio('pesquisar', e);
     }
