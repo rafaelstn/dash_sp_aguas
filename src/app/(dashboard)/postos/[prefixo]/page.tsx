@@ -15,6 +15,8 @@ import {
 } from '@/infrastructure/repositories';
 import { PostoNaoEncontrado } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { favoritosRepository } from '@/infrastructure/repositories';
+import { BotaoFavoritar } from '@/components/features/favoritos/BotaoFavoritar';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +75,16 @@ export default async function PaginaPosto({ params }: PageProps) {
       usuarioId: usuario?.id ?? null,
     });
 
+    let favoritadoInicial = false;
+    if (usuario) {
+      try {
+        const set = await favoritosRepository.prefixosFavoritos(usuario.id);
+        favoritadoInicial = set.has(posto.prefixo);
+      } catch {
+        /* ignora — botão inicia como não-favoritado */
+      }
+    }
+
     return (
       <div className="space-y-8">
         <nav aria-label="Breadcrumb">
@@ -81,9 +93,18 @@ export default async function PaginaPosto({ params }: PageProps) {
           </Link>
         </nav>
 
-        <header>
-          <p className="text-sm text-gov-muted">Prefixo</p>
-          <h1 className="font-mono text-2xl font-bold text-gov-azul">{posto.prefixo}</h1>
+        <header className="flex items-start gap-3">
+          <div>
+            <p className="text-sm text-gov-muted">Prefixo</p>
+            <h1 className="font-mono text-2xl font-bold text-gov-azul">{posto.prefixo}</h1>
+          </div>
+          <div className="ml-auto">
+            <BotaoFavoritar
+              prefixo={posto.prefixo}
+              favoritadoInicial={favoritadoInicial}
+              autenticado={Boolean(usuario)}
+            />
+          </div>
         </header>
 
         <FichaPosto posto={posto} />

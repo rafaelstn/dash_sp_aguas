@@ -5,7 +5,11 @@ import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Alerta } from '@/components/ui/Alerta';
 import { buscarPostos } from '@/application/use-cases/buscar-postos';
-import { postosRepository } from '@/infrastructure/repositories';
+import {
+  postosRepository,
+  favoritosRepository,
+} from '@/infrastructure/repositories';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { TermoBuscaInvalido } from '@/domain/errors';
 
 export const dynamic = 'force-dynamic';
@@ -15,12 +19,39 @@ interface PageProps {
 }
 
 async function Resultados({ termo, pagina }: { termo: string; pagina: number }) {
+  const usuario = await obterUsuarioAtual();
   try {
-    const { itens, total } = await buscarPostos(postosRepository, { termo, pagina });
-    return <ListaResultados itens={itens} total={total} termo={termo} />;
+    const { itens, total } = await buscarPostos(postosRepository, {
+      termo,
+      pagina,
+      usuarioId: usuario?.id ?? null,
+    });
+
+    let prefixosFavoritos = new Set<string>();
+    if (usuario) {
+      try {
+        prefixosFavoritos = await favoritosRepository.prefixosFavoritos(usuario.id);
+      } catch {
+        /* ignora — lista sem marcação de favorito */
+      }
+    }
+
+    return (
+      <ListaResultados
+        itens={itens}
+        total={total}
+        termo={termo}
+        prefixosFavoritos={prefixosFavoritos}
+        autenticado={Boolean(usuario)}
+      />
+    );
   } catch (e) {
     if (e instanceof TermoBuscaInvalido) {
-      return <Alerta tipo="aviso" titulo="Termo inválido">{e.message}</Alerta>;
+      return (
+        <Alerta tipo="aviso" titulo="Termo inválido">
+          {e.message}
+        </Alerta>
+      );
     }
     return (
       <Alerta tipo="erro" titulo="Falha ao consultar postos">
