@@ -1,21 +1,34 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Sobe o dashboard SPAguas em modo desenvolvimento, oculto, e abre/atualiza o navegador.
+    Sobe o dashboard SPAguas em modo desenvolvimento, oculto, executando todo
+    o processo de inicializacao (venv Python, migrations, importer, Next.js,
+    navegador).
 
 .DESCRIPTION
-    - Valida pre-requisitos (Node, .env.local com DATABASE_URL).
-    - Instala dependencias se node_modules nao existir.
-    - Se o Next.js ja estiver rodando e respondendo na porta 3000, apenas atualiza
-      a aba existente do navegador; nao reinicia o processo.
-    - Caso contrario, finaliza processos antigos do projeto (via .run/next.pid),
-      inicia o Next.js como processo oculto e grava o PID para permitir parada limpa.
-    - Procura uma janela de navegador com "localhost:3000" / "SPAguas" no titulo:
-      se existir, ativa e envia F5; senao, abre uma nova aba no navegador padrao.
+    Etapas idempotentes — reexecutar e seguro, pula o que ja esta pronto:
+
+      1. Valida pre-requisitos (Node, Python, .env.local).
+      2. npm install se node_modules ausente.
+      3. Cria venv Python em ops/indexer/.venv e instala dependencias se ausente.
+         (O mesmo venv atende importer e indexer — dependencias compativeis.)
+      4. Se DATABASE_URL preenchido, roda scripts/setup_db.py:
+         - Aplica as 19 migrations se a tabela `postos` nao existir.
+         - Roda o importer do CSV oficial se `postos` estiver vazia.
+         - Pula ambos se ja estiverem prontos.
+      5. Se o Next.js ja estiver rodando na porta escolhida, so refresha o browser.
+      6. Caso contrario, finaliza processos antigos (via .run/next.pid), inicia
+         o Next.js oculto em segundo plano e grava o PID para `.\stop.ps1`.
+      7. Abre ou atualiza aba do navegador apontada pro dashboard.
+
+    O worker de indexacao (ops/indexer) NAO e executado aqui — e varredura
+    cara do HD de rede e deve rodar fora do horario de expediente
+    (Task Scheduler do Windows).
 
 .NOTES
     Companion script: stop.ps1
     Lock file: .run\next.pid
+    Log Next.js: .run\next.log
 #>
 
 [CmdletBinding()]
@@ -154,7 +167,56 @@ if (-not (Test-Path (Join-Path $ProjectRoot 'node_modules'))) {
 }
 
 # --------------------------------------------------------------------------
-# 2. Se ja esta rodando e respondendo, so refresca o navegador
+# 2. Venv Python + setup do banco (idempotente)
+# --------------------------------------------------------------------------
+
+$HasDatabaseUrl = ($envContent -match '(?m)^\s*DATABASE_URL\s*=\s*\S+')
+
+if ($HasDatabaseUrl) {
+    $PyCmd = $null
+    foreach ($cand in @('python','py')) {
+        if (Get-Command $cand -ErrorAction SilentlyContinue) { $PyCmd = $cand; break }
+    }
+    if (-not $PyCmd) {
+        Write-Err "Python nao encontrado no PATH. Instale Python 3.12+ (ou apague DATABASE_URL do .env.local para rodar em modo demo)."
+        exit 1
+    }
+
+    $VenvDir  = Join-Path $ProjectRoot 'ops\indexer\.venv'
+    $VenvPy   = Join-Path $VenvDir 'Scripts\python.exe'
+
+    if (-not (Test-Path $VenvPy)) {
+        Write-Step "Criando venv Python em ops/indexer/.venv..."
+        & $PyCmd -m venv $VenvDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "Falha ao criar venv."
+            exit 1
+        }
+        Write-Step "Instalando dependencias Python (psycopg, dotenv, structlog, unidecode, openpyxl)..."
+        & $VenvPy -m pip install --quiet --upgrade pip
+        & $VenvPy -m pip install --quiet -e "$ProjectRoot\ops\indexer"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "Falha ao instalar dependencias Python."
+            exit 1
+        }
+        Write-Ok "Venv Python pronto."
+    } else {
+        Write-Ok "Venv Python ja existe."
+    }
+
+    Write-Step "Verificando schema e dados (scripts/setup_db.py)..."
+    & $VenvPy "$ProjectRoot\scripts\setup_db.py"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Setup do banco falhou. Revise a mensagem acima antes de continuar."
+        exit 1
+    }
+    Write-Ok "Banco pronto."
+} else {
+    Write-Warn "Pulando setup de banco (modo demo)."
+}
+
+# --------------------------------------------------------------------------
+# 3. Se ja esta rodando e respondendo, so refresca o navegador
 # --------------------------------------------------------------------------
 
 Write-Step "Verificando se o Next.js ja esta rodando na porta $Port..."
@@ -168,7 +230,7 @@ if (Test-PortResponding -Port $Port) {
 }
 
 # --------------------------------------------------------------------------
-# 3. Parar processo antigo (se houver) e subir Next.js oculto
+# 4. Parar processo antigo (se houver) e subir Next.js oculto
 # --------------------------------------------------------------------------
 
 Stop-TrackedNext
@@ -191,7 +253,7 @@ $proc.Id | Out-File -FilePath $PidFile -Encoding ascii
 Write-Ok "Next.js iniciado (PID $($proc.Id)). Log: $LogFile"
 
 # --------------------------------------------------------------------------
-# 4. Aguardar a porta responder
+# 5. Aguardar a porta responder
 # --------------------------------------------------------------------------
 
 Write-Step "Aguardando http://localhost:$Port responder (timeout ${WaitSeconds}s)..."
@@ -222,7 +284,7 @@ if (-not $ready) {
 Write-Ok "Next.js respondendo em $Url"
 
 # --------------------------------------------------------------------------
-# 5. Abrir / atualizar navegador
+# 6. Abrir / atualizar navegador
 # --------------------------------------------------------------------------
 
 Invoke-BrowserRefreshOrOpen -Url $Url
