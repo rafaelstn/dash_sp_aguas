@@ -33,8 +33,10 @@
 
 [CmdletBinding()]
 param(
-    [int]$Port = 3000,
-    [int]$WaitSeconds = 90
+    # Portas candidatas, em ordem de preferencia. Primeira livre e escolhida.
+    # Passe -Ports 3000 para forcar apenas uma.
+    [int[]]$Ports = @(3000, 3001),
+    [int]$WaitSeconds = 120
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,7 +46,6 @@ Set-Location $ProjectRoot
 $RunDir   = Join-Path $ProjectRoot '.run'
 $PidFile  = Join-Path $RunDir 'next.pid'
 $LogFile  = Join-Path $RunDir 'next.log'
-$Url      = "http://localhost:$Port"
 
 if (-not (Test-Path $RunDir)) {
     New-Item -ItemType Directory -Path $RunDir | Out-Null
@@ -60,6 +61,16 @@ function Test-PortResponding {
     try {
         $resp = Invoke-WebRequest -Uri "http://localhost:$Port" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
         return $true
+    } catch {
+        return $false
+    }
+}
+
+function Test-PortInUse {
+    param([int]$Port)
+    try {
+        $t = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop
+        return [bool]$t
     } catch {
         return $false
     }
@@ -216,18 +227,37 @@ if ($HasDatabaseUrl) {
 }
 
 # --------------------------------------------------------------------------
-# 3. Se ja esta rodando e respondendo, so refresca o navegador
+# 3. Escolher porta disponivel entre as candidatas
 # --------------------------------------------------------------------------
 
-Write-Step "Verificando se o Next.js ja esta rodando na porta $Port..."
+Write-Step "Procurando porta disponivel entre: $($Ports -join ', ')..."
 
-if (Test-PortResponding -Port $Port) {
-    Write-Ok "Porta $Port ja responde. Nao vou reiniciar."
-    Invoke-BrowserRefreshOrOpen -Url $Url
-    Write-Host ""
-    Write-Ok "Pronto. Dashboard em $Url"
-    exit 0
+# (a) ja ha dashboard respondendo em alguma porta candidata? so refresca.
+foreach ($p in $Ports) {
+    if (Test-PortResponding -Port $p) {
+        $Url = "http://localhost:$p"
+        Write-Ok "Porta $p ja responde. Nao vou reiniciar."
+        Invoke-BrowserRefreshOrOpen -Url $Url
+        Write-Host ""
+        Write-Ok "Pronto. Dashboard em $Url"
+        exit 0
+    }
 }
+
+# (b) escolhe a primeira porta nao ocupada
+$Port = $null
+foreach ($p in $Ports) {
+    if (-not (Test-PortInUse -Port $p)) { $Port = $p; break }
+}
+
+if (-not $Port) {
+    Write-Err "Todas as portas candidatas estao ocupadas por outro processo: $($Ports -join ', ')."
+    Write-Host "  Libere uma delas ou passe -Ports <n> em start.ps1." -ForegroundColor Yellow
+    exit 1
+}
+
+$Url = "http://localhost:$Port"
+Write-Ok "Porta escolhida: $Port"
 
 # --------------------------------------------------------------------------
 # 4. Parar processo antigo (se houver) e subir Next.js oculto
@@ -235,12 +265,12 @@ if (Test-PortResponding -Port $Port) {
 
 Stop-TrackedNext
 
-Write-Step "Iniciando Next.js oculto em segundo plano..."
+Write-Step "Iniciando Next.js oculto em segundo plano (porta $Port)..."
 
-# captura stdout/stderr do Next para .run/next.log
+# '-p $Port' forca a porta: sem fallback silencioso pra portas diferentes.
 $startArgs = @{
     FilePath         = 'npm.cmd'
-    ArgumentList     = @('run','dev')
+    ArgumentList     = @('run','dev','--','-p',"$Port")
     WorkingDirectory = $ProjectRoot
     WindowStyle      = 'Hidden'
     PassThru         = $true
