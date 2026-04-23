@@ -1,8 +1,7 @@
 name: CI
 
-# Smoke-test mínimo enquanto o projeto ainda não rodou localmente pela primeira
-# vez. Quando package-lock.json for gerado e commitado, reverter `npm install`
-# para `npm ci` e remover os `continue-on-error` de lint/typecheck.
+# Smoke test: lint + typecheck do dashboard e py_compile dos scripts Python.
+# package-lock.json é committado — CI usa `npm ci` para build determinístico.
 
 on:
   push:
@@ -21,17 +20,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install deps
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true
 
       - name: Typecheck
         run: npm run typecheck
-        continue-on-error: true
 
   python:
     name: Python — sintaxe
