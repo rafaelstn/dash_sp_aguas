@@ -14,7 +14,7 @@ ALTER TABLE postos ADD COLUMN busca_tsv TSVECTOR
   GENERATED ALWAYS AS (
     to_tsvector(
       'portuguese',
-      unaccent(
+      f_unaccent(
         coalesce(prefixo,'') || ' ' ||
         coalesce(prefixo_ana,'') || ' ' ||
         coalesce(LPAD(NULLIF(prefixo_ana,''), 8, '0'),'') || ' ' ||

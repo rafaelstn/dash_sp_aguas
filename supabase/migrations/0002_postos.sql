@@ -51,15 +51,15 @@ CREATE TABLE IF NOT EXISTS postos (
     GENERATED ALWAYS AS (
       to_tsvector(
         'portuguese',
-        unaccent(coalesce(prefixo,'') || ' ' ||
-                 coalesce(nome_estacao,'') || ' ' ||
-                 coalesce(municipio,'') || ' ' ||
-                 coalesce(municipio_alt,'') || ' ' ||
-                 coalesce(bacia_hidrografica,'') || ' ' ||
-                 coalesce(ugrhi_nome,'') || ' ' ||
-                 coalesce(sub_ugrhi_nome,'') || ' ' ||
-                 coalesce(proprietario,'') || ' ' ||
-                 coalesce(mantenedor,''))
+        f_unaccent(coalesce(prefixo,'') || ' ' ||
+                   coalesce(nome_estacao,'') || ' ' ||
+                   coalesce(municipio,'') || ' ' ||
+                   coalesce(municipio_alt,'') || ' ' ||
+                   coalesce(bacia_hidrografica,'') || ' ' ||
+                   coalesce(ugrhi_nome,'') || ' ' ||
+                   coalesce(sub_ugrhi_nome,'') || ' ' ||
+                   coalesce(proprietario,'') || ' ' ||
+                   coalesce(mantenedor,''))
       )
     ) STORED,
 
