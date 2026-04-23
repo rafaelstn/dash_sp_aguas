@@ -611,6 +611,7 @@ export const REVISOES_FIXTURES: RevisaoDesconformidade[] = [
     status: 'revisado',
     nota: 'Renomeação programada para o próximo lote.',
     ip: '10.0.0.42',
+    usuarioId: null,
     revisadoEm: new Date('2026-04-21T15:30:00Z'),
     createdAt: new Date('2026-04-21T15:30:00Z'),
   },

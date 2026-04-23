@@ -18,6 +18,7 @@ type LinhaRevisao = {
   status: StatusRevisao;
   nota: string | null;
   ip: string | null;
+  usuario_id: string | null;
   revisado_em: Date | null;
   created_at: Date;
 };
@@ -31,6 +32,7 @@ function mapear(linha: LinhaRevisao): RevisaoDesconformidade {
     status: linha.status,
     nota: linha.nota,
     ip: linha.ip,
+    usuarioId: linha.usuario_id,
     revisadoEm: linha.revisado_em,
     createdAt: linha.created_at,
   };
@@ -41,18 +43,19 @@ export const revisoesRepository: RevisoesRepository = {
     try {
       const linhas = await sql<LinhaRevisao[]>`
         INSERT INTO revisoes_desconformidade
-          (tipo_entidade, id_entidade, categoria, status, nota, ip, revisado_em)
+          (tipo_entidade, id_entidade, categoria, status, nota, ip, usuario_id, revisado_em)
         VALUES
           (${params.tipoEntidade}, ${params.idEntidade}, ${params.categoria},
-           'revisado', ${params.nota}, ${params.ip}, NOW())
+           'revisado', ${params.nota}, ${params.ip}, ${params.usuarioId}, NOW())
         ON CONFLICT (tipo_entidade, id_entidade, categoria)
         DO UPDATE SET
           status = 'revisado',
           nota = COALESCE(EXCLUDED.nota, revisoes_desconformidade.nota),
           ip = EXCLUDED.ip,
+          usuario_id = EXCLUDED.usuario_id,
           revisado_em = NOW()
         RETURNING id, tipo_entidade, id_entidade, categoria, status,
-                  nota, ip, revisado_em, created_at
+                  nota, ip, usuario_id, revisado_em, created_at
       `;
       const linha = linhas[0];
       if (!linha) {

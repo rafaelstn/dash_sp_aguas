@@ -1,6 +1,7 @@
 /**
  * Entidade RevisaoDesconformidade — registro operacional de curadoria.
- * Gravada com `usuarioId = null` e `ip` preenchido no MVP (ADR-0003).
+ * Com auth Supabase ativa (ADR-0004), `usuarioId` passa a ser preenchido.
+ * `ip` permanece como dado complementar pra auditoria forense.
  */
 
 import type { CategoriaDesconformidade } from './desconformidade';
@@ -16,6 +17,7 @@ export interface RevisaoDesconformidade {
   status: StatusRevisao;
   nota: string | null;
   ip: string | null;
+  usuarioId: string | null;
   revisadoEm: Date | null;
   createdAt: Date;
 }
@@ -26,4 +28,5 @@ export interface ParametrosNovaRevisao {
   categoria: CategoriaDesconformidade;
   nota: string | null;
   ip: string | null;
+  usuarioId: string | null;
 }

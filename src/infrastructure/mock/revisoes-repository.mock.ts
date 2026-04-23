@@ -51,6 +51,7 @@ export const revisoesRepository: RevisoesRepository = {
         status: 'revisado',
         nota: params.nota ?? existente.nota,
         ip: params.ip,
+        usuarioId: params.usuarioId,
         revisadoEm: agora,
       };
       armazenamento.set(k, atualizado);
@@ -65,6 +66,7 @@ export const revisoesRepository: RevisoesRepository = {
       status: 'revisado',
       nota: params.nota,
       ip: params.ip,
+      usuarioId: params.usuarioId,
       revisadoEm: agora,
       createdAt: agora,
     };
