@@ -105,8 +105,11 @@ RX_PASTA_COM_SUFIXO = re.compile(r"^(?P<prefixo>\S+)\s+(?P<sufixo>.+)$")
 PASTAS_SEM_PREFIXO = {"0 sem prefixo", "0 semprefixo"}
 PASTAS_DUVIDAS = {"0 duvidas"}
 PASTAS_PARALISADAS = {"0 paralisados", "0 paralisado"}
-# Fichas descritivas: qualquer pasta cujo nome normalizado começa com este prefixo.
-PREFIXO_PASTA_FICHAS = "0 fichas descritivas"
+# Prefixos de pastas tratadas como FICHA_GERAL (documentos institucionais, não por posto).
+#   "0 fichas descritivas *"  — fichas gerais do programa (Fluviometria/Pluviometria).
+#   "0 boletins"              — boletins institucionais anuais (Fluviometria/0 Boletins/
+#                                2019..2024/OUTROS); confirmado via mapeamento real do HD.
+PREFIXOS_PASTA_FICHA_GERAL = ("0 fichas descritivas", "0 boletins")
 
 XLSX_CTHDOC_NOME = "relacao_doc_arquivos_cthdoc.xlsx"
 
@@ -285,7 +288,7 @@ def _classificar_pasta_especial(
             categoria = "PENDENCIA_CLIENTE"
         elif norm in PASTAS_PARALISADAS:
             paralisado = True
-        elif norm.startswith(PREFIXO_PASTA_FICHAS):
+        elif any(norm.startswith(p) for p in PREFIXOS_PASTA_FICHA_GERAL):
             categoria = "FICHA_GERAL"
         else:
             m = RX_PASTA_COM_SUFIXO.match(parte)
