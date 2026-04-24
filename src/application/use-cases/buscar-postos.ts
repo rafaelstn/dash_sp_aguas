@@ -69,7 +69,10 @@ export async function buscarPostos(
 
   return repo.pesquisar({
     termo: pareceCodigo || termoBruto.length === 0 ? undefined : termoBruto,
-    prefixoComecaCom: pareceCodigo ? termoBruto : undefined,
+    // Prefixos no cadastro são sempre maiúsculos. Normaliza aqui pra
+    // cobrir entradas via URL direta (?q=1d-008) ou API externa — o
+    // frontend já envia uppercase, mas este é o último gatekeeper.
+    prefixoComecaCom: pareceCodigo ? termoBruto.toUpperCase() : undefined,
     ugrhiNumero: entrada.ugrhiNumero,
     municipio: entrada.municipio,
     baciaHidrografica: entrada.baciaHidrografica,

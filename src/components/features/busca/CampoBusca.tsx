@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 export function CampoBusca() {
   const router = useRouter();
   const params = useSearchParams();
-  const [termo, setTermo] = useState(params.get('q') ?? '');
+  const [termo, setTermo] = useState((params.get('q') ?? '').toUpperCase());
 
   function submeter(e: FormEvent) {
     e.preventDefault();
@@ -28,11 +28,17 @@ export function CampoBusca() {
         <Input
           rotulo="Buscar posto"
           descricao="Informe o prefixo (ex.: 1D-008) ou texto livre (município, bacia, UGRHI)."
-          placeholder="Ex.: 1D-008 ou Guaratinguetá"
+          placeholder="Ex.: 1D-008 OU GUARATINGUETÁ"
           value={termo}
-          onChange={(e) => setTermo(e.currentTarget.value)}
+          // Todos os prefixos oficiais dos postos são maiúsculos; a busca
+          // textual (FTS) é case-insensitive no backend, então subir tudo
+          // pra maiúscula não muda resultado — só garante prefixo certo e
+          // consistência visual. `textTransform: uppercase` no CSS cobre
+          // o frame entre keystroke e re-render.
+          onChange={(e) => setTermo(e.currentTarget.value.toUpperCase())}
           autoComplete="off"
           inputMode="search"
+          style={{ textTransform: 'uppercase' }}
         />
       </div>
       <Button type="submit">Buscar</Button>
