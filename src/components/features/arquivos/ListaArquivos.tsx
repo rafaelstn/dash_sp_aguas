@@ -3,10 +3,16 @@ import type {
   FormatoNomeArquivo,
 } from '@/domain/arquivo-indexado';
 import type { GrupoArquivosPorTipo } from '@/application/ports/arquivos-repository';
-import { formatarDataHora, formatarTamanho, formatarValor } from '@/lib/format';
+import {
+  formatarDataHora,
+  formatarTamanho,
+  formatarValor,
+} from '@/lib/format';
 import { Alerta } from '@/components/ui/Alerta';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { CaminhoRede } from './CaminhoRede';
+import { AbrirNoExplorer } from './AbrirNoExplorer';
+import { AbasArquivos, type AbaArquivos } from './AbasArquivos';
 
 export interface ListaArquivosProps {
   grupos: GrupoArquivosPorTipo[];
@@ -16,15 +22,21 @@ export interface ListaArquivosProps {
 
 /**
  * Lista de arquivos agrupados por Tipo de Documento (US-010).
- * Grupos sem arquivos não são renderizados. O grupo "Sem classificação"
- * aparece por último e concentra arquivos sem `cod_tipo_documento`.
+ * Cada linha expõe botão "Abrir pasta" — copia o caminho para o Explorer.
  */
-export function ListaArquivos({ grupos, total, prefixoJaIndexado }: ListaArquivosProps) {
+export function ListaArquivos({
+  grupos,
+  total,
+  prefixoJaIndexado,
+}: ListaArquivosProps) {
   if (!prefixoJaIndexado) {
     return (
-      <Alerta tipo="aviso" titulo="Indexação ainda não executada para este prefixo">
-        Os arquivos associados a este posto ainda não foram varridos pelo worker de indexação.
-        Procure o operador responsável pelo processo.
+      <Alerta
+        tipo="aviso"
+        titulo="Indexação ainda não executada para este prefixo"
+      >
+        Os arquivos associados a este posto ainda não foram varridos pelo
+        worker de indexação. Procure o operador responsável pelo processo.
       </Alerta>
     );
   }
@@ -38,39 +50,38 @@ export function ListaArquivos({ grupos, total, prefixoJaIndexado }: ListaArquivo
     );
   }
 
+  // Pré-renderiza cada grupo como JSX no Server Component — as abas (client)
+  // só organizam a exibição. Isso mantém toLocaleDateString & cia no server,
+  // sem hydration mismatch no browser.
+  const abas: AbaArquivos[] = grupos.map((grupo) => ({
+    // codTipoDocumento é numérico (1..7) no domínio — converte pra string
+    // porque o id é usado em aria-controls/htmlFor que só aceitam string.
+    id:
+      grupo.codTipoDocumento !== null
+        ? String(grupo.codTipoDocumento)
+        : 'sem-classificacao',
+    rotulo: grupo.rotulo,
+    contagem: grupo.arquivos.length,
+    conteudo: (
+      <ul className="divide-y divide-app-border-subtle rounded-gov-card border border-app-border-subtle bg-app-surface">
+        {grupo.arquivos.map((a) => (
+          <LinhaArquivo key={a.id} arquivo={a} />
+        ))}
+      </ul>
+    ),
+  }));
+
   return (
-    <div className="space-y-6">
-      <p className="text-sm text-gov-muted">
-        Total: {total} {total === 1 ? 'arquivo' : 'arquivos'} em {grupos.length}{' '}
-        {grupos.length === 1 ? 'grupo' : 'grupos'}.
+    <div className="space-y-3">
+      <p className="text-xs text-app-fg-muted tabular">
+        <span className="font-medium text-app-fg">
+          {total.toLocaleString('pt-BR')}
+        </span>{' '}
+        {total === 1 ? 'arquivo' : 'arquivos'} em {grupos.length}{' '}
+        {grupos.length === 1 ? 'grupo' : 'grupos'}
       </p>
 
-      {grupos.map((grupo) => {
-        const cabecalhoId = `grupo-${grupo.codTipoDocumento ?? 'sem-classificacao'}`;
-        return (
-          <section
-            key={grupo.codTipoDocumento ?? 'sem-classificacao'}
-            aria-labelledby={cabecalhoId}
-            className="space-y-3"
-          >
-            <h3
-              id={cabecalhoId}
-              className="text-base font-semibold text-gov-texto border-b border-gov-borda pb-1"
-            >
-              <span>{grupo.rotulo}</span>
-              <span className="ml-2 text-sm text-gov-muted font-normal">
-                ({grupo.arquivos.length}{' '}
-                {grupo.arquivos.length === 1 ? 'arquivo' : 'arquivos'})
-              </span>
-            </h3>
-            <ul className="space-y-3">
-              {grupo.arquivos.map((a) => (
-                <LinhaArquivo key={a.id} arquivo={a} />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      <AbasArquivos abas={abas} />
     </div>
   );
 }
@@ -81,60 +92,75 @@ function LinhaArquivo({ arquivo }: { arquivo: ArquivoIndexado }) {
     : null;
 
   return (
-    <li className="border border-gov-borda rounded p-4 bg-white">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="font-medium text-gov-texto break-words">{arquivo.nomeArquivo}</p>
-        <BadgeFormatoNome formato={arquivo.formatoNome} />
-      </div>
-      <dl className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs text-gov-muted">
-        {dataDocumento && (
-          <div>
-            <dt className="font-semibold">Data do documento</dt>
-            <dd>{dataDocumento}</dd>
+    <li className="px-3 py-2 hover:bg-app-surface-2">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p
+              className="truncate text-sm font-medium text-app-fg"
+              title={arquivo.nomeArquivo}
+            >
+              {arquivo.nomeArquivo}
+            </p>
+            <BadgeFormatoNome formato={arquivo.formatoNome} />
           </div>
-        )}
-        {arquivo.codEncarregado && (
-          <div>
-            <dt className="font-semibold">Encarregado</dt>
-            <dd>{arquivo.codEncarregado}</dd>
+
+          <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-app-fg-muted tabular">
+            {dataDocumento && (
+              <MetaItem rotulo="Documento" valor={dataDocumento} />
+            )}
+            {arquivo.codEncarregado && (
+              <MetaItem rotulo="Encarregado" valor={arquivo.codEncarregado} />
+            )}
+            <MetaItem
+              rotulo="Tamanho"
+              valor={formatarTamanho(arquivo.tamanhoBytes)}
+            />
+            <MetaItem
+              rotulo="Modificado"
+              valor={formatarDataHora(arquivo.dataModificacao)}
+            />
+            {arquivo.parteOpcional && (
+              <MetaItem
+                rotulo="Compl."
+                valor={formatarValor(arquivo.parteOpcional)}
+              />
+            )}
+          </dl>
+
+          <div className="mt-1.5">
+            <CaminhoRede caminho={arquivo.caminhoAbsoluto} />
           </div>
-        )}
-        {arquivo.parteOpcional && (
-          <div className="col-span-2">
-            <dt className="font-semibold">Complemento</dt>
-            <dd className="break-words">{formatarValor(arquivo.parteOpcional)}</dd>
-          </div>
-        )}
-        <div>
-          <dt className="font-semibold">Tamanho</dt>
-          <dd>{formatarTamanho(arquivo.tamanhoBytes)}</dd>
         </div>
-        <div>
-          <dt className="font-semibold">Modificado em</dt>
-          <dd>{formatarDataHora(arquivo.dataModificacao)}</dd>
+
+        <div className="shrink-0">
+          <AbrirNoExplorer caminhoAbsoluto={arquivo.caminhoAbsoluto} />
         </div>
-      </dl>
-      <div className="mt-3">
-        <CaminhoRede caminho={arquivo.caminhoAbsoluto} />
       </div>
     </li>
   );
 }
 
+function MetaItem({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div className="flex items-baseline gap-1">
+      <dt className="text-app-fg-subtle">{rotulo}:</dt>
+      <dd className="font-medium text-app-fg">{valor}</dd>
+    </div>
+  );
+}
+
 /**
- * Badge suave indicando o formato do nome do arquivo. Só aparece para
- * formatos não-COMPLETO (o COMPLETO é o padrão, não precisa de marcação).
- * PARCIAL e LEGADO são CONFORMES — o badge é informativo, não de alerta.
+ * Badge indicando formato do nome do arquivo. Só aparece para formatos
+ * não-COMPLETO. PARCIAL e LEGADO são CONFORMES — badge informativo, não de alerta.
  */
 function BadgeFormatoNome({ formato }: { formato: FormatoNomeArquivo }) {
   if (formato === 'COMPLETO') return null;
-
   const rotulo =
     formato === 'PARCIAL' ? 'sem cód. encarregado' : 'arquivo histórico';
-
   return (
     <span
-      className="inline-flex items-center rounded-full bg-gov-fundo-suave border border-gov-borda px-2 py-0.5 text-xs font-medium text-gov-muted"
+      className="inline-flex items-center rounded border border-app-border-subtle bg-app-surface-2 px-1.5 py-0.5 text-2xs font-medium text-app-fg-muted"
       title={`Formato ${formato.toLowerCase()}`}
     >
       {rotulo}
