@@ -4,10 +4,10 @@ import { useEffect, useRef } from 'react';
 
 const ATALHOS: Array<{ tecla: string; acao: string }> = [
   { tecla: '/', acao: 'Focar o campo de busca' },
-  { tecla: 'g f', acao: 'Ir para Favoritos' },
-  { tecla: 'g d', acao: 'Ir para Desconformidades' },
-  { tecla: 'g h', acao: 'Ir para a home' },
-  { tecla: 'f', acao: 'Favoritar posto aberto (na ficha)' },
+  { tecla: 'P', acao: 'Ir para Painel' },
+  { tecla: 'F', acao: 'Ir para Favoritos (ou alternar favorito na ficha)' },
+  { tecla: 'D', acao: 'Ir para Desconformidades' },
+  { tecla: 'H', acao: 'Ir para Home (busca de postos)' },
   { tecla: 'Esc', acao: 'Limpar filtros (na home)' },
   { tecla: '?', acao: 'Abrir/fechar esta ajuda' },
 ];
