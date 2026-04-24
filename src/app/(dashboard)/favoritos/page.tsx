@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ListaResultados } from '@/components/features/busca/ListaResultados';
@@ -32,21 +33,17 @@ export default async function PaginaFavoritos() {
 
     if (postos.length === 0) {
       return (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <header>
-            <h1 className="text-display font-bold text-gov-texto">
-              Meus favoritos
-            </h1>
-            <p className="mt-1 text-gov-muted">
+            <h1 className="text-xl font-semibold text-app-fg">Meus favoritos</h1>
+            <p className="mt-0.5 text-xs text-app-fg-muted">
               Postos marcados como favoritos aparecem aqui. Para marcar,
               abra a ficha do posto e clique na estrela.
             </p>
           </header>
-          <div className="border border-dashed border-gov-borda rounded-gov-card bg-white p-8 text-center">
-            <p className="text-gov-texto font-medium">
-              Nenhum posto favoritado ainda.
-            </p>
-            <p className="text-sm text-gov-muted mt-1">
+          <div className="rounded-gov-card border border-dashed border-app-border-subtle bg-app-surface p-8 text-center">
+            <p className="font-medium text-app-fg">Nenhum posto favoritado ainda.</p>
+            <p className="mt-1 text-xs text-app-fg-muted">
               Comece pela{' '}
               <Link href="/" className="text-gov-azul hover:underline">
                 busca de postos
@@ -59,12 +56,10 @@ export default async function PaginaFavoritos() {
     }
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <header>
-          <h1 className="text-display font-bold text-gov-texto">
-            Meus favoritos
-          </h1>
-          <p className="mt-1 text-sm text-gov-muted">
+          <h1 className="text-xl font-semibold text-app-fg">Meus favoritos</h1>
+          <p className="mt-0.5 text-xs text-app-fg-muted tabular">
             {postos.length.toLocaleString('pt-BR')}{' '}
             {postos.length === 1 ? 'posto favoritado' : 'postos favoritados'}
           </p>
@@ -78,10 +73,25 @@ export default async function PaginaFavoritos() {
         />
       </div>
     );
-  } catch {
+  } catch (erro) {
+    // Log estruturado server-side para diagnóstico. UUID interno (pseudônimo
+    // LGPD) + código curto de correlação que o técnico pode citar no suporte.
+    // Não serializar a `causa` para o cliente — pode conter detalhe de infra.
+    const codigo = randomUUID().slice(0, 8);
+    console.error('[favoritos.page] Falha ao listar favoritos', {
+      codigo,
+      usuarioId: usuario.id,
+      erro,
+    });
     return (
-      <Alerta tipo="erro" titulo="Falha ao carregar favoritos">
-        Tente novamente em instantes.
+      <Alerta
+        tipo="erro"
+        titulo="Não foi possível carregar os favoritos no momento"
+      >
+        Tente novamente em instantes. Se o problema persistir, informe o
+        código{' '}
+        <code className="font-mono font-semibold">{codigo}</code> à equipe
+        técnica.
       </Alerta>
     );
   }
