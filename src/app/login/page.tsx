@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { FormularioLogin } from './FormularioLogin';
 
 export const metadata = {
@@ -15,7 +16,13 @@ export default function PaginaLogin() {
         autorizados do setor SPÁguas.
       </p>
       <FormularioLogin />
-      <p className="mt-6 text-xs text-gov-muted">
+      <p className="mt-6 text-sm text-gov-muted">
+        Ainda não tem conta?{' '}
+        <Link href="/cadastrar" className="text-gov-azul hover:underline">
+          Criar conta
+        </Link>
+      </p>
+      <p className="mt-2 text-xs text-gov-muted">
         Em caso de dificuldade de acesso ou esquecimento de senha, contate o
         administrador do sistema.
       </p>

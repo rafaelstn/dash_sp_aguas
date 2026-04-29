@@ -6,6 +6,13 @@ import { obterUsuarioBypassDev } from './dev-bypass';
 export interface UsuarioAutenticado {
   id: string;
   email: string;
+  /**
+   * Nome de exibição. Vem de `user_metadata.nome` quando o usuário se
+   * cadastra via /cadastrar. Pode ser null pra usuários antigos criados
+   * via painel Supabase sem metadata. Quem consome deve fazer fallback
+   * pro `email` (parte antes do @) quando ausente.
+   */
+  nome: string | null;
 }
 
 /**
@@ -17,7 +24,9 @@ export interface UsuarioAutenticado {
  */
 export async function obterUsuarioAtual(): Promise<UsuarioAutenticado | null> {
   const bypass = obterUsuarioBypassDev();
-  if (bypass) return bypass;
+  if (bypass) {
+    return { id: bypass.id, email: bypass.email, nome: null };
+  }
 
   try {
     const supabase = await criarClienteSupabaseServer();
@@ -25,7 +34,13 @@ export async function obterUsuarioAtual(): Promise<UsuarioAutenticado | null> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user || !user.email) return null;
-    return { id: user.id, email: user.email };
+    const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const nomeBruto = typeof meta.nome === 'string' ? meta.nome.trim() : '';
+    return {
+      id: user.id,
+      email: user.email,
+      nome: nomeBruto.length > 0 ? nomeBruto : null,
+    };
   } catch {
     return null;
   }

@@ -77,6 +77,14 @@ export async function Sidenav() {
       <div className="border-t border-app-border-subtle px-3 py-2.5 text-xs text-app-fg-muted">
         {usuario ? (
           <>
+            {usuario.nome ? (
+              <p
+                className="truncate font-medium text-app-fg"
+                title={usuario.nome}
+              >
+                {usuario.nome}
+              </p>
+            ) : null}
             <p className="truncate" title={usuario.email}>
               {usuario.email}
             </p>
@@ -88,9 +96,14 @@ export async function Sidenav() {
             </a>
           </>
         ) : (
-          <Link href="/login" className="text-gov-azul hover:underline">
-            Entrar
-          </Link>
+          <div className="flex flex-col gap-0.5">
+            <Link href="/login" className="text-gov-azul hover:underline">
+              Entrar
+            </Link>
+            <Link href="/cadastrar" className="text-gov-azul hover:underline">
+              Cadastrar
+            </Link>
+          </div>
         )}
       </div>
     </aside>

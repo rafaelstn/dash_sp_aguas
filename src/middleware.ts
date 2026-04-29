@@ -18,6 +18,7 @@ import { bypassAuthAtivo } from '@/infrastructure/auth/dev-bypass';
 
 const ROTAS_PUBLICAS = new Set([
   '/login',
+  '/cadastrar',
   '/auth/callback',
   '/auth/sair',
   '/api/health',
@@ -79,8 +80,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Usuário autenticado tentando acessar /login -> manda pra home.
-  if (user && request.nextUrl.pathname === '/login') {
+  // Usuário autenticado tentando acessar /login ou /cadastrar -> manda pra home.
+  if (
+    user &&
+    (request.nextUrl.pathname === '/login' ||
+      request.nextUrl.pathname === '/cadastrar')
+  ) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = '/';
     homeUrl.search = '';
