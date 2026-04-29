@@ -18,14 +18,19 @@ export const facetasRepository: FacetasRepository = {
       return cache.dados;
     }
     try {
-      const [ugrhis, municipios, bacias, tiposPosto] = await Promise.all([
+      const [ugrhis, municipios, bacias, tiposPosto, mantenedores] = await Promise.all([
+        // Agrupa apenas por ugrhi_numero. MAX(ugrhi_nome) ignora NULLs e pega
+        // um nome válido quando existe — evita key React duplicada quando
+        // alguns postos têm numero preenchido mas nome vazio (ex.: UGRHI 18).
+        // COALESCE final garante label legível mesmo se todos os nomes do
+        // grupo forem nulos (fallback pro número).
         sql<{ numero: string; nome: string; total: string }[]>`
           SELECT ugrhi_numero AS numero,
-                 ugrhi_nome   AS nome,
+                 COALESCE(MAX(ugrhi_nome), ugrhi_numero) AS nome,
                  COUNT(*)::text AS total
             FROM postos
            WHERE ugrhi_numero IS NOT NULL AND ugrhi_numero <> ''
-           GROUP BY ugrhi_numero, ugrhi_nome
+           GROUP BY ugrhi_numero
            ORDER BY ugrhi_numero
         `,
         sql<{ nome: string; total: string }[]>`
@@ -49,6 +54,21 @@ export const facetasRepository: FacetasRepository = {
            GROUP BY tipo_posto
            ORDER BY tipo_posto
         `,
+        // Mantenedores — UNION ALL de mantenedor + btl. COUNT(DISTINCT id)
+        // evita dobrar quando os dois campos têm o mesmo valor no mesmo
+        // registro (cenário comum em postos da Polícia Ambiental).
+        sql<{ nome: string; total: string }[]>`
+          SELECT valor AS nome, COUNT(DISTINCT id)::text AS total
+            FROM (
+              SELECT id, mantenedor AS valor FROM postos
+               WHERE mantenedor IS NOT NULL AND mantenedor <> ''
+              UNION ALL
+              SELECT id, btl AS valor FROM postos
+               WHERE btl IS NOT NULL AND btl <> ''
+            ) u
+           GROUP BY valor
+           ORDER BY valor
+        `,
       ]);
 
       const dados: FacetasPostos = {
@@ -67,6 +87,10 @@ export const facetasRepository: FacetasRepository = {
         })),
         tiposPosto: tiposPosto.map((r) => ({
           codigo: r.codigo,
+          total: Number(r.total),
+        })),
+        mantenedores: mantenedores.map((r) => ({
+          nome: r.nome,
           total: Number(r.total),
         })),
       };

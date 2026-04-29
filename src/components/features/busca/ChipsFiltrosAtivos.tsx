@@ -8,7 +8,10 @@ export interface ChipsFiltrosAtivosProps {
 }
 
 interface ChipSpec {
-  chave: string;
+  /** Chaves do query string a remover ao clicar — array pra coordenadas que
+   *  usam dois params (lat + lng) num único chip.
+   */
+  chaves: string[];
   rotulo: string;
   valor: string;
 }
@@ -18,10 +21,17 @@ const RÓTULOS: Record<string, string> = {
   municipio: 'Município',
   bacia: 'Bacia',
   tipo: 'Tipo',
+  mantenedor: 'Mantenedor',
+  status: 'Status',
   tem_fd: 'Com Ficha Descritiva',
   tem_fi: 'Com Ficha de Inspeção',
   tem_telem: 'Com telemetria',
   favoritos: 'Apenas favoritos',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  ativo: 'Ativo',
+  desativado: 'Desativado',
 };
 
 function extrair(params: URLSearchParams, mostrarFavoritos: boolean): ChipSpec[] {
@@ -30,14 +40,28 @@ function extrair(params: URLSearchParams, mostrarFavoritos: boolean): ChipSpec[]
     if (chave === 'favoritos' && !mostrarFavoritos) continue;
     const valor = params.get(chave);
     if (!valor) continue;
-    // Checkbox (valor "1") vira só o rótulo; demais mostram o valor.
     const isBoolean = ['tem_fd', 'tem_fi', 'tem_telem', 'favoritos'].includes(chave);
+    // Status traduz "ativo"/"desativado" pra rótulos legíveis (Ativo/Desativado).
+    const valorExibido =
+      chave === 'status' ? (STATUS_LABEL[valor] ?? valor) : valor;
     chips.push({
-      chave,
+      chaves: [chave],
       rotulo,
-      valor: isBoolean ? '' : valor,
+      valor: isBoolean ? '' : valorExibido,
     });
   }
+
+  // Coordenada — chip único que junta lat+lng e os remove juntos.
+  const lat = params.get('lat');
+  const lng = params.get('lng');
+  if (lat && lng) {
+    chips.push({
+      chaves: ['lat', 'lng'],
+      rotulo: 'Coordenada',
+      valor: `${lat}, ${lng}`,
+    });
+  }
+
   return chips;
 }
 
@@ -49,9 +73,9 @@ export function ChipsFiltrosAtivos({ mostrarFavoritos = false }: ChipsFiltrosAti
 
   if (chips.length === 0) return null;
 
-  function remover(chave: string) {
+  function remover(chaves: string[]) {
     const novo = new URLSearchParams(searchParams.toString());
-    novo.delete(chave);
+    for (const c of chaves) novo.delete(c);
     novo.delete('pagina'); // reseta paginação ao mudar filtro
     const qs = novo.toString();
     router.push(qs ? `/?${qs}` : '/');
@@ -73,9 +97,9 @@ export function ChipsFiltrosAtivos({ mostrarFavoritos = false }: ChipsFiltrosAti
     >
       {chips.map((c) => (
         <button
-          key={c.chave}
+          key={c.chaves.join('+')}
           type="button"
-          onClick={() => remover(c.chave)}
+          onClick={() => remover(c.chaves)}
           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-gov-azul bg-gov-azul-claro text-gov-azul text-xs font-medium hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           aria-label={`Remover filtro ${c.rotulo}`}
         >

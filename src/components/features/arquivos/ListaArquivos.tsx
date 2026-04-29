@@ -3,6 +3,7 @@ import type {
   FormatoNomeArquivo,
 } from '@/domain/arquivo-indexado';
 import type { GrupoArquivosPorTipo } from '@/application/ports/arquivos-repository';
+import { TIPOS_DOCUMENTO } from '@/domain/tipo-documento';
 import {
   formatarDataHora,
   formatarTamanho,
@@ -21,12 +22,14 @@ export interface ListaArquivosProps {
 }
 
 /**
- * Lista de arquivos agrupados por Tipo de Documento (US-010).
+ * Lista de arquivos antigos do HD agrupados por Tipo de Documento (US-010).
  * Cada linha expõe botão "Abrir pasta" — copia o caminho para o Explorer.
+ *
+ * Fichas DIGITAIS (entrada via app de campo / formulário web) são exibidas
+ * em outra seção da página do posto via `<HistoricoFichas>`.
  */
 export function ListaArquivos({
   grupos,
-  total,
   prefixoJaIndexado,
 }: ListaArquivosProps) {
   if (!prefixoJaIndexado) {
@@ -41,49 +44,59 @@ export function ListaArquivos({
     );
   }
 
-  if (total === 0) {
-    return (
-      <EstadoVazio
-        titulo="Nenhum arquivo indexado para este prefixo"
-        descricao="Já houve varredura, mas nenhum arquivo correspondente foi encontrado no HD de rede."
-      />
-    );
+  // Indexa os grupos por código pra lookup O(1) ao montar abas.
+  const grupoPorCodigo = new Map<number, GrupoArquivosPorTipo>();
+  for (const g of grupos) {
+    if (g.codTipoDocumento !== null) {
+      grupoPorCodigo.set(g.codTipoDocumento, g);
+    }
   }
 
-  // Pré-renderiza cada grupo como JSX no Server Component — as abas (client)
-  // só organizam a exibição. Isso mantém toLocaleDateString & cia no server,
-  // sem hydration mismatch no browser.
-  const abas: AbaArquivos[] = grupos.map((grupo) => ({
-    // codTipoDocumento é numérico (1..7) no domínio — converte pra string
-    // porque o id é usado em aria-controls/htmlFor que só aceitam string.
-    id:
-      grupo.codTipoDocumento !== null
-        ? String(grupo.codTipoDocumento)
-        : 'sem-classificacao',
-    rotulo: grupo.rotulo,
-    contagem: grupo.arquivos.length,
-    conteudo: (
-      <ul className="divide-y divide-app-border-subtle rounded-gov-card border border-app-border-subtle bg-app-surface">
-        {grupo.arquivos.map((a) => (
-          <LinhaArquivo key={a.id} arquivo={a} />
-        ))}
-      </ul>
-    ),
-  }));
+  // SEMPRE constrói as 7 abas oficiais (1..7) na mesma ordem do
+  // HistoricoFichas — paridade visual entre as duas tab bars. Tipos
+  // sem arquivo no posto mostram empty state interno.
+  const abas: AbaArquivos[] = Object.values(TIPOS_DOCUMENTO)
+    .sort((a, b) => a.codigo - b.codigo)
+    .map((tipo) => {
+      const grupo = grupoPorCodigo.get(tipo.codigo);
+      const arquivos = grupo?.arquivos ?? [];
+      return {
+        id: String(tipo.codigo),
+        rotulo: tipo.rotulo,
+        contagem: arquivos.length,
+        conteudo:
+          arquivos.length === 0 ? (
+            <EmptyAbaArquivos rotuloTipo={tipo.rotulo} />
+          ) : (
+            <ul className="divide-y divide-app-border-subtle rounded-gov-card border border-app-border-subtle bg-app-surface">
+              {arquivos.map((a) => (
+                <LinhaArquivo key={a.id} arquivo={a} />
+              ))}
+            </ul>
+          ),
+      };
+    });
 
-  return (
-    <div className="space-y-3">
-      <p className="text-xs text-app-fg-muted tabular">
-        <span className="font-medium text-app-fg">
-          {total.toLocaleString('pt-BR')}
-        </span>{' '}
-        {total === 1 ? 'arquivo' : 'arquivos'} em {grupos.length}{' '}
-        {grupos.length === 1 ? 'grupo' : 'grupos'}
-      </p>
+  // Caso raro: arquivos sem classificação de tipo (codTipoDocumento null
+  // no parser do indexer). Adiciona aba extra "Sem classificação" no
+  // final pra não esconder esses arquivos.
+  const semClassificacao = grupos.find((g) => g.codTipoDocumento === null);
+  if (semClassificacao && semClassificacao.arquivos.length > 0) {
+    abas.push({
+      id: 'sem-classificacao',
+      rotulo: semClassificacao.rotulo,
+      contagem: semClassificacao.arquivos.length,
+      conteudo: (
+        <ul className="divide-y divide-app-border-subtle rounded-gov-card border border-app-border-subtle bg-app-surface">
+          {semClassificacao.arquivos.map((a) => (
+            <LinhaArquivo key={a.id} arquivo={a} />
+          ))}
+        </ul>
+      ),
+    });
+  }
 
-      <AbasArquivos abas={abas} />
-    </div>
-  );
+  return <AbasArquivos abas={abas} />;
 }
 
 function LinhaArquivo({ arquivo }: { arquivo: ArquivoIndexado }) {
@@ -147,6 +160,21 @@ function MetaItem({ rotulo, valor }: { rotulo: string; valor: string }) {
       <dt className="text-app-fg-subtle">{rotulo}:</dt>
       <dd className="font-medium text-app-fg">{valor}</dd>
     </div>
+  );
+}
+
+/**
+ * Empty state mostrado dentro de uma aba sem arquivos daquele tipo.
+ * Mensagem é puramente informativa — diferente do empty de fichas
+ * digitais, aqui não tem CTA porque arquivos vêm do indexador (não
+ * dá pra "criar manualmente" um PDF do HD via UI).
+ */
+function EmptyAbaArquivos({ rotuloTipo }: { rotuloTipo: string }) {
+  return (
+    <EstadoVazio
+      titulo={`Nenhum arquivo de ${rotuloTipo} indexado`}
+      descricao="A varredura do HD de rede não encontrou arquivos deste tipo neste posto."
+    />
   );
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { bypassAuthAtivo } from '@/infrastructure/auth/dev-bypass';
 
 /**
  * Middleware de autenticação — gate de todas as rotas exceto as públicas
@@ -31,6 +32,18 @@ function rotaPublica(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  // Dev: bypass completo da autenticação quando DEV_BYPASS_AUTH_EMAIL está
+  // setada (ver infrastructure/auth/dev-bypass.ts). Guarda NODE_ENV interna.
+  if (bypassAuthAtivo()) {
+    if (request.nextUrl.pathname === '/login') {
+      const homeUrl = request.nextUrl.clone();
+      homeUrl.pathname = '/';
+      homeUrl.search = '';
+      return NextResponse.redirect(homeUrl);
+    }
+    return NextResponse.next();
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 

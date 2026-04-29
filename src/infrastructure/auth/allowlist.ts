@@ -5,12 +5,16 @@ export type ResultadoAllowlist =
   | { ok: false; motivo: 'email_vazio' | 'formato_invalido' | 'dominio_nao_permitido' };
 
 /**
- * Valida se um email pode solicitar magic link.
+ * Valida se um email pode tentar autenticar.
  *
  * Política (ADR-0004): só emails em domínios governamentais (SP/DAEE) ou em
  * lista explícita de exceções via `AUTH_EXTRA_ALLOWED_EMAILS` (ex.: consultor).
- * Validação ocorre server-side antes de qualquer chamada ao Supabase Auth —
- * nunca disparamos email pra endereço não autorizado.
+ * Validação ocorre server-side antes de qualquer chamada ao Supabase Auth.
+ *
+ * MODO DEMO: setar `AUTH_ALLOWED_EMAIL_DOMAINS=*` libera qualquer domínio
+ * (mantendo a validação de formato). Útil pra fase de testes com avaliadores
+ * externos antes do banco oficial estar montado. Quando o sistema for entregue
+ * em produção, restaurar a lista real de domínios institucionais.
  */
 export function emailEstaAutorizado(email: string): ResultadoAllowlist {
   const entrada = email.trim().toLowerCase();
@@ -27,6 +31,9 @@ export function emailEstaAutorizado(email: string): ResultadoAllowlist {
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
+
+  // Wildcard explícito — modo demo, formato já validado acima.
+  if (dominios.includes('*')) return { ok: true };
 
   if (emailsExtras.includes(entrada)) return { ok: true };
 

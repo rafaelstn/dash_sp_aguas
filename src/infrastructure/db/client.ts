@@ -28,7 +28,11 @@ function criar(): Sql {
     max: 5,
     idle_timeout: 20,
     connect_timeout: 10,
-    prepare: false, // Supabase pooler em modo transaction não suporta prepared statements.
+    // `prepare: false` é defensivo. Mesmo assim, postgres.js 3.x quebra em
+    // pgBouncer Transaction mode (porta 6543) com erro "bind message supplies
+    // N parameters but prepared statement requires 0". A DATABASE_URL DEVE
+    // apontar pra Session mode (porta 5432). Ver .env.example.
+    prepare: false,
     transform: {
       undefined: null,
     },

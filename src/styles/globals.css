@@ -2,19 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Foco visível coerente em todo elemento interativo — requisito WCAG 2.4.7 */
+/* ─────────────────────────────────────────────────────────────────
+   Design tokens — SPÁguas
+   Paleta em HSL (sem hsl() wrapper) pra permitir alpha em utilitários
+   Tailwind arbitrários: ex. bg-[hsl(var(--gov-azul)/0.1)]. Dark mode
+   futuro: trocar o bloco [data-theme="dark"] abaixo (comentado).
+   ────────────────────────────────────────────────────────────────── */
 @layer base {
+  :root {
+    /* Superfícies */
+    --bg-app: 210 20% 98%;          /* #F9FAFB — fundo geral */
+    --bg-surface: 0 0% 100%;         /* branco — cards, tabela */
+    --bg-surface-2: 220 14% 96%;     /* #F3F4F6 — header tabela, hover */
+    --bg-surface-3: 220 13% 91%;     /* #E5E7EB — zebra */
+
+    /* Textos */
+    --fg-default: 221 39% 11%;       /* #111827 — 16.9:1 */
+    --fg-muted: 220 9% 36%;          /* #4B5563 — 7.5:1 */
+    --fg-subtle: 220 9% 46%;         /* #6B7280 — 4.7:1 (só >= 14px) */
+
+    /* Bordas */
+    --border-subtle: 220 13% 91%;    /* #E5E7EB */
+    --border-default: 216 12% 84%;   /* #D1D5DB */
+    --border-strong: 218 11% 65%;    /* #9CA3AF */
+
+    /* Marca */
+    --gov-azul: 226 71% 40%;         /* #1E40AF — 8.6:1 */
+    --gov-azul-escuro: 224 76% 32%;  /* #1E3A8A */
+    --gov-azul-claro: 214 95% 93%;   /* #DBEAFE — fundo de pílula */
+
+    /* Semântica */
+    --status-danger: 0 70% 35%;      /* #991B1B — 8.7:1 */
+    --status-success: 142 64% 24%;   /* #166534 — 6.3:1 */
+    --status-warn: 28 84% 31%;       /* #92400E — 7.4:1 */
+
+    /* Focus ring */
+    --ring: var(--gov-azul);
+
+    /* Densidade — escala compacta */
+    --row-h-compact: 32px;
+    --row-h-normal: 40px;
+    --row-h-comfortable: 48px;
+  }
+
+  /* Dark mode — NÃO habilitar agora. Ative depois aplicando
+     <html data-theme="dark">. Valores iniciais abaixo são ponto de
+     partida; refinar na ativação. */
+  /*
+  [data-theme="dark"] {
+    --bg-app: 222 15% 8%;
+    --bg-surface: 222 14% 11%;
+    --bg-surface-2: 221 13% 14%;
+    --bg-surface-3: 220 12% 18%;
+    --fg-default: 210 20% 96%;
+    --fg-muted: 218 11% 70%;
+    --fg-subtle: 218 11% 60%;
+    --border-subtle: 220 12% 22%;
+    --border-default: 220 10% 32%;
+    --border-strong: 218 11% 55%;
+    --gov-azul: 217 91% 65%;
+    --gov-azul-claro: 217 33% 22%;
+  }
+  */
+
   html {
     scroll-behavior: smooth;
   }
 
+  body {
+    background-color: hsl(var(--bg-app));
+    color: hsl(var(--fg-default));
+    font-family: theme('fontFamily.sans');
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* WCAG 2.4.7 — foco visível coerente */
   :focus-visible {
-    outline: 3px solid theme('colors.gov.azul');
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
     border-radius: 2px;
   }
 
-  /* Remove motion para quem pede */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -26,14 +96,21 @@
     }
   }
 
-  body {
-    color: theme('colors.gov.texto');
-    background-color: theme('colors.gov.superficie');
-    font-family: theme('fontFamily.sans');
+  /* Scrollbar discreto — estilo denso */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border-strong)) transparent;
   }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-default));
+    border-radius: 6px;
+    border: 2px solid hsl(var(--bg-app));
+  }
+  *::-webkit-scrollbar-thumb:hover { background: hsl(var(--border-strong)); }
 }
 
-/* Classe utilitária para ocultar visualmente mantendo acessível a leitores de tela */
 @layer utilities {
   .sr-only {
     position: absolute;
@@ -46,4 +123,8 @@
     white-space: nowrap;
     border: 0;
   }
+
+  /* Números tabulares — essencial em tabela densa */
+  .tabular { font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace; }
 }

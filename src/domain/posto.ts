@@ -46,4 +46,15 @@ export interface Posto {
   altimetria: number | null;
   createdAt: Date;
   updatedAt: Date;
+
+  // ──────────── Metadados de indexação sob demanda ────────────
+  // Populados pelo use-case obter-ficha a partir do repositório de indexação.
+  // Permanecem opcionais para compatibilidade com fontes (mock/v1) que ainda
+  // não preenchem esses campos.
+  /** Momento da última indexação bem-sucedida do acervo do posto. */
+  indexadoEm?: Date | null;
+  /** Quando a entrada de cache expira (TTL 24h). */
+  indexExpiraEm?: Date | null;
+  /** Estado atual da indexação — usado pelo BadgeIndexacao. */
+  statusIndexacao?: 'ok' | 'stale' | 'ausente' | 'indexando';
 }

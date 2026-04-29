@@ -1,3 +1,5 @@
+
+
 #Requires -Version 5.1
 <#
 .SYNOPSIS
@@ -80,6 +82,7 @@ if (-not $AllowNetworkDrive) {
             exit $LASTEXITCODE
         }
 
+        
         Write-Host "    Clone local nao encontrado em: $cloneLocal" -ForegroundColor Red
         Write-Host ""
         Write-Host "    Rode uma vez, em qualquer PowerShell:" -ForegroundColor Cyan
@@ -147,6 +150,52 @@ function Stop-TrackedNext {
         }
         Remove-Item $PidFile -ErrorAction SilentlyContinue
     }
+}
+
+# --------------------------------------------------------------------------
+# Identifica o processo que ocupa uma porta e tenta liberar quando for
+# instancia antiga do proprio Next/Node. Se for outro processo (VS Code,
+# Docker, etc.) preserva e devolve $false pra que o caller decida.
+# --------------------------------------------------------------------------
+function Clear-PortaSeNext {
+    param([int]$Port)
+
+    try {
+        $conexoes = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop
+    } catch {
+        return $true  # porta ja livre
+    }
+
+    foreach ($conn in $conexoes) {
+        $owningPid = $conn.OwningProcess
+        if (-not $owningPid -or $owningPid -eq 0) { continue }
+
+        $proc = Get-Process -Id $owningPid -ErrorAction SilentlyContinue
+        if (-not $proc) { continue }
+
+        $procName = $proc.ProcessName
+        $segurosParaMatar = @('node', 'npm', 'next', 'turbopack')
+
+        if ($segurosParaMatar -contains $procName.ToLower()) {
+            Write-Step "Porta $Port ocupada por '$procName' (PID $owningPid) — encerrando para reutilizar..."
+            try {
+                # mata arvore (workers do Next sao filhos do node)
+                Get-CimInstance Win32_Process -Filter "ParentProcessId=$owningPid" |
+                    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+                Stop-Process -Id $owningPid -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 500  # da tempo de soltar o socket
+                Write-Ok "PID $owningPid encerrado, porta $Port liberada."
+                return $true
+            } catch {
+                Write-Warn "Falha ao encerrar PID $owningPid : $($_.Exception.Message)"
+                return $false
+            }
+        } else {
+            Write-Warn "Porta $Port ocupada por '$procName' (PID $owningPid) — nao e processo do Next, preservando."
+            return $false
+        }
+    }
+    return $true
 }
 
 function Invoke-BrowserRefreshOrOpen {
@@ -296,15 +345,26 @@ foreach ($p in $Ports) {
     }
 }
 
-# (b) escolhe a primeira porta nao ocupada
+# (b) escolhe a primeira porta livre — ou tenta liberar uma ocupada por
+# instancia antiga do proprio Next/Node antes de desistir.
 $Port = $null
 foreach ($p in $Ports) {
     if (-not (Test-PortInUse -Port $p)) { $Port = $p; break }
 }
 
 if (-not $Port) {
-    Write-Err "Todas as portas candidatas estao ocupadas por outro processo: $($Ports -join ', ')."
-    Write-Host "  Libere uma delas ou passe -Ports <n> em start.ps1." -ForegroundColor Yellow
+    foreach ($p in $Ports) {
+        if (Clear-PortaSeNext -Port $p) {
+            # confirma que ficou livre depois do kill
+            if (-not (Test-PortInUse -Port $p)) { $Port = $p; break }
+        }
+    }
+}
+
+if (-not $Port) {
+    Write-Err "Todas as portas candidatas estao ocupadas por outros processos: $($Ports -join ', ')."
+    Write-Host "  Use 'netstat -ano | findstr :3000' para identificar quem ocupa," -ForegroundColor Yellow
+    Write-Host "  ou passe -Ports <n> em start.ps1 para escolher outra porta." -ForegroundColor Yellow
     exit 1
 }
 

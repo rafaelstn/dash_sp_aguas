@@ -3,6 +3,8 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Esconde o indicator flutuante do Next.js em dev (canto inferior esquerdo).
+  devIndicators: false,
   // O cliente postgres.js roda apenas no servidor; evita bundling acidental no navegador.
   serverExternalPackages: ['postgres'],
   // typedRoutes desabilitado: Turbopack (Next 15.2) ainda nao suporta.

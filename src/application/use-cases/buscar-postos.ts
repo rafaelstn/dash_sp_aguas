@@ -8,6 +8,10 @@ export interface EntradaBuscarPostos {
   municipio?: string;
   baciaHidrografica?: string;
   tipoPosto?: string;
+  mantenedor?: string;
+  status?: 'ativo' | 'desativado';
+  latitude?: number;
+  longitude?: number;
   // Booleans
   temFichaDescritiva?: boolean;
   temFichaInspecao?: boolean;
@@ -19,8 +23,8 @@ export interface EntradaBuscarPostos {
   porPagina?: number;
 }
 
-const POR_PAGINA_PADRAO = 25;
-const POR_PAGINA_MAX = 100;
+export const POR_PAGINA_PADRAO = 25;
+export const POR_PAGINA_MAX = 100;
 
 /**
  * Normaliza entrada e delega ao repositório.
@@ -40,11 +44,22 @@ export async function buscarPostos(
   const pagina = Math.max(1, entrada.pagina ?? 1);
   const porPagina = Math.min(POR_PAGINA_MAX, Math.max(1, entrada.porPagina ?? POR_PAGINA_PADRAO));
 
+  // Filtro geo só vale se par lat+lng está completo. Um único valor é ignorado
+  // pra evitar busca degenerada (uma faixa horizontal/vertical do estado todo).
+  const temCoord =
+    typeof entrada.latitude === 'number' &&
+    Number.isFinite(entrada.latitude) &&
+    typeof entrada.longitude === 'number' &&
+    Number.isFinite(entrada.longitude);
+
   const temFiltrosCategoricos = Boolean(
     entrada.ugrhiNumero ||
       entrada.municipio ||
       entrada.baciaHidrografica ||
       entrada.tipoPosto ||
+      entrada.mantenedor ||
+      entrada.status ||
+      temCoord ||
       entrada.temFichaDescritiva ||
       entrada.temFichaInspecao ||
       entrada.temTelemetrico ||
@@ -77,6 +92,10 @@ export async function buscarPostos(
     municipio: entrada.municipio,
     baciaHidrografica: entrada.baciaHidrografica,
     tipoPosto: entrada.tipoPosto,
+    mantenedor: entrada.mantenedor,
+    status: entrada.status,
+    latitude: temCoord ? entrada.latitude : undefined,
+    longitude: temCoord ? entrada.longitude : undefined,
     temFichaDescritiva: entrada.temFichaDescritiva,
     temFichaInspecao: entrada.temFichaInspecao,
     temTelemetrico: entrada.temTelemetrico,

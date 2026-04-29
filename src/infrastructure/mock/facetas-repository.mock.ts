@@ -45,6 +45,23 @@ export const facetasRepository: FacetasRepository = {
       tiposMap.set(p.tipoPosto, (tiposMap.get(p.tipoPosto) ?? 0) + 1);
     }
 
+    // Mantenedores: combina mantenedor + btl, conta posto distinto pra
+    // não duplicar quando os dois campos têm o mesmo valor no mesmo registro.
+    const mantenedoresMap = new Map<string, Set<string>>();
+    function adicionar(valor: string | null, postoId: string) {
+      if (!valor) return;
+      let ids = mantenedoresMap.get(valor);
+      if (!ids) {
+        ids = new Set();
+        mantenedoresMap.set(valor, ids);
+      }
+      ids.add(postoId);
+    }
+    for (const p of POSTOS_FIXTURES) {
+      adicionar(p.mantenedor, p.id);
+      adicionar(p.btl, p.id);
+    }
+
     return {
       ugrhis: Array.from(ugrhiMap.values()).sort((a, b) =>
         a.numero.localeCompare(b.numero),
@@ -54,6 +71,9 @@ export const facetasRepository: FacetasRepository = {
       tiposPosto: Array.from(tiposMap.entries())
         .map(([codigo, total]) => ({ codigo, total }))
         .sort((a, b) => a.codigo.localeCompare(b.codigo)),
+      mantenedores: Array.from(mantenedoresMap.entries())
+        .map(([nome, ids]) => ({ nome, total: ids.size }))
+        .sort((a, b) => a.nome.localeCompare(b.nome)),
     };
   },
 };

@@ -176,6 +176,42 @@ export const postosRepository: PostosRepository = {
           )`
         : sql``;
 
+    // Mantenedor — match em mantenedor OU btl. Os dois campos representam
+    // a mesma noção do ponto de vista do usuário (responsável pelo posto).
+    const condMantenedor = params.mantenedor
+      ? sql`AND (mantenedor = ${params.mantenedor} OR btl = ${params.mantenedor})`
+      : sql``;
+
+    // Status operacional — heurística de recência (ADR pendente, ver
+    // knowledge-base 2026-04-28). A coluna `operacao_fim_ano` no SPÁguas
+    // não significa só "ano em que parou": pra postos ativos a planilha
+    // preenche com o ano da última varredura (2024/2025), pra postos
+    // extintos preenche com o ano real de baixa, e usa 0 como sentinela
+    // "sem dado". Por isso `IS NULL` sozinho retornava só 20 postos.
+    //
+    // Regra adotada (revisar com cliente SPÁguas):
+    //   ativo      = NULL  OR  ano >= ano_corrente - 1
+    //   desativado = ano > 0 AND ano < ano_corrente - 1   (0 cai aqui)
+    const condStatus =
+      params.status === 'ativo'
+        ? sql`AND (operacao_fim_ano IS NULL
+                   OR operacao_fim_ano >= EXTRACT(YEAR FROM CURRENT_DATE)::int - 1)`
+        : params.status === 'desativado'
+          ? sql`AND operacao_fim_ano > 0
+                AND operacao_fim_ano < EXTRACT(YEAR FROM CURRENT_DATE)::int - 1`
+          : sql``;
+
+    // Bounding box geográfica — sem PostGIS. Tolerância ±0.01° (~1 km em SP)
+    // cobre arredondamento de coordenadas coladas de Google Maps/GPS sem
+    // estourar a query. Pra raio real, faltaria PostGIS + ST_DWithin.
+    const TOLERANCIA_GRAUS = 0.01;
+    const condCoord =
+      typeof params.latitude === 'number' &&
+      typeof params.longitude === 'number'
+        ? sql`AND latitude  BETWEEN ${params.latitude - TOLERANCIA_GRAUS} AND ${params.latitude + TOLERANCIA_GRAUS}
+              AND longitude BETWEEN ${params.longitude - TOLERANCIA_GRAUS} AND ${params.longitude + TOLERANCIA_GRAUS}`
+        : sql``;
+
     try {
       const [linhas, contagem] = await Promise.all([
         sql<LinhaPosto[]>`
@@ -187,6 +223,9 @@ export const postosRepository: PostosRepository = {
            ${condMunicipio}
            ${condBacia}
            ${condTipo}
+           ${condMantenedor}
+           ${condStatus}
+           ${condCoord}
            ${condFD}
            ${condFI}
            ${condTelem}
@@ -203,6 +242,9 @@ export const postosRepository: PostosRepository = {
            ${condMunicipio}
            ${condBacia}
            ${condTipo}
+           ${condMantenedor}
+           ${condStatus}
+           ${condCoord}
            ${condFD}
            ${condFI}
            ${condTelem}

@@ -8,6 +8,7 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 
 ## Pré-condição obrigatória de deploy
 
+
 > **Durante o MVP, o sistema deve rodar exclusivamente em rede interna do setor, sem exposição à internet pública.** A autenticação individual de usuários foi deliberadamente adiada para a Fase 2 (ver `docs/spec.md` §1.2 e `docs/architecture.md` §5.6), e a proteção do ambiente depende da topologia de rede. Qualquer operação de deploy deve verificar essa pré-condição antes de expor o serviço.
 
 ---

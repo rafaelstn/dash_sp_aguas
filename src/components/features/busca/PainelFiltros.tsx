@@ -1,5 +1,23 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import type { FacetasPostos } from '@/application/ports/facetas-repository';
+
+/**
+ * Aparência customizada para `<select>`: esconde a seta nativa do browser
+ * (que fica colada na borda direita) e desenha um chevron SVG com offset
+ * confortável em relação à borda. Inline no `style` em vez de Tailwind
+ * arbitrary value pra não depender do JIT scan resolver data URIs.
+ */
+const ESTILO_SELECT: CSSProperties = {
+  backgroundImage:
+    "url(\"data:image/svg+xml;charset=UTF-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7280'><path fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/></svg>\")",
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 0.85rem center',
+  backgroundSize: '1rem',
+};
+
+const CLASSE_SELECT =
+  'appearance-none w-full pl-3 pr-10 py-2 border border-gov-borda rounded bg-white text-gov-texto';
 
 export interface ValoresFiltros {
   q?: string;
@@ -7,6 +25,10 @@ export interface ValoresFiltros {
   municipio?: string;
   bacia?: string;
   tipo?: string;
+  mantenedor?: string;
+  status?: 'ativo' | 'desativado';
+  lat?: string;
+  lng?: string;
   tem_fd?: boolean;
   tem_fi?: boolean;
   tem_telem?: boolean;
@@ -45,7 +67,8 @@ export function PainelFiltros({
           <select
             name="ugrhi"
             defaultValue={valores.ugrhi ?? ''}
-            className="px-3 py-2 border border-gov-borda rounded bg-white text-gov-texto"
+            className={CLASSE_SELECT}
+            style={ESTILO_SELECT}
           >
             <option value="">Todas</option>
             {facetas.ugrhis.map((u) => (
@@ -61,7 +84,8 @@ export function PainelFiltros({
           <select
             name="tipo"
             defaultValue={valores.tipo ?? ''}
-            className="px-3 py-2 border border-gov-borda rounded bg-white text-gov-texto"
+            className={CLASSE_SELECT}
+            style={ESTILO_SELECT}
           >
             <option value="">Todos</option>
             {facetas.tiposPosto.map((t) => (
@@ -105,6 +129,70 @@ export function PainelFiltros({
             ))}
           </datalist>
         </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-gov-texto">
+            Mantenedor / batalhão
+          </span>
+          <input
+            type="text"
+            name="mantenedor"
+            list="lista-mantenedores"
+            defaultValue={valores.mantenedor ?? ''}
+            placeholder="Ex.: 3° BPAmb, DAEE, CETESB…"
+            className="px-3 py-2 border border-gov-borda rounded bg-white text-gov-texto"
+          />
+          <datalist id="lista-mantenedores">
+            {facetas.mantenedores.slice(0, 500).map((m) => (
+              <option key={m.nome} value={m.nome} />
+            ))}
+          </datalist>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-gov-texto">
+            Status operacional
+          </span>
+          <select
+            name="status"
+            defaultValue={valores.status ?? ''}
+            className={CLASSE_SELECT}
+            style={ESTILO_SELECT}
+          >
+            <option value="">Qualquer</option>
+            <option value="ativo">Ativo</option>
+            <option value="desativado">Desativado</option>
+          </select>
+        </label>
+
+        <fieldset className="flex flex-col gap-1 sm:col-span-2">
+          <legend className="text-sm font-medium text-gov-texto">
+            Coordenada (latitude e longitude)
+          </legend>
+          <p className="text-xs text-gov-muted -mt-0.5 mb-1">
+            Tolerância automática ~1 km. Preencha os dois para ativar.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input
+              type="number"
+              step="any"
+              name="lat"
+              defaultValue={valores.lat ?? ''}
+              placeholder="Lat. ex.: -23.5"
+              aria-label="Latitude"
+              className="px-3 py-2 border border-gov-borda rounded bg-white text-gov-texto"
+            />
+            <input
+              type="number"
+              step="any"
+              name="lng"
+              defaultValue={valores.lng ?? ''}
+              placeholder="Long. ex.: -46.6"
+              aria-label="Longitude"
+              className="px-3 py-2 border border-gov-borda rounded bg-white text-gov-texto"
+            />
+          </div>
+        </fieldset>
       </div>
 
       <fieldset className="grid gap-2 sm:grid-cols-2">

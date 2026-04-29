@@ -11,12 +11,13 @@ export default function PaginaLogin() {
         Acesso ao sistema
       </h2>
       <p className="mt-2 text-sm text-gov-muted">
-        Informe seu endereço de email institucional para receber o link de
-        acesso. Acesso restrito a usuários autorizados do setor SPÁguas.
+        Informe seu email e senha cadastrados. Acesso restrito a usuários
+        autorizados do setor SPÁguas.
       </p>
       <FormularioLogin />
       <p className="mt-6 text-xs text-gov-muted">
-        Em caso de dificuldade, contate o administrador do sistema.
+        Em caso de dificuldade de acesso ou esquecimento de senha, contate o
+        administrador do sistema.
       </p>
     </section>
   );

@@ -23,3 +23,18 @@ export class FalhaRepositorio extends Error {
     this.name = 'FalhaRepositorio';
   }
 }
+
+/**
+ * Sinaliza que o backend aceitou a solicitação de indexação mas ela não
+ * concluiu no tempo síncrono esperado (>8s). O frontend deve fazer polling
+ * em GET /api/jobs/{jobId} até a varredura terminar.
+ */
+export class IndexacaoPendente extends Error {
+  constructor(
+    public readonly prefixo: string,
+    public readonly jobId: string,
+  ) {
+    super(`Indexação pendente para ${prefixo} (job ${jobId})`);
+    this.name = 'IndexacaoPendente';
+  }
+}
