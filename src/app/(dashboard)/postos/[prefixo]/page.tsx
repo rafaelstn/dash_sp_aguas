@@ -171,6 +171,35 @@ function CabecalhoAcervo({
         status={posto.statusIndexacao ?? 'ausente'}
       />
 
+      {/* Aviso sobre requisito de rede pra abrir os arquivos. Colapsável
+          (details/summary) — primeiro acesso vê fechado, expande sob demanda. */}
+      <details className="rounded border border-gov-azul/30 bg-gov-azul-claro/40 px-3 py-2 text-xs text-gov-azul">
+        <summary className="cursor-pointer font-medium">
+          Como abrir os arquivos do HD
+        </summary>
+        <div className="mt-2 space-y-1.5 text-app-fg">
+          <p>
+            Os arquivos abaixo estão fisicamente no HD de rede da FCTH (drive{' '}
+            <code className="mono rounded bg-white px-1">Y:\</code>). Para abrir
+            diretamente, você precisa estar:
+          </p>
+          <ul className="ml-4 list-disc space-y-0.5">
+            <li>Conectado à rede do FCTH (cabo ou Wi-Fi institucional) ou à VPN do DAEE</li>
+            <li>
+              Com o drive <code className="mono rounded bg-white px-1">Y:\</code>{' '}
+              mapeado no Windows do seu PC
+            </li>
+          </ul>
+          <p>
+            Se ambos os requisitos estiverem ok, o ícone de pasta no final de
+            cada linha abre o arquivo. Caso o navegador bloqueie a abertura
+            (por segurança), o caminho completo é copiado pra área de
+            transferência — basta colar em <kbd className="mono rounded bg-white px-1">Win+R</kbd>{' '}
+            ou na barra de endereço do Explorer.
+          </p>
+        </div>
+      </details>
+
       {/* Suprime warning de variável não usada quando indexação está pendente. */}
       <span className="hidden">{prefixoJaIndexado ? 'ok' : 'pendente'}</span>
     </header>

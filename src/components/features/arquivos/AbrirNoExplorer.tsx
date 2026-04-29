@@ -1,6 +1,7 @@
 'use client';
 
 import { FolderOpen } from 'lucide-react';
+import { useState, type MouseEvent } from 'react';
 
 export interface AbrirNoExplorerProps {
   /** Caminho absoluto do arquivo (Windows drive ou UNC). */
@@ -9,83 +10,106 @@ export interface AbrirNoExplorerProps {
 }
 
 /**
- * Abre o Explorer na pasta onde o arquivo está salvo — link `file://` real.
+ * Botão que abre o arquivo no Explorer da máquina do usuário.
  *
- * Limitações do browser:
- *   - Chrome/Edge padrão bloqueiam `file://` servido de `http(s)://` com
- *     mensagem "Not allowed to load local resource". Navegação silenciosa.
- *   - Edge empresarial (DAEE) com `URLAllowlist` configurando `file:*` ou
- *     dashboards internos em zona intranet permite.
- *   - Firefox: permite com aviso.
+ * Limitações inerentes (não removíveis via código):
+ *   - Chrome/Edge bloqueiam `file://` servido por `http(s)://` por segurança.
+ *     Navegação fica silenciosa, sem feedback do browser.
+ *   - Firefox tenta abrir mas avisa.
+ *   - É impossível DETECTAR via JavaScript se o usuário tem acesso ao HD —
+ *     o browser não expõe isso (seria vetor de scan de filesystem).
  *
- * Estratégia: entrega `<a href="file://...">` honesto + copia o caminho da
- * pasta no clipboard em paralelo como rede de segurança — se o browser
- * bloquear, o usuário pode colar o caminho no Win+R ou na barra do Explorer.
+ * Estratégia (melhor possível dentro das restrições):
+ *   1. Tenta `<a href="file://...">` honesto — funciona em ambientes corporativos
+ *      com `URLAllowlist` configurada (Edge empresarial DAEE/FCTH costuma ter)
+ *   2. Em paralelo, copia o caminho COMPLETO do arquivo no clipboard
+ *   3. Mostra toast confirmando + instrução pra colar no Win+R caso não tenha
+ *      aberto sozinho
  *
- * Para UX perfeita (selecionar o arquivo no Explorer com `explorer /select`),
- * precisaria de um custom protocol handler registrado no Windows do usuário —
- * ver ADR pendente sobre helper nativo.
+ * O toast aparece em qualquer caso — vira "feedback positivo" quando abriu E
+ * "instrução de fallback" quando não abriu. Sem detectar resultado, é a única
+ * UX honesta.
  */
 export function AbrirNoExplorer({
   caminhoAbsoluto,
   className = '',
 }: AbrirNoExplorerProps) {
-  const pasta = caminhoAbsoluto.replace(/[\\/][^\\/]+$/, '');
-  const fileUrl = gerarFileUrl(pasta);
-  const titulo = `Abrir pasta no Explorer: ${pasta}`;
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const fileUrl = gerarFileUrl(caminhoAbsoluto);
+  const titulo = `Abrir arquivo: ${caminhoAbsoluto}`;
 
-  function copiarSilencioso() {
-    // Best-effort em paralelo à navegação — se o browser bloquear o file://,
-    // o usuário ainda tem o caminho no clipboard pra colar no Win+R.
+  function aoClicar(_e: MouseEvent<HTMLAnchorElement>) {
+    // Copia o caminho como rede de segurança — se o browser bloquear o file://
+    // ou o usuário não tiver acesso à rede da FCTH, ele cola manualmente.
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(pasta).catch(() => {});
+      navigator.clipboard
+        .writeText(caminhoAbsoluto)
+        .then(() => {
+          setFeedback(
+            'Caminho copiado. Se a pasta não abriu, cole no Win+R ou na barra do Explorer.',
+          );
+          window.setTimeout(() => setFeedback(null), 6000);
+        })
+        .catch(() => {
+          setFeedback(
+            'Não foi possível copiar o caminho automaticamente. Verifique se o navegador permite.',
+          );
+          window.setTimeout(() => setFeedback(null), 6000);
+        });
     }
+    // Não chamamos preventDefault — deixa o browser tentar o file:// nativamente.
   }
 
   return (
-    <a
-      href={fileUrl}
-      onClick={copiarSilencioso}
-      // target="_blank" aqui atrapalha: Chrome abre aba vazia quando bloqueia
-      // e dá a impressão de que abriu no Explorer. Sem target, o bloqueio é
-      // silencioso e o usuário usa o caminho copiado como backup.
-      aria-label={titulo}
-      title={titulo}
-      className={[
-        'inline-flex h-7 w-7 items-center justify-center rounded',
-        'text-app-fg-muted hover:bg-app-surface-2 hover:text-gov-azul',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul',
-        'transition-colors motion-safe:duration-100',
-        className,
-      ].join(' ')}
-    >
-      <FolderOpen className="h-4 w-4" aria-hidden="true" />
-      <span className="sr-only">{titulo}</span>
-    </a>
+    <span className={`relative inline-flex ${className}`}>
+      <a
+        href={fileUrl}
+        onClick={aoClicar}
+        aria-label={titulo}
+        title={titulo}
+        className={[
+          'inline-flex h-7 w-7 items-center justify-center rounded',
+          'text-app-fg-muted hover:bg-app-surface-2 hover:text-gov-azul',
+          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul',
+          'transition-colors motion-safe:duration-100',
+        ].join(' ')}
+      >
+        <FolderOpen className="h-4 w-4" aria-hidden="true" />
+        <span className="sr-only">{titulo}</span>
+      </a>
+
+      {feedback ? (
+        <span
+          role="status"
+          aria-live="polite"
+          className="absolute right-0 top-full z-20 mt-1 w-72 rounded border border-gov-azul/30 bg-gov-azul-claro px-3 py-2 text-xs text-gov-azul shadow-gov-card-hover"
+        >
+          {feedback}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
 /**
  * Converte caminho Windows em URL `file://`.
- * - `Y:\000 Docs\arquivo.pdf` → `file:///Y:/000%20Docs/arquivo.pdf`
- * - `\\servidor\share\arquivo` → `file://servidor/share/arquivo`
+ *
+ * - `Y:\000 Docs\arquivo.pdf`     → `file:///Y:/000%20Docs/arquivo.pdf`
+ * - `\\servidor\share\arquivo`     → `file://servidor/share/arquivo`
  */
 function gerarFileUrl(caminho: string): string {
   const normalizado = caminho.replace(/\\/g, '/');
-  // encodeURI preserva ":" e "/" mas escapa espaço, acentos, etc.
-  // Complementa `#` e `?` que encodeURI deixa passar.
   const encoded = encodeURI(normalizado)
     .replace(/#/g, '%23')
     .replace(/\?/g, '%3F');
 
-  // Drive local (ex.: "Y:/..."): file:/// + caminho
+  // Drive local (ex.: "Y:/...")
   if (/^[a-zA-Z]:/.test(encoded)) {
     return 'file:///' + encoded;
   }
-  // UNC (ex.: "//servidor/share/..."): file: + caminho (as // já vêm)
+  // UNC (ex.: "//servidor/share/...")
   if (encoded.startsWith('//')) {
     return 'file:' + encoded;
   }
-  // Fallback (não esperado pra paths do indexer)
   return 'file://' + encoded;
 }
