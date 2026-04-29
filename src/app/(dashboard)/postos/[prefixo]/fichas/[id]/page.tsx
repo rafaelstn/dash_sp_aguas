@@ -12,11 +12,31 @@ interface PageProps {
   params: Promise<{ prefixo: string; id: string }>;
 }
 
+// Aceita UUID v4 canônico (mesmo formato do gen_random_uuid).
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default async function DetalheFichaPage({ params }: PageProps) {
   const { prefixo: prefixoRaw, id } = await params;
-  const prefixo = decodeURIComponent(prefixoRaw);
+  let prefixo: string;
+  try {
+    prefixo = decodeURIComponent(prefixoRaw);
+  } catch {
+    notFound();
+  }
 
-  const ficha = await obterFichaVisita(fichasVisitaRepository, id);
+  // Filtra ID malformado antes de chegar no Postgres — sem isso, qualquer
+  // string aleatória na URL (ex: /fichas/abc) causa erro de cast UUID.
+  if (!UUID_REGEX.test(id)) notFound();
+
+  let ficha: Awaited<ReturnType<typeof obterFichaVisita>>;
+  try {
+    ficha = await obterFichaVisita(fichasVisitaRepository, id);
+  } catch (e) {
+    console.error('[fichas/[id]] Falha ao carregar ficha', { id, prefixo, e });
+    throw e; // Repassa pro error.tsx mostrar UI amigável.
+  }
+
   if (!ficha || ficha.prefixo !== prefixo) notFound();
 
   const schema = obterSchema(ficha.codTipoDocumento);

@@ -163,10 +163,17 @@ export async function POST(
       duracao_s: worker.duracao_s,
     });
   } catch (e) {
+    // NÃO expõe e.message no body — pode conter caminho de HD de rede
+    // (Y:\...) ou stack do Postgres. Detalhe vai pros logs do servidor.
+    console.error('[api/reindexar] Falha', {
+      prefixo,
+      mensagem: e instanceof Error ? e.message : String(e),
+    });
     const body: RespostaErro = {
       erro: {
         codigo: 'ERRO_INTERNO',
-        mensagem: `Falha ao reindexar posto: ${e instanceof Error ? e.message : String(e)}`,
+        mensagem:
+          'Falha ao reindexar este posto. Tente novamente em instantes ou contate o administrador.',
       },
     };
     return NextResponse.json(body, { status: 500 });

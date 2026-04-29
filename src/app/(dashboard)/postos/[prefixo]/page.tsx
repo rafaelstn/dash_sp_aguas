@@ -9,7 +9,6 @@ import { MapaPosto } from '@/components/features/posto/MapaPosto';
 import { Alerta } from '@/components/ui/Alerta';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BadgeIndexacao } from '@/components/features/posto/BadgeIndexacao';
-import { BotaoExportarRelatorio } from '@/components/features/posto/BotaoExportarRelatorio';
 import { StatusIndexacaoArquivos } from '@/components/features/arquivos/StatusIndexacaoArquivos';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
 import { listarArquivosAgrupados } from '@/application/use-cases/listar-arquivos-agrupados';
@@ -159,10 +158,9 @@ function CabecalhoAcervo({
             oficiais de documento.
           </p>
         </div>
-        <BotaoExportarRelatorio
-          prefixo={prefixo}
-          ultimaVarreduraGlobal={null}
-        />
+        {/* Botão "Exportar relatório" oculto até a rota
+            /api/postos/[prefixo]/relatorio existir. Sem ela, clique gera
+            404 opaco. Reativar quando a feature for implementada. */}
       </div>
 
       {/* Linha do badge separada — ocupa toda a largura do card. */}
@@ -181,7 +179,14 @@ function CabecalhoAcervo({
 
 export default async function PaginaPosto({ params }: PageProps) {
   const { prefixo: prefixoRaw } = await params;
-  const prefixo = decodeURIComponent(prefixoRaw);
+  // URL com `%` solto (ex: /postos/1D%) lança URIError — captura aqui
+  // pra cair em notFound em vez de Application error.
+  let prefixo: string;
+  try {
+    prefixo = decodeURIComponent(prefixoRaw);
+  } catch {
+    notFound();
+  }
 
   const h = await headers();
   const ip =

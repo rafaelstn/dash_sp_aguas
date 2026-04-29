@@ -85,8 +85,8 @@ async function Resultados(props: {
     if (usuario) {
       try {
         prefixosFavoritos = await favoritosRepository.prefixosFavoritos(usuario.id);
-      } catch {
-        /* ignora */
+      } catch (e) {
+        console.error('[home] Falha em chamada opcional — degrada graciosa', e);
       }
     }
 
@@ -282,8 +282,8 @@ export default async function Home({ searchParams }: PageProps) {
     if (usuario) {
       try {
         totalFavoritos = await favoritosRepository.contar(usuario.id);
-      } catch {
-        /* ignora */
+      } catch (e) {
+        console.error('[home] Falha em chamada opcional — degrada graciosa', e);
       }
       try {
         postosRecentes = await listarPostosRecentes(
@@ -292,15 +292,15 @@ export default async function Home({ searchParams }: PageProps) {
           usuario.id,
           10,
         );
-      } catch {
-        // Não estoura a home se a query falhar — recentes some, resto continua.
+      } catch (e) {
+        console.error('[home] Falha ao listar postos recentes — recentes some', e);
       }
       try {
         prefixosFavoritosSet = await favoritosRepository.prefixosFavoritos(
           usuario.id,
         );
-      } catch {
-        // Estrelas iniciam vazias, click ainda funciona — só perde estado inicial.
+      } catch (e) {
+        console.error('[home] Falha ao listar prefixos favoritos — estrelas vazias', e);
       }
     }
     try {

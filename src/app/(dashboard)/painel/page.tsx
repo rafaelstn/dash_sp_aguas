@@ -64,7 +64,8 @@ export default async function PaginaPainel() {
         painelRepository.statusOperacional(),
         painelRepository.rankingMantenedores(15),
       ]);
-  } catch {
+  } catch (e) {
+    console.error('[painel] Falha ao carregar agregações', e);
     falha = true;
   }
 
@@ -183,7 +184,7 @@ export default async function PaginaPainel() {
           />
           <CardKPI
             titulo="Cobertura geográfica"
-            valor={`${((resumo.postosComCoordenadas / resumo.totalPostos) * 100).toFixed(1)}%`}
+            valor={`${(resumo.totalPostos === 0 ? 0 : (resumo.postosComCoordenadas / resumo.totalPostos) * 100).toFixed(1)}%`}
             contexto={`${resumo.postosComCoordenadas.toLocaleString('pt-BR')} com coordenadas`}
             severidade="sucesso"
             icone={FileCheck}
@@ -256,7 +257,7 @@ export default async function PaginaPainel() {
           <CardKPI
             titulo="Postos ativos"
             valor={statusOp.ativos}
-            contexto={`${((statusOp.ativos / statusOp.total) * 100).toFixed(1)}% da rede`}
+            contexto={`${(statusOp.total === 0 ? 0 : (statusOp.ativos / statusOp.total) * 100).toFixed(1)}% da rede`}
             severidade="sucesso"
             icone={Power}
             href="/?status=ativo"
@@ -265,7 +266,7 @@ export default async function PaginaPainel() {
           <CardKPI
             titulo="Postos desativados"
             valor={statusOp.desativados}
-            contexto={`${((statusOp.desativados / statusOp.total) * 100).toFixed(1)}% da rede`}
+            contexto={`${(statusOp.total === 0 ? 0 : (statusOp.desativados / statusOp.total) * 100).toFixed(1)}% da rede`}
             severidade="info"
             icone={PowerOff}
             href="/?status=desativado"

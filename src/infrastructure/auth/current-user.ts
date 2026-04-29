@@ -41,7 +41,8 @@ export async function obterUsuarioAtual(): Promise<UsuarioAutenticado | null> {
       email: user.email,
       nome: nomeBruto.length > 0 ? nomeBruto : null,
     };
-  } catch {
+  } catch (e) {
+    console.error('[auth] Falha ao obter usuário atual — tratando como deslogado', e);
     return null;
   }
 }
