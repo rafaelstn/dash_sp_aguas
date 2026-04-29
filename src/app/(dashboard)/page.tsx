@@ -255,10 +255,24 @@ export default async function Home({ searchParams }: PageProps) {
     temTelem ||
     apenasFavoritos;
 
-  const [facetas, usuario] = await Promise.all([
-    listarFacetas(facetasRepository),
-    obterUsuarioAtual(),
-  ]);
+  // Carrega facetas + usuário em paralelo. Se facetas falhar (banco fora,
+  // pool exaurido, schema inconsistente), não derruba a página: o painel
+  // de filtros aparece com listas vazias e a busca por termo continua
+  // funcionando. Logging server-side preserva diagnóstico.
+  const usuario = await obterUsuarioAtual();
+  let facetas: Awaited<ReturnType<typeof listarFacetas>>;
+  try {
+    facetas = await listarFacetas(facetasRepository);
+  } catch (e) {
+    console.error('[home] Falha ao listar facetas — usando fallback vazio', e);
+    facetas = {
+      ugrhis: [],
+      municipios: [],
+      bacias: [],
+      tiposPosto: [],
+      mantenedores: [],
+    };
+  }
 
   let totalFavoritos = 0;
   let totalDesconformidades = 0;
