@@ -13,21 +13,14 @@ export async function GET() {
     await sql`SELECT 1`;
     return NextResponse.json({ status: 'ok', db: 'ok' }, { status: 200 });
   } catch (e) {
-    // Diagnóstico: expõe detalhes do erro no body em ambiente não-produtivo
-    // OU quando flag de diagnóstico está ligada. Pra produção fechada,
-    // remover após resolver.
-    const detalhe =
-      e instanceof Error
-        ? {
-            name: e.name,
-            message: e.message,
-            code: (e as { code?: string }).code ?? null,
-            severity: (e as { severity?: string }).severity ?? null,
-          }
-        : { raw: String(e) };
-    console.error('[api/health] DB connect fail', detalhe);
+    // Loga detalhe pra debug nos logs do Vercel; resposta pública genérica.
+    console.error('[api/health] DB connect fail', {
+      name: e instanceof Error ? e.name : 'Unknown',
+      message: e instanceof Error ? e.message : String(e),
+      code: e instanceof Error ? (e as { code?: string }).code : null,
+    });
     return NextResponse.json(
-      { status: 'degraded', db: 'erro', detalhe },
+      { status: 'degraded', db: 'erro' },
       { status: 503 },
     );
   }

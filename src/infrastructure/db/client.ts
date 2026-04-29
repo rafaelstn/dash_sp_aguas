@@ -28,10 +28,13 @@ function criar(): Sql {
     max: 5,
     idle_timeout: 20,
     connect_timeout: 10,
-    // `prepare: false` é defensivo. Mesmo assim, postgres.js 3.x quebra em
-    // pgBouncer Transaction mode (porta 6543) com erro "bind message supplies
-    // N parameters but prepared statement requires 0". A DATABASE_URL DEVE
-    // apontar pra Session mode (porta 5432). Ver .env.example.
+    // `prepare: false` é OBRIGATÓRIO porque o cliente pode rodar contra
+    // Supavisor em Transaction mode (porta 6543) — recomendado pra
+    // ambientes serverless tipo Vercel. Sem `prepare: false`, dá erro
+    // "bind message supplies N parameters but prepared statement requires 0".
+    //
+    // Local (start.ps1) usa Session mode (5432) — também aceita prepare:false
+    // sem prejuízo. Em produção (Vercel) usar 6543 pra escalar conexões.
     prepare: false,
     transform: {
       undefined: null,
