@@ -96,6 +96,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Matcher exclui assets estáticos pra não pagar custo de middleware nelas.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt).*)'],
+  // Matcher exclui assets estáticos pra não pagar custo de middleware neles
+  // E pra não disparar redirect 307 pra /login em arquivos de public/
+  // (logo, ícones, fontes, etc.) acessados por usuário não autenticado.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|otf|eot|map|txt)$).*)',
+  ],
 };
