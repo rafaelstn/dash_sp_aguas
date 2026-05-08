@@ -49,8 +49,14 @@ tsconfig.tsbuildinfo
 # Manuais originais do cliente (prints expõem IP interno do DAEE — tratar como sensível até confirmação)
 docs/manuais-cliente/
 
+# Relatórios pessoais do consultor (fora de escopo do repo do cliente)
+docs/relatorios/
+
 # Data dumps / planilhas originais (governo — não subir em repo público)
 # comentar se for repo privado e quiser versionar a planilha base
 # *.csv
 # *.xlsx
 .vercel
+
+# Settings locais do harness Claude Code (per-repo overrides)
+.claude/settings.local.json
