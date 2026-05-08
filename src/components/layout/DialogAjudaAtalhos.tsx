@@ -2,14 +2,34 @@
 
 import { useEffect, useRef } from 'react';
 
-const ATALHOS: Array<{ tecla: string; acao: string }> = [
+interface AtalhoItem {
+  tecla: string;
+  acao: string;
+  contexto?: string;
+}
+
+const ATALHOS_GERAIS: AtalhoItem[] = [
   { tecla: '/', acao: 'Focar o campo de busca' },
   { tecla: 'P', acao: 'Ir para Painel' },
   { tecla: 'F', acao: 'Ir para Favoritos (ou alternar favorito na ficha)' },
   { tecla: 'D', acao: 'Ir para Desconformidades' },
+  { tecla: 'T', acao: 'Ir para Triagem' },
   { tecla: 'H', acao: 'Ir para Home (busca de postos)' },
   { tecla: 'Esc', acao: 'Limpar filtros (na home)' },
   { tecla: '?', acao: 'Abrir/fechar esta ajuda' },
+];
+
+const ATALHOS_TRIAGEM_LISTA: AtalhoItem[] = [
+  { tecla: 'J', acao: 'Selecionar próxima ficha da fila' },
+  { tecla: 'K', acao: 'Selecionar ficha anterior' },
+  { tecla: 'Enter', acao: 'Abrir detalhe da ficha selecionada' },
+];
+
+const ATALHOS_TRIAGEM_DETALHE: AtalhoItem[] = [
+  { tecla: 'R', acao: 'Iniciar revisão (estado pendente)' },
+  { tecla: 'A', acao: 'Aprovar ficha (em revisão)' },
+  { tecla: 'X', acao: 'Rejeitar ficha (em revisão)' },
+  { tecla: 'D', acao: 'Devolver ficha ao técnico (em revisão)' },
 ];
 
 export interface DialogAjudaAtalhosProps {
@@ -58,7 +78,7 @@ export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="relative max-w-md w-full bg-white rounded-gov-card shadow-gov-card-hover border border-gov-borda p-5 focus:outline-none"
+        className="relative max-w-md w-full max-h-[85vh] overflow-y-auto bg-white rounded-gov-card shadow-gov-card-hover border border-gov-borda p-5 focus:outline-none"
       >
         <div className="flex items-start justify-between gap-3 mb-3">
           <h2 id="titulo-ajuda-atalhos" className="text-lg font-semibold text-gov-texto">
@@ -73,22 +93,46 @@ export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps
             ×
           </button>
         </div>
-        <dl className="divide-y divide-gov-borda text-sm">
-          {ATALHOS.map((a) => (
-            <div key={a.tecla} className="flex items-center justify-between gap-4 py-2">
-              <dt className="text-gov-muted">{a.acao}</dt>
-              <dd>
-                <kbd className="font-mono text-xs bg-gov-superficie-2 border border-gov-borda rounded px-2 py-1 text-gov-texto">
-                  {a.tecla}
-                </kbd>
-              </dd>
-            </div>
-          ))}
-        </dl>
+
+        <Bloco titulo="Navegação" itens={ATALHOS_GERAIS} />
+        <Bloco titulo="Lista de triagem" itens={ATALHOS_TRIAGEM_LISTA} />
+        <Bloco titulo="Detalhe da triagem" itens={ATALHOS_TRIAGEM_DETALHE} />
+
         <p className="mt-4 text-xs text-gov-muted">
           Atalhos são ignorados quando você está digitando em um campo.
         </p>
       </div>
     </div>
+  );
+}
+
+function Bloco({
+  titulo,
+  itens,
+}: {
+  titulo: string;
+  itens: AtalhoItem[];
+}) {
+  return (
+    <section className="mt-3 first:mt-0">
+      <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wider text-gov-muted">
+        {titulo}
+      </h3>
+      <dl className="divide-y divide-gov-borda text-sm">
+        {itens.map((a) => (
+          <div
+            key={a.tecla}
+            className="flex items-center justify-between gap-4 py-1.5"
+          >
+            <dt className="text-gov-muted">{a.acao}</dt>
+            <dd>
+              <kbd className="font-mono text-xs bg-gov-superficie-2 border border-gov-borda rounded px-2 py-1 text-gov-texto">
+                {a.tecla}
+              </kbd>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

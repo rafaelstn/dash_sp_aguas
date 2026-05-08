@@ -1,5 +1,7 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { papeisRepository } from '@/infrastructure/repositories';
 import { Sidenav } from '@/components/layout/Sidenav';
 
 /**
@@ -16,6 +18,21 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const usuario = await obterUsuarioAtual();
+
+  // Alerta global pra aprovador sem MFA configurado. Não bloqueia
+  // navegação — só os endpoints críticos de triagem rejeitam (403).
+  let avisoMFA = false;
+  if (usuario) {
+    try {
+      const eh = await papeisRepository.ehAprovador(usuario.id);
+      if (eh) {
+        const tem = await papeisRepository.temMFAVerificado(usuario.id);
+        avisoMFA = !tem;
+      }
+    } catch {
+      /* sem MFA check, sem aviso — não derruba a página */
+    }
+  }
 
   return (
     <div className="lg:flex">
@@ -76,6 +93,27 @@ export default async function DashboardLayout({
           id="conteudo-principal"
           className="mx-auto w-full max-w-content flex-1 px-4 py-6"
         >
+          {avisoMFA ? (
+            <div
+              role="status"
+              className="mb-4 rounded border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <p className="font-semibold">MFA não configurado.</p>
+              <p className="mt-1">
+                Você possui papel de aprovador, mas ainda não configurou o
+                segundo fator de autenticação. Operações críticas de triagem
+                serão bloqueadas até a configuração.{' '}
+                <Link
+                  href="/perfil/mfa"
+                  className="font-medium underline"
+                >
+                  Configurar agora
+                </Link>
+                .
+              </p>
+            </div>
+          ) : null}
+
           <div className="space-y-6">{children}</div>
         </main>
 

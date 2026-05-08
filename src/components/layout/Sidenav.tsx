@@ -2,6 +2,8 @@ import Link from 'next/link';
 import {
   favoritosRepository,
   desconformidadesRepository,
+  papeisRepository,
+  triagemRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { ItemSidenav, type IconeKey } from './ItemSidenav';
@@ -13,11 +15,15 @@ import { ItemSidenav, type IconeKey } from './ItemSidenav';
  * Contadores:
  *  - favoritos: do usuário autenticado (0 se deslogado).
  *  - desconformidades: total de postos desconformes (view v_postos_desconformes).
+ *  - triagem: total de fichas pendentes/em revisão. Item é visível apenas
+ *    para usuários com papel `aprovador` em `usuarios_papeis`.
  */
 export async function Sidenav() {
   const usuario = await obterUsuarioAtual();
   let totalFavoritos = 0;
   let totalDesconformidades = 0;
+  let ehAprovador = false;
+  let totalTriagem = 0;
 
   try {
     if (usuario) totalFavoritos = await favoritosRepository.contar(usuario.id);
@@ -30,14 +36,35 @@ export async function Sidenav() {
   } catch {
     /* idem */
   }
+  if (usuario) {
+    try {
+      ehAprovador = await papeisRepository.ehAprovador(usuario.id);
+    } catch {
+      /* sem papel ainda assim renderiza sidenav — apenas oculta o item */
+    }
+    if (ehAprovador) {
+      try {
+        const r = await triagemRepository.listarPendentes({
+          estado: ['pendente', 'em_revisao'],
+          limite: 1,
+          offset: 0,
+        });
+        totalTriagem = r.total;
+      } catch {
+        /* badge ausente é melhor que sidenav quebrado */
+      }
+    }
+  }
 
-  const itens: ReadonlyArray<{
+  type ItemSide = {
     href: string;
     rotulo: string;
     icone: IconeKey;
     contador: number | null;
     atalho?: string;
-  }> = [
+  };
+
+  const itens: ItemSide[] = [
     { href: '/painel', rotulo: 'Painel', icone: 'dashboard', contador: null, atalho: 'P' },
     { href: '/', rotulo: 'Buscar postos', icone: 'search', contador: null, atalho: '/' },
     { href: '/favoritos', rotulo: 'Favoritos', icone: 'star', contador: totalFavoritos, atalho: 'F' },
@@ -49,6 +76,16 @@ export async function Sidenav() {
       atalho: 'D',
     },
   ];
+
+  if (ehAprovador) {
+    itens.push({
+      href: '/triagem',
+      rotulo: 'Triagem',
+      icone: 'inbox',
+      contador: totalTriagem,
+      atalho: 'T',
+    });
+  }
 
   return (
     <aside

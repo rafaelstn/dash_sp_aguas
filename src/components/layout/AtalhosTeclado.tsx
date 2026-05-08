@@ -15,6 +15,7 @@ import { DialogAjudaAtalhos } from './DialogAjudaAtalhos';
  *   `p`   → /painel
  *   `f`   → /favoritos   (exceto em /postos/<prefixo>, onde alterna favorito)
  *   `d`   → /desconformidades
+ *   `t`   → /triagem  (visível pra aprovadores; tela bloqueia caso contrário)
  *   `h`   → / (home / busca de postos)
  *   `Esc` → limpa filtros (na home) / fecha diálogo
  *   `?`   → abre/fecha modal de ajuda
@@ -50,6 +51,13 @@ export function AtalhosTeclado() {
       botao?.click();
     }
 
+    // Atalhos contextuais da triagem (j/k/Enter na lista, r/a/x/d no
+    // detalhe) são tratados pelos componentes específicos. O handler
+    // global apenas suspende as colisões enquanto o usuário está nessas
+    // rotas — assim `d` (devolver), `a`/`r`/`x` e `j`/`k` não disparam
+    // navegação acidental.
+    const naTriagem = pathname === '/triagem' || pathname.startsWith('/triagem/');
+
     function onKey(e: KeyboardEvent) {
       if (emEdicao(e.target)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -80,14 +88,20 @@ export function AtalhosTeclado() {
           router.push('/painel');
           return;
         case 'd':
+          if (naTriagem) return;
           e.preventDefault();
           router.push('/desconformidades');
+          return;
+        case 't':
+          e.preventDefault();
+          router.push('/triagem');
           return;
         case 'h':
           e.preventDefault();
           router.push('/');
           return;
         case 'f':
+          if (naTriagem) return;
           e.preventDefault();
           // Na ficha de posto, `f` alterna o favorito do posto aberto;
           // em qualquer outra tela, navega para a lista de favoritos.
