@@ -19,7 +19,7 @@ export default async function PerfilPage() {
           className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
         >
           <h2 id="perfil-titulo" className="sr-only">
-            Identidade do usuário
+            Identificação do técnico
           </h2>
           <dl className="space-y-2 text-sm">
             <div>
@@ -27,15 +27,15 @@ export default async function PerfilPage() {
                 Nome
               </dt>
               <dd className="text-app-fg">
-                {usuario?.nome ?? '—'}
+                {usuario?.nome ?? 'Não informado'}
               </dd>
             </div>
             <div>
               <dt className="text-2xs uppercase tracking-wider text-app-fg-muted">
-                E-mail
+                E-mail institucional
               </dt>
               <dd className="break-all text-app-fg">
-                {usuario?.email ?? 'não autenticado'}
+                {usuario?.email ?? 'Sessão não autenticada'}
               </dd>
             </div>
           </dl>
@@ -45,11 +45,12 @@ export default async function PerfilPage() {
           href="/auth/sair"
           className="block min-h-[48px] rounded-gov-card border border-app-border bg-app-surface p-3 text-center text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
         >
-          Sair do aplicativo
+          Encerrar sessão
         </a>
 
         <p className="text-2xs text-app-fg-muted">
-          Sistema em rede SPÁguas · Acesso restrito ao setor.
+          Sistema institucional SPÁguas. Acesso restrito ao corpo técnico
+          autorizado.
         </p>
       </div>
     </>

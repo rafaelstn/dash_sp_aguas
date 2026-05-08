@@ -15,7 +15,7 @@ export default async function ConfigurarMFAPage() {
   if (!usuario) {
     return (
       <Alerta tipo="aviso" titulo="Sessão necessária">
-        Faça login para configurar o segundo fator de autenticação.
+        Acesse o sistema para configurar o segundo fator de autenticação.
       </Alerta>
     );
   }
@@ -37,16 +37,17 @@ export default async function ConfigurarMFAPage() {
         </h1>
         <p className="mt-0.5 text-xs text-app-fg-muted">
           O segundo fator (TOTP) protege as operações críticas da triagem
-          contra acesso indevido. Use um aplicativo autenticador como Google
-          Authenticator, Microsoft Authenticator ou Authy.
+          contra acesso indevido. É necessário utilizar um aplicativo
+          autenticador, como Google Authenticator, Microsoft Authenticator ou
+          Authy.
         </p>
       </header>
 
       {ehAprovador ? (
-        <Alerta tipo="info" titulo="Você é aprovador">
+        <Alerta tipo="info" titulo="Conta com papel de aprovador">
           {temMFA
-            ? 'O seu segundo fator está configurado. Você pode adicionar fatores adicionais ou continuar normalmente.'
-            : 'Aprovações, rejeições e devoluções de fichas exigem MFA verificado. Conclua a configuração abaixo antes de continuar.'}
+            ? 'O segundo fator desta conta já está configurado. Operações críticas da triagem permanecem habilitadas.'
+            : 'Aprovar, rejeitar e devolver fichas exigem segundo fator verificado. Conclua a configuração abaixo antes de prosseguir.'}
         </Alerta>
       ) : null}
 
@@ -54,14 +55,14 @@ export default async function ConfigurarMFAPage() {
 
       <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-3 text-xs text-app-fg-muted">
         <p>
-          Em caso de perda do dispositivo, contate o gestor para que solicite a
-          remoção do fator no painel administrativo. Códigos de recuperação
-          são exibidos uma única vez ao final do processo — guarde-os em local
-          seguro.
+          Em caso de perda do dispositivo, contate o gestor responsável para
+          solicitar a remoção do fator no painel administrativo. Os códigos de
+          recuperação são exibidos uma única vez, ao final do processo —
+          guarde-os em local seguro.
         </p>
         <p className="mt-2">
           <Link href="/triagem" className="text-gov-azul hover:underline">
-            Voltar para a triagem
+            Retornar à triagem de fichas
           </Link>
         </p>
       </div>

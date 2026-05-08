@@ -70,7 +70,9 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
   async function verificarCodigo() {
     if (!dadosFator) return;
     if (!/^\d{6}$/.test(codigo)) {
-      setErro('Insira o código de 6 dígitos exibido no seu aplicativo autenticador.');
+      setErro(
+        'Informe o código de 6 dígitos exibido no aplicativo autenticador.',
+      );
       return;
     }
     setCarregando(true);
@@ -107,7 +109,7 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
     const conteudo =
       `Códigos de recuperação — SPÁguas Ficha Técnica\nUsuário: ${emailUsuario}\nGerado em: ${new Date().toLocaleString('pt-BR')}\n\n` +
       recoveryCodes.map((c, i) => `${i + 1}. ${c}`).join('\n') +
-      `\n\nGuarde estes códigos em local seguro. Cada um pode ser usado uma única vez para recuperar o acesso caso você perca o aparelho com o aplicativo autenticador.\nEm caso de perda total, contate o gestor para resetar o fator no painel administrativo.\n`;
+      `\n\nMantenha estes códigos em local seguro. Cada código pode ser utilizado uma única vez para recuperar o acesso, caso o aparelho com o aplicativo autenticador seja perdido.\nEm caso de perda total, contate o gestor responsável para reiniciar o fator no painel administrativo.\n`;
     const blob = new Blob([conteudo], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -137,8 +139,8 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
           Segundo fator configurado
         </h2>
         <p className="mt-1">
-          Seu segundo fator está ativo. Você pode aprovar, rejeitar e devolver
-          fichas normalmente.
+          O segundo fator desta conta está ativo. As operações de aprovar,
+          rejeitar e devolver fichas estão habilitadas.
         </p>
       </section>
     );
@@ -164,16 +166,23 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
 
       {etapa === 'inicio' ? (
         <div className="space-y-3 text-sm">
-          <p>
-            Você precisará de um aplicativo autenticador instalado no seu
-            celular. Em seguida, leia o QR code apresentado e digite o código
-            de 6 dígitos para confirmar.
-          </p>
+          <header>
+            <p className="text-2xs uppercase tracking-wider text-app-fg-muted">
+              Etapa 1 de 4
+            </p>
+            <h3 className="text-base font-semibold text-app-fg">
+              Preparação
+            </h3>
+            <p className="mt-1 text-xs text-app-fg-muted">
+              Antes de iniciar, instale um aplicativo autenticador em um
+              dispositivo de uso pessoal.
+            </p>
+          </header>
           <ol className="ml-5 list-decimal space-y-1 text-app-fg">
-            <li>Abra um aplicativo autenticador.</li>
-            <li>Escaneie o QR code que será exibido na próxima etapa.</li>
-            <li>Digite o código de 6 dígitos para verificar.</li>
-            <li>Salve os códigos de recuperação em local seguro.</li>
+            <li>Abrir um aplicativo autenticador no dispositivo.</li>
+            <li>Ler o QR code apresentado na próxima etapa.</li>
+            <li>Informar o código de 6 dígitos exibido pelo aplicativo.</li>
+            <li>Armazenar os códigos de recuperação em local seguro.</li>
           </ol>
           <button
             type="button"
@@ -181,20 +190,29 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
             disabled={carregando}
             className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
-            {carregando ? 'Iniciando…' : 'Iniciar configuração'}
+            {carregando ? 'Iniciando configuração…' : 'Iniciar configuração'}
           </button>
         </div>
       ) : null}
 
       {etapa === 'qrcode' && dadosFator ? (
         <div className="space-y-3 text-sm">
-          <p>
-            Escaneie o QR code abaixo no seu aplicativo autenticador. Caso não
-            seja possível escanear, insira manualmente o segredo.
-          </p>
+          <header>
+            <p className="text-2xs uppercase tracking-wider text-app-fg-muted">
+              Etapa 2 de 4
+            </p>
+            <h3 className="text-base font-semibold text-app-fg">
+              Leitura do QR code
+            </h3>
+            <p className="mt-1 text-xs text-app-fg-muted">
+              Leia o QR code abaixo com o aplicativo autenticador. Caso a
+              leitura não seja possível, registre manualmente o segredo
+              alfanumérico.
+            </p>
+          </header>
           {dadosFator.qrCodeSvg ? (
             <div
-              aria-label="QR code do segundo fator"
+              aria-label="QR code do segundo fator de autenticação"
               className="mx-auto w-fit rounded border border-app-border-subtle bg-white p-3"
               // O Supabase devolve SVG seguro (gerado no servidor); a
               // alternativa seria renderizar via imagem externa, o que
@@ -203,12 +221,13 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
             />
           ) : (
             <p className="text-amber-800">
-              QR code indisponível — utilize o segredo manual abaixo.
+              QR code indisponível no momento. Utilize o segredo alfanumérico
+              abaixo.
             </p>
           )}
           {dadosFator.segredoTexto ? (
             <div className="rounded border border-app-border-subtle bg-app-surface-2 p-2 text-xs">
-              <p className="font-semibold">Segredo manual:</p>
+              <p className="font-semibold">Segredo alfanumérico:</p>
               <p className="mono mt-1 break-all">{dadosFator.segredoTexto}</p>
             </div>
           ) : null}
@@ -217,7 +236,7 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
             onClick={() => setEtapa('verificar')}
             className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
-            Já escaneei — continuar
+            Continuar para verificação
           </button>
         </div>
       ) : null}
@@ -230,9 +249,21 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
             void verificarCodigo();
           }}
         >
+          <header>
+            <p className="text-2xs uppercase tracking-wider text-app-fg-muted">
+              Etapa 3 de 4
+            </p>
+            <h3 className="text-base font-semibold text-app-fg">
+              Verificação do código
+            </h3>
+            <p className="mt-1 text-xs text-app-fg-muted">
+              Informe o código de 6 dígitos exibido no aplicativo autenticador
+              para confirmar a vinculação do dispositivo.
+            </p>
+          </header>
           <label htmlFor={codigoId} className="block">
             <span className="block text-xs font-medium text-app-fg">
-              Código de verificação (6 dígitos)
+              Código de 6 dígitos
             </span>
             <input
               id={codigoId}
@@ -260,7 +291,7 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
               disabled={carregando}
               className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro disabled:opacity-60"
             >
-              {carregando ? 'Verificando…' : 'Verificar e ativar'}
+              {carregando ? 'Verificando código…' : 'Verificar e ativar'}
             </button>
           </div>
         </form>
@@ -268,12 +299,24 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
 
       {etapa === 'recovery' ? (
         <div className="space-y-3 text-sm">
+          <header>
+            <p className="text-2xs uppercase tracking-wider text-app-fg-muted">
+              Etapa 4 de 4
+            </p>
+            <h3 className="text-base font-semibold text-app-fg">
+              Códigos de recuperação
+            </h3>
+            <p className="mt-1 text-xs text-app-fg-muted">
+              Os códigos abaixo permitem recuperar o acesso em caso de perda
+              do dispositivo. São exibidos uma única vez.
+            </p>
+          </header>
           <div className="rounded border border-amber-300 bg-amber-50 p-3 text-amber-900">
-            <p className="font-semibold">Guarde estes códigos de recuperação.</p>
+            <p className="font-semibold">Atenção: registre os códigos antes de prosseguir.</p>
             <p className="mt-1">
-              Eles aparecem uma única vez. Em caso de perda do aparelho, esses
-              códigos permitem recuperar o acesso. Cada código pode ser usado
-              apenas uma vez.
+              Cada código pode ser utilizado uma única vez. Em caso de perda
+              do aparelho, os códigos permitem restabelecer o acesso ao
+              sistema.
             </p>
           </div>
           <ul className="grid grid-cols-2 gap-2 rounded border border-app-border-subtle bg-app-surface-2 p-3 text-sm sm:grid-cols-4">
@@ -292,14 +335,14 @@ export function WizardMFA({ emailUsuario, jaConfigurado }: WizardMFAProps) {
               onClick={baixarCodigos}
               className="rounded border border-gov-azul bg-white px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-app-surface-2"
             >
-              Baixar como arquivo .txt
+              Baixar arquivo .txt com os códigos
             </button>
             <button
               type="button"
               onClick={() => setEtapa('concluido')}
               className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro"
             >
-              Já guardei — concluir
+              Confirmar registro e concluir
             </button>
           </div>
         </div>
@@ -323,5 +366,5 @@ function gerarCodigosRecuperacao(qtd: number): string[] {
 
 function extrairMensagem(e: unknown): string {
   if (e instanceof Error) return e.message;
-  return 'Falha ao processar a solicitação.';
+  return 'Não foi possível concluir a operação. Tente novamente em instantes.';
 }

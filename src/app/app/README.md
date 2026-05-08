@@ -102,7 +102,7 @@ O relatório do Lighthouse fica em `docs/relatorios/lighthouse-pwa.html`.
 | Ícone definitivo da PWA | `public/icons/*` | Os atuais são placeholder gerados por script (texto "SPÁ" sobre fundo azul). Substituir por arte oficial 192/512/maskable + apple-touch-icon. |
 | Paleta final (se mudar) | `src/styles/globals.css` + `manifest.json` `theme_color` | Hoje usa `#1E40AF` (`gov-azul`). Sincronizar caso design entregue novo. |
 | Ícone temático por tipo de ficha | `src/components/mobile/CardTipoFicha.tsx` | Hoje exibe número do código (01..07). Substituir por SVG temático. |
-| Copy descritiva dos cards | `src/app/app/page.tsx` | Strings em `DESCRICOES_PLACEHOLDER` são minhas (Bruno) — Camila valida texto institucional. |
+| Copy descritiva dos cards | `src/app/app/page.tsx` | Texto institucional final em `DESCRICOES_TIPO_FICHA` (Camila — auditoria Sprint 1.S3). Atualizar apenas em caso de mudança de escopo. |
 | Listagem em "Minhas fichas" | `src/app/app/minhas-fichas/page.tsx` | Aguarda Lucas entregar `/api/triagem/minhas-fichas` (Sprint 1 backend). |
 | GPS / consentimento | _(novo)_ | Conforme spec §2.1 e checklist André §10 (pendência 4) — telinha de consentimento explícito antes da primeira captura. |
 | Rascunho local + fila offline | `src/infrastructure/storage/*` | Sprint 4. Não no escopo desta semana. |

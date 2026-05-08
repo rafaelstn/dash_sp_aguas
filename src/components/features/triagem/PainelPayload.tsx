@@ -63,7 +63,7 @@ export function PainelPayload({
       {observacoes && observacoes.trim().length > 0 ? (
         <fieldset className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
           <legend className="px-1 text-sm font-semibold text-app-fg">
-            Observações gerais do técnico
+            Observações registradas pelo técnico
           </legend>
           <p className="mt-2 whitespace-pre-wrap text-sm text-app-fg">
             {observacoes}
@@ -74,12 +74,13 @@ export function PainelPayload({
       {extras.length > 0 ? (
         <fieldset className="rounded-gov-card border border-amber-300 bg-amber-50 p-4">
           <legend className="px-1 text-sm font-semibold text-amber-900">
-            Campos adicionais (não previstos no schema)
+            Campos adicionais não previstos para este tipo de ficha
           </legend>
           <p className="mt-1 text-xs text-amber-900">
-            Os campos abaixo foram enviados pelo aplicativo, porém não fazem
-            parte do schema deste tipo de ficha. Confirme com o técnico antes
-            de aprovar.
+            Os campos a seguir foram submetidos pelo aplicativo, porém não
+            fazem parte da estrutura prevista para este tipo de ficha.
+            Recomenda-se confirmar a procedência das informações com o
+            técnico responsável antes de aprovar.
           </p>
           <dl className="mt-2 grid gap-3 sm:grid-cols-2">
             {extras.map((chave) => (

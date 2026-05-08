@@ -111,14 +111,14 @@ export function InstallPWAPrompt() {
         className="fixed inset-x-3 bottom-20 z-40 rounded-gov-card border border-gov-azul bg-app-surface p-4 shadow-gov-card-hover"
       >
         <p id="pwa-install-titulo" className="text-sm font-semibold text-app-fg">
-          Instalar o aplicativo
+          Instalar o aplicativo no dispositivo
         </p>
         <p
           id="pwa-install-descricao"
           className="mt-1 text-xs text-app-fg-muted"
         >
-          Tenha acesso rápido pelo ícone na tela inicial. Funciona melhor em
-          campo e ocupa pouco espaço.
+          A instalação adiciona um atalho na tela inicial e melhora o
+          desempenho do aplicativo durante o uso em campo.
         </p>
         <div className="mt-3 flex gap-2">
           <button
@@ -133,7 +133,7 @@ export function InstallPWAPrompt() {
             onClick={dispensar}
             className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
           >
-            Agora não
+            Mais tarde
           </button>
         </div>
       </div>
@@ -149,11 +149,12 @@ export function InstallPWAPrompt() {
         className="fixed inset-x-3 bottom-20 z-40 rounded-gov-card border border-gov-azul bg-app-surface p-4 shadow-gov-card-hover"
       >
         <p id="pwa-ios-titulo" className="text-sm font-semibold text-app-fg">
-          Adicionar à tela de início
+          Adicionar à Tela de Início
         </p>
         <p id="pwa-ios-descricao" className="mt-1 text-xs text-app-fg-muted">
-          Toque no ícone de compartilhar do Safari e escolha{' '}
-          <strong>Adicionar à Tela de Início</strong> para usar como aplicativo.
+          Acesse o ícone de compartilhar do Safari e selecione{' '}
+          <strong>Adicionar à Tela de Início</strong> para utilizar o sistema
+          como aplicativo.
         </p>
         <div className="mt-3 flex justify-end">
           <button
@@ -161,7 +162,7 @@ export function InstallPWAPrompt() {
             onClick={dispensar}
             className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
           >
-            Entendi
+            Fechar
           </button>
         </div>
       </div>

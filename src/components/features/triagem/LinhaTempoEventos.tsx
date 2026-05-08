@@ -6,13 +6,13 @@ import { formatarDataHora } from '@/lib/format';
 
 const ROTULO_EVENTO: Record<TipoEventoTriagem, string> = {
   submetida: 'Ficha submetida pelo técnico',
-  reenvio_apos_devolucao: 'Re-enviada após devolução',
-  revisao_iniciada: 'Revisão iniciada',
+  reenvio_apos_devolucao: 'Ficha re-submetida após devolução',
+  revisao_iniciada: 'Revisão iniciada pelo aprovador',
   revisao_liberada: 'Revisão liberada manualmente',
-  lock_expirado: 'Lock de revisão expirado (TTL)',
+  lock_expirado: 'Reserva da revisão liberada por inatividade',
   aprovada: 'Ficha aprovada',
   rejeitada: 'Ficha rejeitada',
-  devolvida: 'Ficha devolvida ao técnico',
+  devolvida: 'Ficha devolvida para correção',
 };
 
 const COR_EVENTO: Record<TipoEventoTriagem, string> = {
@@ -34,7 +34,7 @@ export function LinhaTempoEventos({ eventos }: LinhaTempoEventosProps) {
   if (eventos.length === 0) {
     return (
       <p className="text-xs text-app-fg-muted">
-        Nenhum evento registrado para esta ficha.
+        Não há eventos registrados para esta ficha até o momento.
       </p>
     );
   }
@@ -64,7 +64,7 @@ export function LinhaTempoEventos({ eventos }: LinhaTempoEventosProps) {
           <p className="mt-0.5 text-2xs text-app-fg-muted tabular">
             {formatarDataHora(e.ocorreuEm)}
             {e.atorId ? (
-              <span className="mono"> · ator {e.atorId.slice(0, 8)}</span>
+              <span className="mono"> · responsável {e.atorId.slice(0, 8)}</span>
             ) : null}
           </p>
           {e.motivo ? (

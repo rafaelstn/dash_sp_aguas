@@ -63,7 +63,9 @@ export function BarraAcoesTriagem({
       if (e instanceof ErroTriagemAPI) {
         setErro(mensagemErroTriagem(e));
       } else {
-        setErro('Falha inesperada ao iniciar revisão.');
+        setErro(
+          'Não foi possível iniciar a revisão. Tente novamente em instantes.',
+        );
       }
     } finally {
       setIniciandoRevisao(false);
@@ -152,9 +154,9 @@ export function BarraAcoesTriagem({
       {estado === 'em_revisao' && donoDoLock ? (
         <>
           <span className="text-xs text-app-fg-muted">
-            Você está revisando esta ficha.
+            Revisão em andamento por esta sessão.
             {lockExpiraEm
-              ? ` Lock expira ${tempoRelativo(lockExpiraEm)}.`
+              ? ` Reserva da revisão expira ${tempoRelativo(lockExpiraEm)}.`
               : null}
           </span>
           <div className="flex flex-wrap gap-2 sm:ml-auto">
@@ -217,23 +219,28 @@ function BannerLockOutroAprovador({
 }: {
   lockExpiraEm: Date | null;
 }) {
-  const expiraTexto = lockExpiraEm ? tempoRelativo(lockExpiraEm) : 'em até 1 hora';
+  const expiraTexto = lockExpiraEm
+    ? tempoRelativo(lockExpiraEm)
+    : 'em até 1 hora';
 
   return (
     <div className="w-full rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-      <p className="font-semibold">Ficha em revisão por outro aprovador.</p>
+      <p className="font-semibold">
+        Ficha em revisão por outro aprovador.
+      </p>
       <p className="mt-1">
-        O lock será liberado automaticamente {expiraTexto}. Aguarde a
-        liberação ou contate o aprovador atual antes de retomar a revisão.
+        A reserva da revisão será liberada automaticamente {expiraTexto}.
+        Aguarde a liberação ou contate o aprovador responsável antes de
+        retomar a revisão.
       </p>
       <details className="mt-2 text-xs">
         <summary className="cursor-pointer">
-          Por que não posso forçar a liberação?
+          Liberação manual da reserva
         </summary>
         <p className="mt-1">
-          A liberação manual de lock por terceiros não está disponível neste
-          momento. O sistema libera automaticamente após uma hora sem
-          atividade do revisor atual.
+          A liberação manual da reserva por terceiros não está habilitada. O
+          sistema libera automaticamente após uma hora sem atividade do
+          aprovador responsável.
         </p>
       </details>
     </div>

@@ -186,7 +186,8 @@ async function Lista({ filtros }: { filtros: FiltrosResolvidos }) {
   if (!usuario) {
     return (
       <Alerta tipo="aviso" titulo="Sessão necessária">
-        Faça login com uma conta autorizada para acessar a fila de triagem.
+        Acesse o sistema com uma conta autorizada para visualizar a fila de
+        triagem.
       </Alerta>
     );
   }
@@ -212,16 +213,16 @@ async function Lista({ filtros }: { filtros: FiltrosResolvidos }) {
     if (e instanceof UsuarioNaoEhAprovador) {
       return (
         <Alerta tipo="aviso" titulo="Acesso restrito">
-          Esta área é exclusiva de aprovadores. Caso necessite revisar fichas,
-          solicite ao gestor a atribuição do papel de aprovador.
+          Acesso restrito ao papel de aprovador. Solicite ao gestor a
+          atribuição do papel para revisar fichas em triagem.
         </Alerta>
       );
     }
     console.error('[triagem/lista] falha ao listar', e);
     return (
       <Alerta tipo="erro" titulo="Falha ao carregar a fila de triagem">
-        Tente novamente em instantes. Se o erro persistir, procure o operador
-        do sistema.
+        Não foi possível concluir a operação. Tente novamente em instantes. Se
+        o erro persistir, contate o administrador do sistema.
       </Alerta>
     );
   }
@@ -230,7 +231,7 @@ async function Lista({ filtros }: { filtros: FiltrosResolvidos }) {
     return (
       <EstadoVazio
         titulo="Nenhuma ficha pendente de triagem no momento."
-        descricao="Quando os técnicos de campo submetem fichas pelo aplicativo móvel, elas aparecem aqui para revisão."
+        descricao="As fichas submetidas pelos técnicos de campo pelo aplicativo móvel serão exibidas nesta tela para revisão."
       />
     );
   }
@@ -326,8 +327,8 @@ export default async function TriagemListaPage({ searchParams }: PageProps) {
           Triagem de fichas
         </h1>
         <p className="mt-0.5 text-xs text-app-fg-muted">
-          Revise as fichas submetidas pelos técnicos em campo. Mais antigas
-          aparecem primeiro.
+          Fichas submetidas pelos técnicos de campo, ordenadas por data de
+          submissão (mais antigas primeiro).
         </p>
       </header>
 

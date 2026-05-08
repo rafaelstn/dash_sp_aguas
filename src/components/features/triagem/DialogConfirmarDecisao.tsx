@@ -14,16 +14,16 @@ export type AcaoDecisao = 'aprovar' | 'rejeitar' | 'devolver';
 const TITULO: Record<AcaoDecisao, string> = {
   aprovar: 'Aprovar ficha',
   rejeitar: 'Rejeitar ficha',
-  devolver: 'Devolver ficha ao técnico',
+  devolver: 'Devolver ficha para correção',
 };
 
 const DESCRICAO: Record<AcaoDecisao, string> = {
   aprovar:
-    'Ao confirmar, a ficha será promovida para a base de produção (fichas_visita) e ficará imutável. Esta ação é irreversível.',
+    'A confirmação promove a ficha para a base de produção e a torna imutável. A operação não pode ser desfeita.',
   rejeitar:
-    'A ficha será marcada como rejeitada. O técnico verá o motivo descrito abaixo. O ciclo da ficha será encerrado.',
+    'A confirmação registra a rejeição e encerra o ciclo da ficha. A justificativa informada abaixo ficará disponível para o técnico responsável.',
   devolver:
-    'A ficha voltará ao técnico para correção. Ele poderá re-enviar uma versão ajustada. Descreva claramente o que precisa ser corrigido.',
+    'A confirmação devolve a ficha ao técnico para correção. Descreva de forma clara e objetiva o que precisa ser ajustado antes da nova submissão.',
 };
 
 const ROTULO_BOTAO: Record<AcaoDecisao, string> = {
@@ -138,7 +138,9 @@ export function DialogConfirmarDecisao({
         setErroSlug(e.slug);
         setErroMensagem(mensagemErroTriagem(e));
       } else {
-        setErroMensagem('Falha inesperada ao processar a solicitação.');
+        setErroMensagem(
+          'Não foi possível concluir a operação. Tente novamente em instantes.',
+        );
       }
     } finally {
       setEnviando(false);
@@ -191,7 +193,7 @@ export function DialogConfirmarDecisao({
                 htmlFor={motivoId}
                 className="mb-1 block text-xs font-medium text-app-fg"
               >
-                Motivo
+                Justificativa
                 <span aria-hidden="true" className="text-gov-perigo">
                   {' '}
                   *
@@ -212,8 +214,8 @@ export function DialogConfirmarDecisao({
                 className="block w-full rounded border border-app-border-subtle bg-app-surface px-2 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul disabled:opacity-60"
                 placeholder={
                   acao === 'rejeitar'
-                    ? 'Descreva por que a ficha não pode ser aceita.'
-                    : 'Descreva o que precisa ser corrigido pelo técnico.'
+                    ? 'Descreva os motivos que impedem a aprovação desta ficha.'
+                    : 'Descreva os ajustes necessários para que o técnico possa re-submeter a ficha.'
                 }
               />
               <div
@@ -227,7 +229,7 @@ export function DialogConfirmarDecisao({
                       : 'text-gov-perigo'
                   }
                 >
-                  Mínimo de {TAMANHO_MIN_MOTIVO} caracteres.
+                  A justificativa precisa ter ao menos {TAMANHO_MIN_MOTIVO} caracteres.
                 </span>
                 <span
                   className={[
@@ -242,9 +244,9 @@ export function DialogConfirmarDecisao({
             </div>
           ) : (
             <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-              Esta operação requer MFA verificado. Se o seu segundo fator não
-              estiver configurado, será exibido um aviso e o link para
-              configurá-lo.
+              Esta operação exige segundo fator de autenticação verificado. Caso
+              o segundo fator ainda não tenha sido configurado, o sistema
+              exibirá o link para a configuração antes de concluir a aprovação.
             </p>
           )}
 
@@ -254,15 +256,18 @@ export function DialogConfirmarDecisao({
               role="alert"
               className="rounded border-l-4 border-gov-perigo bg-red-50 p-3 text-sm text-gov-perigo"
             >
-              <p className="font-semibold">Não foi possível concluir.</p>
+              <p className="font-semibold">
+                Não foi possível concluir a operação.
+              </p>
               <p className="mt-0.5">{erroMensagem}</p>
-              {erroSlug === 'mfa_obrigatorio' ? (
+              {erroSlug === 'mfa_obrigatorio' ||
+              erroSlug === 'mfa_nao_validado_na_sessao' ? (
                 <p className="mt-2">
                   <a
                     href="/perfil/mfa"
                     className="font-medium text-gov-azul underline"
                   >
-                    Configurar MFA agora
+                    Configurar segundo fator
                   </a>
                 </p>
               ) : null}
@@ -288,7 +293,7 @@ export function DialogConfirmarDecisao({
               VARIANTE_BOTAO[acao],
             ].join(' ')}
           >
-            {enviando ? 'Processando…' : ROTULO_BOTAO[acao]}
+            {enviando ? 'Processando solicitação…' : ROTULO_BOTAO[acao]}
           </button>
         </footer>
       </form>

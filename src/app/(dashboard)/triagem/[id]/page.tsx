@@ -77,7 +77,8 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
   if (!usuario) {
     return (
       <Alerta tipo="aviso" titulo="Sessão necessária">
-        Faça login com uma conta autorizada para acessar a triagem.
+        Acesse o sistema com uma conta autorizada para visualizar a ficha em
+        triagem.
       </Alerta>
     );
   }
@@ -121,7 +122,7 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
             {tipoRotulo}
           </p>
           <h1 className="text-xl font-semibold text-app-fg">
-            Visita em {dataVisitaTexto} —{' '}
+            Visita de {dataVisitaTexto} —{' '}
             <span className="mono">{ficha.prefixo}</span>
           </h1>
           <p className="mt-0.5 text-xs text-app-fg-muted">
@@ -132,33 +133,34 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
         </div>
         <BadgeEstado
           estado={ficha.estado}
-          rotuloAcessivel={`Estado da ficha: ${rotuloEstado(ficha.estado)}`}
+          rotuloAcessivel={`Situação da ficha: ${rotuloEstado(ficha.estado)}`}
         />
       </header>
 
       {ficha.fichaOrigemId ? (
-        <Alerta tipo="info" titulo="Re-envio após devolução">
-          Esta ficha é um re-envio. A versão devolvida originalmente está em{' '}
+        <Alerta tipo="info" titulo="Re-submissão após devolução">
+          Esta ficha foi re-submetida pelo técnico após uma devolução
+          anterior.{' '}
           <Link
             href={`/triagem/${ficha.fichaOrigemId}`}
             className="font-medium underline"
           >
-            ver ficha original
+            Consultar a ficha de origem
           </Link>
           .
         </Alerta>
       ) : null}
 
       {ehAprovador && !temMFA ? (
-        <Alerta tipo="aviso" titulo="MFA pendente">
-          Você possui papel de aprovador, mas ainda não configurou o segundo
-          fator de autenticação. Operações críticas (aprovar / rejeitar /
-          devolver) exigem MFA verificado.{' '}
+        <Alerta tipo="aviso" titulo="Segundo fator pendente">
+          O papel de aprovador está atribuído a esta conta, porém o segundo
+          fator de autenticação ainda não foi configurado. Aprovar, rejeitar e
+          devolver fichas exigem segundo fator verificado.{' '}
           <Link
             href="/perfil/mfa"
             className="font-medium underline"
           >
-            Configurar agora
+            Configurar segundo fator
           </Link>
           .
         </Alerta>
@@ -258,13 +260,13 @@ function SecaoIdentificacao({ ficha }: { ficha: FichaTriagem }) {
               rel="noopener noreferrer"
               className="text-gov-azul hover:underline"
             >
-              Abrir no Google Maps
+              Consultar no Google Maps
             </a>
           </ItemMeta>
         ) : (
           <ItemMeta rotulo="Localização no mapa">
             <span className="text-amber-800">
-              Coordenadas não foram capturadas
+              Coordenadas não capturadas durante a visita
             </span>
           </ItemMeta>
         )}
@@ -296,13 +298,13 @@ function MetadadosFicha({ ficha }: { ficha: FichaTriagem }) {
         </div>
         {ficha.fichaVisitaId ? (
           <div>
-            <dt className="text-app-fg-muted">Promovida para</dt>
+            <dt className="text-app-fg-muted">Promovida para a base</dt>
             <dd className="text-app-fg">
               <Link
                 href={`/postos/${encodeURIComponent(ficha.prefixo)}/fichas/${ficha.fichaVisitaId}`}
                 className="text-gov-azul hover:underline"
               >
-                Ver ficha de produção
+                Consultar ficha na base de produção
               </Link>
             </dd>
           </div>
@@ -318,7 +320,7 @@ function DecisaoFinal({ ficha }: { ficha: FichaTriagem }) {
       ? 'Ficha aprovada'
       : ficha.estado === 'rejeitada'
         ? 'Ficha rejeitada'
-        : 'Ficha devolvida ao técnico';
+        : 'Ficha devolvida para correção';
   const tipo =
     ficha.estado === 'aprovada'
       ? 'sucesso'
@@ -330,12 +332,12 @@ function DecisaoFinal({ ficha }: { ficha: FichaTriagem }) {
       <div className="space-y-1">
         {ficha.decididaEm ? (
           <p>
-            Decidida em {formatarDataHora(ficha.decididaEm)}.
+            Decisão registrada em {formatarDataHora(ficha.decididaEm)}.
           </p>
         ) : null}
         {ficha.motivoDecisao ? (
           <p>
-            <strong>Motivo:</strong>{' '}
+            <strong>Justificativa:</strong>{' '}
             <span className="whitespace-pre-wrap">{ficha.motivoDecisao}</span>
           </p>
         ) : null}

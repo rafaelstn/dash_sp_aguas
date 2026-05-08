@@ -75,7 +75,7 @@ const ABAS: AbaBottomNav[] = [
   },
   {
     href: '/app/minhas-fichas',
-    rotulo: 'Minhas',
+    rotulo: 'Minhas fichas',
     ativa: (p) => p.startsWith('/app/minhas-fichas'),
     icone: IconeLista,
   },

@@ -7,34 +7,34 @@ import { CODIGOS_TIPO_DOCUMENTO } from '@/domain/tipo-documento';
 /**
  * Home do app — grade de tipos de ficha disponíveis. US-MOB-002.
  *
- * Atende fluxo "Técnico abre app → vê grade de cards → seleciona tipo →
- * navega pra busca de posto" descrito em `docs/spec-modulo-mobile.md` §2.
+ * Atende fluxo "técnico abre app → vê grade de cards → seleciona tipo →
+ * navega para a busca de posto" descrito em `docs/spec-modulo-mobile.md` §2.
  *
- * Decisão: por enquanto o card leva direto pra `/app/postos?tipo=<codigo>`
- * (busca de posto). Pendência Fernanda Sprint 3: copy descritiva final
- * de cada card e ícone temático por tipo. As descrições abaixo são
- * placeholder explícito.
+ * Por enquanto o card leva direto para `/app/postos?tipo=<codigo>`
+ * (busca de posto). As descrições abaixo são definitivas (Sprint 1.S3,
+ * Camila — auditoria de copy formal SPÁguas) e devem ser atualizadas
+ * apenas quando o cliente sinalizar mudança de escopo.
  */
 
-const DESCRICOES_PLACEHOLDER: Record<number, string> = {
-  1: 'Cadastro descritivo do posto: estrutura, equipamentos, observador.',
-  2: 'Plataforma de Coleta de Dados — telemetria do posto.',
-  3: 'Inspeção em campo: situação encontrada, leituras, fotos.',
-  4: 'Levantamento de cotas via nivelamento topográfico.',
-  5: 'Levantamento da seção transversal do curso d’água.',
-  6: 'Registro de troca de observador responsável pelo posto.',
-  7: 'Medição de vazão (descarga líquida) com molinete ou ADCP.',
+const DESCRICOES_TIPO_FICHA: Record<number, string> = {
+  1: 'Caracterização do posto: estação, bacia, acesso e infraestrutura.',
+  2: 'Configuração e parâmetros operacionais da PCD do posto.',
+  3: 'Situação do posto, leituras e serviços executados em campo.',
+  4: 'Cotas das RNs e das réguas do posto, com erro de fechamento.',
+  5: 'Seção transversal do curso d’água: largura, profundidade, verticais.',
+  6: 'Substituição do observador responsável pelo posto.',
+  7: 'Medição de descarga líquida com molinete, ADCP ou flutuador.',
 };
 
 export default async function MobileHomePage() {
   const usuario = await obterUsuarioAtual();
-  const nome = usuario?.nome ?? usuario?.email?.split('@')[0] ?? 'Técnico';
+  const nome = usuario?.nome ?? usuario?.email?.split('@')[0] ?? 'técnico';
 
   return (
     <>
       <HeaderMobile
-        titulo="Selecionar ficha"
-        subtitulo={`Olá, ${nome}`}
+        titulo="Selecionar tipo de ficha"
+        subtitulo={`Sessão de ${nome}`}
         acaoDireita={
           <a
             href="/auth/sair"
@@ -47,8 +47,8 @@ export default async function MobileHomePage() {
 
       <div className="mx-auto w-full max-w-content px-4 py-5">
         <p className="mb-4 text-xs text-app-fg-muted">
-          Toque em um tipo para começar uma nova ficha. Você poderá escolher
-          o posto na próxima tela.
+          Selecione o tipo de ficha a preencher. O posto será informado na
+          próxima etapa.
         </p>
 
         <ul
@@ -62,7 +62,7 @@ export default async function MobileHomePage() {
                 <CardTipoFicha
                   codigo={codigo}
                   rotulo={schema.rotulo}
-                  descricao={DESCRICOES_PLACEHOLDER[codigo]}
+                  descricao={DESCRICOES_TIPO_FICHA[codigo]}
                   href={`/app/postos?tipo=${codigo}`}
                   disponivel={schema.disponivel}
                 />
