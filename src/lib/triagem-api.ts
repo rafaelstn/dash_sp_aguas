@@ -208,39 +208,156 @@ export async function devolverTriagemCliente(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Submissão pelo app móvel — endpoint /api/app/fichas (Lucas).
+// Difere das mutações acima porque carrega `Idempotency-Key` no header e
+// pode retornar 201 (criada nova) ou 200 (idempotência → ficha existente).
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface CorpoSubmissaoApp {
+  prefixo: string;
+  codTipoDocumento: number;
+  dataVisita: string; // YYYY-MM-DD
+  horaInicio?: string | null;
+  horaFim?: string | null;
+  tecnicoNome: string;
+  latitudeCapturada?: number | null;
+  longitudeCapturada?: number | null;
+  precisaoGpsM?: number | null;
+  observacoes?: string | null;
+  dados: Record<string, unknown>;
+  fichaOrigemId?: string | null;
+}
+
+export interface RespostaSubmissaoApp {
+  id: string;
+  estado: string;
+  criadaEm: string;
+}
+
+/**
+ * Submete ficha pelo app móvel (`POST /api/app/fichas`). O backend valida
+ * o payload com `construirSchemaZodEstrito` (André) — usar a mesma função
+ * no cliente antes do submit pra falhar barato e exibir erro inline.
+ *
+ * `idempotencyKey` é enviada no header `Idempotency-Key`. O cliente deve
+ * persistir essa chave junto com o rascunho e reusar entre tentativas
+ * para garantir idempotência (Lucas trata na repository.submeter).
+ */
+export async function submeterFichaApp(
+  corpo: CorpoSubmissaoApp,
+  idempotencyKey: string,
+): Promise<RespostaSubmissaoApp> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'Idempotency-Key': idempotencyKey,
+  };
+  const resp = await fetch('/api/app/fichas', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers,
+    body: JSON.stringify(corpo),
+    cache: 'no-store',
+  });
+  if (!resp.ok) await tratarErro(resp);
+  return (await resp.json()) as RespostaSubmissaoApp;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Helpers de UI compartilhados (puros — não dependem de DOM).
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Mapeia o `slug` do erro do backend pra mensagem formal exibida ao
- * aprovador. Cada slug aqui é um contrato com `_helpers.ts` da API.
+ * Mapeia o `slug` do erro do backend para a mensagem formal exibida ao
+ * aprovador (governo SP — tom institucional, terceira pessoa, sem
+ * culpabilização do usuário). Cada slug aqui é um contrato com os
+ * endpoints em `src/app/api/triagem/*` e `src/app/api/app/fichas/route.ts`.
+ *
+ * Slugs cobertos:
+ *  - `nao_autenticado`               (401)
+ *  - `rate_limit`                    (429)
+ *  - `id_invalido` / `query_invalida`/ `body_invalido` / `json_invalido`
+ *                                    (400)
+ *  - `dados_invalidos`               (422 — Zod do payload)
+ *  - `motivo_insuficiente`           (400 — justificativa < 20 chars)
+ *  - `tipo_indisponivel`             (409 — schema da ficha não habilitado)
+ *  - `nao_encontrada`                (404)
+ *  - `sem_papel_aprovador`           (403)
+ *  - `mfa_obrigatorio`               (403)
+ *  - `mfa_nao_validado_na_sessao`    (403 — AAL < aal2)
+ *  - `estado_invalido`               (409 — ficha já decidida)
+ *  - `lock_negado`                   (409 — disputa de revisão)
+ *  - `idempotency_duplicada`         (409 — Idempotency-Key reaproveitada)
+ *  - `idempotency_invalida`          (400 — UUIDv4 inválido)
+ *  - `erro_interno`                  (500)
  */
 export function mensagemErroTriagem(erro: ErroTriagemAPI): string {
   switch (erro.slug) {
-    case 'lock_negado':
-      if (erro.extra && (erro.extra as { motivo?: string }).motivo === 'ja_existe_lock') {
-        return 'Outro aprovador iniciou a revisão. Aguarde a liberação automática ou contate o aprovador atual.';
-      }
-      if (erro.extra && (erro.extra as { motivo?: string }).motivo === 'nao_dono_do_lock') {
-        return 'O lock de revisão pertence a outro aprovador.';
-      }
-      return 'Lock de revisão indisponível para esta ficha.';
-    case 'estado_invalido':
-      return 'A ficha já foi decidida. Recarregue a página para visualizar o estado atual.';
-    case 'mfa_obrigatorio':
-      return 'Esta operação exige MFA verificado. Configure o segundo fator no seu perfil antes de continuar.';
-    case 'sem_papel_aprovador':
-      return 'Operação requer papel de aprovador.';
-    case 'motivo_insuficiente':
-      return 'O motivo precisa ter ao menos 20 caracteres descrevendo o problema identificado.';
-    case 'nao_encontrada':
-      return 'Ficha de triagem não encontrada.';
-    case 'rate_limit':
-      return 'Limite de requisições atingido. Aguarde alguns instantes e tente novamente.';
     case 'nao_autenticado':
-      return 'Sessão expirada. Faça login novamente.';
+      return 'A sessão expirou. Acesse o sistema novamente para continuar.';
+
+    case 'rate_limit':
+      return 'Limite de requisições atingido. Aguarde alguns instantes antes de tentar novamente.';
+
+    case 'id_invalido':
+      return 'Identificador da ficha em formato inválido. Recarregue a página para reabrir o registro.';
+
+    case 'query_invalida':
+      return 'Os filtros informados estão em formato inválido. Revise os campos antes de aplicar novamente.';
+
+    case 'body_invalido':
+    case 'json_invalido':
+      return 'Os dados submetidos estão em formato inválido. Recarregue a página e tente novamente.';
+
+    case 'dados_invalidos':
+      return 'A ficha contém campos com valores incompatíveis com este tipo. Revise as informações antes de submeter novamente.';
+
+    case 'motivo_insuficiente':
+      return 'A justificativa precisa ter ao menos 20 caracteres descrevendo o problema identificado.';
+
+    case 'tipo_indisponivel':
+      return 'O tipo de ficha selecionado não está habilitado para submissão no momento. Contate o gestor responsável.';
+
+    case 'nao_encontrada':
+      return 'Ficha de triagem não localizada. É possível que tenha sido removida ou que o identificador esteja incorreto.';
+
+    case 'sem_papel_aprovador':
+      return 'Acesso restrito ao papel de aprovador. Solicite ao gestor a atribuição do papel para concluir esta operação.';
+
+    case 'mfa_obrigatorio':
+      return 'Esta operação exige segundo fator de autenticação verificado. Configure o segundo fator no perfil antes de prosseguir.';
+
+    case 'mfa_nao_validado_na_sessao':
+      return 'Esta sessão ainda não validou o segundo fator. Encerre a sessão e acesse o sistema informando o segundo fator.';
+
+    case 'estado_invalido':
+      return 'A ficha já foi decidida. Recarregue a página para visualizar a situação atual.';
+
+    case 'lock_negado': {
+      const motivoLock = (erro.extra as { motivo?: string } | undefined)?.motivo;
+      if (motivoLock === 'ja_existe_lock') {
+        return 'Outro aprovador iniciou a revisão desta ficha. Aguarde a liberação automática ou contate o aprovador responsável.';
+      }
+      if (motivoLock === 'nao_dono_do_lock') {
+        return 'A reserva da revisão pertence a outro aprovador. Inicie a revisão para retomar a ficha.';
+      }
+      return 'Reserva de revisão indisponível para esta ficha no momento.';
+    }
+
+    case 'idempotency_duplicada':
+      return 'Esta submissão já foi registrada anteriormente. Recarregue a página para verificar a ficha existente.';
+
+    case 'idempotency_invalida':
+      return 'Identificador de idempotência em formato inválido. Recarregue a página e tente novamente.';
+
+    case 'erro_interno':
+      return 'Falha interna do sistema. Tente novamente em instantes. Se o erro persistir, contate o administrador do sistema.';
+
     default:
-      return erro.mensagem || 'Falha ao processar a solicitação.';
+      return (
+        erro.mensagem ||
+        'Não foi possível concluir a operação. Tente novamente em instantes.'
+      );
   }
 }
 

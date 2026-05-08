@@ -34,16 +34,22 @@
   ],
   "shortcuts": [
     {
+      "name": "Nova ficha",
+      "short_name": "Nova",
+      "url": "/app",
+      "description": "Selecionar tipo de ficha e iniciar nova submissão."
+    },
+    {
       "name": "Minhas fichas",
       "short_name": "Minhas",
       "url": "/app/minhas-fichas",
-      "description": "Lista de fichas que você enviou."
+      "description": "Lista de fichas submetidas pelo usuário."
     },
     {
       "name": "Buscar posto",
       "short_name": "Postos",
       "url": "/app/postos",
-      "description": "Buscar um posto da rede."
+      "description": "Consultar um posto da rede."
     }
   ],
   "prefer_related_applications": false
