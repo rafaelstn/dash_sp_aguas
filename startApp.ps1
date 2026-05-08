@@ -35,8 +35,8 @@
 .PARAMETER Width / -Height
     Dimensoes customizadas. Sobrescreve -Device.
 
-.PARAMETER NoDevTools
-    Nao abrir DevTools automaticamente.
+.PARAMETER DevTools
+    Abrir DevTools automaticamente. Default: nao abrir (UI limpa).
 
 .PARAMETER NoStart
     Nao iniciar o Next automaticamente. Falha se Next nao estiver rodando.
@@ -49,11 +49,11 @@
 
 .EXAMPLE
     .\startApp.ps1
-    Abre /app no Chrome em modo Pixel 7 com DevTools.
+    Abre /app no Chrome em modo Pixel 7, sem DevTools.
 
 .EXAMPLE
-    .\startApp.ps1 -Path /triagem -Device iPhone14 -NoDevTools
-    Abre tela de triagem como iPhone 14, sem DevTools.
+    .\startApp.ps1 -Path /triagem -Device iPhone14 -DevTools
+    Abre tela de triagem como iPhone 14, com DevTools.
 
 .EXAMPLE
     .\startApp.ps1 -Width 360 -Height 640 -Browser edge
@@ -71,7 +71,7 @@ param(
     [string]$Device = 'Pixel7',
     [int]$Width,
     [int]$Height,
-    [switch]$NoDevTools,
+    [switch]$DevTools,
     [switch]$NoStart,
     [int]$Port,
     [ValidateSet('chrome', 'edge')]
@@ -251,7 +251,7 @@ $browserArgs = @(
     '--no-default-browser-check'
 )
 
-if (-not $NoDevTools) {
+if ($DevTools) {
     $browserArgs += '--auto-open-devtools-for-tabs'
 }
 
@@ -264,7 +264,7 @@ Write-Host "  URL         : $targetUrl"
 Write-Host "  Dispositivo : $deviceLabel"
 Write-Host "  Viewport    : ${deviceWidth} x ${deviceHeight}"
 Write-Host "  User-Agent  : $userAgent"
-Write-Host "  DevTools    : $(if ($NoDevTools) { 'desabilitado' } else { 'aberto' })"
+Write-Host "  DevTools    : $(if ($DevTools) { 'aberto (-DevTools)' } else { 'fechado (use -DevTools para abrir)' })"
 Write-Host "  Perfil      : $profileDir (isolado do Chrome principal)"
 Write-Host ''
 Write-Host 'Para fechar: feche a janela do navegador e rode .\stop.ps1 para parar o Next.' -ForegroundColor DarkGray
