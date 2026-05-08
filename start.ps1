@@ -268,14 +268,36 @@ if ($envContent -notmatch '(?m)^\s*DATABASE_URL\s*=\s*\S+') {
     Write-Ok ".env.local presente com DATABASE_URL preenchido"
 }
 
-if (-not (Test-Path (Join-Path $ProjectRoot 'node_modules'))) {
-    Write-Step "node_modules ausente. Rodando npm install (primeira execucao)..."
-    npm install
+$nodeModulesPath = Join-Path $ProjectRoot 'node_modules'
+$installedLockPath = Join-Path $nodeModulesPath '.package-lock.json'
+$projectLockPath = Join-Path $ProjectRoot 'package-lock.json'
+
+$precisaInstall = $false
+$motivoInstall = $null
+
+if (-not (Test-Path $nodeModulesPath)) {
+    $precisaInstall = $true
+    $motivoInstall = 'node_modules ausente (primeira execucao)'
+} elseif (-not (Test-Path (Join-Path $nodeModulesPath '.bin/next'))) {
+    $precisaInstall = $true
+    $motivoInstall = 'node_modules incompleto (next/.bin nao encontrado)'
+} elseif ((Test-Path $installedLockPath) -and (Test-Path $projectLockPath)) {
+    $instMtime = (Get-Item $installedLockPath).LastWriteTimeUtc
+    $projMtime = (Get-Item $projectLockPath).LastWriteTimeUtc
+    if ($projMtime -gt $instMtime) {
+        $precisaInstall = $true
+        $motivoInstall = 'package-lock.json mais recente que o instalado (deps defasadas)'
+    }
+}
+
+if ($precisaInstall) {
+    Write-Step "$motivoInstall - rodando npm install..."
+    npm install --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) {
         Write-Err "npm install falhou."
         exit 1
     }
-    Write-Ok "Dependencias instaladas."
+    Write-Ok "Dependencias instaladas/atualizadas."
 }
 
 # --------------------------------------------------------------------------
