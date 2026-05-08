@@ -11,6 +11,8 @@ import { revisoesRepository as revisoesPg } from './db/revisoes-repository.pg';
 import { favoritosRepository as favoritosPg } from './db/favoritos-repository.pg';
 import { facetasRepository as facetasPg } from './db/facetas-repository.pg';
 import { fichasVisitaRepository as fichasVisitaPg } from './db/fichas-visita-repository.pg';
+import { triagemRepository as triagemPg } from './db/triagem-repository.pg';
+import { papeisRepository as papeisPg } from './db/papeis-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
 import { postosRepository as postosMock } from './mock/postos-repository.mock';
@@ -21,6 +23,8 @@ import { revisoesRepository as revisoesMock } from './mock/revisoes-repository.m
 import { favoritosRepository as favoritosMock } from './mock/favoritos-repository.mock';
 import { facetasRepository as facetasMock } from './mock/facetas-repository.mock';
 import { fichasVisitaRepository as fichasVisitaMock } from './mock/fichas-visita-repository.mock';
+import { triagemRepository as triagemMock } from './mock/triagem-repository.mock';
+import { papeisRepository as papeisMock } from './mock/papeis-repository.mock';
 
 /**
  * Ponto único de escolha entre repositórios PG (reais) e mock (demo).
@@ -41,5 +45,7 @@ export const revisoesRepository = demo ? revisoesMock : revisoesPg;
 export const favoritosRepository = demo ? favoritosMock : favoritosPg;
 export const facetasRepository = demo ? facetasMock : facetasPg;
 export const fichasVisitaRepository = demo ? fichasVisitaMock : fichasVisitaPg;
+export const triagemRepository = demo ? triagemMock : triagemPg;
+export const papeisRepository = demo ? papeisMock : papeisPg;
 
 export const modoDemoAtivo = demo;

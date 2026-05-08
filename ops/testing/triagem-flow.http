@@ -1,0 +1,197 @@
+### =========================================================================
+### Triagem — fluxo manual end-to-end (REST Client / .http)
+###
+### Pré-requisitos:
+###   1. Servidor local rodando: `pwsh start.ps1` ou `npm run dev`
+###   2. Migrations 0023–0026 aplicadas (Supabase ou Postgres local).
+###   3. Login feito no browser (cookie `sb-...` válido) — copie o cookie
+###      pra variável @sessionCookie abaixo. Em modo demo (sem DB), o
+###      `DEV_BYPASS_AUTH_EMAIL` cria sessão fake e bypassa cookies.
+###
+### Requer extensão "REST Client" do VSCode (humao.rest-client) ou similar.
+### =========================================================================
+
+### Variáveis ambiente
+@host = http://localhost:3000
+@sessionCookie = sb-localhost-auth-token=COLE_AQUI
+@cronSecret = dev-secret-placeholder
+@idempotencyTeste1 = 11111111-1111-4111-8111-111111111111
+
+### -------------------------------------------------------------------------
+### 1) Técnico submete ficha pelo app (estado: pendente)
+### Esperado: 201 Created, body { id, estado: 'pendente', criadaEm }
+### -------------------------------------------------------------------------
+POST {{host}}/api/app/fichas
+Content-Type: application/json
+Cookie: {{sessionCookie}}
+Idempotency-Key: {{idempotencyTeste1}}
+
+{
+  "prefixo": "3D-001",
+  "codTipoDocumento": 3,
+  "dataVisita": "2026-05-08",
+  "horaInicio": "08:30",
+  "horaFim": "10:15",
+  "tecnicoNome": "Técnico Demo",
+  "latitudeCapturada": -23.5489,
+  "longitudeCapturada": -46.6388,
+  "precisaoGpsM": 8.5,
+  "observacoes": "Ficha de teste E2E",
+  "dados": {
+    "tipo_manutencao": "preventiva",
+    "acesso": "boa",
+    "limpeza": "boa"
+  }
+}
+
+### Capture o id retornado:
+@triagemId = COLE_O_ID_AQUI
+
+### -------------------------------------------------------------------------
+### 1.1) Idempotência — re-submete com mesma key. Esperado: 201 + MESMO id
+### -------------------------------------------------------------------------
+POST {{host}}/api/app/fichas
+Content-Type: application/json
+Cookie: {{sessionCookie}}
+Idempotency-Key: {{idempotencyTeste1}}
+
+{
+  "prefixo": "3D-001",
+  "codTipoDocumento": 3,
+  "dataVisita": "2026-05-08",
+  "tecnicoNome": "Técnico Demo",
+  "dados": { "tipo_manutencao": "preventiva" }
+}
+
+### -------------------------------------------------------------------------
+### 2) Aprovador lista fichas pendentes
+### Esperado: 200 com itens incluindo a recém-criada
+### Erro esperado se não for aprovador: 403 sem_papel_aprovador
+### -------------------------------------------------------------------------
+GET {{host}}/api/triagem?limite=50
+Cookie: {{sessionCookie}}
+
+### -------------------------------------------------------------------------
+### 3) Aprovador inicia revisão (adquire lock)
+### Esperado: 200 com ficha em estado 'em_revisao' + lock.expiraEm
+### -------------------------------------------------------------------------
+POST {{host}}/api/triagem/{{triagemId}}/iniciar-revisao
+Cookie: {{sessionCookie}}
+
+### -------------------------------------------------------------------------
+### 4) Race: segundo aprovador tenta iniciar revisão da mesma ficha
+### Esperado: 423 Locked, motivo "ja_existe_lock"
+### Mude o cookie pra outro usuário aprovador antes de rodar.
+### -------------------------------------------------------------------------
+POST {{host}}/api/triagem/{{triagemId}}/iniciar-revisao
+Cookie: sb-localhost-auth-token=OUTRO_APROVADOR
+
+### -------------------------------------------------------------------------
+### 5a) Aprovador rejeita com motivo curto (< 20 chars)
+### Esperado: 400 motivo_insuficiente
+### -------------------------------------------------------------------------
+POST {{host}}/api/triagem/{{triagemId}}/rejeitar
+Content-Type: application/json
+Cookie: {{sessionCookie}}
+
+{ "motivo": "errado" }
+
+### -------------------------------------------------------------------------
+### 5b) Aprovador devolve ficha (motivo válido ≥ 20)
+### Esperado: 200, ficha em estado 'devolvida'
+### -------------------------------------------------------------------------
+POST {{host}}/api/triagem/{{triagemId}}/devolver
+Content-Type: application/json
+Cookie: {{sessionCookie}}
+
+{
+  "motivo": "Por favor revise a coordenada GPS — está fora do entorno do posto declarado."
+}
+
+### -------------------------------------------------------------------------
+### 6) Técnico re-envia ficha corrigida (cria NOVA ficha, ficha_origem_id = original)
+### Esperado: 201, novo id, estado 'pendente'
+### -------------------------------------------------------------------------
+POST {{host}}/api/app/fichas
+Content-Type: application/json
+Cookie: {{sessionCookie}}
+
+{
+  "prefixo": "3D-001",
+  "codTipoDocumento": 3,
+  "dataVisita": "2026-05-08",
+  "horaInicio": "08:30",
+  "horaFim": "10:15",
+  "tecnicoNome": "Técnico Demo",
+  "latitudeCapturada": -23.5500,
+  "longitudeCapturada": -46.6400,
+  "precisaoGpsM": 5.0,
+  "observacoes": "Re-envio com coordenadas corrigidas",
+  "dados": {
+    "tipo_manutencao": "preventiva",
+    "acesso": "boa",
+    "limpeza": "boa"
+  },
+  "fichaOrigemId": "{{triagemId}}"
+}
+
+### Capture o novo id:
+@triagemIdReenvio = COLE_O_NOVO_ID_AQUI
+
+### -------------------------------------------------------------------------
+### 7) Aprovador inicia revisão da nova ficha + aprova
+### Esperado primeiro: 200 lock adquirido. Esperado depois: 200 com fichaVisitaId
+### -------------------------------------------------------------------------
+POST {{host}}/api/triagem/{{triagemIdReenvio}}/iniciar-revisao
+Cookie: {{sessionCookie}}
+
+###
+POST {{host}}/api/triagem/{{triagemIdReenvio}}/aprovar
+Cookie: {{sessionCookie}}
+
+### -------------------------------------------------------------------------
+### 8) Verifica que a ficha apareceu em /api/fichas (camada de produção)
+### -------------------------------------------------------------------------
+GET {{host}}/api/fichas/COLE_FICHA_VISITA_ID
+Cookie: {{sessionCookie}}
+
+### -------------------------------------------------------------------------
+### 9) Detalhe da triagem (com eventos / audit trail)
+### Esperado: ficha aprovada + lista de eventos cronológica
+### -------------------------------------------------------------------------
+GET {{host}}/api/triagem/{{triagemIdReenvio}}
+Cookie: {{sessionCookie}}
+
+### -------------------------------------------------------------------------
+### 10) Cron — liberação de locks expirados
+### Esperado com secret correto: 200 { liberados: [...], quantidade: N }
+### Esperado sem secret: 401 nao_autorizado
+### -------------------------------------------------------------------------
+POST {{host}}/api/cron/liberar-locks-expirados
+x-cron-secret: {{cronSecret}}
+
+###
+POST {{host}}/api/cron/liberar-locks-expirados
+x-cron-secret: secret-errado
+
+### -------------------------------------------------------------------------
+### 11) Negative path — body inválido
+### Esperado: 400 body_invalido com lista de motivos
+### -------------------------------------------------------------------------
+POST {{host}}/api/app/fichas
+Content-Type: application/json
+Cookie: {{sessionCookie}}
+
+{
+  "prefixo": "",
+  "codTipoDocumento": 99,
+  "dataVisita": "data-errada",
+  "tecnicoNome": "",
+  "dados": "string em vez de objeto"
+}
+
+### -------------------------------------------------------------------------
+### 12) Negative path — sem auth
+### Esperado: 401 nao_autenticado
+### -------------------------------------------------------------------------
+GET {{host}}/api/triagem

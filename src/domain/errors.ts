@@ -38,3 +38,73 @@ export class IndexacaoPendente extends Error {
     this.name = 'IndexacaoPendente';
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Erros do módulo de triagem (Fase 2.A — ADR-0008).
+// Tradução pra HTTP é responsabilidade da camada de apresentação:
+//   EstadoTriagemInvalido           → 409 Conflict
+//   LockRevisaoNegado               → 423 Locked
+//   MotivoRejeicaoInsuficiente      → 400 Bad Request
+//   AprovadorSemMFA                 → 403 Forbidden
+//   FichaTriagemNaoEncontrada       → 404 Not Found
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class FichaTriagemNaoEncontrada extends Error {
+  constructor(public readonly id: string) {
+    super(`Ficha de triagem não encontrada: ${id}`);
+    this.name = 'FichaTriagemNaoEncontrada';
+  }
+}
+
+export class EstadoTriagemInvalido extends Error {
+  constructor(
+    public readonly de: string,
+    public readonly para: string,
+  ) {
+    super(`Transição inválida na triagem: ${de} → ${para}`);
+    this.name = 'EstadoTriagemInvalido';
+  }
+}
+
+export class LockRevisaoNegado extends Error {
+  constructor(
+    public readonly triagemId: string,
+    public readonly motivo: 'ja_existe_lock' | 'nao_dono_do_lock' | 'lock_expirado',
+  ) {
+    super(`Lock de revisão negado (${motivo}) para triagem ${triagemId}`);
+    this.name = 'LockRevisaoNegado';
+  }
+}
+
+export class MotivoRejeicaoInsuficiente extends Error {
+  constructor(public readonly tamanhoRecebido: number) {
+    super(
+      `Motivo de rejeição/devolução exige ao menos 20 caracteres (recebido: ${tamanhoRecebido}).`,
+    );
+    this.name = 'MotivoRejeicaoInsuficiente';
+  }
+}
+
+export class AprovadorSemMFA extends Error {
+  constructor(public readonly usuarioId: string) {
+    super(`Usuário ${usuarioId} é aprovador mas não tem MFA verificado.`);
+    this.name = 'AprovadorSemMFA';
+  }
+}
+
+export class UsuarioNaoEhAprovador extends Error {
+  constructor(public readonly usuarioId: string) {
+    super(`Usuário ${usuarioId} não tem papel de aprovador.`);
+    this.name = 'UsuarioNaoEhAprovador';
+  }
+}
+
+export class IdempotencyKeyDuplicada extends Error {
+  constructor(
+    public readonly key: string,
+    public readonly fichaExistenteId: string,
+  ) {
+    super(`Idempotency-Key ${key} já usada — ficha existente: ${fichaExistenteId}`);
+    this.name = 'IdempotencyKeyDuplicada';
+  }
+}
