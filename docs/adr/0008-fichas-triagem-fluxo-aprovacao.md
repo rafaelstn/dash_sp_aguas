@@ -2,12 +2,18 @@
 
 | Campo | Valor |
 |-------|-------|
-| Status | Proposto — 2026-05-08 |
-| Autor | Damasceno Dev OS (Bruno — Engenharia) |
+| Status | Aceito — 2026-05-08; ajustado em implementação na mesma data |
+| Autor | Damasceno Dev OS (Bruno — Engenharia; Lucas — Backend revisou na implementação) |
 | Contexto | Módulo mobile do Sistema de Ficha Técnica de Postos Hidrológicos SPÁguas — Fase 2.A |
 | Complementa | ADR-0007 (PWA + Capacitor); migration `0022_fichas_visita.sql` |
 | Substitui | nada (cria estrutura nova) |
-| Referências | `docs/spec-modulo-mobile.md §4`; `docs/seguranca/checklist-modulo-mobile.md` |
+| Referências | `docs/spec-modulo-mobile.md §4`; `docs/seguranca/checklist-modulo-mobile.md`; migrations `0023`–`0026` |
+
+> **Atualização 2026-05-08 (pós-implementação Sprint 1):** ao implementar, Lucas
+> tomou 4 decisões autônomas que ajustam este ADR. Estão consolidadas na
+> **§9 Decisões da implementação** (final do documento). O texto principal
+> abaixo permanece como contexto e justificativa originais; quando houver
+> divergência, §9 prevalece.
 
 ---
 
@@ -313,5 +319,78 @@ Razão: o app móvel **não fala direto com o Supabase** — sempre passa pelos 
 ## 7. Pendências
 
 - [ ] Decisão: papel `aprovador` setado por painel Supabase ou comando admin? (operacional — Rodrigo)
-- [ ] Validar com Rafael: TTL de 30min é razoável? Considerar 1h se demanda for baixa.
-- [ ] Decisão: ficha aprovada por engano — reabrir ou criar substituição? Plano atual: criar substituição (campo `substitui_ficha_id` em ADR futuro). Confirmar com Rafael.
+- [x] **Resolvido 2026-05-08:** TTL de lock = 1 hora (decisão Rafael, ver `memory/decisoes_fase_2a.md` #5).
+- [x] **Resolvido 2026-05-08:** ficha aprovada não reabre — cria substituição via `substitui_ficha_id`, coluna adicionada em `fichas_visita` na migration `0024` (decisão Rafael, ver `memory/decisoes_fase_2a.md` #4).
+
+---
+
+## 8. Pendências de hardening (abertas)
+
+- [ ] **Endurecer schema dinâmico de payload** (`construirSchemaZod`): hoje o `dados` da ficha usa `.passthrough()` no fluxo de triagem. Endurecer pra `.strict()` exige varredura dos `secoes[].campos[].codigo` em `src/domain/fichas/schemas.ts` para confirmar cobertura. Owner: André + Lucas — meta Sprint 1.5.
+- [ ] **Suite de testes unitários do domínio** (`podeTransitar`, `MotivoDecisao`, regras de negócio dos use cases). Owner: Thiago — Sprint 1.5.
+- [ ] **Pen-test do fluxo**: race em iniciar revisão, IDOR cross-aprovador, cron forjado, promoção atômica com falha no meio. Owner: Thiago + André — Sprint 2.
+- [ ] **Vercel Cron + alerta de heartbeat** para `/api/cron/liberar-locks-expirados` (5min de cadência). Owner: Rodrigo — Sprint 4.
+
+---
+
+## 9. Decisões da implementação (Lucas, 2026-05-08)
+
+Ajustes ao desenho original feitos durante a entrega da Sprint 1 backend. Cada um traz contexto pra futuros leitores entenderem por que o código não bate exatamente com §2.
+
+### 9.1 Tabela `triagem_locks` separada (não inline em `fichas_triagem`)
+
+**Original (§2.1):** colunas `lock_aprovador_id` e `lock_expira_em` inline em `fichas_triagem`.
+
+**Implementado:** tabela própria `triagem_locks` (migration `0026`) com `UNIQUE(triagem_id)` e `expira_em`.
+
+**Por quê:** com a UNIQUE explícita, a corrida entre dois aprovadores tentando iniciar revisão é detectada pelo driver via violação de constraint, em vez de exigir `FOR UPDATE` + checagem manual. Mais simples de raciocinar e mais difícil de errar. Custa uma tabela extra — vale a troca.
+
+### 9.2 Re-envio após devolução cria NOVA linha (não reutiliza a devolvida)
+
+**Original (§2.2):** `devolvida → pendente` no re-envio (mesma linha).
+
+**Implementado:** re-envio cria nova linha em `fichas_triagem` com `ficha_origem_id` apontando pra original; a devolvida permanece imutável em estado `devolvida`. Use case dedicado `reenviarFichaTriagem`.
+
+**Por quê:**
+- Preserva linhagem auditável completa — quem devolveu, quando, motivo, e o que foi reenviado.
+- Simplifica imutabilidade: nenhum registro muda de estado depois de chegar a estado terminal.
+- Custo: ~1 linha extra por ciclo de devolução. Negligível.
+
+A máquina de estados na §2.2 deve ser lida como "estados visíveis ao usuário"; internamente, `devolvida` é terminal.
+
+### 9.3 Idempotência de submissão via UNIQUE composto
+
+**Original:** não definido — o ADR §2.1 só listou a tabela; o checklist de André mencionou idempotency key.
+
+**Implementado:** `UNIQUE(tecnico_id, idempotency_key)` parcial (`WHERE idempotency_key IS NOT NULL`) na `fichas_triagem`. App móvel envia header `Idempotency-Key` (UUID v4 gerado client-side). Use case `submeterFichaTriagem` faz lookup pela key antes do INSERT — se existe, devolve a ficha anterior sem 409. Erro `IdempotencyKeyDuplicada` reservado pra colisões de race onde key reusa com payload diferente.
+
+**Por quê:** retransmissões de rede em campo (técnico com sinal ruim) não devem criar 2 fichas. UUID v4 client-side mais barato e suficientemente improvável de colidir.
+
+### 9.4 `substitui_ficha_id` adicionado em `fichas_visita` agora
+
+**Original (§7 pendência):** "campo `substitui_ficha_id` em ADR futuro".
+
+**Implementado:** `ALTER TABLE fichas_visita ADD COLUMN substitui_ficha_id UUID NULL` já incluído na migration `0024`, com FK pra `fichas_visita(id)`.
+
+**Por quê:** decisão #4 da Fase 2.A já amarra o comportamento de "criar substituição em vez de reabrir". Adicionar agora evita uma migration extra futura. Custo: zero — coluna nullable.
+
+---
+
+## 10. Status de execução (2026-05-08)
+
+Implementação da Sprint 1 Semana 1 entregue por Lucas:
+
+- Migrations `0023_usuarios_papeis.sql`, `0024_fichas_triagem.sql`, `0025_triagem_eventos.sql`, `0026_triagem_locks.sql` ✓
+- Domínio puro (`src/domain/triagem.ts`, `src/domain/triagem-evento.ts`) ✓
+- Ports (`triagem-repository.ts`, `papeis-repository.ts`) ✓
+- Use cases em `src/application/use-cases/triagem/` ✓
+- Implementação Postgres (`src/infrastructure/db/triagem-repository.pg.ts`, `papeis-repository.pg.ts`) ✓
+- Mocks em memória (`src/infrastructure/mock/triagem-repository.mock.ts`, `papeis-repository.mock.ts`) ✓
+- Endpoints HTTP em `src/app/api/{app/fichas, triagem, cron}/` ✓
+- Rate limit Camada 1 in-memory (`src/infrastructure/security/rate-limit.ts`) ✓
+- Audit trail emitido na mesma transação dos use cases mutadores ✓
+- MFA enforcement em duas camadas (trigger SQL + runtime check) ✓
+- Cenários de teste manual em `ops/testing/triagem-flow.http` ✓
+- `tsc --noEmit` zerado, `npm run lint` zerado (warnings menores não-bloqueantes) ✓
+
+Próximo: Sprint 1 Semana 2 — Fernanda implementa `/triagem` web consumindo os endpoints; André revisa OWASP nos endpoints prontos.
