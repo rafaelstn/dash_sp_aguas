@@ -41,6 +41,14 @@
 .PARAMETER NoStart
     Nao iniciar o Next automaticamente. Falha se Next nao estiver rodando.
 
+.PARAMETER Prod
+    Sobe em modo PRODUCAO (next start) em vez de dev. Build automatico se
+    .next/BUILD_ID ausente. Para o Next dev se estiver rodando. Service
+    Worker fica ATIVO (em dev e disabled). PID em .run/next-prod.pid.
+
+.PARAMETER Rebuild
+    Forca rebuild antes de iniciar prod (so faz sentido com -Prod).
+
 .PARAMETER Port
     Porta do Next a usar. Default: detecta entre 3000 e 3001.
 
@@ -59,6 +67,14 @@
     .\startApp.ps1 -Width 360 -Height 640 -Browser edge
     Edge com viewport custom 360x640.
 
+.EXAMPLE
+    .\startApp.ps1 -Prod
+    Mata dev se rodando, build se preciso, sobe em modo producao e abre Chrome.
+
+.EXAMPLE
+    .\startApp.ps1 -Prod -Rebuild
+    Forca npm run pwa:build antes de iniciar prod.
+
 .NOTES
     Companion: start.ps1 (sobe Next), stop.ps1 (mata Next), startApp.ps1.
     Perfil isolado: .run/chrome-profile (gitignored via .run/).
@@ -73,6 +89,8 @@ param(
     [int]$Height,
     [switch]$DevTools,
     [switch]$NoStart,
+    [switch]$Prod,
+    [switch]$Rebuild,
     [int]$Port,
     [ValidateSet('chrome', 'edge')]
     [string]$Browser
@@ -135,7 +153,69 @@ foreach ($p in $candidatePorts) {
     }
 }
 
-# --- Sobe Next se preciso ------------------------------------------------------
+# --- Modo PRODUCAO: mata dev, build se preciso, inicia next start --------------
+if ($Prod) {
+    if ($activePort) {
+        Write-Step "Next em :$activePort detectado. Verificando se ja e producao..."
+        $marcadorProd = Join-Path $repoRoot '.run\next-prod.pid'
+        if (-not (Test-Path $marcadorProd) -or $Rebuild) {
+            Write-Warn "Forcando reinicio em modo producao."
+            taskkill /F /IM node.exe 2>&1 | Out-Null
+            Start-Sleep -Seconds 1
+            $activePort = $null
+        } else {
+            Write-Ok 'Reusando producao em execucao.'
+        }
+    }
+
+    if (-not $activePort) {
+        if ($NoStart) {
+            Write-Err "Next nao esta rodando e -NoStart foi passado."
+            exit 1
+        }
+
+        $buildId = Join-Path $repoRoot '.next\BUILD_ID'
+        if ($Rebuild -or -not (Test-Path $buildId)) {
+            $motivo = if ($Rebuild) { '-Rebuild solicitado' } else { '.next/BUILD_ID ausente' }
+            Write-Step "Build de producao ($motivo) - npm run pwa:build..."
+            & npm run pwa:build 2>&1 | Tee-Object -FilePath (Join-Path $repoRoot '.run\build.log')
+            if ($LASTEXITCODE -ne 0) {
+                Write-Err 'Build falhou. Ver .run/build.log.'
+                exit 1
+            }
+            Write-Ok 'Build concluido.'
+        } else {
+            Write-Ok '.next/BUILD_ID presente - pulando build.'
+        }
+
+        $portaProd = if ($Port) { $Port } else { 3000 }
+        Write-Step "Iniciando next start em :$portaProd em background..."
+        $logProd = Join-Path $repoRoot '.run\next-prod.log'
+        $proc = Start-Process -FilePath 'cmd.exe' `
+                              -ArgumentList @('/c', "npm run start > `"$logProd`" 2>&1") `
+                              -WorkingDirectory $repoRoot `
+                              -WindowStyle Hidden -PassThru
+        Set-Content -Path (Join-Path $repoRoot '.run\next-prod.pid') -Value $proc.Id -Force
+
+        Write-Step 'Aguardando producao responder (timeout 60s)...'
+        $deadline = (Get-Date).AddSeconds(60)
+        while ((Get-Date) -lt $deadline) {
+            if (Test-NextRunning -Port $portaProd) {
+                $activePort = $portaProd
+                break
+            }
+            Start-Sleep -Milliseconds 800
+        }
+
+        if (-not $activePort) {
+            Write-Err 'Producao nao respondeu em 60s. Ver .run/next-prod.log.'
+            exit 1
+        }
+        Write-Ok "Producao pronta em http://localhost:$activePort (PID $($proc.Id))"
+    }
+}
+
+# --- Sobe Next dev se preciso (modo padrao) -----------------------------------
 if (-not $activePort) {
     if ($NoStart) {
         Write-Err "Next nao esta rodando e -NoStart foi passado. Rode .\start.ps1 antes."

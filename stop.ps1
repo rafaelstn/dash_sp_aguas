@@ -17,8 +17,9 @@ $ErrorActionPreference = 'Stop'
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
 
-$RunDir  = Join-Path $ProjectRoot '.run'
-$PidFile = Join-Path $RunDir 'next.pid'
+$RunDir      = Join-Path $ProjectRoot '.run'
+$PidFile     = Join-Path $RunDir 'next.pid'
+$PidFileProd = Join-Path $RunDir 'next-prod.pid'
 
 function Write-Step { param($Msg) Write-Host "==> $Msg" -ForegroundColor Cyan }
 function Write-Ok   { param($Msg) Write-Host "[ok] $Msg" -ForegroundColor Green }
@@ -37,20 +38,25 @@ function Stop-Tree {
 
 $killed = $false
 
-# 1. Processo rastreado pelo start.ps1
-if (Test-Path $PidFile) {
-    $trackedPid = Get-Content $PidFile -ErrorAction SilentlyContinue
-    if ($trackedPid -and ($trackedPid -match '^\d+$')) {
-        $proc = Get-Process -Id $trackedPid -ErrorAction SilentlyContinue
-        if ($proc) {
-            Write-Step "Encerrando processo rastreado (PID $trackedPid) e filhos..."
-            Stop-Tree -RootPid ([int]$trackedPid)
-            $killed = $true
-        } else {
-            Write-Warn "PID $trackedPid nao corresponde a um processo vivo."
+# 1. Processos rastreados (dev via start.ps1, prod via startApp.ps1 -Prod)
+foreach ($entry in @(
+    @{ Path = $PidFile;     Rotulo = 'dev (start.ps1)' },
+    @{ Path = $PidFileProd; Rotulo = 'producao (startApp.ps1 -Prod)' }
+)) {
+    if (Test-Path $entry.Path) {
+        $trackedPid = Get-Content $entry.Path -ErrorAction SilentlyContinue
+        if ($trackedPid -and ($trackedPid -match '^\d+$')) {
+            $proc = Get-Process -Id $trackedPid -ErrorAction SilentlyContinue
+            if ($proc) {
+                Write-Step "Encerrando $($entry.Rotulo) (PID $trackedPid) e filhos..."
+                Stop-Tree -RootPid ([int]$trackedPid)
+                $killed = $true
+            } else {
+                Write-Warn "PID $trackedPid ($($entry.Rotulo)) nao corresponde a um processo vivo."
+            }
         }
+        Remove-Item $entry.Path -ErrorAction SilentlyContinue
     }
-    Remove-Item $PidFile -ErrorAction SilentlyContinue
 }
 
 # 2. Rede de seguranca: qualquer node.exe rodando "next dev" a partir desta pasta
