@@ -39,7 +39,7 @@ Definir a arquitetura técnica da Fase 1 (MVP) do sistema, aderente à especific
 │   • Server Components (renderização padrão)                │
 │   • Client Components pontuais (busca, cópia de caminho)   │
 │   • API Routes (BFF) — única fronteira com o banco         │
-│   • Middleware de auditoria LGPD (auth = Fase 2)           │
+│   • Middleware de auth (Supabase Auth) + auditoria LGPD    │
 └─────────────────────┬──────────────────────────────────────┘
                       │ Data Access Layer (abstraída)
                       │ — trocável sem refactor da UI
@@ -238,7 +238,7 @@ export interface AuditoriaRepository {
 
 - `PostosRepositoryPg` — implementação PostgreSQL, acessada via cliente SQL. **Decisão tomada:** `postgres.js` (ADR-0002) — driver enxuto, sem ORM, parametrização nativa e tipagem explícita. Preferido em vez de `pg + drizzle-orm` pelo volume pequeno do *schema* e pela rejeição a ORM como dependência estrutural em projeto de governo.
 - Uso **deliberado** do cliente SQL em vez do SDK supabase-js no servidor, para não acoplar a lógica à API proprietária do Supabase. A migração para outro PG passa a ser apenas troca de `DATABASE_URL`.
-- **Sem** cliente supabase-js no MVP (autenticação está fora de escopo). Se a Fase 2 optar por Supabase Auth, o uso ficará **isolado** em `infrastructure/auth/` a ser criado na ocasião; casos de uso permanecem desconhecendo a biblioteca.
+- **Cliente supabase-js usado exclusivamente para autenticação**, isolado em `infrastructure/auth/` (`supabase-server.ts`, `supabase-browser.ts`, `current-user.ts`, `allowlist.ts`, `dev-bypass.ts`) + `src/middleware.ts`. Casos de uso (`application/use-cases/*`) e domínio (`domain/*`) permanecem desconhecendo a biblioteca; recebem `usuarioId: string | null` das camadas externas. Nenhum acesso a dados de negócio passa pelo SDK Supabase — esses ainda usam `postgres.js` (ADR-0002). Detalhes do método de auth: ADR-0004 (decisão original) + ADR-0006 (pivô para email + senha + self-signup).
 
 ### 4.3 Consequência
 
@@ -273,12 +273,12 @@ Componente transversal introduzido a partir da documentação oficial do cliente
 | UI | `src/app/(dashboard)/desconformidades/` | Rota com 4 abas controladas (WAI-ARIA) |
 | UI | `src/components/features/desconformidades/*` | Componentes por aba e linha |
 
-### 4bis.2 Fluxo de revisão (MVP, sem auth)
+### 4bis.2 Fluxo de revisão (com auth — ADR-0004 + ADR-0006)
 
 1. Técnico abre `/desconformidades`, vê 4 abas com contagem e *badge*.
 2. Escolhe aba; cada linha traz problema + sugestão textual.
 3. Clica *Marcar como revisado* → `POST /api/desconformidades/revisoes` com `tipoEntidade`, `idEntidade`, `nota` (opcional).
-4. API grava `revisoes_desconformidade` com `usuario_id = NULL`, `ip` extraído de `x-forwarded-for`/`x-real-ip`, `revisado_em = NOW()`.
+4. API grava `revisoes_desconformidade` com `usuario_id` do usuário logado (lido por `obterUsuarioAtual()`), `ip` extraído de `x-forwarded-for`/`x-real-ip`, `revisado_em = NOW()`. `usuario_id` permanece nullable no schema apenas para compatibilidade com registros criados antes da ativação da auth.
 5. UI atualiza o status da linha via *optimistic update* + revalidação do *route segment*.
 
 ### 4bis.3 Fluxo de classificação (indexer → 3 *buckets*)
@@ -556,7 +556,7 @@ WHERE classe_prefixo NOT LIKE 'conforme_%'
 
 ### 5.3.4 Tabela `revisoes_desconformidade`
 
-Registra curadoria operacional sobre postos e arquivos desconformes. `UPDATE` permitido em `status` e `nota` no MVP (ausência de auth). Fase 2 aplica *trigger* bloqueante.
+Registra curadoria operacional sobre postos e arquivos desconformes. `UPDATE` permitido em `status` e `nota` no MVP. Com auth ativa (ADR-0004 + ADR-0006), o `usuario_id` é gravado a cada revisão; *trigger* bloqueante de imutabilidade fica como evolução para a Fase 2.
 
 ```sql
 -- Migration 0013
@@ -589,7 +589,7 @@ CREATE INDEX idx_revisoes_categoria   ON revisoes_desconformidade (categoria);
 ```sql
 CREATE TABLE acesso_ficha (
   id                UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
-  usuario_id        TEXT         NULL,           -- nullable no MVP (auth = Fase 2)
+  usuario_id        TEXT         NULL,           -- nullable: registros antes da ativação da auth (ADR-0004) + casos sem sessão
   prefixo           VARCHAR(32)  NOT NULL,
   acao              VARCHAR(32)  NOT NULL,       -- 'visualizou_ficha' | 'listou_arquivos'
   ip                TEXT         NULL,           -- IP do requester
@@ -608,7 +608,7 @@ REVOKE UPDATE, DELETE ON acesso_ficha FROM PUBLIC;
 -- A aplicação usa um ROLE sem UPDATE/DELETE nesta tabela (append-only).
 ```
 
-**Nota:** `usuario_id` fica nullable durante o MVP porque autenticação entra apenas na Fase 2. A coluna já está prevista no *schema* para evitar migração destrutiva quando a auth for introduzida.
+**Nota:** `usuario_id` permanece nullable por compatibilidade com (a) registros criados antes da ativação da auth (ADR-0004) e (b) cenários degradados em que a sessão não é resolvida. Com auth em produção (ADR-0004 + ADR-0006), novas linhas gravam o `usuario_id` do usuário logado quando disponível.
 
 ### 5.5 Tabela `import_log`
 
@@ -633,12 +633,14 @@ CREATE TABLE import_log (
 
 ### 5.6 *Row Level Security* no Supabase
 
-- **RLS baseada em usuário fica fora do MVP** (autenticação é Fase 2). A proteção do banco no MVP é feita por:
-  - Nenhuma chave de banco exposta ao navegador.
-  - Dashboard acessa o PG exclusivamente via API Routes do Next.js em ambiente servidor, com `DATABASE_URL` contendo *role* de aplicação.
-  - Pré-condição de deploy: sistema em rede interna, sem exposição à internet pública.
+- **RLS baseada em usuário aplicada apenas em `usuarios_favoritos`** (ADR-0005), onde o titular é o próprio usuário autenticado. Demais tabelas (`postos`, `arquivos_indexados`, `arquivos_orfaos`, `revisoes_desconformidade`, `acesso_ficha`) **não usam RLS por usuário**: o domínio é compartilhado entre todos os técnicos do setor SPÁguas e a leitura é uniforme.
+- A proteção do banco no MVP é feita por defesa em profundidade:
+  - Nenhuma chave de banco (`service_role`, `DATABASE_URL`) exposta ao navegador.
+  - Dashboard acessa o PG exclusivamente via API Routes do Next.js em ambiente servidor, com *role* de aplicação.
+  - Auth ativa (ADR-0004 + ADR-0006) com gate no `middleware.ts`: nenhuma rota privada renderiza sem sessão Supabase válida (ou bypass de dev sob `NODE_ENV=development`).
+  - Allowlist de domínio aplicada server-side antes de qualquer chamada ao Supabase Auth — wildcard `*` permitido só em homologação.
 - `acesso_ficha`: `INSERT` apenas pela *role* da aplicação; sem `SELECT`/`UPDATE`/`DELETE` para usuário final. Consultas de auditoria ficam a cargo de DBA/administrador.
-- A reativação de RLS com base em usuário volta à pauta na Fase 2, sob responsabilidade do André.
+- Distinção de papel (leitor vs curador) via RBAC fica como evolução futura (ver ADR-0004 §2.6) sob responsabilidade do André quando exigência contratual surgir.
 
 ---
 
@@ -789,11 +791,11 @@ Acessibilidade é tratada como **requisito de arquitetura**, não enfeite de fim
 | CORS | Restritivo em produção; *origin* do dashboard explicitamente listado. |
 | SQL Injection | Queries parametrizadas obrigatórias; proibido `string interpolation` em SQL. |
 | XSS | Saída via React (escape automático); nenhuma utilização de `dangerouslySetInnerHTML`. |
-| Auditoria | Toda visualização de ficha e listagem de arquivos gera registro em `acesso_ficha`, com `usuario_id` nullable no MVP. |
+| Auditoria | Toda visualização de ficha e listagem de arquivos gera registro em `acesso_ficha`. Com auth ativa (ADR-0004 + ADR-0006), `usuario_id` é gravado quando há sessão; permanece nullable para registros pré-auth e cenários degradados sem sessão. |
 | Retenção | Política a definir (pergunta em aberto na spec). |
 | *Rate limiting* | Middleware no Next.js — valores definidos pelo André antes do *deploy*. |
 | Territorialidade | Supabase é POC; migração para PG nacional prevista (ADR 0001). |
-| **Exposição à rede** | **MVP roda exclusivamente em rede interna.** Sem auth, qualquer exposição à internet pública é proibida. Pré-condição de deploy documentada no runbook. |
+| **Exposição à rede** | Auth ativa (ADR-0004 + ADR-0006) habilita deploy Vercel em internet pública. Em homologação, `AUTH_ALLOWED_EMAIL_DOMAINS=*` libera avaliadores externos; em produção, restaurar a lista institucional (`sp.gov.br`, `daee.sp.gov.br`) é pré-condição bloqueante para o *go-live*. |
 
 ---
 

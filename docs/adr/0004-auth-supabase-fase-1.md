@@ -2,11 +2,19 @@
 
 | Campo | Valor |
 |-------|-------|
-| Status | Aceito — 2026-04-23 |
+| Status | **Parcialmente superada — 2026-05-08** (ver ADR-0006). Decisões de isolamento arquitetural, allowlist, ausência de MFA e ausência de RBAC permanecem válidas; o método de login (magic link) e a desativação do self-signup foram revisados. |
+| Status original | Aceito — 2026-04-23 |
 | Autor | Damasceno Dev OS (André — Segurança; Bruno — Engenharia) |
 | Contexto | Ficha Técnica de Postos Hidrológicos SPÁguas — MVP (Fase 1) |
 | Substitui / complementa | ADR-0002 (§"Sem cliente supabase-js no MVP") |
-| Referências | `docs/spec.md §1.2, §4.5, US-008`; `docs/architecture.md §5.6, §10` |
+| Atualizada por | **ADR-0006** (pivô para email + senha + cadastro self-service) |
+| Referências | `docs/spec.md §1.2, §4.5, US-008`; `docs/architecture.md §5.6, §10`; `docs/adr/0006-auth-pivot-email-senha-self-signup.md` |
+
+> **Aviso de leitura — 2026-05-08:** os itens 2 e 4 da seção "Decisão" (magic
+> link e ausência de self-signup funcional) **não refletem mais o sistema em
+> produção**. Foram substituídos pelo método email + senha com cadastro
+> self-service via `/cadastrar`, conforme ADR-0006. O restante da decisão
+> (provedor, isolamento, allowlist, sem MFA, sem RBAC) permanece em vigor.
 
 ---
 

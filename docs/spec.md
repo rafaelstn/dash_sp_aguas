@@ -4,9 +4,9 @@
 |-------|-------|
 | Cliente | SPÁguas — Governo do Estado de São Paulo |
 | Responsável pela especificação | Camila — PO Produto (Damasceno Dev OS) |
-| Versão | 1.2 — MVP (Fase 1) |
-| Data | 2026-04-22 |
-| Status | Rascunho — atualizado com documentação oficial do cliente (22/04/2026) |
+| Versão | 1.3 — MVP (Fase 1) |
+| Data | 2026-05-08 |
+| Status | Rascunho — autenticação ativada na Fase 1 (ADR-0004 + ADR-0006); documentação oficial do cliente integrada (22/04/2026) |
 | Tom do documento | Formal — padrão governo |
 
 ---
@@ -33,11 +33,13 @@ O sistema substitui essa operação manual por interface única de consulta, pre
 | Técnico SPÁguas | Técnico do programa que consulta ficha de posto para atividade operacional ou elaboração de relatório | Pequeno (setor reduzido) |
 | Gestor SPÁguas | Responsável por visão consolidada da rede | Muito pequeno |
 
-**Autenticação está fora do MVP** (decisão do Rafael em 22/04/2026). Consequências:
+**Autenticação está ativa na Fase 1** (decisão antecipada em 23/04/2026 — ADR-0004; pivô para email + senha + cadastro self-service em 08/05/2026 — ADR-0006). Consequências:
 
-- Todo o fluxo de uso do MVP ocorre sem identificação individual do usuário.
-- A trilha LGPD (`acesso_ficha`) permanece obrigatória (é exigência legal para órgão público), porém registra `timestamp`, `ip`, `user_agent` e `prefixo_consultado`. A coluna `usuario_id` fica nullable até a Fase 2, quando a autenticação for introduzida.
-- **Pré-condição de deploy:** o sistema deve rodar **exclusivamente em rede interna** do setor durante o MVP, nunca exposto à internet pública. Essa pré-condição é responsabilidade conjunta do Rodrigo (DevOps) e da Marina (Documentação) e deve constar como requisito explícito no runbook de deploy (ADR-0002, quando for criado).
+- Login obrigatório via email + senha (`signInWithPassword`); cadastro self-service em `/cadastrar` para avaliadores e técnicos. `nome` é capturado no cadastro e exibido na sidenav.
+- Allowlist de domínio aplicada server-side antes de qualquer chamada ao Supabase Auth: `sp.gov.br`, `daee.sp.gov.br` + `AUTH_EXTRA_ALLOWED_EMAILS`. Em homologação, `AUTH_ALLOWED_EMAIL_DOMAINS=*` libera avaliadores externos; restaurar a lista institucional é pré-condição bloqueante para o *go-live*.
+- A trilha LGPD (`acesso_ficha`) registra `timestamp`, `ip`, `user_agent`, `prefixo_consultado` e `usuario_id` quando há sessão. A coluna permanece nullable apenas para registros pré-auth e cenários degradados sem sessão (mantida compatibilidade com schema original).
+- **Sem MFA e sem RBAC no MVP** (ADR-0004 §2.5/§2.6) — qualquer usuário autenticado tem o mesmo conjunto de ações. RBAC volta à pauta na Fase 2 se houver exigência contratual.
+- O sistema pode ser exposto à internet pública (Vercel) com a auth ativa. Documentação operacional (Supabase com "Confirm email" desmarcado em homologação, restauração da allowlist em produção) é responsabilidade de Rodrigo (DevOps) + Marina (Documentação).
 
 ---
 
@@ -191,11 +193,11 @@ Registro operacional de curadoria sobre entidades (posto ou arquivo) identificad
 | Identificador da entidade | Texto | Sim | Prefixo do posto ou caminho do arquivo |
 | Status | Enum (`pendente` \| `revisado`) | Sim | Default `pendente` |
 | Nota | Texto | Não | Observação livre do técnico |
-| IP | Texto | Não | Registrado em lugar de `usuario_id` no MVP (auth = Fase 2) |
+| IP | Texto | Não | Registrado em complemento ao `usuario_id` (defesa em profundidade) |
 | Revisado em | *Timestamp* | Não | Preenchido quando transição para `revisado` |
 | Criado em | *Timestamp* | Sim | Default `NOW()` |
 
-Esta tabela admite `UPDATE` em `status`, `nota` e `revisado_em` durante o MVP (ausência de auth torna *append-only* inviável sem comprometer o fluxo). Fase 2 recebe *trigger* que exige `usuario_id` na criação e bloqueia edição do histórico.
+Esta tabela admite `UPDATE` em `status`, `nota` e `revisado_em` durante o MVP. Com auth ativa (ADR-0004 + ADR-0006), `usuario_id` é gravado a cada revisão; *trigger* bloqueante de imutabilidade do histórico fica como evolução para a Fase 2.
 
 #### 3.1.3 Acesso a Ficha (trilha de auditoria LGPD)
 
@@ -312,8 +314,8 @@ Análise cruzada do CSV oficial (22/04/2026) contra as regex de 3.1.4:
 
 ### 4.2.3 Política de não-edição em lote no MVP
 
-- **RN-10.2 —** O sistema **nunca** altera dado cadastral de posto em lote com base em sugestão automática. Motivo: regra de governo + LGPD — alteração de dado cadastral exige *audit trail* com responsável humano autenticado, e autenticação entra apenas na Fase 2.
-- **RN-10.3 —** O módulo de desconformidade **sugere** a correção e permite que o técnico marque o caso como `revisado` (gera registro em `revisoes_desconformidade` com IP e *timestamp* em lugar de `usuario_id` no MVP). A correção efetiva do dado ocorre manualmente na planilha-fonte, fora do escopo do sistema.
+- **RN-10.2 —** O sistema **nunca** altera dado cadastral de posto em lote com base em sugestão automática. Motivo: regra de governo + LGPD — alteração de dado cadastral exige *audit trail* com responsável humano autenticado. Com auth ativa (ADR-0004 + ADR-0006), o `usuario_id` é gravado nas revisões; correções em lote permanecem fora de escopo do MVP.
+- **RN-10.3 —** O módulo de desconformidade **sugere** a correção e permite que o técnico marque o caso como `revisado` (gera registro em `revisoes_desconformidade` com `usuario_id` do usuário logado, IP e *timestamp*). A correção efetiva do dado ocorre manualmente na planilha-fonte, fora do escopo do sistema.
 - **RN-10.4 —** O importador do CSV, quando executado, **repopula** a base a partir da planilha já corrigida; não há rota de escrita direta em `postos` pela aplicação no MVP.
 
 #### 4.2.1 Formatos de prefixo observados na fonte (histórico)
@@ -456,19 +458,29 @@ Tamanho: S — PO responsável: Fernanda + Lucas
 Tamanho: S — PO responsável: Lucas + André
 
 **Critérios:**
-- GWT-007.1 — **DADO** qualquer consulta bem-sucedida à ficha, **QUANDO** a resposta é emitida, **ENTÃO** registro é gravado contendo `timestamp`, `ip`, `user_agent` e `prefixo_consultado` (o campo `usuario_id` permanece nulo enquanto não houver autenticação, conforme decisão do kickoff).
+- GWT-007.1 — **DADO** qualquer consulta bem-sucedida à ficha, **QUANDO** a resposta é emitida, **ENTÃO** registro é gravado contendo `timestamp`, `ip`, `user_agent`, `prefixo_consultado` e `usuario_id` quando há sessão (auth ativa via ADR-0004 + ADR-0006). `usuario_id` permanece nullable apenas para registros pré-auth e cenários degradados sem sessão.
 - GWT-007.2 — **DADO** o registro gravado, **QUANDO** o DBA consulta a tabela, **ENTÃO** o conteúdo é imutável pela aplicação (*append-only*).
 - GWT-007.3 — **DADO** volume de consultas, **QUANDO** acumulado por 12 meses, **ENTÃO** a tabela de auditoria não compromete a performance do sistema (estratégia de retenção definida pelo PO DevOps).
 
-### US-008 — Autenticação (Fase 2 — não implementar no MVP)
+### US-008 — Autenticação (entregue na Fase 1 — ADR-0004 + ADR-0006)
 
 > **Como** órgão público sujeito à LGPD
 > **Quero** identificar individualmente cada usuário que consulta a rede de postos
 > **Para** atribuir responsabilidade individual à trilha de auditoria.
 
-Tamanho: M — PO responsável: André (Segurança) + Lucas — **Fase 2**
+Tamanho: M — PO responsável: André (Segurança) + Bruno (Engenharia) — **entregue na Fase 1** (decisão antecipada para destravar deploy Vercel; pivô de método em 08/05/2026).
 
-**Restrição vigente no MVP:** enquanto esta US não for implementada, o sistema **deve** rodar exclusivamente em rede interna do setor, sem exposição à internet pública. Essa restrição é pré-condição de deploy e é responsabilidade do Rodrigo documentá-la no runbook.
+**Critérios:**
+
+- GWT-008.1 — **DADO** um usuário não autenticado, **QUANDO** acessa qualquer rota privada, **ENTÃO** o middleware redireciona para `/login` com `returnTo` preservando a rota original.
+- GWT-008.2 — **DADO** o formulário de login, **QUANDO** o usuário envia email + senha, **ENTÃO** a allowlist server-side valida o domínio antes de tocar Supabase Auth; em caso de domínio fora da lista, exibe a mensagem formal "Acesso restrito a contas institucionais do setor SPÁguas. Contate o administrador do sistema." sem disparar email ou requisição ao provedor.
+- GWT-008.3 — **DADO** credenciais inválidas, **QUANDO** o `signInWithPassword` falha, **ENTÃO** a UI exibe mensagem genérica "Email ou senha incorretos. Verifique os dados e tente novamente." — sem revelar se o email existe na base.
+- GWT-008.4 — **DADO** um usuário novo, **QUANDO** acessa `/cadastrar` e preenche nome + email + senha (mín. 6 caracteres), **ENTÃO** a allowlist é aplicada antes do `signUp`; em sucesso com sessão imediata, redireciona para a home; em painel Supabase com "Confirm email" ativo, retorna mensagem amigável solicitando confirmação por email.
+- GWT-008.5 — **DADO** um usuário autenticado, **QUANDO** qualquer ação de auditoria é executada (visualização de ficha, listagem de arquivos, revisão de desconformidade, favoritar), **ENTÃO** o `usuario_id` é gravado no respectivo registro.
+- GWT-008.6 — **DADO** ambiente `NODE_ENV=development` com `DEV_BYPASS_AUTH_EMAIL` e `DEV_BYPASS_AUTH_USER_ID` (UUID válido) no `.env.local`, **QUANDO** a aplicação é executada, **ENTÃO** o middleware libera o gate e o `obterUsuarioAtual` retorna o usuário simulado; em produção, qualquer valor é ignorado.
+- GWT-008.7 — **DADO** produção, **QUANDO** o sistema é promovido para *go-live*, **ENTÃO** `AUTH_ALLOWED_EMAIL_DOMAINS` deve estar restrito à lista institucional (`sp.gov.br,daee.sp.gov.br`); o uso de wildcard `*` é restrito à homologação.
+
+**Fora do escopo do MVP (avaliar Fase 2):** MFA, RBAC (perfis leitor/curador), política de senha do DAEE, *trigger* bloqueante de imutabilidade do histórico de revisões.
 
 ### US-009 — Consultar desconformidades cadastrais
 
@@ -484,7 +496,7 @@ Tamanho: M — PO responsável: Fernanda (UI) + Lucas (API)
 - GWT-009.2 — **DADO** a aba *Prefixo principal desconforme*, **QUANDO** renderizada, **ENTÃO** cada linha apresenta: prefixo atual, classe do problema (ex.: "suspeita de dígito/letra trocados", "placeholder com interrogação", "outlier"), sugestão de correção textual e status (`pendente` | `revisado`).
 - GWT-009.3 — **DADO** a aba *Prefixo ANA desconforme*, **QUANDO** renderizada, **ENTÃO** cada linha apresenta: prefixo do posto, prefixo ANA atual, prefixo ANA sugerido (com *padding* de zeros à esquerda), e status.
 - GWT-009.4 — **DADO** qualquer linha, **QUANDO** clico em *Marcar como revisado*, **ENTÃO** o sistema registra em `revisoes_desconformidade` com `status = 'revisado'`, `ip` do *requester* e `revisado_em = NOW()`. O estado da aba é atualizado sem recarga completa da página.
-- GWT-009.5 — **DADO** o MVP sem auth, **QUANDO** a ação de revisão é executada, **ENTÃO** o registro grava `usuario_id = NULL` e `ip` preenchido — nunca bloqueia por ausência de autenticação, mas a nota deixa explícito que a correção efetiva é responsabilidade do técnico sobre a planilha-fonte.
+- GWT-009.5 — **DADO** auth ativa, **QUANDO** a ação de revisão é executada, **ENTÃO** o registro grava `usuario_id` do usuário logado + `ip` (defesa em profundidade) — a nota deixa explícito que a correção efetiva do dado é responsabilidade do técnico sobre a planilha-fonte.
 - GWT-009.6 — **DADO** o usuário navegando por teclado, **QUANDO** percorre as abas, **ENTÃO** as setas esquerda/direita alternam as abas (padrão WAI-ARIA *tabs*), o `Tab` desce para a primeira linha da aba ativa, e o foco é anunciado pelo leitor de tela.
 - GWT-009.7 — **DADO** que o *worker* de indexação ainda não rodou, **QUANDO** as abas *Arquivos órfãos* e *Arquivos malformados* são abertas, **ENTÃO** é apresentado estado vazio com mensagem "nenhum arquivo indexado até o momento — aguardando varredura do *worker*".
 - GWT-009.8 — **DADO** o tom formal do padrão governo, **QUANDO** os textos são exibidos, **ENTÃO** seguem o exemplo: "Verificamos 436 postos com código da ANA fora do padrão oficial (8 dígitos). A correção sugerida é preencher os dígitos faltantes à esquerda." Nenhuma informalidade, nenhum *emoji*.
@@ -563,7 +575,7 @@ A feature só é considerada concluída quando, para cada tela relevante, os est
 ## 9. Perguntas em Aberto (a confirmar com o Rafael / cliente)
 
 1. ~~**Padrão do prefixo nos nomes de arquivo:** o regex `^([0-9][A-Z]-[0-9]{3})` cobre todos os casos reais do HD de rede?~~ **RESPONDIDO (22/04/2026 — documentação oficial do cliente):** o cliente forneceu o padrão oficial por pasta raiz (5 categorias), com regex específica por tipo de dado (ver 3.1.4) e padrão de nome de arquivo consolidado `{Prefixo} {CodDoc} {CodEnc} [Opcional] {AAAA MM DD}.pdf` (ver RN-06). A estratégia da v1.1 por `startswith` é descartada; o *worker* passa a usar parsing por regex + validação de existência do prefixo em `postos`.
-2. ~~**Identidade do usuário:** no MVP, como será feita a autenticação?~~ **RESPONDIDO (22/04/2026):** autenticação está **fora do MVP**. Trilha LGPD passa a registrar `timestamp`, `ip`, `user_agent` e `prefixo_consultado`, com `usuario_id` nullable até a Fase 2 (US-008). Pré-condição: sistema rodando exclusivamente em rede interna no MVP.
+2. ~~**Identidade do usuário:** no MVP, como será feita a autenticação?~~ **RESPONDIDO (atualizado 08/05/2026):** autenticação foi antecipada para a Fase 1 em 23/04/2026 (ADR-0004) para destravar o deploy Vercel; método pivotou em 08/05/2026 (ADR-0006) para email + senha + cadastro self-service em `/cadastrar`, mantendo allowlist server-side e isolamento arquitetural. Trilha LGPD grava `usuario_id` quando há sessão; coluna permanece nullable apenas para compatibilidade com registros pré-auth e cenários degradados.
 3. **Território nacional para produção:** o contrato exige explicitamente hospedagem em território nacional? Data alvo para migração?
 4. **Política de retenção da trilha LGPD:** por quanto tempo manter os registros de acesso (12 meses? Indefinido?).
 5. **Variações de caminho do HD de rede:** há múltiplos volumes/servidores ou é um único caminho UNC raiz?
