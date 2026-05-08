@@ -7,6 +7,7 @@
 | Pendência fechada (parcialmente) | `docs/seguranca/owasp-review-sprint-1.md` §A02 + §5 #7 |
 | Documento pai | `next.config.ts` (header HSTS) |
 | Status | **Não ativado**. Aguardando confirmação. |
+| Domínio assumido | `spaguas-ficha-tecnica.vercel.app` `<<placeholder até confirmação Rafael>>` |
 | Última revisão | 2026-05-08 |
 
 ---
@@ -41,6 +42,8 @@ Pré-requisitos absolutos antes de submeter:
 | `includeSubDomains` no header | **OK** | next.config.ts |
 
 **Domínio de produção do projeto SPÁguas Ficha Técnica é desconhecido neste sprint.** Só uma URL Vercel temporária ou domínio custom do cliente Governo SP — preciso da confirmação.
+
+**Decisão Rafael (2026-05-08):** documentar tudo com **`spaguas-ficha-tecnica.vercel.app`** como `<<placeholder até confirmação Rafael>>`. Substituir pelo domínio real quando cliente decidir. Como provavelmente entraremos com subdomínio do `vercel.app` (modo Hobby) ou subdomínio institucional do governo, **a recomendação de NÃO ativar `preload`** se mantém — qualquer um dos dois cenários já cai no §3 abaixo como "não ativar".
 
 ---
 
@@ -125,7 +128,7 @@ Sem `preload`, ainda temos:
 
 **Recomendação Rodrigo:** **NÃO ativar `preload`** se o domínio de produção for subdomínio institucional do governo SP. Custo da reversão é alto, ganho marginal sobre `max-age=2y + includeSubDomains` é pequeno pro perfil de ataque do projeto.
 
-**Decisão Rafael:** *(pendente)*
+**Decisão Rafael (2026-05-08):** mantém **NÃO ativado**. Domínio fica em placeholder `spaguas-ficha-tecnica.vercel.app` até cliente decidir — em ambos os cenários prováveis (subdomínio `*.vercel.app` ou subdomínio institucional `*.sp.gov.br`) **`preload` não será ativado**. Reabrir esta decisão somente se o cliente comprar domínio próprio dedicado (ex.: `spaguas-fichas.com.br`) com inventário completo de subdomínios.
 
 ---
 

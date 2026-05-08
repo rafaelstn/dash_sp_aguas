@@ -6,8 +6,44 @@
 | Sprint origem | 1.S3 |
 | Pendência fechada | `docs/seguranca/owasp-review-sprint-1.md` §A09 + §5 #5 |
 | Documento pai | `docs/seguranca/threat-model-sprint-1.md`, ADR-0008 |
-| Estratégia | Vercel Log Drains → webhook (Slack ou e-mail institucional) |
+| Estratégia (modo Pro — futuro) | Vercel Log Drains → webhook (Slack ou e-mail institucional) |
+| Estratégia (modo Hobby — atual) | **Logs-only** — JSON estruturado em stdout, retenção Vercel 1h, revisão manual via dashboard. Logger preparado pra drain HTTP futuro via env vars. |
 | Última revisão | 2026-05-08 |
+
+---
+
+## 0. Modo Hobby (atual) — operação compensatória
+
+**Decisão Rafael (2026-05-08):** projeto fica em **Vercel Hobby (free)** por enquanto. Vercel Log Drains são feature do Pro — não dá pra ativar agora.
+
+**Decisão Rodrigo (2026-05-08):** rodar em **modo logs-only** + preparar logger pra drain HTTP futuro:
+
+| Componente | Status no Hobby | Observação |
+|------------|-----------------|------------|
+| Logger estruturado JSON (`src/infrastructure/logging/logger.ts`) | **ativo** — emite stdout/stderr | Mesmo formato que será consumido pelo drain quando ativar |
+| Suporte opcional a drain HTTP no logger | **código pronto, desativado** | Ativa via env vars (`LOG_DRAIN_URL`, `LOG_DRAIN_TOKEN`, `LOG_DRAIN_MIN_SEVERITY`) — sem deploy de código |
+| Vercel Logs (dashboard) | **única fonte de visibilidade** | Retenção 1h no Hobby (era 7 dias no Pro). Revisão manual diária do Rodrigo. |
+| Alertas A1–A5 automáticos | **inativos** | Disparo é por convenção operacional: Rodrigo filtra `severidade:"security"` 1×/dia no dashboard |
+| Alerta A3 (cron ausente) | **mitigação compensatória** | Notificação de falha do cron-job.org chega por e-mail (`cron-externo-hobby.md` §2.3) — cobre o gap principal |
+
+**Quando Rafael decidir o canal de drain (Slack? Better Stack? Logtail? Axiom? caixa institucional?):**
+
+1. Configurar duas env vars em Vercel Project Settings:
+   - `LOG_DRAIN_URL` — endpoint HTTPS do destino.
+   - `LOG_DRAIN_TOKEN` — Bearer token de autenticação no destino (se aplicável).
+   - `LOG_DRAIN_MIN_SEVERITY` (opcional, default `security`) — filtrar quais eventos vão pro drain.
+2. Re-deploy. Logger passa a emitir POST fire-and-forget pro destino.
+3. Sem mudança de código — só configuração.
+
+**Por que não escolher canal agora:** decisão postergada por Rafael. Logger preparado pra qualquer drain HTTP genérico, então pivot é flip de env var.
+
+**Gaps aceitos no modo Hobby:**
+
+- Alerta de IDOR (A1) não dispara em tempo real → revisão manual diária pega no dia seguinte. **Aceito pra MVP**, com plano de elevar pra Pro+drain antes de UAT do governo.
+- Retenção de log de 1h é curta → registros importantes vazam se Rodrigo não fizer review diário. Mitigação: tabela `auditoria` (Postgres) cobre eventos de domínio (estados de triagem, aprovação) — log de aplicação só complementa.
+- Brute force (A5) não dispara → Vercel WAF + rate limit do Supabase mitigam o pior caso.
+
+Resto do runbook descreve a **arquitetura final (Pro)** — referência pra quando subir.
 
 ---
 
@@ -235,14 +271,16 @@ SLA de resposta = tempo entre alerta disparar e haver triagem registrada (não r
 
 ---
 
-## 5. Setup operacional dos drains
+## 5. Setup operacional dos drains (modo Pro — futuro)
+
+> **Modo atual (Hobby): logs-only.** Esta seção descreve a configuração quando subir pra Pro **OU** quando Rafael decidir um canal e habilitar o drain HTTP via env vars no logger (ver §0 + §5.5).
 
 ### 5.1 Pré-requisitos
 
-- [ ] Plano Vercel Pro (Log Drains não estão no Hobby).
-- [ ] Webhook de destino configurado (Slack incoming webhook OU SMTP-over-HTTP).
+- [ ] Plano Vercel Pro (Log Drains não estão no Hobby) **OU** drain HTTP do logger configurado via env vars.
+- [ ] Webhook de destino configurado (Slack incoming webhook OU SMTP-over-HTTP OU Better Stack/Logtail/Axiom).
 - [ ] `CRON_SECRET` rotacionado nos últimos 90 dias.
-- [ ] Logger estruturado em uso (verificado: `src/infrastructure/logging/logger.ts` já está em produção desde Sprint 1.S3).
+- [ ] Logger estruturado em uso (verificado: `src/infrastructure/logging/logger.ts` já está em produção desde Sprint 1.S3, com extensão de drain HTTP pronta na Sprint 1.S3.A).
 
 ### 5.2 Configurar drain no painel Vercel
 
@@ -272,20 +310,62 @@ A cada 90 dias:
 - Webhook secret → rotar no destino + atualizar no painel Vercel.
 - Endpoint URL → trocar se houver suspeita.
 
+### 5.5 Setup alternativo no Hobby — drain HTTP do logger
+
+Sem precisar subir pra Pro, é possível ativar drain HTTP direto pelo `logger.ts`. Útil pra usar **Better Stack/Logtail (free 1GB/mês)** ou **Axiom (free 500GB/mês)**.
+
+```
+1. Criar conta no destino (ex.: Better Stack):
+   └─ Dashboard → Sources → Add HTTP source
+   └─ Copiar endpoint URL + token de ingestão.
+
+2. Configurar 2 env vars em Vercel Project Settings (Production + Preview):
+   - LOG_DRAIN_URL    = <endpoint HTTPS>
+   - LOG_DRAIN_TOKEN  = <Bearer token do destino>
+
+   Opcional:
+   - LOG_DRAIN_MIN_SEVERITY = security
+     (default: "security". Outras opções: warn, error)
+
+3. Re-deploy (qualquer commit ou redeploy manual).
+
+4. Validar:
+   - Forçar evento de teste:
+     curl -X POST -H "x-cron-secret: $CRON_SECRET" \
+       https://<dominio>/api/cron/liberar-locks-expirados
+     (gera log info — não dispara drain se MIN_SEVERITY=security; ajustar pra warn se quiser ver agora)
+   - Forçar IDOR (logado em produção real ou em staging):
+     usuário A tenta GET /triagem/<id-do-B>/ficha
+     => evento seg.triagem.idor_blocked → drain → destino em ≤2s.
+
+5. Verificar no destino: payload JSON canônico (ver §2).
+```
+
+**Comportamento do drain do logger:**
+- Fire-and-forget: chamada HTTP em background, não bloqueia a request.
+- Timeout 2s por POST; falha silenciosa (cai no console como fallback).
+- Sem `LOG_DRAIN_URL` configurado: drain inativo, apenas console (modo atual).
+- Sem retry: aceitamos perder eventos ocasionais — é monitoring auxiliar, não auditoria.
+
+**Limites:**
+- Não substitui Vercel Log Drains pra HTTP logs (5xx, brute force) — essas alertas (A4, A5) ainda exigem Pro ou ferramenta no edge (Cloudflare/WAF).
+- Para A1, A2, A3 (eventos de aplicação, gravados pelo logger), o drain HTTP **cobre 100%** — equivalente funcional do Pro.
+
 ---
 
 ## 6. Pendências de input externo
 
 | Pendência | Owner | Bloqueia |
 |-----------|-------|----------|
-| Definir destino do webhook (Slack? E-mail institucional do governo?) | Paula → Rafael → cliente | Setup §5.2 |
-| Aprovar plano Vercel Pro (Log Drains) | Rafael (orçamento) | Tudo a partir de §5 |
-| Decidir se `/api/health` será público ou só monitor externo | Rodrigo + André (Sprint 1.S4) | A3 implementação |
+| Definir destino do drain (Slack? Better Stack? Axiom? Logtail? E-mail institucional?) | Paula → Rafael → cliente | Setup §5.2 ou §5.5 |
+| Aprovar plano Vercel Pro (Log Drains nativos + retenção 7d) | Rafael (orçamento) | §5.2 — alternativa: §5.5 cobre A1/A2/A3 sem subir |
+| Decidir se `/api/health` será público ou só monitor externo | Rodrigo + André (Sprint 1.S4) | A3 implementação no modo Pro |
 
-Enquanto pendências não fecham:
+Enquanto pendências não fecham (modo Hobby atual):
 
-- **Mitigação compensatória:** logs estruturados ficam disponíveis em **Vercel Logs** com retenção padrão (7 dias no Pro). Rodrigo faz **revisão diária manual** no painel filtrando `severidade:"security"` (5min de check).
-- **Alarme A3 (cron):** mesmo sem drain, query SQL manual `SELECT MAX(ocorreu_em) FROM cron_heartbeats` 1× por dia detecta ausência prolongada. Não é instantâneo, é o que dá.
+- **Mitigação compensatória:** logs estruturados ficam disponíveis em **Vercel Logs** com retenção 1h no Hobby. Rodrigo faz **revisão diária manual** no painel filtrando `severidade:"security"` (5min de check). Eventos críticos de domínio (estados de triagem, aprovação) duplicam em `auditoria` (Postgres) — auditoria persistente independente do log de aplicação.
+- **Alarme A3 (cron):** notificação de falha do **cron-job.org** (configurada em `cron-externo-hobby.md` §2.3) chega por e-mail em ≤5min após falha consecutiva. Cobre o gap principal sem depender de Postgres ou drain.
+- **Alarme A1 (IDOR):** review diário manual + `auditoria` table. Aceito pra MVP; **plano de elevar antes de UAT do governo** — drain HTTP via §5.5 é caminho rápido (sem custo Vercel adicional).
 
 ---
 

@@ -41,6 +41,33 @@ import 'server-only';
  *   - error: 5xx, falha de infra, falha de invariante.
  *   - security: subset de warn/error que **alerta SIEM** — eventos com
  *     prefixo `seg.*` na chave `evento`. Forçado pra stderr.
+ *
+ * DRAIN HTTP OPCIONAL (modo Hobby — Sprint 1.S3.A)
+ *   Como o projeto está em Vercel Hobby (sem Log Drains nativos), o logger
+ *   pode opcionalmente enviar entradas via HTTP POST pra um endpoint
+ *   externo (Better Stack, Logtail, Axiom, n8n, Slack incoming webhook,
+ *   etc). Configuração 100% via env vars — sem deploy de código.
+ *
+ *   Env vars:
+ *     LOG_DRAIN_URL          — endpoint HTTPS de destino. Ausente => drain inativo.
+ *     LOG_DRAIN_TOKEN        — Bearer token (opcional). Se presente, vai em
+ *                              `Authorization: Bearer <token>`.
+ *     LOG_DRAIN_MIN_SEVERITY — severidade mínima a enviar (default: "security").
+ *                              Aceita: debug | info | warn | error | security.
+ *
+ *   Comportamento:
+ *     - Fire-and-forget: não bloqueia o handler que chamou o logger.
+ *     - Timeout 2s por POST.
+ *     - Falha silenciosa: erro vai pra console (sem disparar log → loop infinito).
+ *     - Sem retry: aceito perder eventos ocasionais (monitoring auxiliar,
+ *       não auditoria — auditoria é a tabela `auditoria` do Postgres).
+ *     - Payload: mesmo JSON do stdout (formato canônico documentado acima).
+ *     - Content-Type: `application/json`.
+ *
+ *   Quando ativar: ver `docs/runbooks/alertas-siem.md` §5.5. Decisão de
+ *   canal (Slack? Better Stack? Logtail? Axiom?) postergada por Rafael.
+ *   Logger fica pronto pra qualquer drain HTTP genérico — pivot é flip de
+ *   env var.
  */
 
 type Severidade = 'debug' | 'info' | 'warn' | 'error' | 'security';
@@ -51,6 +78,86 @@ interface LogEntry {
   evento: string;
   mensagem?: string;
   [campo: string]: unknown;
+}
+
+// Ordem ascendente de criticidade — usada pra comparar com LOG_DRAIN_MIN_SEVERITY.
+const ordemSeveridade: Record<Severidade, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+  security: 4,
+};
+
+function severidadeMinimaConfigurada(): Severidade {
+  const valor = process.env.LOG_DRAIN_MIN_SEVERITY?.toLowerCase();
+  if (
+    valor === 'debug' ||
+    valor === 'info' ||
+    valor === 'warn' ||
+    valor === 'error' ||
+    valor === 'security'
+  ) {
+    return valor;
+  }
+  // Default: só eventos de segurança vão pro drain. Conservador — evita
+  // saturar free tier do destino com info/debug. Override explícito via env.
+  return 'security';
+}
+
+/**
+ * Envia o log pro drain HTTP configurado, se houver. Não bloqueia o caller.
+ *
+ * Não usa o logger pra reportar próprios erros — evita loop infinito caso
+ * o drain volte 5xx repetidamente.
+ */
+function despacharDrain(entry: LogEntry, linha: string): void {
+  const url = process.env.LOG_DRAIN_URL;
+  if (!url) return;
+
+  const minimo = severidadeMinimaConfigurada();
+  if (ordemSeveridade[entry.severidade] < ordemSeveridade[minimo]) return;
+
+  const token = process.env.LOG_DRAIN_TOKEN;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // AbortController pra timeout 2s — evita request pendurada drenando o
+  // budget de execução serverless (Vercel mata a função após o response).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2000);
+
+  // Fire-and-forget. `void` deixa explícito que ignoramos a promise.
+  // Catch silencioso: se logássemos a falha pelo próprio logger, e o drain
+  // estivesse caído, criaríamos loop. console.error direto cai no Vercel
+  // dashboard como fallback de visibilidade.
+  void fetch(url, {
+    method: 'POST',
+    headers,
+    body: linha,
+    signal: controller.signal,
+    // keepalive ajuda em finais de request — Node 20+ suporta.
+    keepalive: true,
+  })
+    .catch((erro: unknown) => {
+      // eslint-disable-next-line no-console
+      console.error(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          severidade: 'error',
+          evento: 'logger.drain.falha',
+          mensagem: 'Falha ao despachar log pro drain HTTP — caiu no fallback console.',
+          motivo: erro instanceof Error ? erro.message : String(erro),
+        }),
+      );
+    })
+    .finally(() => {
+      clearTimeout(timer);
+    });
 }
 
 function emitir(entry: LogEntry): void {
@@ -79,6 +186,10 @@ function emitir(entry: LogEntry): void {
   } else {
     process.stdout.write(linha + '\n');
   }
+
+  // Drain HTTP opcional — ativa quando LOG_DRAIN_URL está configurado.
+  // Sem env var => no-op, modo Hobby atual.
+  despacharDrain(entry, linha);
 }
 
 function basico(severidade: Severidade) {

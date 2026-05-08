@@ -1,16 +1,32 @@
-# Runbook — Vercel Cron + heartbeat
+# Runbook — Vercel Cron + heartbeat (modo Pro — congelado)
 
 | Campo | Valor |
 |-------|-------|
 | Owner | Rodrigo (DevOps) |
 | Sprint origem | 1.S3 (antecipação da pendência #6) |
+| Status | **CONGELADO** — projeto está em Vercel Hobby (free); cron nativo só dá pra ativar no Pro. |
+| Runbook ativo agora | `docs/runbooks/cron-externo-hobby.md` (cron-job.org disparando o mesmo endpoint) |
 | Documento pai | ADR-0008 §10, `supabase/migrations/0026_triagem_locks.sql`, `supabase/migrations/0027_cron_heartbeats.sql` |
-| Configuração | `vercel.json`, `src/app/api/cron/liberar-locks-expirados/route.ts` |
+| Configuração | `vercel.json` (sem `crons` no Hobby — voltam quando subir pra Pro), `src/app/api/cron/liberar-locks-expirados/route.ts` |
 | Última revisão | 2026-05-08 |
 
 ---
 
-## 1. Visão geral
+## 0. Por que este runbook está congelado
+
+Vercel Hobby não suporta `crons` com schedule sub-diário. Como precisamos `*/5 * * * *` (locks com TTL de 1h), movemos a operação pra cron-job.org externo. **Este documento permanece como referência pra reativação quando subir pra Pro.**
+
+Para operação atual: `docs/runbooks/cron-externo-hobby.md`.
+
+Para reativar este modo:
+1. Subir o plano pra Pro no painel da Vercel.
+2. Restaurar bloco `crons` no `vercel.json` (template em §7 abaixo).
+3. Pausar o job no cron-job.org.
+4. Seguir checklist do §8.
+
+---
+
+## 1. Visão geral (modo Pro)
 
 | Item | Valor |
 |------|-------|
@@ -69,6 +85,8 @@ Decisão de fazer heartbeat em Postgres (não UptimeRobot/BetterStack):
 - Audit interno (governo SP gosta de ter tudo no DB que ele controla).
 - Auto-referência aceita: se Postgres cair, **alerta A3 dispara igual** (ausência de heartbeat).
 
+O heartbeat continua ativo no modo Hobby — quem dispara o endpoint (cron-job.org) não importa pra essa parte; é o use case que grava.
+
 ---
 
 ## 4. Verificar histórico de execução
@@ -107,6 +125,8 @@ Significa que **não há heartbeat há mais de 10min**. Possíveis causas:
 | Vercel logs mostram 429 | rate-limit estouro (quase impossível com 5min) | Investigar atacante usando o path |
 | Vercel logs vazios | Cron não está rodando | Ver §5 (rodar manual + Project Settings) |
 
+No modo Hobby, vale o equivalente do dashboard cron-job.org — ver `cron-externo-hobby.md` §4.
+
 ---
 
 ## 5. Como rodar manualmente em emergência
@@ -125,13 +145,15 @@ curl -X POST \
 # {"liberados":[],"quantidade":0,"duracaoMs":42}
 ```
 
-### 5.2 Via painel Vercel — disparo on-demand
+`<dominio-prod>` placeholder atual: `spaguas-ficha-tecnica.vercel.app` `<<placeholder até confirmação Rafael>>`.
+
+### 5.2 Via painel Vercel — disparo on-demand (apenas Pro)
 
 ```
 Project → Cron Jobs → triagem-liberar-locks-expirados → Run
 ```
 
-Aparece o resultado da última execução. Conta como heartbeat normal.
+No Hobby, esse botão não existe — usar curl (§5.1) ou o "Run now" do cron-job.org.
 
 ### 5.3 Em ambiente local
 
@@ -151,7 +173,9 @@ Mock repository não persiste heartbeat (no-op) — é esperado em modo demo.
 
 Política: rotação **trimestral** + **imediata** se houver suspeita de vazamento (commit acidental, ex-funcionário, etc).
 
-### 6.1 Procedimento sem janela (zero-downtime)
+**No modo Hobby atual, o passo extra é atualizar o cron-job.org junto** — ver `cron-externo-hobby.md` §5.
+
+### 6.1 Procedimento sem janela (zero-downtime, modo Pro)
 
 ```
 1. Gerar novo secret: openssl rand -base64 48
@@ -194,12 +218,13 @@ Janela de "1 cron perdido" (5min) é aceitável — o use case é idempotente, l
 
 ---
 
-## 7. Ajustar a frequência (cadência)
+## 7. Ajustar a frequência (cadência) — válido só no Pro
 
-Editar `vercel.json`:
+Editar `vercel.json` — **template para reativação no Pro**:
 
 ```json
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
       "path": "/api/cron/liberar-locks-expirados",
@@ -209,7 +234,7 @@ Editar `vercel.json`:
 }
 ```
 
-Sintaxe cron Vercel: aceita `*/N`, ranges, listas. Mínimo permitido pelo plano Pro: **1 minuto**. Plano Hobby: **dia**. Confirmar plano contratado antes de ajustar.
+Sintaxe cron Vercel: aceita `*/N`, ranges, listas. Mínimo permitido pelo plano Pro: **1 minuto**. Plano Hobby: **dia** (por isso o bloco está fora).
 
 Se for diminuir pra 1min, considerar:
 
@@ -221,7 +246,7 @@ Recomendação atual: **5min** é o sweet spot. Lock fantasma máximo = 5min ap�
 
 ---
 
-## 8. Checklist pós-deploy do cron
+## 8. Checklist pós-deploy do cron (modo Pro — quando reativar)
 
 Após qualquer mudança no `vercel.json` ou no handler:
 
@@ -231,6 +256,7 @@ Após qualquer mudança no `vercel.json` ou no handler:
 - [ ] Verificar `cron_heartbeats` recebeu nova linha
 - [ ] Verificar Vercel Logs — última execução em 200
 - [ ] Se mudou schedule: confirmar no painel **Project → Cron Jobs** que aparece o cronograma novo
+- [ ] Pausar (não apagar) o job correspondente no cron-job.org após 24h de operação Vercel estável
 
 ---
 
@@ -239,7 +265,7 @@ Após qualquer mudança no `vercel.json` ou no handler:
 | Limite | Valor | Mitigação |
 |--------|-------|-----------|
 | Headers customizados em `vercel.json` | não suportado | usar `Authorization: Bearer` (Vercel default) |
-| Plano Hobby: schedule mínimo | diário | upgrade pra Pro se precisar mais granular |
+| **Plano Hobby: schedule mínimo** | **diário** | **operação atual via cron-job.org — `cron-externo-hobby.md`** |
 | Vercel Cron timeout | mesmo da função (60s default) | aumentar via `maxDuration` se precisar |
 | Heartbeat em modo demo | no-op (mock repo) | aceitável (só prod tem alerta A3) |
 | Secret em log de incidente | risco | log sempre escapa via `String(erro)` — sem secret |
