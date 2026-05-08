@@ -139,4 +139,16 @@ export interface TriagemRepository {
     tecnicoId: string,
     idempotencyKey: string,
   ): Promise<FichaTriagem | null>;
+
+  /**
+   * Registra um heartbeat de execução do cron job. Usado pelo alerta A3
+   * (`docs/runbooks/alertas-siem.md`) — ausência por >10min dispara alarme.
+   * Limpa registros com mais de 7 dias na mesma chamada (retenção operacional).
+   * Falha silenciosamente — heartbeat é sinal de saúde, não pode quebrar o job.
+   */
+  registrarHeartbeat(
+    job: 'triagem-liberar-locks-expirados',
+    duracaoMs: number,
+    payload?: Record<string, unknown> | null,
+  ): Promise<void>;
 }

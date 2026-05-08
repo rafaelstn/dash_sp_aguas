@@ -5,6 +5,7 @@ import type {
 import type { PapeisRepository } from '@/application/ports/papeis-repository';
 import type { FichaTriagem } from '@/domain/triagem';
 import { UsuarioNaoEhAprovador } from '@/domain/errors';
+import { logger } from '@/infrastructure/logging/logger';
 
 /**
  * Lista fichas pendentes/em revisão pra o aprovador.
@@ -58,13 +59,17 @@ export async function obterFichaTriagem(
   const ehAprovador = await papeis.ehAprovador(usuarioId);
   if (ehAprovador) return ficha;
   // Não é dono e não é aprovador → trata como inexistente (evita oracle).
-  // Log estruturado para SIEM detectar pattern de varredura de IDs.
-  console.warn('[seg.triagem.idor_blocked]', {
-    evento: 'idor_blocked',
-    triagemId,
-    usuarioId,
-    donoId: ficha.tecnicoId,
-    estado: ficha.estado,
-  });
+  // Log estruturado (severidade `security`) para SIEM detectar varredura
+  // de IDs — alerta A1 em `docs/runbooks/alertas-siem.md`.
+  logger.security(
+    'seg.triagem.idor_blocked',
+    {
+      triagemId,
+      usuarioId,
+      donoId: ficha.tecnicoId,
+      estado: ficha.estado,
+    },
+    'Tentativa de leitura cruzada bloqueada',
+  );
   return null;
 }

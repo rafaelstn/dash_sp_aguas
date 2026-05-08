@@ -7,26 +7,34 @@ import {
   consumirRateLimit,
   extrairIp,
 } from '@/infrastructure/security/rate-limit';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/cron/liberar-locks-expirados
- * Endpoint protegido por header `x-cron-secret: $CRON_SECRET`.
+ * GET|POST /api/cron/liberar-locks-expirados
  *
- * Roda em cron (Vercel Cron) a cada N minutos. Idempotente — chamar 2x não
- * gera efeitos extras além de logar zero liberações.
+ * Endpoint dual-method protegido por secret em header (timing-safe compare):
+ *
+ *   - **GET**: usado pelo **Vercel Cron**. A plataforma envia automaticamente
+ *     `Authorization: Bearer ${CRON_SECRET}` quando o env var existe. Não dá
+ *     para configurar headers customizados em vercel.json (limitação da
+ *     plataforma — ver `docs/runbooks/vercel-cron.md`).
+ *   - **POST**: usado para **chamadas manuais** (ex.: rotação de secret,
+ *     debugging, testes locais com curl). Lê `x-cron-secret` ou `Authorization`.
+ *
+ * Roda em cron (Vercel Cron) a cada 5min — vercel.json. Idempotente: chamar
+ * 2x não gera efeitos extras além de logar zero liberações.
  *
  * Comparação em tempo constante via `crypto.timingSafeEqual` (Node nativo) —
  * evita timing attack na descoberta do secret. Strings de comprimento
  * diferente são padded antes do compare para também esconder o length da
  * string recebida (defesa adicional, baixa criticidade).
  *
- * Bypass do rate limit: este endpoint NÃO consome o token bucket do
- * `rate-limit.ts` — chamado só pelo Vercel Cron com IP fixo. Se o secret
- * vazasse e atacante tentasse chamar com força bruta, a única defesa é o
- * próprio compare constante; sem rate limit aqui é decisão consciente.
+ * Heartbeat: emitido sempre que o use case completa com sucesso (em
+ * `liberarLocksExpirados`) — ver tabela `cron_heartbeats` (migration 0027)
+ * e alerta A3 em `docs/runbooks/alertas-siem.md`.
  */
 function compareSecretsConstantTime(received: string, expected: string): boolean {
   // Padding pra mesmo length antes do timingSafeEqual (que exige tamanhos iguais).
@@ -43,7 +51,24 @@ function compareSecretsConstantTime(received: string, expected: string): boolean
   return timingSafeEqual(a, b);
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Extrai o secret do request, aceitando dois formatos:
+ *   1. `Authorization: Bearer <secret>` — usado pelo Vercel Cron e padrão
+ *      na maioria das ferramentas.
+ *   2. `x-cron-secret: <secret>` — chamada manual em curl/local.
+ *
+ * A função sempre retorna string (vazia se ausente) pra alimentar o
+ * timing-safe compare que padroniza tempo independente do header presente.
+ */
+function extrairSecret(request: NextRequest): string {
+  const auth = request.headers.get('authorization');
+  if (auth?.startsWith('Bearer ')) {
+    return auth.slice('Bearer '.length);
+  }
+  return request.headers.get('x-cron-secret') ?? '';
+}
+
+async function executar(request: NextRequest) {
   // Rate limit por IP — defesa em profundidade contra brute-force do secret.
   // Vercel Cron dispara poucas vezes; um IP atingindo 60+/min é suspeito.
   const ip = extrairIp(request);
@@ -59,14 +84,18 @@ export async function POST(request: NextRequest) {
   if (!secretEnv || secretEnv.length < 32) {
     // Não loga o valor — só a falha de config. < 32 chars é considerado
     // misconfig (o gerador de secret deve usar ≥ 32 bytes random).
-    console.error('[cron liberar-locks] CRON_SECRET ausente ou curto demais');
+    logger.error(
+      'cron.config_invalida',
+      { job: 'triagem-liberar-locks-expirados' },
+      'CRON_SECRET ausente ou curto demais',
+    );
     return NextResponse.json(
       { erro: 'configuracao_invalida' },
       { status: 500 },
     );
   }
 
-  const recebido = request.headers.get('x-cron-secret') ?? '';
+  const recebido = extrairSecret(request);
   if (!compareSecretsConstantTime(recebido, secretEnv)) {
     // Não diferencia "ausente" de "errado" — mesma resposta, mesmo tempo.
     return NextResponse.json({ erro: 'nao_autorizado' }, { status: 401 });
@@ -75,15 +104,33 @@ export async function POST(request: NextRequest) {
   try {
     const resultado = await liberarLocksExpirados(triagemRepository);
     if (resultado.quantidade > 0) {
-      console.info('[cron liberar-locks] liberados', resultado);
+      logger.info(
+        'cron.liberar_locks.sucesso',
+        {
+          job: 'triagem-liberar-locks-expirados',
+          quantidade: resultado.quantidade,
+          liberados: resultado.liberados,
+          duracaoMs: resultado.duracaoMs,
+        },
+        `${resultado.quantidade} lock(s) liberado(s)`,
+      );
     }
     return NextResponse.json(resultado);
   } catch (e) {
     // String(e) escapa stack — toString do Error não inclui stack por padrão.
-    console.error('[cron liberar-locks] falha', String(e));
+    // Severity `error` alimenta alerta A3/A4 (ver alertas-siem.md).
+    logger.error(
+      'cron.liberar_locks.falha',
+      { job: 'triagem-liberar-locks-expirados', erro: String(e) },
+      'Falha ao executar cron de liberação de locks',
+    );
     return NextResponse.json(
       { erro: 'erro_interno' },
       { status: 500 },
     );
   }
 }
+
+// Vercel Cron sempre dispara GET. POST mantido para chamadas manuais.
+export const GET = executar;
+export const POST = executar;

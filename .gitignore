@@ -19,6 +19,9 @@ out/
 dist/
 build/
 
+# Test coverage (Vitest output)
+coverage/
+
 # IDE
 .vscode/
 .idea/

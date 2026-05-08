@@ -12,6 +12,7 @@ import {
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { criarClienteSupabaseServer } from '@/infrastructure/auth/supabase-server';
 import { obterUsuarioBypassDev } from '@/infrastructure/auth/dev-bypass';
+import { logger } from '@/infrastructure/logging/logger';
 
 /**
  * Erro lançado quando a sessão do aprovador NÃO está em AAL2 (MFA passou neste
@@ -63,12 +64,18 @@ export async function exigirSessaoAal2(usuarioId: string): Promise<void> {
   const aalResp = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   const aalAtual = aalResp.data?.currentLevel ?? 'aal1';
   if (aalAtual !== 'aal2') {
-    console.warn('[seg.triagem.aal_insuficiente]', {
-      evento: 'aal_insuficiente',
-      usuarioId,
-      aalAtual,
-      audClaim: claim,
-    });
+    // Severity `security` → roteado pelo SIEM para alerta A2 (mfa_rejected)
+    // em `docs/runbooks/alertas-siem.md`. Nome `aal_insuficiente` mantido
+    // por consistência com `owasp-review-sprint-1.md` §A07 (já documentado).
+    logger.security(
+      'seg.triagem.aal_insuficiente',
+      {
+        usuarioId,
+        aalAtual,
+        audClaim: claim,
+      },
+      'Sessão sem AAL2 tentou operação destrutiva',
+    );
     throw new SessaoSemAal2(aalAtual);
   }
 }
@@ -169,14 +176,17 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
   // 5xx — correlation ID pra rastrear sem expor stack.
   const correlationId = randomUUID();
   // String(erro) escapa stack: Error.toString() retorna só "Name: message".
-  // Logging estruturado: chave evento + correlationId pra busca SIEM.
-  console.error(`[${rota}] erro_inesperado`, {
-    evento: 'erro_inesperado',
-    correlationId,
-    rota,
-    ...contexto,
-    erro: String(erro),
-  });
+  // Logging estruturado: chave evento + correlationId pra busca SIEM (alerta A4).
+  logger.error(
+    'erro_inesperado',
+    {
+      correlationId,
+      rota,
+      ...contexto,
+      erro: String(erro),
+    },
+    `Erro 5xx em ${rota}`,
+  );
   return NextResponse.json(
     {
       erro: 'erro_interno',

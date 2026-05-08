@@ -1,0 +1,119 @@
+# =============================================================================
+# Dependabot — atualizações automáticas de dependências
+# =============================================================================
+# Owner: Rodrigo (DevOps)
+# Sprint: 1.S3 — pendência #2 do owasp-review-sprint-1.md
+# Regra aplicada: governo.md (cliente Governo SP)
+#
+# POLÍTICA:
+#   - Updates SEMANAIS (segunda 06:00 BRT) para limitar PR storm.
+#   - PATCH e MINOR abrem PR automático com label `dependencies`.
+#   - MAJOR é IGNORADO automaticamente — exige review manual e ADR
+#     (mudança quebradora, depende de testes de regressão da Thiago).
+#   - CVE crítica/alta: Dependabot dispara PR fora do schedule via security
+#     advisory (label automática `security`).
+#   - Auto-merge NÃO ATIVADO — política deliberada enquanto não houver
+#     suíte de testes E2E rodando no CI. Reabrir quando Thiago entregar
+#     cobertura mínima (Sprint 2). Doc em docs/runbooks/dependencias-sla.md.
+#
+# AGRUPAMENTOS:
+#   - `next-react`: Next.js + React + ReactDOM + types-react juntos (evita
+#     PR storm e quebra de matriz de versões — Next 15.5 exige React 19).
+#   - `supabase`: @supabase/* atualizados em conjunto.
+#   - `tooling`: ESLint, TS, autoprefixer, postcss, tailwind — devDeps de build.
+# =============================================================================
+
+version: 2
+updates:
+  # ──────────────────────────────────────────────────────────────────────────
+  # NPM — dependências do dashboard (raiz do repo)
+  # ──────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'America/Sao_Paulo'
+    open-pull-requests-limit: 10
+    labels:
+      - 'dependencies'
+      - 'npm'
+    reviewers:
+      - 'rafaelstn'
+    assignees:
+      - 'rafaelstn'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+      include: 'scope'
+    # Major bloqueado — exige review manual + ADR + regressão Thiago.
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - 'version-update:semver-major'
+    groups:
+      next-react:
+        patterns:
+          - 'next'
+          - 'eslint-config-next'
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+        update-types:
+          - 'minor'
+          - 'patch'
+      supabase:
+        patterns:
+          - '@supabase/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      serwist:
+        patterns:
+          - 'serwist'
+          - '@serwist/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      tooling:
+        patterns:
+          - 'eslint'
+          - 'eslint-plugin-*'
+          - 'typescript'
+          - 'autoprefixer'
+          - 'postcss'
+          - 'tailwindcss'
+          - '@types/node'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # GitHub Actions — workflows (.github/workflows/*.yml)
+  # ──────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'America/Sao_Paulo'
+    open-pull-requests-limit: 5
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+    reviewers:
+      - 'rafaelstn'
+    assignees:
+      - 'rafaelstn'
+    commit-message:
+      prefix: 'chore(ci)'
+      include: 'scope'
+    # Major também bloqueado em actions (mudança de major costuma quebrar
+    # input/output de step).
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - 'version-update:semver-major'

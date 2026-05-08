@@ -101,10 +101,20 @@ const nextConfig: NextConfig = {
           // cobre browsers modernos; X-Frame-Options ainda existe pra IE/Edge
           // legacy que não respeitam frame-ancestors).
           { key: 'X-Frame-Options', value: 'DENY' },
-          // HSTS — força HTTPS em todo subdomínio, com preload eligible.
-          // 2 anos = 63072000 segundos. includeSubDomains exige TODOS os
-          // subdomínios servidos via TLS — confirmar com Rodrigo antes de
-          // adicionar `preload`.
+          // HSTS — força HTTPS em todo subdomínio. 2 anos = 63072000s.
+          //
+          // SEM `preload` deliberadamente (Rodrigo, Sprint 1.S3).
+          // Adicionar `; preload` é IRREVERSÍVEL na prática — uma vez que o
+          // domínio entra na lista do Chrome (https://hstspreload.org), só sai
+          // após meses de processo manual. Pré-requisitos pra ativar:
+          //   1. TODOS os subdomínios precisam servir TLS válido.
+          //   2. Domínio raiz e www precisam responder em HTTPS.
+          //   3. Confirmação com cliente (Governo SP) de que nenhum subdomínio
+          //      legado opera em HTTP (ex.: app.dominio.gov.br vs old.dominio.gov.br).
+          //
+          // Ticket de confirmação aberto em `docs/runbooks/hsts-preload-pendencia.md`.
+          // Owner: Paula → Rafael → contato cliente. Ativar `; preload` quando
+          // confirmação chegar, seguindo o checklist do runbook.
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=63072000; includeSubDomains',

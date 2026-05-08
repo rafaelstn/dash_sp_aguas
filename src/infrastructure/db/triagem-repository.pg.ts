@@ -636,6 +636,34 @@ export const triagemRepository: TriagemRepository = {
       throw new FalhaRepositorio('triagem.obterPorIdempotency', e);
     }
   },
+
+  async registrarHeartbeat(job, duracaoMs, payload) {
+    // NUNCA quebra o cron — heartbeat é apenas sinal. Se DB caiu, a ausência
+    // de heartbeat já é o próprio alerta (A3 monitora `MAX(ocorreu_em)`).
+    // INSERT + DELETE de retenção em uma operação curta. Sem transação
+    // (perda de uma das duas é aceitável).
+    try {
+      await sql`
+        INSERT INTO cron_heartbeats (job, duracao_ms, payload)
+        VALUES (
+          ${job},
+          ${duracaoMs},
+          ${payload ? JSON.stringify(payload) : null}::jsonb
+        )
+      `;
+      // Limpeza de retenção: descarta heartbeats > 7 dias do MESMO job.
+      // Janela de alerta é 10min — qualquer coisa antiga é log histórico.
+      await sql`
+        DELETE FROM cron_heartbeats
+         WHERE job = ${job}
+           AND ocorreu_em < NOW() - INTERVAL '7 days'
+      `;
+    } catch {
+      // Engole erro: heartbeat falhou. Saúde do cron é reportada pelos
+      // logs estruturados (logger.error) que o handler já emite.
+      // Não relançamos — o cron principal já fez seu trabalho.
+    }
+  },
 };
 
 /**

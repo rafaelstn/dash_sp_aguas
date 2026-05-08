@@ -312,6 +312,12 @@ export const triagemRepository: TriagemRepository = {
     }
     return null;
   },
+
+  async registrarHeartbeat() {
+    // No-op no mock — heartbeat é puramente operacional.
+    // Em modo demo (sem DB), o cron dispara sem persistir nada e a alerta
+    // A3 fica aplicável só no ambiente real.
+  },
 };
 
 function decidirMock(
