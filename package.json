@@ -9,9 +9,13 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"(reservado para Thiago — testes ainda não configurados)\" && exit 0"
+    "test": "echo \"(reservado para Thiago — testes ainda não configurados)\" && exit 0",
+    "pwa:icons": "node scripts/gerar-icones-placeholder.mjs",
+    "pwa:build": "next build",
+    "pwa:audit": "npx --yes lighthouse http://localhost:3000/app --only-categories=pwa,accessibility,performance,best-practices --chrome-flags=--headless --output=html --output-path=./docs/relatorios/lighthouse-pwa.html"
   },
   "dependencies": {
+    "@serwist/next": "^9.5.11",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.1",
     "lucide-react": "^1.9.0",
@@ -19,6 +23,7 @@
     "postgres": "3.4.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "serwist": "^9.5.11",
     "zod": "3.24.1"
   },
   "devDependencies": {

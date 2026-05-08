@@ -1,0 +1,50 @@
+{
+  "id": "/app",
+  "name": "SPÁguas — Ficha Técnica de Campo",
+  "short_name": "SPÁguas",
+  "description": "Aplicativo do técnico de campo para preencher fichas de inspeção, manutenção e medição dos postos hidrológicos da rede SPÁguas — Governo do Estado de São Paulo.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "background_color": "#F9FAFB",
+  "theme_color": "#1E40AF",
+  "categories": ["government", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Minhas fichas",
+      "short_name": "Minhas",
+      "url": "/app/minhas-fichas",
+      "description": "Lista de fichas que você enviou."
+    },
+    {
+      "name": "Buscar posto",
+      "short_name": "Postos",
+      "url": "/app/postos",
+      "description": "Buscar um posto da rede."
+    }
+  ],
+  "prefer_related_applications": false
+}
