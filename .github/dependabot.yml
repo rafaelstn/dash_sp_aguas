@@ -36,9 +36,11 @@ updates:
       time: '06:00'
       timezone: 'America/Sao_Paulo'
     open-pull-requests-limit: 10
-    labels:
-      - 'dependencies'
-      - 'npm'
+    # Labels removidos temporariamente — exigem criação manual no repo
+    # ("dependencies", "npm", "security", "github-actions"). Dependabot
+    # estava reclamando "Labels following could not be found" e bloqueando
+    # criação de PR. Recriar as labels via GitHub web e descomentar quando
+    # houver organização de tags estável. Por ora, PRs ficam sem label.
     reviewers:
       - 'rafaelstn'
     assignees:
@@ -101,9 +103,7 @@ updates:
       time: '06:00'
       timezone: 'America/Sao_Paulo'
     open-pull-requests-limit: 5
-    labels:
-      - 'dependencies'
-      - 'github-actions'
+    # Labels removidos — ver nota no bloco npm acima.
     reviewers:
       - 'rafaelstn'
     assignees:
