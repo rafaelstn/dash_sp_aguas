@@ -756,5 +756,35 @@ export function construirSchemaZod(codigo: CodigoTipoDocumento): z.ZodTypeAny {
     }
   }
   // Desconhece campos extras no body sem erro (futuro-proof).
+  // Usado pelo fluxo legado web (`/api/postos/.../fichas`) — escreve direto em
+  // `fichas_visita` sem aprovação humana. Manter `.passthrough()` aqui evita
+  // breaking change até a regressão Thiago da Sprint 1.5 cobrir migração para
+  // strict (ver ADR-0008 §8 e owasp-review-sprint-1.md §A03).
   return z.object(shape).passthrough();
+}
+
+/**
+ * Variante estrita do construtor para o fluxo de TRIAGEM (app móvel +
+ * aprovação humana). Rejeita campos extras com `unrecognized_keys`.
+ *
+ * Trade-off (André + Lucas, 2026-05-08): triagem é a superfície que recebe
+ * payload do app móvel, então é onde a defesa deve ser maior. Cliente legado
+ * web (`/api/postos/.../fichas`) não passa por aqui — ver
+ * `construirSchemaZod` acima.
+ *
+ * Antes de adicionar uma chave nova ao formulário do app móvel, edite a
+ * `SCHEMAS_FICHA` deste arquivo. Se o app enviar chave fora do schema, o
+ * backend devolve `dados_invalidos` com `unrecognized_keys: [...]`.
+ */
+export function construirSchemaZodEstrito(
+  codigo: CodigoTipoDocumento,
+): z.ZodTypeAny {
+  const schema = obterSchema(codigo);
+  const shape: Record<string, z.ZodTypeAny> = {};
+  for (const secao of schema.secoes) {
+    for (const campo of secao.campos) {
+      shape[campo.chave] = zodCampo(campo);
+    }
+  }
+  return z.object(shape).strict();
 }

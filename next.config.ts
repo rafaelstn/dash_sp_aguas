@@ -65,18 +65,67 @@ const nextConfig: NextConfig = {
   // cobre os href <Link> suficientemente.
   // Cabeçalho de idioma pt-BR é requisito WCAG / e-MAG.
   async headers() {
+    // CSP base — aplicada GLOBALMENTE. Restritiva por padrão, sem `unsafe-eval`.
+    // Mantém `'unsafe-inline'` em script-src (Next.js runtime injeta scripts
+    // inline; migrar pra CSP nonce-based exige refactor de _document e está
+    // postergado pra fase de hardening pós-MVP).
+    const cspBase = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "worker-src 'self' blob:",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.supabase.co",
+      "manifest-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      // Sem object-src = recusa <object>/<embed> — defesa contra Flash legacy.
+      "object-src 'none'",
+    ].join('; ');
+
+    // CSP do `/triagem/*` (web aprovador) — mesma base; futuramente pode
+    // remover `'unsafe-inline'` quando o time migrar pra nonce-based.
+    const cspTriagem = cspBase;
+
     return [
       {
         source: '/:path*',
         headers: [
+          // Headers globais — toda resposta carrega.
           { key: 'Content-Language', value: 'pt-BR' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Defense-in-depth contra clickjacking (CSP frame-ancestors também
+          // cobre browsers modernos; X-Frame-Options ainda existe pra IE/Edge
+          // legacy que não respeitam frame-ancestors).
+          { key: 'X-Frame-Options', value: 'DENY' },
+          // HSTS — força HTTPS em todo subdomínio, com preload eligible.
+          // 2 anos = 63072000 segundos. includeSubDomains exige TODOS os
+          // subdomínios servidos via TLS — confirmar com Rodrigo antes de
+          // adicionar `preload`.
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains',
+          },
+          // CSP base aplicada a tudo, exceto onde sobrescrita abaixo.
+          { key: 'Content-Security-Policy', value: cspBase },
+          // Permissions-Policy default: nada liberado. Sobrescrito em /app/*.
+          {
+            key: 'Permissions-Policy',
+            value:
+              'geolocation=(), camera=(), microphone=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()',
+          },
+          // Cross-Origin policies — defesa contra Spectre-style cross-origin
+          // leaks. Mantém compat com nosso uso (sem iframes externos).
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
         ],
       },
-      // Hardening específico das rotas /app/* — CSP mais restritivo e
-      // Permissions-Policy liberando geolocation só pro app (checklist
-      // André §A05 e §"Hardening do PWA").
+      // Hardening específico das rotas /app/* — Permissions-Policy libera
+      // geolocation/camera (PWA precisa), CSP herdada do global mas com
+      // worker-src restrito ao mesmo origin.
       {
         source: '/app/:path*',
         headers: [
@@ -85,23 +134,21 @@ const nextConfig: NextConfig = {
             value: 'geolocation=(self), camera=(self), microphone=()',
           },
           {
-            // CSP mais restritivo no app: sem unsafe-eval. Workers só same-origin.
-            // Mantemos 'unsafe-inline' em script-src enquanto não migrarmos os
-            // event handlers inline do Next runtime — postergado.
+            // CSP idêntica à base — `worker-src 'self' blob:` permite o SW.
             key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
-              "worker-src 'self'",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co",
-              "manifest-src 'self'",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
+            value: cspBase,
+          },
+        ],
+      },
+      // Hardening específico de /triagem/* (web aprovador). Mantém HSTS +
+      // CSP. Sem permissões de hardware. Reforça frame-ancestors none.
+      {
+        source: '/triagem/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: cspTriagem },
+          {
+            key: 'Permissions-Policy',
+            value: 'geolocation=(), camera=(), microphone=()',
           },
         ],
       },

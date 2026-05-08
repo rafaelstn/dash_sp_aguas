@@ -33,7 +33,18 @@ export async function listarTriagemPendentes(
 
 /**
  * Aprovador pode ver qualquer ficha; técnico só vê as próprias. O use case
- * não decide HTTP — devolve ficha ou null. A camada de apresentação faz 404.
+ * não decide HTTP — devolve ficha ou null. A camada de apresentação faz 404
+ * (não 403) para não revelar a existência da ficha (anti-oracle / anti-IDOR).
+ *
+ * Defesa em profundidade:
+ *   1) Se a ficha não existe → null.
+ *   2) Se o usuário é o técnico dono → libera.
+ *   3) Se o usuário é aprovador → libera.
+ *   4) Caso contrário → null (camada HTTP devolve 404).
+ *
+ * Tentativa de leitura cruzada (não-dono, não-aprovador, ficha existe) é
+ * logada como evento de segurança para correlação posterior — sem expor
+ * detalhes ao chamador.
  */
 export async function obterFichaTriagem(
   repo: TriagemRepository,
@@ -47,5 +58,13 @@ export async function obterFichaTriagem(
   const ehAprovador = await papeis.ehAprovador(usuarioId);
   if (ehAprovador) return ficha;
   // Não é dono e não é aprovador → trata como inexistente (evita oracle).
+  // Log estruturado para SIEM detectar pattern de varredura de IDs.
+  console.warn('[seg.triagem.idor_blocked]', {
+    evento: 'idor_blocked',
+    triagemId,
+    usuarioId,
+    donoId: ficha.tecnicoId,
+    estado: ficha.estado,
+  });
   return null;
 }

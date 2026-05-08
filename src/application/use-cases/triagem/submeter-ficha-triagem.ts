@@ -3,7 +3,7 @@ import type {
   TriagemRepository,
 } from '@/application/ports/triagem-repository';
 import type { FichaTriagem } from '@/domain/triagem';
-import { construirSchemaZod, obterSchema } from '@/domain/fichas/schemas';
+import { construirSchemaZodEstrito, obterSchema } from '@/domain/fichas/schemas';
 import {
   IdempotencyKeyDuplicada,
   EstadoTriagemInvalido,
@@ -34,7 +34,7 @@ export async function submeterFichaTriagem(
     throw new TipoFichaIndisponivel(entrada.codTipoDocumento);
   }
 
-  const validador = construirSchemaZod(entrada.codTipoDocumento);
+  const validador = construirSchemaZodEstrito(entrada.codTipoDocumento);
   const resultado = validador.safeParse(entrada.dados);
   if (!resultado.success) {
     throw new DadosFichaInvalidos(
@@ -98,7 +98,7 @@ export async function reenviarFichaTriagem(
   if (!schema.disponivel) {
     throw new TipoFichaIndisponivel(entrada.codTipoDocumento);
   }
-  const validador = construirSchemaZod(entrada.codTipoDocumento);
+  const validador = construirSchemaZodEstrito(entrada.codTipoDocumento);
   const resultado = validador.safeParse(entrada.dados);
   if (!resultado.success) {
     throw new DadosFichaInvalidos(

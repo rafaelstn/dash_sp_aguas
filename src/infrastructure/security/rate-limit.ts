@@ -21,14 +21,33 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-// Limpeza preguiçosa: a cada N inserções, remove buckets antigos.
+// Limpeza preguiçosa: dispara a cada N inserções OU a cada N segundos —
+// o que vier antes. Defesa contra memory leak: atacante mandando 10k chaves
+// distintas em 1s não bloqueia limpeza pela barreira de tempo.
 let inserts = 0;
-const LIMPEZA_A_CADA = 1000;
+let ultimaLimpeza = Date.now();
+const LIMPEZA_A_CADA_INSERTS = 1000;
+const LIMPEZA_A_CADA_MS = 60 * 1000; // 1 min de piso temporal
+const TTL_BUCKET_MS = 10 * 60 * 1000;
+// Limite duro de buckets pra evitar OOM mesmo com flood — se exceder,
+// força limpeza imediata. 50k buckets ~ poucos MB.
+const LIMITE_HARD_BUCKETS = 50_000;
 
 function limparAntigos(): void {
-  const corte = Date.now() - 10 * 60 * 1000; // 10 min
+  const corte = Date.now() - TTL_BUCKET_MS;
   for (const [k, b] of buckets.entries()) {
     if (b.ultimaRecarga < corte) buckets.delete(k);
+  }
+  ultimaLimpeza = Date.now();
+}
+
+function talvezLimpar(): void {
+  if (
+    inserts % LIMPEZA_A_CADA_INSERTS === 0 ||
+    Date.now() - ultimaLimpeza > LIMPEZA_A_CADA_MS ||
+    buckets.size > LIMITE_HARD_BUCKETS
+  ) {
+    limparAntigos();
   }
 }
 
@@ -66,7 +85,7 @@ export function consumirRateLimit(
     bucket = { tokens: config.limite, ultimaRecarga: agora };
     buckets.set(id, bucket);
     inserts += 1;
-    if (inserts % LIMPEZA_A_CADA === 0) limparAntigos();
+    talvezLimpar();
   }
 
   // Refil proporcional ao tempo decorrido desde última checagem.
@@ -133,6 +152,17 @@ export const POLITICAS = {
   leituraTriagem: {
     politica: 'leitura-triagem',
     limite: 200,
+    janelaSegundos: 60,
+  },
+  /**
+   * Política aplicada à invocação do cron (`/api/cron/*`) por IP. Vercel Cron
+   * dispara raramente (cada 5–60min) — limite generoso, mas presente para
+   * conter brute-force do `x-cron-secret` se atacante descobrir o endpoint.
+   * Combina com `crypto.timingSafeEqual` no compare do secret.
+   */
+  cronInvocacao: {
+    politica: 'cron-invocacao-ip',
+    limite: 60,
     janelaSegundos: 60,
   },
 } satisfies Record<string, ConfiguracaoRateLimit>;
