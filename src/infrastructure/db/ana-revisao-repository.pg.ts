@@ -1,15 +1,10 @@
 import 'server-only';
 import type { AnaRevisaoRepository } from '@/application/ports/ana-revisao-repository';
 import type {
-  AcaoBulkAna,
   AnaRevisaoEstacao,
   AnaRevisaoLote,
-  ContextoAtor,
   DivergenciaMunicipio,
-  FiltrosListaAnaRevisao,
-  ListaAnaRevisao,
   MatchTipo,
-  ResumoPainelAna,
   StatusRevisao,
 } from '@/domain/ana-revisao';
 import { FalhaRepositorio } from '@/domain/errors';
@@ -527,7 +522,7 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
           const statusAtual = atual.status as StatusRevisao;
           let novoStatus: StatusRevisao = statusAtual;
           let correcoesUpdate: Record<string, unknown> | null = null;
-          let justUpdate: string | null = acao.justificativa ?? null;
+          const justUpdate: string | null = acao.justificativa ?? null;
           let evento = 'corrigida_manual';
 
           if (acao.acao === 'marcar_revisada') {
