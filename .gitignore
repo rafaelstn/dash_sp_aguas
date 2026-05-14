@@ -63,3 +63,6 @@ docs/relatorios/
 
 # Settings locais do harness Claude Code (per-repo overrides)
 .claude/settings.local.json
+
+# Locks internos do harness (ScheduleWakeup, /loop, etc) — runtime-only, nunca commitar
+.claude/*.lock
