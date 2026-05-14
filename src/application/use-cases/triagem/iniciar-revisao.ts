@@ -8,6 +8,7 @@ import {
   LockRevisaoNegado,
   UsuarioNaoEhAprovador,
 } from '@/domain/errors';
+import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 
 export interface ResultadoIniciarRevisaoUseCase {
   ficha: FichaTriagem;
@@ -33,9 +34,11 @@ export async function iniciarRevisao(
   if (!ehAprovador) {
     throw new UsuarioNaoEhAprovador(aprovadorId);
   }
-  const temMFA = await papeis.temMFAVerificado(aprovadorId);
-  if (!temMFA) {
-    throw new AprovadorSemMFA(aprovadorId);
+  if (mfaObrigatorio()) {
+    const temMFA = await papeis.temMFAVerificado(aprovadorId);
+    if (!temMFA) {
+      throw new AprovadorSemMFA(aprovadorId);
+    }
   }
 
   const resultado = await repo.iniciarRevisao(triagemId, aprovadorId, metadata);

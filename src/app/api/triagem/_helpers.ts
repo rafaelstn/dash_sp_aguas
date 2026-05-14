@@ -12,6 +12,7 @@ import {
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { criarClienteSupabaseServer } from '@/infrastructure/auth/supabase-server';
 import { obterUsuarioBypassDev } from '@/infrastructure/auth/dev-bypass';
+import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 import { logger } from '@/infrastructure/logging/logger';
 
 /**
@@ -50,6 +51,16 @@ export async function exigirSessaoAal2(usuarioId: string): Promise<void> {
   if (obterUsuarioBypassDev()) {
     // Dev bypass — evita exigir MFA no fluxo local. Em produção, o
     // `dev-bypass.ts` recusa ativar (NODE_ENV check).
+    return;
+  }
+  if (!mfaObrigatorio()) {
+    // Bypass de homologação (ADR-0009). Logado para auditoria; SIEM tem
+    // alerta dedicado em runbook. Default seguro: ausência da env exige MFA.
+    logger.security(
+      'seg.mfa.bypass_homologacao',
+      { usuarioId, camada: 'sessao_aal2' },
+      'Camada AAL2 bypassada por MFA_OPCIONAL_HOMOLOGACAO=true',
+    );
     return;
   }
   const supabase = await criarClienteSupabaseServer();

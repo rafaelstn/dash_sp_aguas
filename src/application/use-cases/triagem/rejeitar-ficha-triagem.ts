@@ -7,6 +7,7 @@ import {
   MotivoRejeicaoInsuficiente,
   UsuarioNaoEhAprovador,
 } from '@/domain/errors';
+import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 
 /**
  * Rejeição final — ciclo encerrado. Motivo ≥ 20 chars (validado por VO
@@ -25,9 +26,11 @@ export async function rejeitarFichaTriagem(
   if (!ehAprovador) {
     throw new UsuarioNaoEhAprovador(aprovadorId);
   }
-  const temMFA = await papeis.temMFAVerificado(aprovadorId);
-  if (!temMFA) {
-    throw new AprovadorSemMFA(aprovadorId);
+  if (mfaObrigatorio()) {
+    const temMFA = await papeis.temMFAVerificado(aprovadorId);
+    if (!temMFA) {
+      throw new AprovadorSemMFA(aprovadorId);
+    }
   }
 
   let motivo: MotivoDecisao;

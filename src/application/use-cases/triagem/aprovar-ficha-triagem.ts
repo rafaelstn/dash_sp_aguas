@@ -5,6 +5,7 @@ import {
   AprovadorSemMFA,
   UsuarioNaoEhAprovador,
 } from '@/domain/errors';
+import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 
 export interface ResultadoAprovacaoUseCase {
   triagem: FichaTriagem;
@@ -41,9 +42,11 @@ export async function aprovarFichaTriagem(
   if (!ehAprovador) {
     throw new UsuarioNaoEhAprovador(aprovadorId);
   }
-  const temMFA = await papeis.temMFAVerificado(aprovadorId);
-  if (!temMFA) {
-    throw new AprovadorSemMFA(aprovadorId);
+  if (mfaObrigatorio()) {
+    const temMFA = await papeis.temMFAVerificado(aprovadorId);
+    if (!temMFA) {
+      throw new AprovadorSemMFA(aprovadorId);
+    }
   }
 
   // Repo lança LockRevisaoNegado / EstadoTriagemInvalido / FichaTriagemNaoEncontrada

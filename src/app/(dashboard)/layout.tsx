@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { papeisRepository } from '@/infrastructure/repositories';
+import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 import { Sidenav } from '@/components/layout/Sidenav';
 
 /**
@@ -21,8 +22,9 @@ export default async function DashboardLayout({
 
   // Alerta global pra aprovador sem MFA configurado. Não bloqueia
   // navegação — só os endpoints críticos de triagem rejeitam (403).
+  // Suprimido quando MFA_OPCIONAL_HOMOLOGACAO=true (ADR-0009).
   let avisoMFA = false;
-  if (usuario) {
+  if (usuario && mfaObrigatorio()) {
     try {
       const eh = await papeisRepository.ehAprovador(usuario.id);
       if (eh) {

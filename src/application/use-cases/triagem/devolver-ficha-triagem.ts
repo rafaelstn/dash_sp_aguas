@@ -7,6 +7,7 @@ import {
   MotivoRejeicaoInsuficiente,
   UsuarioNaoEhAprovador,
 } from '@/domain/errors';
+import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 
 /**
  * Devolve ficha pro técnico com solicitação de correção.
@@ -25,9 +26,11 @@ export async function devolverFichaTriagem(
   if (!ehAprovador) {
     throw new UsuarioNaoEhAprovador(aprovadorId);
   }
-  const temMFA = await papeis.temMFAVerificado(aprovadorId);
-  if (!temMFA) {
-    throw new AprovadorSemMFA(aprovadorId);
+  if (mfaObrigatorio()) {
+    const temMFA = await papeis.temMFAVerificado(aprovadorId);
+    if (!temMFA) {
+      throw new AprovadorSemMFA(aprovadorId);
+    }
   }
 
   let solicitacao: MotivoDecisao;
