@@ -50,14 +50,19 @@ export async function GET() {
   }
 
   try {
-    const { buffer, nomeArquivo } = await exportarInventarioAna(
-      anaRevisaoRepository,
+    const { buffer, nomeArquivo, estatisticas } = await exportarInventarioAna(
       lote.id,
     );
 
     logger.info(
       'inventario_ana.exportado',
-      { loteId: lote.id, usuarioId: usuario.id, bytes: buffer.byteLength },
+      {
+        loteId: lote.id,
+        usuarioId: usuario.id,
+        bytes: buffer.byteLength,
+        totalLinhas: estatisticas.total,
+        linhasComCorrecao: estatisticas.comDiff,
+      },
       'Inventário ANA exportado para XLSX',
     );
 
