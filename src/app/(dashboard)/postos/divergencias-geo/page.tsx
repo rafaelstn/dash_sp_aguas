@@ -6,6 +6,7 @@ import { Alerta } from '@/components/ui/Alerta';
 import { Paginador } from '@/components/ui/Paginador';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
 import { BotaoAceitarMunicipioIbge } from '@/components/features/postos/BotaoAceitarMunicipioIbge';
+import { BotaoAceitarCoordIbge } from '@/components/features/postos/BotaoAceitarCoordIbge';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
@@ -26,6 +27,9 @@ interface LinhaPosto {
   divergencia_municipio: Divergencia | null;
   distancia_municipio_m: string | null;
   municipio_correto_ibge: string | null;
+  lat_sugerida_ibge: string | null;
+  lng_sugerida_ibge: string | null;
+  distancia_sugerida_m: string | null;
   operacao_fim_ano: number | null;
   tipo_posto: string | null;
 }
@@ -104,6 +108,9 @@ export default async function DivergenciasGeoPage({ searchParams }: PageProps) {
            p.divergencia_municipio,
            p.distancia_municipio_m::text,
            p.municipio_correto_ibge,
+           p.lat_sugerida_ibge::text,
+           p.lng_sugerida_ibge::text,
+           p.distancia_sugerida_m::text,
            p.operacao_fim_ano,
            p.tipo_posto
       FROM postos p
@@ -342,6 +349,18 @@ export default async function DivergenciasGeoPage({ searchParams }: PageProps) {
                     </td>
                     <td className="px-3 py-1.5">
                       <div className="flex flex-wrap items-center gap-2">
+                        {p.lat_sugerida_ibge && p.lng_sugerida_ibge ? (
+                          <BotaoAceitarCoordIbge
+                            prefixo={p.prefixo}
+                            latSugerida={Number(p.lat_sugerida_ibge)}
+                            lngSugerida={Number(p.lng_sugerida_ibge)}
+                            deslocamentoKm={
+                              p.distancia_sugerida_m !== null
+                                ? Number(p.distancia_sugerida_m) / 1000
+                                : null
+                            }
+                          />
+                        ) : null}
                         {p.municipio_correto_ibge &&
                         p.municipio_correto_ibge !== p.municipio ? (
                           <BotaoAceitarMunicipioIbge
