@@ -1,5 +1,8 @@
 import 'server-only';
 import type {
+  CamposEditaveisPosto,
+  ContextoAtorPosto,
+  DadosCriacaoPosto,
   ParametrosPesquisa,
   PostosRepository,
   ResultadoPesquisa,
@@ -47,9 +50,28 @@ type LinhaPosto = {
   ultima_atualizacao_fd: string | null;
   aquifero: string | null;
   altimetria: string | null;
+  ana_escala_inicio: Date | null;
+  ana_escala_fim: Date | null;
+  ana_descarga_liquida_inicio: Date | null;
+  ana_descarga_liquida_fim: Date | null;
+  ana_sedimentos_inicio: Date | null;
+  ana_sedimentos_fim: Date | null;
+  ana_qualidade_inicio: Date | null;
+  ana_qualidade_fim: Date | null;
+  ana_pluviometro_inicio: Date | null;
+  ana_pluviometro_fim: Date | null;
+  ana_telemetria_inicio: Date | null;
+  ana_telemetria_fim: Date | null;
+  deleted_at: Date | null;
+  origem: string | null;
   created_at: Date;
   updated_at: Date;
 };
+
+function isoDate(d: Date | null): string | null {
+  if (!d) return null;
+  return d.toISOString().slice(0, 10);
+}
 
 function mapear(linha: LinhaPosto): Posto {
   return {
@@ -91,6 +113,20 @@ function mapear(linha: LinhaPosto): Posto {
     ultimaAtualizacaoFd: linha.ultima_atualizacao_fd,
     aquifero: linha.aquifero,
     altimetria: linha.altimetria !== null ? Number(linha.altimetria) : null,
+    anaEscalaInicio: isoDate(linha.ana_escala_inicio),
+    anaEscalaFim: isoDate(linha.ana_escala_fim),
+    anaDescargaLiquidaInicio: isoDate(linha.ana_descarga_liquida_inicio),
+    anaDescargaLiquidaFim: isoDate(linha.ana_descarga_liquida_fim),
+    anaSedimentosInicio: isoDate(linha.ana_sedimentos_inicio),
+    anaSedimentosFim: isoDate(linha.ana_sedimentos_fim),
+    anaQualidadeInicio: isoDate(linha.ana_qualidade_inicio),
+    anaQualidadeFim: isoDate(linha.ana_qualidade_fim),
+    anaPluviometroInicio: isoDate(linha.ana_pluviometro_inicio),
+    anaPluviometroFim: isoDate(linha.ana_pluviometro_fim),
+    anaTelemetriaInicio: isoDate(linha.ana_telemetria_inicio),
+    anaTelemetriaFim: isoDate(linha.ana_telemetria_fim),
+    deletedAt: linha.deleted_at,
+    origem: linha.origem,
     createdAt: linha.created_at,
     updatedAt: linha.updated_at,
   };
@@ -111,6 +147,13 @@ function colunas() {
     ultima_transmissao, convencional, logger_eqp, telemetrico,
     nivel, vazao, ficha_inspecao, ultima_data_fi, ficha_descritiva,
     ultima_atualizacao_fd, aquifero, altimetria,
+    ana_escala_inicio, ana_escala_fim,
+    ana_descarga_liquida_inicio, ana_descarga_liquida_fim,
+    ana_sedimentos_inicio, ana_sedimentos_fim,
+    ana_qualidade_inicio, ana_qualidade_fim,
+    ana_pluviometro_inicio, ana_pluviometro_fim,
+    ana_telemetria_inicio, ana_telemetria_fim,
+    deleted_at, origem,
     created_at, updated_at
   `;
   return _colunas;
@@ -259,4 +302,341 @@ export const postosRepository: PostosRepository = {
       throw new FalhaRepositorio('pesquisar', e);
     }
   },
+
+  async atualizar(prefixo, campos, ator) {
+    try {
+      return await sql.begin(async (tx) => {
+        const antes = await tx<LinhaPosto[]>`
+          SELECT ${colunas()} FROM postos
+           WHERE prefixo = ${prefixo}
+             FOR UPDATE
+        `;
+        if (!antes[0]) {
+          throw new FalhaRepositorio('atualizar', `posto nao encontrado: ${prefixo}`);
+        }
+        if (antes[0].deleted_at !== null) {
+          throw new FalhaRepositorio(
+            'atualizar',
+            `posto ${prefixo} esta removido (deleted_at). Restaurar antes de editar.`,
+          );
+        }
+
+        const valoresAntes = mapear(antes[0]);
+        const setExprs = construirSetExprs(campos);
+        if (setExprs.length === 0) {
+          // Nada a atualizar
+          return valoresAntes;
+        }
+
+        await tx`
+          UPDATE postos
+             SET ${setExprs.reduce((acc, e, i) =>
+                    i === 0 ? e : sql`${acc}, ${e}`,
+                    sql``)},
+                 updated_at = NOW()
+           WHERE prefixo = ${prefixo}
+        `;
+
+        await tx`
+          INSERT INTO postos_evento
+            (posto_id, evento, ator_id, valores_antes, valores_depois,
+             origem_evento, referencia_externa_id, observacao, ip, user_agent)
+          VALUES (
+            ${antes[0].id},
+            'atualizado',
+            ${ator.usuarioId},
+            ${JSON.stringify(extrairCamposAuditados(valoresAntes, campos))}::jsonb,
+            ${JSON.stringify(campos)}::jsonb,
+            ${ator.origemEvento ?? 'ui_edicao'},
+            ${ator.referenciaExternaId ?? null}::uuid,
+            ${ator.observacao ?? null},
+            ${ator.ip}::inet,
+            ${ator.userAgent}
+          )
+        `;
+
+        const depois = await tx<LinhaPosto[]>`
+          SELECT ${colunas()} FROM postos WHERE prefixo = ${prefixo}
+        `;
+        return mapear(depois[0]!);
+      });
+    } catch (e) {
+      if (e instanceof FalhaRepositorio) throw e;
+      throw new FalhaRepositorio('atualizar', e);
+    }
+  },
+
+  async criar(dados, ator) {
+    try {
+      return await sql.begin(async (tx) => {
+        const existente = await tx<{ id: string }[]>`
+          SELECT id FROM postos WHERE prefixo = ${dados.prefixo} LIMIT 1
+        `;
+        if (existente[0]) {
+          throw new FalhaRepositorio(
+            'criar',
+            `prefixo ${dados.prefixo} ja existe`,
+          );
+        }
+
+        const inserido = await tx<LinhaPosto[]>`
+          INSERT INTO postos (
+            prefixo, mantenedor, prefixo_ana, nome_estacao,
+            operacao_inicio_ano, operacao_fim_ano, latitude, longitude,
+            municipio, municipio_alt, bacia_hidrografica,
+            ugrhi_nome, ugrhi_numero, sub_ugrhi_nome, sub_ugrhi_numero,
+            rede, proprietario, tipo_posto, area_km2, btl, cia_ambiental,
+            cobacia, observacoes, tempo_transmissao, status_pcd,
+            ultima_transmissao, convencional, logger_eqp, telemetrico,
+            nivel, vazao, ficha_inspecao, ultima_data_fi, ficha_descritiva,
+            ultima_atualizacao_fd, aquifero, altimetria,
+            ana_escala_inicio, ana_escala_fim,
+            ana_descarga_liquida_inicio, ana_descarga_liquida_fim,
+            ana_sedimentos_inicio, ana_sedimentos_fim,
+            ana_qualidade_inicio, ana_qualidade_fim,
+            ana_pluviometro_inicio, ana_pluviometro_fim,
+            ana_telemetria_inicio, ana_telemetria_fim,
+            origem
+          ) VALUES (
+            ${dados.prefixo},
+            ${dados.mantenedor ?? null},
+            ${dados.prefixoAna ?? null},
+            ${dados.nomeEstacao ?? null},
+            ${dados.operacaoInicioAno ?? null},
+            ${dados.operacaoFimAno ?? null},
+            ${dados.latitude ?? null},
+            ${dados.longitude ?? null},
+            ${dados.municipio ?? null},
+            ${dados.municipioAlt ?? null},
+            ${dados.baciaHidrografica ?? null},
+            ${dados.ugrhiNome ?? null},
+            ${dados.ugrhiNumero ?? null},
+            ${dados.subUgrhiNome ?? null},
+            ${dados.subUgrhiNumero ?? null},
+            ${dados.rede ?? null},
+            ${dados.proprietario ?? null},
+            ${dados.tipoPosto ?? null},
+            ${dados.areaKm2 ?? null},
+            ${dados.btl ?? null},
+            ${dados.ciaAmbiental ?? null},
+            ${dados.cobacia ?? null},
+            ${dados.observacoes ?? null},
+            ${dados.tempoTransmissao ?? null},
+            ${dados.statusPcd ?? null},
+            ${dados.ultimaTransmissao ?? null},
+            ${dados.convencional ?? null},
+            ${dados.loggerEqp ?? null},
+            ${dados.telemetrico ?? null},
+            ${dados.nivel ?? null},
+            ${dados.vazao ?? null},
+            ${dados.fichaInspecao ?? null},
+            ${dados.ultimaDataFi ?? null},
+            ${dados.fichaDescritiva ?? null},
+            ${dados.ultimaAtualizacaoFd ?? null},
+            ${dados.aquifero ?? null},
+            ${dados.altimetria ?? null},
+            ${dados.anaEscalaInicio ?? null}::date,
+            ${dados.anaEscalaFim ?? null}::date,
+            ${dados.anaDescargaLiquidaInicio ?? null}::date,
+            ${dados.anaDescargaLiquidaFim ?? null}::date,
+            ${dados.anaSedimentosInicio ?? null}::date,
+            ${dados.anaSedimentosFim ?? null}::date,
+            ${dados.anaQualidadeInicio ?? null}::date,
+            ${dados.anaQualidadeFim ?? null}::date,
+            ${dados.anaPluviometroInicio ?? null}::date,
+            ${dados.anaPluviometroFim ?? null}::date,
+            ${dados.anaTelemetriaInicio ?? null}::date,
+            ${dados.anaTelemetriaFim ?? null}::date,
+            ${dados.origem ?? 'edicao_manual'}
+          )
+          RETURNING ${colunas()}
+        `;
+
+        const novo = mapear(inserido[0]!);
+
+        await tx`
+          INSERT INTO postos_evento
+            (posto_id, evento, ator_id, valores_antes, valores_depois,
+             origem_evento, referencia_externa_id, observacao, ip, user_agent)
+          VALUES (
+            ${novo.id},
+            'criado',
+            ${ator.usuarioId},
+            NULL,
+            ${JSON.stringify(dados)}::jsonb,
+            ${ator.origemEvento ?? 'ui_edicao'},
+            ${ator.referenciaExternaId ?? null}::uuid,
+            ${ator.observacao ?? null},
+            ${ator.ip}::inet,
+            ${ator.userAgent}
+          )
+        `;
+
+        return novo;
+      });
+    } catch (e) {
+      if (e instanceof FalhaRepositorio) throw e;
+      throw new FalhaRepositorio('criar', e);
+    }
+  },
+
+  async remover(prefixo, ator) {
+    try {
+      await sql.begin(async (tx) => {
+        const linhas = await tx<LinhaPosto[]>`
+          SELECT ${colunas()} FROM postos
+           WHERE prefixo = ${prefixo} AND deleted_at IS NULL
+             FOR UPDATE
+        `;
+        if (!linhas[0]) {
+          throw new FalhaRepositorio('remover', `posto nao encontrado ou ja removido: ${prefixo}`);
+        }
+        await tx`
+          UPDATE postos SET deleted_at = NOW(), updated_at = NOW()
+           WHERE prefixo = ${prefixo}
+        `;
+        await tx`
+          INSERT INTO postos_evento
+            (posto_id, evento, ator_id, valores_antes, origem_evento, observacao, ip, user_agent)
+          VALUES (
+            ${linhas[0].id}, 'removido', ${ator.usuarioId},
+            ${JSON.stringify(mapear(linhas[0]))}::jsonb,
+            ${ator.origemEvento ?? 'ui_edicao'},
+            ${ator.observacao ?? null}, ${ator.ip}::inet, ${ator.userAgent}
+          )
+        `;
+      });
+    } catch (e) {
+      if (e instanceof FalhaRepositorio) throw e;
+      throw new FalhaRepositorio('remover', e);
+    }
+  },
+
+  async restaurar(prefixo, ator) {
+    try {
+      return await sql.begin(async (tx) => {
+        const linhas = await tx<LinhaPosto[]>`
+          SELECT ${colunas()} FROM postos
+           WHERE prefixo = ${prefixo} AND deleted_at IS NOT NULL
+             FOR UPDATE
+        `;
+        if (!linhas[0]) {
+          throw new FalhaRepositorio('restaurar', `posto nao removido: ${prefixo}`);
+        }
+        await tx`
+          UPDATE postos SET deleted_at = NULL, updated_at = NOW()
+           WHERE prefixo = ${prefixo}
+        `;
+        await tx`
+          INSERT INTO postos_evento
+            (posto_id, evento, ator_id, origem_evento, observacao, ip, user_agent)
+          VALUES (
+            ${linhas[0].id}, 'restaurado', ${ator.usuarioId},
+            ${ator.origemEvento ?? 'ui_edicao'},
+            ${ator.observacao ?? null}, ${ator.ip}::inet, ${ator.userAgent}
+          )
+        `;
+        const depois = await tx<LinhaPosto[]>`
+          SELECT ${colunas()} FROM postos WHERE prefixo = ${prefixo}
+        `;
+        return mapear(depois[0]!);
+      });
+    } catch (e) {
+      if (e instanceof FalhaRepositorio) throw e;
+      throw new FalhaRepositorio('restaurar', e);
+    }
+  },
 };
+
+// ─────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────
+
+const MAP_CAMELCASE_SNAKE: Record<string, string> = {
+  mantenedor: 'mantenedor',
+  prefixoAna: 'prefixo_ana',
+  nomeEstacao: 'nome_estacao',
+  operacaoInicioAno: 'operacao_inicio_ano',
+  operacaoFimAno: 'operacao_fim_ano',
+  latitude: 'latitude',
+  longitude: 'longitude',
+  municipio: 'municipio',
+  municipioAlt: 'municipio_alt',
+  baciaHidrografica: 'bacia_hidrografica',
+  ugrhiNome: 'ugrhi_nome',
+  ugrhiNumero: 'ugrhi_numero',
+  subUgrhiNome: 'sub_ugrhi_nome',
+  subUgrhiNumero: 'sub_ugrhi_numero',
+  rede: 'rede',
+  proprietario: 'proprietario',
+  tipoPosto: 'tipo_posto',
+  areaKm2: 'area_km2',
+  btl: 'btl',
+  ciaAmbiental: 'cia_ambiental',
+  cobacia: 'cobacia',
+  observacoes: 'observacoes',
+  tempoTransmissao: 'tempo_transmissao',
+  statusPcd: 'status_pcd',
+  ultimaTransmissao: 'ultima_transmissao',
+  convencional: 'convencional',
+  loggerEqp: 'logger_eqp',
+  telemetrico: 'telemetrico',
+  nivel: 'nivel',
+  vazao: 'vazao',
+  fichaInspecao: 'ficha_inspecao',
+  ultimaDataFi: 'ultima_data_fi',
+  fichaDescritiva: 'ficha_descritiva',
+  ultimaAtualizacaoFd: 'ultima_atualizacao_fd',
+  aquifero: 'aquifero',
+  altimetria: 'altimetria',
+  anaEscalaInicio: 'ana_escala_inicio',
+  anaEscalaFim: 'ana_escala_fim',
+  anaDescargaLiquidaInicio: 'ana_descarga_liquida_inicio',
+  anaDescargaLiquidaFim: 'ana_descarga_liquida_fim',
+  anaSedimentosInicio: 'ana_sedimentos_inicio',
+  anaSedimentosFim: 'ana_sedimentos_fim',
+  anaQualidadeInicio: 'ana_qualidade_inicio',
+  anaQualidadeFim: 'ana_qualidade_fim',
+  anaPluviometroInicio: 'ana_pluviometro_inicio',
+  anaPluviometroFim: 'ana_pluviometro_fim',
+  anaTelemetriaInicio: 'ana_telemetria_inicio',
+  anaTelemetriaFim: 'ana_telemetria_fim',
+};
+
+const CAMPOS_DATE = new Set([
+  'ana_escala_inicio', 'ana_escala_fim',
+  'ana_descarga_liquida_inicio', 'ana_descarga_liquida_fim',
+  'ana_sedimentos_inicio', 'ana_sedimentos_fim',
+  'ana_qualidade_inicio', 'ana_qualidade_fim',
+  'ana_pluviometro_inicio', 'ana_pluviometro_fim',
+  'ana_telemetria_inicio', 'ana_telemetria_fim',
+]);
+
+function construirSetExprs(campos: CamposEditaveisPosto): Array<ReturnType<typeof sql>> {
+  const exprs: Array<ReturnType<typeof sql>> = [];
+  for (const [chaveCamel, valor] of Object.entries(campos)) {
+    const coluna = MAP_CAMELCASE_SNAKE[chaveCamel];
+    if (!coluna) continue;
+    if (CAMPOS_DATE.has(coluna)) {
+      exprs.push(sql`${sql.unsafe(coluna)} = ${valor as string | null}::date`);
+    } else {
+      exprs.push(sql`${sql.unsafe(coluna)} = ${valor as never}`);
+    }
+  }
+  return exprs;
+}
+
+function extrairCamposAuditados(
+  posto: Posto,
+  campos: CamposEditaveisPosto,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const postoMap = posto as unknown as Record<string, unknown>;
+  for (const chave of Object.keys(campos)) {
+    result[chave] = postoMap[chave];
+  }
+  return result;
+}
+
+// Re-export for callers that need the audit context type
+export type { ContextoAtorPosto, CamposEditaveisPosto, DadosCriacaoPosto };

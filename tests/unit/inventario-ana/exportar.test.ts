@@ -48,7 +48,7 @@ describe('exportarInventarioAna', () => {
 
     // Reabre o XLSX e valida estrutura
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(buffer.buffer as ArrayBuffer);
     const ws = wb.getWorksheet('DÚVIDAS');
     expect(ws).toBeTruthy();
 
@@ -83,7 +83,7 @@ describe('exportarInventarioAna', () => {
     );
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(buffer.buffer as ArrayBuffer);
     const ws = wb.getWorksheet('DÚVIDAS');
     expect(ws).toBeTruthy();
 
@@ -115,7 +115,7 @@ describe('exportarInventarioAna', () => {
       LOTE,
     );
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(buffer.buffer as ArrayBuffer);
     const ws = wb.getWorksheet('DÚVIDAS')!;
 
     const lastCol = ws.columnCount;
@@ -132,7 +132,7 @@ describe('exportarInventarioAna', () => {
       LOTE,
     );
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buffer);
+    await wb.xlsx.load(buffer.buffer as ArrayBuffer);
     const ws = wb.getWorksheet('DÚVIDAS')!;
     expect(ws.rowCount).toBe(1);
   });

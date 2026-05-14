@@ -44,6 +44,29 @@ export interface Posto {
   ultimaAtualizacaoFd: string | null;
   aquifero: string | null;
   altimetria: number | null;
+
+  // ──────────── Datas de medição ANA (Meta I.6 PROGESTÃO) ────────────
+  // Adicionadas pela migration 0031. Espelham os 6 pares início/fim por
+  // tipo de medição que a ANA exige no inventário oficial.
+  anaEscalaInicio: string | null;
+  anaEscalaFim: string | null;
+  anaDescargaLiquidaInicio: string | null;
+  anaDescargaLiquidaFim: string | null;
+  anaSedimentosInicio: string | null;
+  anaSedimentosFim: string | null;
+  anaQualidadeInicio: string | null;
+  anaQualidadeFim: string | null;
+  anaPluviometroInicio: string | null;
+  anaPluviometroFim: string | null;
+  anaTelemetriaInicio: string | null;
+  anaTelemetriaFim: string | null;
+
+  // ──────────── Gestão de ciclo de vida ────────────
+  /** Soft delete. NULL = ativo. */
+  deletedAt: Date | null;
+  /** Origem do cadastro (importacao_csv | ana_promocao_* | edicao_manual). */
+  origem: string | null;
+
   createdAt: Date;
   updatedAt: Date;
 

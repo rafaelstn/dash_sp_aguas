@@ -60,7 +60,107 @@ export interface ResultadoPesquisa {
   itens: Posto[];
 }
 
+/**
+ * Campos editáveis de um posto. NÃO inclui `id`, `prefixo`, `createdAt`,
+ * `updatedAt`, `deletedAt`, `origem` (são imutáveis pela UI ou gerenciados
+ * pelo próprio repo).
+ *
+ * Todos opcionais: omitir campo = preservar o valor atual no banco.
+ */
+export type CamposEditaveisPosto = Partial<{
+  mantenedor: string | null;
+  prefixoAna: string | null;
+  nomeEstacao: string | null;
+  operacaoInicioAno: number | null;
+  operacaoFimAno: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  municipio: string | null;
+  municipioAlt: string | null;
+  baciaHidrografica: string | null;
+  ugrhiNome: string | null;
+  ugrhiNumero: string | null;
+  subUgrhiNome: string | null;
+  subUgrhiNumero: string | null;
+  rede: string | null;
+  proprietario: string | null;
+  tipoPosto: string | null;
+  areaKm2: number | null;
+  btl: string | null;
+  ciaAmbiental: string | null;
+  cobacia: string | null;
+  observacoes: string | null;
+  tempoTransmissao: string | null;
+  statusPcd: string | null;
+  ultimaTransmissao: string | null;
+  convencional: string | null;
+  loggerEqp: string | null;
+  telemetrico: string | null;
+  nivel: string | null;
+  vazao: string | null;
+  fichaInspecao: string | null;
+  ultimaDataFi: string | null;
+  fichaDescritiva: string | null;
+  ultimaAtualizacaoFd: string | null;
+  aquifero: string | null;
+  altimetria: number | null;
+  anaEscalaInicio: string | null;
+  anaEscalaFim: string | null;
+  anaDescargaLiquidaInicio: string | null;
+  anaDescargaLiquidaFim: string | null;
+  anaSedimentosInicio: string | null;
+  anaSedimentosFim: string | null;
+  anaQualidadeInicio: string | null;
+  anaQualidadeFim: string | null;
+  anaPluviometroInicio: string | null;
+  anaPluviometroFim: string | null;
+  anaTelemetriaInicio: string | null;
+  anaTelemetriaFim: string | null;
+}>;
+
+/**
+ * Campos exigidos na criação de um posto novo. `prefixo` é obrigatório
+ * porque é a chave natural. Os demais são opcionais (mesmo regime de
+ * `CamposEditaveisPosto`).
+ */
+export type DadosCriacaoPosto = CamposEditaveisPosto & {
+  prefixo: string;
+  origem?: string;
+};
+
+export interface ContextoAtorPosto {
+  usuarioId: string;
+  ip: string | null;
+  userAgent: string | null;
+  /** Origem semântica do evento (ui_edicao | ana_promocao_manual | ana_promocao_bulk | etc). */
+  origemEvento?: string;
+  /** ID de origem externa (ex: ana_revisao_estacao.id). */
+  referenciaExternaId?: string | null;
+  /** Observação livre pro audit. */
+  observacao?: string | null;
+}
+
 export interface PostosRepository {
   buscarPorPrefixo(prefixo: string): Promise<Posto | null>;
   pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa>;
+
+  /**
+   * Atualiza campos de um posto. Audita em `postos_evento`. Falha se
+   * o posto está soft-deleted (`deleted_at IS NOT NULL`) — restaura
+   * antes de editar.
+   */
+  atualizar(
+    prefixo: string,
+    campos: CamposEditaveisPosto,
+    ator: ContextoAtorPosto,
+  ): Promise<Posto>;
+
+  /** Cria posto novo. Falha se o `prefixo` já existe. */
+  criar(dados: DadosCriacaoPosto, ator: ContextoAtorPosto): Promise<Posto>;
+
+  /** Soft delete (marca `deleted_at = NOW()`). Não remove a linha. */
+  remover(prefixo: string, ator: ContextoAtorPosto): Promise<void>;
+
+  /** Reverte soft delete (`deleted_at = NULL`). */
+  restaurar(prefixo: string, ator: ContextoAtorPosto): Promise<Posto>;
 }

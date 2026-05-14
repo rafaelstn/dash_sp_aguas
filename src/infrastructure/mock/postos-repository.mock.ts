@@ -46,6 +46,20 @@ export const postosRepository: PostosRepository = {
     return achado ?? null;
   },
 
+  // Mutações não suportadas em modo demo (fixtures são read-only)
+  async atualizar() {
+    throw new Error('Modo demo: edição de posto indisponível sem banco.');
+  },
+  async criar() {
+    throw new Error('Modo demo: criação de posto indisponível sem banco.');
+  },
+  async remover() {
+    throw new Error('Modo demo: remoção de posto indisponível sem banco.');
+  },
+  async restaurar() {
+    throw new Error('Modo demo: restauração de posto indisponível sem banco.');
+  },
+
   async pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa> {
     const offset = (params.pagina - 1) * params.porPagina;
     let filtrados: Posto[] = [];
