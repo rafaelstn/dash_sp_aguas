@@ -5,6 +5,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { Alerta } from '@/components/ui/Alerta';
 import { Paginador } from '@/components/ui/Paginador';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
+import { BotaoAceitarMunicipioIbge } from '@/components/features/postos/BotaoAceitarMunicipioIbge';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
@@ -340,13 +341,22 @@ export default async function DivergenciasGeoPage({ searchParams }: PageProps) {
                       )}
                     </td>
                     <td className="px-3 py-1.5">
-                      <Link
-                        href={`/postos/${encodeURIComponent(p.prefixo)}/editar`}
-                        className="text-2xs text-gov-azul hover:underline"
-                        aria-label={`Editar posto ${p.prefixo}`}
-                      >
-                        Editar
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {p.municipio_correto_ibge &&
+                        p.municipio_correto_ibge !== p.municipio ? (
+                          <BotaoAceitarMunicipioIbge
+                            prefixo={p.prefixo}
+                            municipioSugerido={p.municipio_correto_ibge}
+                          />
+                        ) : null}
+                        <Link
+                          href={`/postos/${encodeURIComponent(p.prefixo)}/editar`}
+                          className="text-2xs text-gov-azul hover:underline"
+                          aria-label={`Editar posto ${p.prefixo}`}
+                        >
+                          Editar
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 );

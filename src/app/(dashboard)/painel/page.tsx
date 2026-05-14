@@ -1,124 +1,127 @@
 import Link from 'next/link';
-import {
-  AlertTriangle,
-  FileWarning,
-  FolderX,
-  MapPinOff,
-  FileCheck,
-  Database,
-  Radio,
-  Power,
-  PowerOff,
-  HelpCircle,
-  Building2,
-  Search,
-  ClipboardCheck,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, Database, FolderX } from 'lucide-react';
 import { painelRepository } from '@/infrastructure/db/painel-repository.pg';
 import {
   anaRevisaoRepository,
   papeisRepository,
 } from '@/infrastructure/repositories';
+import { sql } from '@/infrastructure/db/client';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { CardKPI } from '@/components/features/painel/CardKPI';
-import { BarraProgresso } from '@/components/features/painel/BarraProgresso';
 import { Alerta } from '@/components/ui/Alerta';
 
 export const dynamic = 'force-dynamic';
-
 export const metadata = {
   title: 'Painel — Ficha Técnica SPÁguas',
 };
 
-function formatarDataHora(d: Date | null): string {
-  if (!d) return '—';
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(d);
+interface ProximaAcao {
+  tipo: 'ana' | 'divergencia_geo';
+  prefixo?: string;
+  codigoAna?: string;
+  nome: string | null;
+  municipio: string | null;
+  municipioCorreto?: string | null;
+  distanciaKm?: number;
+  href: string;
 }
 
-function rotuloClasse(classe: string): string {
-  const mapa: Record<string, string> = {
-    conforme_pluviometria: 'Conforme pluviometria',
-    conforme_fluviometria: 'Conforme fluviometria',
-    suspeita_troca_letra_digito: 'Suspeita troca letra/dígito',
-    placeholder_interrogacao: 'Placeholder "?"',
-    outlier_prefixo: 'Prefixo outlier',
-    faltando_zero_esquerda: 'Faltando zero à esquerda',
-    vazio: 'Vazio',
-    outlier_ana: 'ANA outlier',
-  };
-  return mapa[classe] ?? classe;
+interface Contagens {
+  totalPostos: number;
+  ativos: number;
+  semCoord: number;
+  postosDivergentes: number;
+  postosDivergentesAtivos: number;
+  anaPendencias: number;
+  anaOperando: number;
 }
 
 export default async function PaginaPainel() {
-  let resumo: Awaited<ReturnType<typeof painelRepository.resumoPendencias>> | null = null;
-  let tipos: Awaited<ReturnType<typeof painelRepository.distribuicaoPorTipo>> = [];
-  let ugrhis: Awaited<ReturnType<typeof painelRepository.rankingUGRHI>> = [];
-  let classes: Awaited<ReturnType<typeof painelRepository.classesDesconformidade>> = [];
-  let statusOp: Awaited<ReturnType<typeof painelRepository.statusOperacional>> | null = null;
-  let mantenedores: Awaited<ReturnType<typeof painelRepository.rankingMantenedores>> = [];
-  let falha = false;
-  let resumoAna: Awaited<ReturnType<typeof anaRevisaoRepository.resumoPainel>> | null = null;
-  let prazoAna: Date | null = null;
-
-  try {
-    [resumo, tipos, ugrhis, classes, statusOp, mantenedores] =
-      await Promise.all([
-        painelRepository.resumoPendencias(),
-        painelRepository.distribuicaoPorTipo(),
-        painelRepository.rankingUGRHI(),
-        painelRepository.classesDesconformidade(),
-        painelRepository.statusOperacional(),
-        painelRepository.rankingMantenedores(15),
-      ]);
-  } catch (e) {
-    console.error('[painel] Falha ao carregar agregações', e);
-    falha = true;
+  const usuario = await obterUsuarioAtual();
+  let ehAprovador = false;
+  if (usuario) {
+    try {
+      ehAprovador = await papeisRepository.ehAprovador(usuario.id);
+    } catch {
+      /* sem papel é OK */
+    }
   }
 
-  // Auditoria ANA: visível apenas para aprovadores
-  let proximaEstacao: { codigoAna: string; nome: string | null; municipio: string | null } | null = null;
-  let divergenciasPostos: { total: number; ativos: number } | null = null;
-  try {
-    const usuario = await obterUsuarioAtual();
-    if (usuario) {
-      const eh = await papeisRepository.ehAprovador(usuario.id);
-      if (eh) {
+  // 1. Próxima ação (CTA principal). Prioriza: divergente ativo > ANA operando.
+  let proxima: ProximaAcao | null = null;
+  if (ehAprovador) {
+    try {
+      const r = await sql<
+        Array<{
+          prefixo: string;
+          nome_estacao: string | null;
+          municipio: string | null;
+          municipio_correto_ibge: string | null;
+          distancia_municipio_m: string | null;
+        }>
+      >`
+        SELECT prefixo, nome_estacao, municipio,
+               municipio_correto_ibge, distancia_municipio_m::text
+          FROM postos
+         WHERE deleted_at IS NULL
+           AND divergencia_municipio = 'divergente'
+           AND (operacao_fim_ano IS NULL OR operacao_fim_ano >= EXTRACT(YEAR FROM CURRENT_DATE)::int - 1)
+         ORDER BY distancia_municipio_m DESC
+         LIMIT 1
+      `;
+      if (r[0]) {
+        proxima = {
+          tipo: 'divergencia_geo',
+          prefixo: r[0].prefixo,
+          nome: r[0].nome_estacao,
+          municipio: r[0].municipio,
+          municipioCorreto: r[0].municipio_correto_ibge,
+          distanciaKm: r[0].distancia_municipio_m
+            ? Math.round(Number(r[0].distancia_municipio_m) / 1000)
+            : undefined,
+          href: `/postos/${encodeURIComponent(r[0].prefixo)}/editar`,
+        };
+      } else {
+        // Fallback ANA
         const lote = await anaRevisaoRepository.loteAtual();
         if (lote) {
-          resumoAna = await anaRevisaoRepository.resumoPainel(lote.id);
-          prazoAna = lote.prazoResposta;
-
-          // F6 Fernanda: card "Próxima estação a corrigir".
-          // Prioriza: operando=sim AND divergente AND pendente.
           const fila = await anaRevisaoRepository.listar(lote.id, {
             operando: 'sim',
             divergenciaMunicipio: 'divergente',
             status: 'pendente',
             porPagina: 1,
           });
-          const escolha =
-            fila.itens[0] ??
-            (await anaRevisaoRepository.listar(lote.id, {
-              divergenciaMunicipio: 'divergente',
-              status: 'pendente',
-              porPagina: 1,
-            })).itens[0];
-          if (escolha) {
-            proximaEstacao = {
-              codigoAna: escolha.codigoAna,
-              nome: escolha.nome,
-              municipio: escolha.municipioNome,
+          if (fila.itens[0]) {
+            proxima = {
+              tipo: 'ana',
+              codigoAna: fila.itens[0].codigoAna,
+              nome: fila.itens[0].nome,
+              municipio: fila.itens[0].municipioNome,
+              href: `/inventario-ana/${encodeURIComponent(fila.itens[0].codigoAna)}`,
             };
           }
         }
+      }
+    } catch {
+      /* tolera */
+    }
+  }
 
-        // Wave E: divergências geográficas em postos (proativo, sem ANA)
-        const divs = await (
-          await import('@/infrastructure/db/client')
-        ).sql<Array<{ total: number; ativos: number }>>`
+  // 2. Contagens consolidadas (só o essencial)
+  let contagens: Contagens | null = null;
+  let falha = false;
+  try {
+    const [r1, r2, ana] = await Promise.all([
+      painelRepository.resumoPendencias(),
+      painelRepository.statusOperacional(),
+      ehAprovador && (await anaRevisaoRepository.loteAtual())
+        ? anaRevisaoRepository.resumoPainel(
+            (await anaRevisaoRepository.loteAtual())!.id,
+          )
+        : null,
+    ]);
+
+    const divs = ehAprovador
+      ? await sql<Array<{ total: number; ativos: number }>>`
           SELECT COUNT(*)::int AS total,
                  COUNT(*) FILTER (
                    WHERE operacao_fim_ano IS NULL
@@ -127,643 +130,247 @@ export default async function PaginaPainel() {
             FROM postos
            WHERE deleted_at IS NULL
              AND divergencia_municipio = 'divergente'
-        `;
-        if (divs[0]) {
-          divergenciasPostos = { total: divs[0].total, ativos: divs[0].ativos };
-        }
-      }
-    }
-  } catch {
-    /* tolera, painel continua */
+        `
+      : null;
+
+    contagens = {
+      totalPostos: r1.totalPostos,
+      ativos: r2.ativos,
+      semCoord: r1.postosSemCoordenadas,
+      postosDivergentes: divs?.[0]?.total ?? 0,
+      postosDivergentesAtivos: divs?.[0]?.ativos ?? 0,
+      anaPendencias: ana?.totalPendencias ?? 0,
+      anaOperando: ana?.operando ?? 0,
+    };
+  } catch (e) {
+    console.error('[painel]', e);
+    falha = true;
   }
 
-  if (falha || !resumo || !statusOp) {
+  if (falha || !contagens) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold text-app-fg">Painel de operação</h1>
-        <Alerta tipo="erro" titulo="Falha ao carregar painel">
-          Não foi possível conectar ao banco. Tente novamente em instantes.
+        <h1 className="text-xl font-semibold text-app-fg">Painel</h1>
+        <Alerta tipo="erro" titulo="Falha ao carregar">
+          Não foi possível conectar ao banco. Tente novamente.
         </Alerta>
       </div>
     );
   }
 
-  const pctCobertura =
-    resumo.totalPostos === 0
-      ? 0
-      : (resumo.postosComArquivos / resumo.totalPostos) * 100;
-  const taxaTelem =
-    resumo.totalPostos === 0
-      ? 0
-      : (resumo.postosComTelemetria / resumo.totalPostos) * 100;
-
-  const classesPrefixo = classes
-    .filter((c) => c.tipo === 'prefixo')
-    .sort((a, b) => b.total - a.total);
-  const classesPrefixoAna = classes
-    .filter((c) => c.tipo === 'prefixo_ana')
-    .sort((a, b) => b.total - a.total);
-  const totalDesconfPrefixo = classesPrefixo.reduce((a, c) => a + c.total, 0);
-  const totalDesconfPrefixoAna = classesPrefixoAna.reduce((a, c) => a + c.total, 0);
-
-  const ugrhiPiores = ugrhis
-    .filter((u) => u.total > 0)
-    .sort((a, b) => b.taxa - a.taxa)
-    .slice(0, 10);
+  const totalPendencias =
+    contagens.postosDivergentes + contagens.anaPendencias;
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-app-fg">Painel de operação</h1>
-          <p className="mt-0.5 text-xs text-app-fg-muted">
-            Visão consolidada da rede hidrológica · pendências, cobertura e atividade
-          </p>
-        </div>
-        <p className="text-2xs text-app-fg-subtle tabular">
-          Dados atualizados em {formatarDataHora(new Date())}
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-xl font-semibold text-app-fg">Painel</h1>
+        <p className="mt-0.5 text-xs text-app-fg-muted">
+          {usuario?.email
+            ? `Logado como ${usuario.email}.`
+            : 'Visão geral da rede SPÁguas.'}
         </p>
       </header>
 
-      {resumoAna && proximaEstacao ? (
+      {/* CTA principal: o que precisa ser feito agora */}
+      {ehAprovador && proxima ? (
         <section
-          aria-labelledby="sec-prox"
-          className="rounded-gov-card border-l-4 border-gov-azul bg-blue-50 p-4"
+          aria-labelledby="sec-cta"
+          className="rounded-gov-card border-l-4 border-gov-perigo bg-app-surface p-5"
         >
-          <h2 id="sec-prox" className="text-sm font-semibold text-app-fg">
-            Próxima estação a revisar
+          <p className="text-2xs font-semibold uppercase tracking-wider text-gov-perigo">
+            Próxima ação
+          </p>
+          <h2 id="sec-cta" className="mt-1 text-lg font-semibold text-app-fg">
+            {proxima.tipo === 'divergencia_geo' ? (
+              <>
+                Posto <span className="mono">{proxima.prefixo}</span> está com
+                coord errada
+              </>
+            ) : (
+              <>
+                Estação ANA <span className="mono">{proxima.codigoAna}</span>{' '}
+                pendente
+              </>
+            )}
           </h2>
           <p className="mt-1 text-sm text-app-fg">
-            <strong className="mono">{proximaEstacao.codigoAna}</strong>{' '}
-            — {proximaEstacao.nome ?? 'Sem nome'}
-            {proximaEstacao.municipio ? (
-              <>
-                {' '}
-                <span className="text-app-fg-muted">
-                  ({proximaEstacao.municipio})
-                </span>
-              </>
-            ) : null}
+            {proxima.nome ?? 'Sem nome'}
+            {proxima.municipio ? ` · declarado em ${proxima.municipio}` : ''}
+            {proxima.municipioCorreto &&
+            proxima.municipioCorreto !== proxima.municipio
+              ? ` · coord cai em ${proxima.municipioCorreto}`
+              : ''}
+            {proxima.distanciaKm
+              ? ` · ${proxima.distanciaKm}km da fronteira`
+              : ''}
           </p>
           <p className="mt-2 text-2xs text-app-fg-muted">
-            {resumoAna.totalPendencias.toLocaleString('pt-BR')} estações restantes ·{' '}
-            {resumoAna.statusRevisada.toLocaleString('pt-BR')} já revisadas ·
-            progresso da Meta I.6:{' '}
-            <strong className="tabular">
-              {resumoAna.totalPendencias > 0
-                ? (
-                    (resumoAna.statusRevisada /
-                      (resumoAna.totalPendencias + resumoAna.statusRevisada)) *
-                    100
-                  ).toFixed(0)
-                : 100}
-              %
-            </strong>
+            {contagens.postosDivergentesAtivos > 0
+              ? `${contagens.postosDivergentesAtivos} posto(s) ativo(s) com divergência. `
+              : ''}
+            {contagens.anaOperando > 0
+              ? `${contagens.anaOperando} estação(ões) ANA operando pendente(s).`
+              : ''}
           </p>
           <Link
-            href={`/inventario-ana/${encodeURIComponent(proximaEstacao.codigoAna)}`}
-            className="mt-3 inline-block rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            href={proxima.href}
+            className="mt-3 inline-flex items-center gap-1.5 rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
-            Abrir e corrigir
+            Resolver agora
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </section>
-      ) : null}
-
-      {resumoAna ? (
-        <section aria-labelledby="sec-ana" className="space-y-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2
-              id="sec-ana"
-              className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-            >
-              Auditoria ANA · Meta I.6 PROGESTÃO
-            </h2>
-            {prazoAna ? (
-              <p className="text-2xs text-app-fg-subtle">
-                Prazo:{' '}
-                <span className="font-semibold text-gov-perigo tabular">
-                  {new Intl.DateTimeFormat('pt-BR').format(new Date(prazoAna))}
-                </span>
-              </p>
-            ) : null}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <CardKPI
-              titulo="Pendências ANA"
-              valor={resumoAna.totalPendencias}
-              contexto={`de ${resumoAna.totalEstacoes.toLocaleString('pt-BR')} estações no inventário`}
-              severidade="alta"
-              icone={FileWarning}
-              href="/inventario-ana"
-              rotuloAcao="Abrir fila"
-            />
-            <CardKPI
-              titulo="Operando (prioridade)"
-              valor={resumoAna.operando}
-              contexto="estações ativas com observação"
-              severidade={resumoAna.operando > 0 ? 'critica' : 'sucesso'}
-              icone={AlertTriangle}
-              href="/inventario-ana?operando=sim"
-              rotuloAcao="Filtrar"
-            />
-            <CardKPI
-              titulo="Divergência geo (≥10km)"
-              valor={resumoAna.divergenciaDivergente}
-              contexto={`+ ${resumoAna.divergenciaMargem.toLocaleString('pt-BR')} em margem aceitável`}
-              severidade={resumoAna.divergenciaDivergente > 0 ? 'alta' : 'sucesso'}
-              icone={AlertTriangle}
-              href="/inventario-ana?divergencia=divergente"
-              rotuloAcao="Corrigir"
-            />
-            <CardKPI
-              titulo="Sem match no banco"
-              valor={resumoAna.semMatch}
-              contexto="ANA aponta estação que não está em postos"
-              severidade={resumoAna.semMatch > 0 ? 'media' : 'sucesso'}
-              icone={Search}
-              href="/inventario-ana?semMatch=true"
-              rotuloAcao="Investigar"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <CardKPI
-              titulo="Já revisadas"
-              valor={resumoAna.statusRevisada}
-              contexto="aceitas, corrigidas ou descartadas"
-              severidade="sucesso"
-              icone={ClipboardCheck}
-              href="/inventario-ana?status=revisada"
-              rotuloAcao="Conferir"
-            />
-            <CardKPI
-              titulo="Em revisão"
-              valor={resumoAna.statusEmRevisao}
-              contexto="rascunhos salvos sem fechar"
-              severidade="info"
-              icone={ClipboardCheck}
-            />
-            <CardKPI
-              titulo="Pendente"
-              valor={resumoAna.statusPendente}
-              contexto="ainda não tocadas"
-              severidade={resumoAna.statusPendente > 0 ? 'alta' : 'sucesso'}
-              icone={FileWarning}
-            />
-            <CardKPI
-              titulo="Descartadas"
-              valor={resumoAna.statusDescartada}
-              contexto="fora do escopo SPÁguas"
-              severidade="info"
-              icone={ClipboardCheck}
-            />
-          </div>
+      ) : ehAprovador && totalPendencias === 0 ? (
+        <section className="rounded-gov-card border-l-4 border-gov-sucesso bg-green-50 p-4">
+          <p className="text-sm font-medium text-green-900">
+            Sem pendências críticas. Tudo em ordem.
+          </p>
         </section>
       ) : null}
 
-      {divergenciasPostos && divergenciasPostos.total > 0 ? (
-        <section aria-labelledby="sec-div-postos" className="space-y-3">
+      {/* 3 listas curtas pra ele clicar e ir resolver */}
+      {ehAprovador ? (
+        <section aria-labelledby="sec-pend" className="space-y-2">
           <h2
-            id="sec-div-postos"
+            id="sec-pend"
             className="text-2xs font-semibold uppercase tracking-wider text-app-fg-muted"
           >
-            Divergências geográficas (proativo, sem ANA)
+            Filas de correção
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <CardKPI
-              titulo="Postos divergentes"
-              valor={divergenciasPostos.total}
-              contexto="coordenada >=10km da fronteira do município declarado"
-              severidade={divergenciasPostos.ativos > 0 ? 'critica' : 'alta'}
-              icone={AlertTriangle}
-              href="/postos/divergencias-geo"
-              rotuloAcao="Investigar"
-            />
-            <CardKPI
-              titulo="Divergentes ATIVOS"
-              valor={divergenciasPostos.ativos}
-              contexto="postos transmitindo com coord errada"
-              severidade={divergenciasPostos.ativos > 0 ? 'critica' : 'sucesso'}
-              icone={AlertTriangle}
+          <ul className="rounded-gov-card border border-app-border-subtle bg-app-surface divide-y divide-app-border-subtle">
+            <LinhaFila
+              titulo="Postos com coord errada"
+              valor={contagens.postosDivergentes}
+              destaque={contagens.postosDivergentesAtivos}
+              destaqueRotulo="ativos"
               href="/postos/divergencias-geo?classificacao=divergente&operando=sim"
-              rotuloAcao="Corrigir primeiro"
+              icone={AlertTriangle}
             />
-          </div>
+            <LinhaFila
+              titulo="Auditoria ANA"
+              valor={contagens.anaPendencias}
+              destaque={contagens.anaOperando}
+              destaqueRotulo="operando"
+              href="/inventario-ana?operando=sim&divergencia=divergente"
+              icone={AlertTriangle}
+            />
+            <LinhaFila
+              titulo="Postos sem coordenada"
+              valor={contagens.semCoord}
+              destaque={null}
+              destaqueRotulo=""
+              href="/postos/divergencias-geo?classificacao=sem_coordenada"
+              icone={FolderX}
+            />
+          </ul>
         </section>
       ) : null}
 
-      {/* ═══════════════════════════════════════════════════
-          AÇÕES NECESSÁRIAS
-          ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-acoes" className="space-y-3">
+      {/* Panorama da rede — 1 linha enxuta, sem distrair */}
+      <section
+        aria-labelledby="sec-pano"
+        className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
+      >
         <h2
-          id="sec-acoes"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
+          id="sec-pano"
+          className="mb-2 text-2xs font-semibold uppercase tracking-wider text-app-fg-muted"
         >
-          Ações necessárias
+          Rede SPÁguas
         </h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <CardKPI
-            titulo="Postos sem arquivo"
-            valor={resumo.postosSemArquivos}
-            contexto={`${(100 - pctCobertura).toFixed(1)}% da rede não indexada`}
-            severidade="critica"
-            icone={FolderX}
-            rotuloAcao="Rodar worker"
-          />
-          <CardKPI
-            titulo="Cadastro irregular"
-            valor={resumo.desconformidadesPostos}
-            contexto="prefixo ou código ANA inconsistente"
-            severidade="alta"
-            icone={AlertTriangle}
-            href="/desconformidades"
-            rotuloAcao="Revisar lista"
-          />
-          <CardKPI
-            titulo="Arquivos órfãos"
-            valor={resumo.arquivosOrfaos}
-            contexto="não associados a posto"
-            severidade="alta"
-            icone={FileWarning}
-            href="/desconformidades/arquivos-malformados"
-            rotuloAcao="Classificar"
-          />
-          <CardKPI
-            titulo="Sem coordenadas"
-            valor={resumo.postosSemCoordenadas}
-            contexto={`de ${resumo.totalPostos.toLocaleString('pt-BR')} postos`}
-            severidade={resumo.postosSemCoordenadas > 0 ? 'critica' : 'sucesso'}
-            icone={MapPinOff}
-          />
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════
-          PANORAMA DA REDE
-          ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-panorama" className="space-y-3">
-        <h2
-          id="sec-panorama"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          Panorama da rede
-        </h2>
-        <div className="grid gap-3 lg:grid-cols-3">
-          <CardKPI
-            titulo="Total de postos"
-            valor={resumo.totalPostos}
-            contexto="cadastrados no sistema"
-            severidade="info"
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <KV
+            rotulo="Total de postos"
+            valor={contagens.totalPostos.toLocaleString('pt-BR')}
             icone={Database}
           />
-          <CardKPI
-            titulo="Cobertura geográfica"
-            valor={`${(resumo.totalPostos === 0 ? 0 : (resumo.postosComCoordenadas / resumo.totalPostos) * 100).toFixed(1)}%`}
-            contexto={`${resumo.postosComCoordenadas.toLocaleString('pt-BR')} com coordenadas`}
-            severidade="sucesso"
-            icone={FileCheck}
-            formatarValor={false}
+          <KV
+            rotulo="Postos ativos"
+            valor={contagens.ativos.toLocaleString('pt-BR')}
+            icone={Database}
           />
-          <CardKPI
-            titulo="Telemetria ativa"
-            valor={`${taxaTelem.toFixed(1)}%`}
-            contexto={`${resumo.postosComTelemetria.toLocaleString('pt-BR')} postos transmitindo`}
-            severidade={taxaTelem >= 20 ? 'sucesso' : 'media'}
-            icone={Radio}
-            formatarValor={false}
+          <KV
+            rotulo="Sem coordenada"
+            valor={contagens.semCoord.toLocaleString('pt-BR')}
+            icone={Database}
           />
-        </div>
+        </dl>
+      </section>
 
-        <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h3 className="text-sm font-semibold text-app-fg">
-              Distribuição por tipo de posto
-            </h3>
-            <span className="text-2xs text-app-fg-subtle tabular">
-              {tipos.length} categorias
+      <p className="text-2xs text-app-fg-muted">
+        Detalhes por UGRHI, mantenedor e tipo de inconsistência ficam em{' '}
+        <Link href="/desconformidades" className="text-gov-azul hover:underline">
+          Desconformidades
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
+
+function LinhaFila({
+  titulo,
+  valor,
+  destaque,
+  destaqueRotulo,
+  href,
+  icone: Icone,
+}: {
+  titulo: string;
+  valor: number;
+  destaque: number | null;
+  destaqueRotulo: string;
+  href: string;
+  icone: typeof AlertTriangle;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="flex items-center gap-3 px-4 py-3 hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+      >
+        <Icone
+          className="h-4 w-4 shrink-0 text-app-fg-muted"
+          aria-hidden="true"
+        />
+        <span className="flex-1 text-sm font-medium text-app-fg">{titulo}</span>
+        <span className="flex items-baseline gap-2 text-sm tabular">
+          {destaque !== null && destaque > 0 ? (
+            <span className="rounded bg-red-100 px-1.5 text-2xs font-semibold text-gov-perigo">
+              {destaque} {destaqueRotulo}
             </span>
-          </div>
-          <ul className="space-y-2.5">
-            {tipos.map((t) => {
-              const totalTipo = tipos.reduce((a, x) => a + x.total, 0);
-              return (
-                <li key={t.tipo} className="flex items-center gap-3">
-                  <span className="w-14 text-sm font-medium text-app-fg mono">
-                    {t.tipo}
-                  </span>
-                  <div className="flex-1">
-                    <BarraProgresso
-                      valor={t.total}
-                      total={totalTipo}
-                      cor={
-                        t.tipo === 'PLU'
-                          ? 'bg-gov-azul'
-                          : t.tipo === 'FLU'
-                            ? 'bg-gov-sucesso'
-                            : 'bg-gov-alerta'
-                      }
-                      mostrarValor
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════
-          STATUS OPERACIONAL — Ativos / Desativados
-          ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-status" className="space-y-3">
-        <h2
-          id="sec-status"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          Status operacional
-        </h2>
-        <p className="text-2xs text-app-fg-subtle">
-          Heurística de recência sobre <code className="mono">operacao_fim_ano</code>
-          : ativo = ano corrente ou anterior · desativado = parou há mais de 1 ano
-          · indeterminado = sem dado registrado.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <CardKPI
-            titulo="Postos ativos"
-            valor={statusOp.ativos}
-            contexto={`${(statusOp.total === 0 ? 0 : (statusOp.ativos / statusOp.total) * 100).toFixed(1)}% da rede`}
-            severidade="sucesso"
-            icone={Power}
-            href="/?status=ativo"
-            rotuloAcao="Ver lista"
+          ) : null}
+          <span className="mono font-semibold text-app-fg">
+            {valor.toLocaleString('pt-BR')}
+          </span>
+          <ArrowRight
+            className="h-3.5 w-3.5 text-app-fg-muted"
+            aria-hidden="true"
           />
-          <CardKPI
-            titulo="Postos desativados"
-            valor={statusOp.desativados}
-            contexto={`${(statusOp.total === 0 ? 0 : (statusOp.desativados / statusOp.total) * 100).toFixed(1)}% da rede`}
-            severidade="info"
-            icone={PowerOff}
-            href="/?status=desativado"
-            rotuloAcao="Ver lista"
-          />
-          <CardKPI
-            titulo="Sem informação"
-            valor={statusOp.indeterminados}
-            contexto="ano de fim com sentinela 0 — revisar planilha-fonte"
-            severidade={statusOp.indeterminados > 0 ? 'media' : 'sucesso'}
-            icone={HelpCircle}
-          />
-        </div>
-      </section>
+        </span>
+      </Link>
+    </li>
+  );
+}
 
-      {/* ═══════════════════════════════════════════════════
-          MANTENEDORES — quem opera quantos postos
-          ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-mantenedores" className="space-y-3">
-        <h2
-          id="sec-mantenedores"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          Mantenedores e batalhões
-        </h2>
-        <p className="text-2xs text-app-fg-subtle">
-          Combinação dos campos <code className="mono">mantenedor</code> +{' '}
-          <code className="mono">btl</code> — top {mantenedores.length} por
-          número de postos. Coluna “ativos” usa a mesma heurística do status
-          operacional.
-        </p>
-        <div className="overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface">
-          <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">
-              Top mantenedores e batalhões por número de postos sob gestão
-            </caption>
-            <thead>
-              <tr className="bg-app-surface-2">
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  Mantenedor / batalhão
-                </th>
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-right text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  Total
-                </th>
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-right text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  Ativos
-                </th>
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  Cobertura ativa
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {mantenedores.map((m) => (
-                <tr
-                  key={m.nome}
-                  className="border-b border-app-border-subtle last:border-0 hover:bg-app-surface-2"
-                >
-                  <td className="px-3 py-1.5">
-                    <Link
-                      href={`/?mantenedor=${encodeURIComponent(m.nome)}`}
-                      aria-label={`Filtrar postos do mantenedor ${m.nome} (${m.total.toLocaleString('pt-BR')} postos, ${m.ativos.toLocaleString('pt-BR')} ativos)`}
-                      className="inline-flex items-center gap-2 text-app-fg hover:text-gov-azul hover:underline"
-                    >
-                      <Building2
-                        className="h-3.5 w-3.5 shrink-0 text-app-fg-muted"
-                        aria-hidden="true"
-                      />
-                      <span className="text-sm">{m.nome}</span>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular mono text-sm text-app-fg">
-                    {m.total.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular mono text-sm text-gov-sucesso">
-                    {m.ativos.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <BarraProgresso
-                        valor={m.ativos}
-                        total={m.total}
-                        cor="bg-gov-sucesso"
-                        tamanho="sm"
-                      />
-                      <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
-                        {m.total === 0
-                          ? '—'
-                          : `${((m.ativos / m.total) * 100).toFixed(0)}%`}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════
-          COBERTURA POR UGRHI
-          ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-ugrhi" className="space-y-3">
-        <h2
-          id="sec-ugrhi"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          UGRHIs com maior % de cadastro irregular
-        </h2>
-        <div className="overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface">
-          <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">
-              Top 10 UGRHIs com maior taxa de postos desconformes
-            </caption>
-            <thead>
-              <tr className="bg-app-surface-2">
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  UGRHI
-                </th>
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  Desconformes
-                </th>
-                <th
-                  scope="col"
-                  className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted"
-                >
-                  Taxa
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {ugrhiPiores.map((u) => (
-                <tr
-                  key={u.numero}
-                  className="border-b border-app-border-subtle last:border-0 hover:bg-app-surface-2"
-                >
-                  <td className="px-3 py-1.5">
-                    <Link
-                      href={`/?ugrhi=${encodeURIComponent(u.numero)}`}
-                      aria-label={`Filtrar postos da UGRHI ${u.numero} ${u.nome} (${u.desconformes} desconformes de ${u.total})`}
-                      className="block"
-                    >
-                      <span className="mono text-2xs text-app-fg-subtle">
-                        #{u.numero}
-                      </span>{' '}
-                      <span className="text-sm text-app-fg">{u.nome}</span>
-                      <span className="ml-2 text-2xs text-app-fg-muted tabular">
-                        ({u.total} postos)
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-1.5 tabular mono text-sm text-app-fg">
-                    {u.desconformes}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <BarraProgresso
-                        valor={u.desconformes}
-                        total={u.total}
-                        cor={
-                          u.taxa >= 0.3
-                            ? 'bg-gov-perigo'
-                            : u.taxa >= 0.2
-                              ? 'bg-gov-alerta'
-                              : 'bg-gov-azul'
-                        }
-                        tamanho="sm"
-                      />
-                      <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
-                        {(u.taxa * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════
-          TIPOS DE INCONSISTÊNCIA
-          ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-classes" className="space-y-3">
-        <h2
-          id="sec-classes"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          Tipos de inconsistência detectados
-        </h2>
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
-            <h3 className="mb-2 text-sm font-semibold text-app-fg">
-              Prefixo ({totalDesconfPrefixo})
-            </h3>
-            <ul className="space-y-2">
-              {classesPrefixo.map((c) => (
-                <li key={c.classe} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-xs text-app-fg-muted">
-                      {rotuloClasse(c.classe)}
-                    </span>
-                    <span className="mono tabular text-2xs text-app-fg">
-                      {c.total}
-                    </span>
-                  </div>
-                  <BarraProgresso
-                    valor={c.total}
-                    total={totalDesconfPrefixo}
-                    cor="bg-gov-azul"
-                    tamanho="sm"
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
-            <h3 className="mb-2 text-sm font-semibold text-app-fg">
-              Código ANA ({totalDesconfPrefixoAna})
-            </h3>
-            <ul className="space-y-2">
-              {classesPrefixoAna.map((c) => (
-                <li key={c.classe} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-xs text-app-fg-muted">
-                      {rotuloClasse(c.classe)}
-                    </span>
-                    <span className="mono tabular text-2xs text-app-fg">
-                      {c.total}
-                    </span>
-                  </div>
-                  <BarraProgresso
-                    valor={c.total}
-                    total={totalDesconfPrefixoAna}
-                    cor="bg-gov-alerta"
-                    tamanho="sm"
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
+function KV({
+  rotulo,
+  valor,
+  icone: Icone,
+}: {
+  rotulo: string;
+  valor: string;
+  icone: typeof Database;
+}) {
+  return (
+    <div>
+      <dt className="flex items-center gap-1.5 text-2xs uppercase tracking-wide text-app-fg-muted">
+        <Icone className="h-3 w-3" aria-hidden="true" />
+        {rotulo}
+      </dt>
+      <dd className="mt-0.5 text-xl font-semibold tabular text-app-fg">
+        {valor}
+      </dd>
     </div>
   );
 }
