@@ -46,11 +46,19 @@ export default async function MinhasFichasPage() {
     redirect('/app/login');
   }
 
-  const { itens } = await triagemRepository.listarPendentes({
-    estado: ['pendente', 'em_revisao', 'devolvida', 'aprovada', 'rejeitada'],
-    tecnicoId: usuario.id,
-    limite: 200,
-  });
+  let itens: FichaTriagem[] = [];
+  let falhouCarga = false;
+  try {
+    const resp = await triagemRepository.listarPendentes({
+      estado: ['pendente', 'em_revisao', 'devolvida', 'aprovada', 'rejeitada'],
+      tecnicoId: usuario.id,
+      limite: 200,
+    });
+    itens = resp.itens;
+  } catch (e) {
+    falhouCarga = true;
+    console.error('[minhas-fichas] Falha ao carregar triagem do tecnico', e);
+  }
 
   const agrupado = agruparPorEstado(itens);
   const total = itens.length;
@@ -65,12 +73,14 @@ export default async function MinhasFichasPage() {
             className="rounded-gov-card border border-app-border-subtle bg-app-surface p-6 text-center"
           >
             <h2 id="vazio-titulo" className="text-md font-semibold text-app-fg">
-              Nenhuma ficha submetida pelo aplicativo até o momento.
+              {falhouCarga
+                ? 'Não foi possível carregar suas fichas no momento.'
+                : 'Nenhuma ficha submetida pelo aplicativo até o momento.'}
             </h2>
             <p className="mt-2 text-sm text-app-fg-muted">
-              As fichas submetidas em campo aparecerão nesta lista com a situação
-              atual da triagem (pendente, em revisão, devolvida, aprovada ou
-              rejeitada).
+              {falhouCarga
+                ? 'Tente novamente em instantes. Se o problema persistir, contate o administrador do sistema.'
+                : 'As fichas submetidas em campo aparecerão nesta lista com a situação atual da triagem (pendente, em revisão, devolvida, aprovada ou rejeitada).'}
             </p>
             <Link
               href="/app"
