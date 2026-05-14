@@ -319,7 +319,24 @@ if ($HasDatabaseUrl) {
     $VenvDir  = Join-Path $ProjectRoot 'ops\indexer\.venv'
     $VenvPy   = Join-Path $VenvDir 'Scripts\python.exe'
 
-    if (-not (Test-Path $VenvPy)) {
+    # Venv guarda caminho absoluto do Python em pyvenv.cfg; ao alternar
+    # entre PCs (notebook DAEE x PC win1064) o caminho some e o python.exe
+    # do venv vira shim quebrado. Detecta executando --version: se nao
+    # responder 0, apaga e recria do zero no Python local.
+    $VenvOk = $false
+    if (Test-Path $VenvPy) {
+        try {
+            $null = & $VenvPy --version 2>&1
+            if ($LASTEXITCODE -eq 0) { $VenvOk = $true }
+        } catch { $VenvOk = $false }
+    }
+
+    if ((Test-Path $VenvPy) -and -not $VenvOk) {
+        Write-Warn "Venv existente esta quebrado (Python referenciado nao existe nesta maquina). Recriando..."
+        Remove-Item -Recurse -Force $VenvDir
+    }
+
+    if (-not $VenvOk) {
         Write-Step "Criando venv Python em ops/indexer/.venv..."
         & $PyCmd -m venv $VenvDir
         if ($LASTEXITCODE -ne 0) {
