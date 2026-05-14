@@ -1,0 +1,350 @@
+import type { AnaRevisaoRepository } from '@/application/ports/ana-revisao-repository';
+import type {
+  AcaoBulkAna,
+  AnaRevisaoEstacao,
+  AnaRevisaoLote,
+  ContextoAtor,
+  StatusRevisao,
+} from '@/domain/ana-revisao';
+
+/**
+ * Mock in-memory do AnaRevisaoRepository, usado em testes e modo demo.
+ *
+ * Estado fica em closures globais ao módulo. `_resetMockAna()` zera tudo
+ * entre testes.
+ */
+
+interface EstadoMock {
+  lotes: AnaRevisaoLote[];
+  estacoes: AnaRevisaoEstacao[];
+  /** Audit trail simplificado (test-only) */
+  eventos: Array<{
+    estacaoId: string;
+    evento: string;
+    atorId: string;
+    valoresAntes: unknown;
+    valoresDepois: unknown;
+    ocorreuEm: Date;
+  }>;
+}
+
+let estado: EstadoMock = { lotes: [], estacoes: [], eventos: [] };
+
+export function _resetMockAna(): void {
+  estado = { lotes: [], estacoes: [], eventos: [] };
+}
+
+export function _seedMockAnaLote(lote: AnaRevisaoLote): void {
+  estado.lotes.push(lote);
+}
+
+export function _seedMockAnaEstacao(estacao: AnaRevisaoEstacao): void {
+  estado.estacoes.push(estacao);
+}
+
+export function _eventosMockAna(): EstadoMock['eventos'] {
+  return [...estado.eventos];
+}
+
+const TRANSICOES: Record<StatusRevisao, StatusRevisao[]> = {
+  pendente: ['em_revisao', 'revisada', 'descartada', 'sem_match'],
+  em_revisao: ['revisada', 'descartada', 'pendente'],
+  revisada: ['em_revisao', 'descartada', 'promovida_a_posto'],
+  descartada: ['pendente', 'em_revisao'],
+  sem_match: ['em_revisao', 'descartada', 'promovida_a_posto'],
+  promovida_a_posto: [],
+};
+
+function transicaoPermitida(de: StatusRevisao, para: StatusRevisao): boolean {
+  if (de === para) return true;
+  return TRANSICOES[de]?.includes(para) ?? false;
+}
+
+function temObservacao(e: AnaRevisaoEstacao): boolean {
+  return e.observacoes.length > 0;
+}
+
+export const anaRevisaoRepository: AnaRevisaoRepository = {
+  async loteAtual() {
+    if (estado.lotes.length === 0) return null;
+    return estado.lotes[estado.lotes.length - 1]!;
+  },
+
+  async resumoPainel(loteId) {
+    const ests = estado.estacoes.filter((e) => e.loteId === loteId);
+    const lote = estado.lotes.find((l) => l.id === loteId);
+    const comObs = ests.filter(temObservacao);
+    return {
+      loteId,
+      loteNome: lote?.nome ?? '',
+      prazoResposta: lote?.prazoResposta ?? null,
+      totalEstacoes: ests.length,
+      totalPendencias: comObs.length,
+      operando: comObs.filter((e) => e.operando === true).length,
+      desativadas: comObs.filter((e) => e.operando === false).length,
+      semMatch: ests.filter((e) => e.postoId === null).length,
+      statusPendente: ests.filter((e) => e.status === 'pendente').length,
+      statusEmRevisao: ests.filter((e) => e.status === 'em_revisao').length,
+      statusRevisada: ests.filter((e) => e.status === 'revisada').length,
+      statusDescartada: ests.filter((e) => e.status === 'descartada').length,
+      statusPromovida: ests.filter((e) => e.status === 'promovida_a_posto').length,
+      divergenciaOk: ests.filter((e) => e.divergenciaMunicipio === 'ok').length,
+      divergenciaMargem: ests.filter((e) => e.divergenciaMunicipio === 'margem_aceitavel').length,
+      divergenciaDivergente: ests.filter((e) => e.divergenciaMunicipio === 'divergente').length,
+      divergenciaSemCoord: ests.filter((e) => e.divergenciaMunicipio === 'sem_coordenada').length,
+    };
+  },
+
+  async listar(loteId, filtros) {
+    let itens = estado.estacoes.filter((e) => e.loteId === loteId);
+
+    if (filtros.operando === 'sim') itens = itens.filter((e) => e.operando === true);
+    if (filtros.operando === 'nao') itens = itens.filter((e) => e.operando === false);
+    if (filtros.status) itens = itens.filter((e) => e.status === filtros.status);
+    if (filtros.divergenciaMunicipio) {
+      itens = itens.filter((e) => e.divergenciaMunicipio === filtros.divergenciaMunicipio);
+    }
+    if (filtros.semMatch === true) itens = itens.filter((e) => e.postoId === null);
+    if (filtros.semMatch === false) itens = itens.filter((e) => e.postoId !== null);
+    if (filtros.busca) {
+      const q = filtros.busca.toLowerCase();
+      itens = itens.filter(
+        (e) =>
+          e.codigoAna.toLowerCase().includes(q) ||
+          (e.codigoAdicional?.toLowerCase().includes(q) ?? false) ||
+          (e.nome?.toLowerCase().includes(q) ?? false),
+      );
+    }
+    if (filtros.cenario) {
+      const prefix = filtros.cenario.toLowerCase();
+      itens = itens.filter((e) =>
+        e.observacoes.some((o) => o.toLowerCase().startsWith(prefix)),
+      );
+    }
+
+    const total = itens.length;
+    const porPagina = Math.min(Math.max(filtros.porPagina ?? 25, 1), 200);
+    const pagina = Math.max(filtros.pagina ?? 1, 1);
+    const offset = (pagina - 1) * porPagina;
+
+    const paged = itens.slice(offset, offset + porPagina);
+    return { itens: paged, total };
+  },
+
+  async obterPorCodigo(loteId, codigoAna) {
+    return (
+      estado.estacoes.find(
+        (e) => e.loteId === loteId && e.codigoAna === codigoAna,
+      ) ?? null
+    );
+  },
+
+  async aplicarRevisao(estacaoId, payload, ator) {
+    const idx = estado.estacoes.findIndex((e) => e.id === estacaoId);
+    if (idx === -1) {
+      throw new Error(`estacao ${estacaoId} nao encontrada`);
+    }
+    const atual = estado.estacoes[idx]!;
+    if (!transicaoPermitida(atual.status, payload.novoStatus)) {
+      throw new Error(
+        `transicao invalida ${atual.status} -> ${payload.novoStatus}`,
+      );
+    }
+
+    const valoresAntes = {
+      status: atual.status,
+      correcoes: atual.correcoes,
+      justificativa: atual.justificativa,
+    };
+
+    const correcoesMerge = payload.correcoes
+      ? { ...(atual.correcoes ?? {}), ...payload.correcoes }
+      : atual.correcoes;
+
+    const atualizado: AnaRevisaoEstacao = {
+      ...atual,
+      status: payload.novoStatus,
+      correcoes: correcoesMerge,
+      justificativa: payload.justificativa ?? atual.justificativa,
+      revisadoEm: new Date(),
+      atualizadoEm: new Date(),
+    };
+    estado.estacoes[idx] = atualizado;
+
+    estado.eventos.push({
+      estacaoId,
+      evento:
+        payload.novoStatus === 'descartada'
+          ? 'descartada'
+          : payload.novoStatus === 'revisada'
+            ? 'revisada'
+            : 'corrigida_manual',
+      atorId: ator.usuarioId,
+      valoresAntes,
+      valoresDepois: {
+        status: payload.novoStatus,
+        correcoes: correcoesMerge,
+        justificativa: payload.justificativa ?? atual.justificativa,
+      },
+      ocorreuEm: new Date(),
+    });
+
+    return atualizado;
+  },
+
+  async aplicarBulk(loteId, acao, ator) {
+    if (acao.estacaoIds.length === 0) return { aplicadas: 0, falhadas: 0 };
+    if (acao.estacaoIds.length > 500) {
+      throw new Error('bulk limitado a 500 estacoes');
+    }
+    let aplicadas = 0;
+    let falhadas = 0;
+
+    for (const id of acao.estacaoIds) {
+      const idx = estado.estacoes.findIndex(
+        (e) => e.id === id && e.loteId === loteId,
+      );
+      if (idx === -1) {
+        falhadas += 1;
+        continue;
+      }
+      const atual = estado.estacoes[idx]!;
+      let novoStatus: StatusRevisao = atual.status;
+      let correcoesUpdate: Record<string, unknown> | null = null;
+
+      if (acao.acao === 'marcar_revisada') novoStatus = 'revisada';
+      else if (acao.acao === 'descartar') novoStatus = 'descartada';
+      else if (acao.acao === 'restaurar') novoStatus = 'pendente';
+      else if (acao.acao === 'aceitar_sugestao_municipio') {
+        if (!atual.municipioSugeridoNome) {
+          falhadas += 1;
+          continue;
+        }
+        correcoesUpdate = {
+          ...(atual.correcoes ?? {}),
+          municipioNome: atual.municipioSugeridoNome,
+          municipioCodigo: atual.municipioSugeridoCodigo,
+        };
+        novoStatus = 'revisada';
+      }
+
+      if (!transicaoPermitida(atual.status, novoStatus)) {
+        falhadas += 1;
+        continue;
+      }
+
+      estado.estacoes[idx] = {
+        ...atual,
+        status: novoStatus,
+        correcoes: correcoesUpdate ?? atual.correcoes,
+        justificativa: acao.justificativa ?? atual.justificativa,
+        revisadoEm: new Date(),
+        atualizadoEm: new Date(),
+      };
+
+      estado.eventos.push({
+        estacaoId: id,
+        evento:
+          novoStatus === 'descartada'
+            ? 'descartada'
+            : novoStatus === 'pendente'
+              ? 'restaurada'
+              : novoStatus === 'revisada'
+                ? 'revisada'
+                : 'corrigida_manual',
+        atorId: ator.usuarioId,
+        valoresAntes: { status: atual.status, correcoes: atual.correcoes },
+        valoresDepois: {
+          status: novoStatus,
+          correcoes: correcoesUpdate ?? atual.correcoes,
+          justificativa: acao.justificativa ?? atual.justificativa,
+        },
+        ocorreuEm: new Date(),
+      });
+
+      aplicadas += 1;
+    }
+
+    return { aplicadas, falhadas };
+  },
+};
+
+/**
+ * Builder usado pelos testes pra criar uma estação ANA com defaults sensatos.
+ */
+export function _criarEstacaoMock(
+  override: Partial<AnaRevisaoEstacao> & {
+    id: string;
+    loteId: string;
+    codigoAna: string;
+  },
+): AnaRevisaoEstacao {
+  return {
+    codigoAdicional: null,
+    nome: null,
+    latitude: null,
+    longitude: null,
+    altitude: null,
+    areaDrenagemKm2: null,
+    baciaCodigo: null,
+    baciaNome: null,
+    subbaciaCodigo: null,
+    subbaciaNome: null,
+    rioCodigo: null,
+    rioNome: null,
+    estadoSigla: 'SP',
+    municipioCodigo: null,
+    municipioNome: null,
+    responsavelSigla: null,
+    estacaoTipo: null,
+    escalaInicio: null,
+    escalaFim: null,
+    descargaLiquidaInicio: null,
+    descargaLiquidaFim: null,
+    sedimentosInicio: null,
+    sedimentosFim: null,
+    qualidadeInicio: null,
+    qualidadeFim: null,
+    pluviometroInicio: null,
+    pluviometroFim: null,
+    telemetriaInicio: null,
+    telemetriaFim: null,
+    operando: null,
+    observacoes: [],
+    postoId: null,
+    postoPrefixo: null,
+    matchTipo: null,
+    status: 'pendente',
+    correcoes: {},
+    justificativa: null,
+    dentroMunicipioDeclarado: null,
+    distanciaMunicipioDeclaradoM: null,
+    municipioSugeridoCodigo: null,
+    municipioSugeridoNome: null,
+    divergenciaMunicipio: null,
+    revisadoEm: null,
+    atualizadoEm: new Date(),
+    ...override,
+  };
+}
+
+export function _criarLoteMock(
+  override: Partial<AnaRevisaoLote> & { id: string; nome: string },
+): AnaRevisaoLote {
+  return {
+    arquivoOrigem: null,
+    totalEstacoes: 0,
+    totalPendencias: 0,
+    prazoResposta: null,
+    criadoEm: new Date(),
+    ...override,
+  };
+}
+
+export const META_ATOR: ContextoAtor = {
+  usuarioId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  ip: '127.0.0.1',
+  userAgent: 'vitest',
+};
+
+export type AcaoBulkAnaTeste = AcaoBulkAna;

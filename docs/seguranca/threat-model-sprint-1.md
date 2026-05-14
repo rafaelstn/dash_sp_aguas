@@ -11,6 +11,20 @@
 Este documento substitui o §3 do checklist agora que o código foi entregue. Cada vetor é avaliado contra o **código real** do commit `97226cc`, com mitigações implementadas e gap residual.
 
 > **Nota 2026-05-14 (ADR-0010):** as mitigações de MFA (camadas 1–3) referenciadas em V3 e V4 foram revogadas. Sistema usa apenas email + senha; controle de acesso à triagem segue via flag `aprovador`. Risco residual aceito pelo proprietário (ADR-0010 §3).
+>
+> **Nota 2026-05-14 (ADR-0011, módulo Inventário ANA):** novo módulo `/inventario-ana` segue o mesmo modelo de ameaças.
+>
+> Cobertura defensiva:
+> - **RBAC** via `papeisRepository.ehAprovador` em todas as 6 rotas (vetor V8 spoofing de papel).
+> - **Rate limit** dedicado (`leituraInventarioAna` 200/min, `decisaoInventarioAna` 60/min, vetor V10 DoS).
+> - **Validação Zod** estrita em body/query nas rotas POST e GET com filtros (vetor V11 schema bypass).
+> - **Audit trail imutável** em `ana_revisao_evento` (governo.md §4 LGPD), com IP, user-agent e snapshots antes/depois.
+> - **Transações com `SELECT FOR UPDATE`** em `aplicarRevisao` e `aplicarBulk` (vetor V5 race).
+> - **Isolamento por lote_id** validado por teste anti-IDOR (`listar-filtros.test.ts`): estação de outro lote nunca é devolvida (vetor V8).
+> - **Limite de 500 estações por bulk** (`bulk.test.ts`), proteção contra DoS via UI.
+> - **Cenário (k) ANA** ("município incompatível com coordenadas") coberto por PostGIS contra polígonos IBGE, threshold de 10km da fronteira (não centroide), elimina falsos positivos em municípios grandes (Iguape, Itanhaém).
+> - **Sem PII** no módulo (somente dados técnicos de infraestrutura pública).
+> - Cobertura de testes: 25 testes (transições de status, bulk, filtros + anti-IDOR cross-lote, export XLSX com células amarelas).
 
 Frame: **STRIDE** + **abuse cases** específicos do domínio (triagem).
 
