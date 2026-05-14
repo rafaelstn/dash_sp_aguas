@@ -209,6 +209,7 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
           div_margem: number;
           div_divergente: number;
           div_sem_coord: number;
+          total_pendencias_reais: number;
         }>
       >`
         SELECT
@@ -216,25 +217,51 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
           (SELECT prazo_resposta FROM ana_revisao_lote WHERE id = ${loteId}) AS prazo_resposta,
           (SELECT total_estacoes FROM ana_revisao_lote WHERE id = ${loteId}) AS total_estacoes,
           (SELECT total_pendencias FROM ana_revisao_lote WHERE id = ${loteId}) AS total_pendencias,
+          -- "Pendente": estação ANA com observação E status que ainda pede ação.
+          -- Promovida/revisada/descartada SAI da contagem (já resolvida).
           COUNT(*) FILTER (WHERE e.operando = TRUE
+            AND e.status NOT IN ('revisada', 'promovida_a_posto', 'descartada')
             AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
               OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
               OR e.observacao_5 IS NOT NULL))::int AS operando,
           COUNT(*) FILTER (WHERE e.operando = FALSE
+            AND e.status NOT IN ('revisada', 'promovida_a_posto', 'descartada')
             AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
               OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
               OR e.observacao_5 IS NOT NULL))::int AS desativadas,
-          COUNT(*) FILTER (WHERE e.posto_id IS NULL)::int AS sem_match,
+          -- Sem match: ainda pendente de cadastro (não conta o que já foi descartado)
+          COUNT(*) FILTER (WHERE e.posto_id IS NULL
+            AND e.status NOT IN ('revisada', 'promovida_a_posto', 'descartada'))::int AS sem_match,
           COUNT(*) FILTER (WHERE e.status = 'pendente')::int AS status_pendente,
           COUNT(*) FILTER (WHERE e.status = 'em_revisao')::int AS status_em_revisao,
           COUNT(*) FILTER (WHERE e.status = 'revisada')::int AS status_revisada,
           COUNT(*) FILTER (WHERE e.status = 'descartada')::int AS status_descartada,
           COUNT(*) FILTER (WHERE e.status = 'promovida_a_posto')::int AS status_promovida,
-          COUNT(*) FILTER (WHERE e.divergencia_municipio = 'ok')::int AS div_ok,
-          COUNT(*) FILTER (WHERE e.divergencia_municipio = 'margem_aceitavel')::int AS div_margem,
-          COUNT(*) FILTER (WHERE e.divergencia_municipio = 'divergente')::int AS div_divergente,
-          COUNT(*) FILTER (WHERE e.divergencia_municipio = 'sem_coordenada')::int AS div_sem_coord
+          -- Divergência geo: contagem PENDENTE (postos.divergencia_municipio é a verdade,
+          -- não a coluna em ana_revisao_estacao que é snapshot da planilha).
+          -- Quando posto associado está OK ou margem_aceitavel, NÃO conta como divergência pendente.
+          COUNT(*) FILTER (WHERE
+            COALESCE(p.divergencia_municipio, e.divergencia_municipio) = 'ok'
+          )::int AS div_ok,
+          COUNT(*) FILTER (WHERE
+            COALESCE(p.divergencia_municipio, e.divergencia_municipio) = 'margem_aceitavel'
+          )::int AS div_margem,
+          COUNT(*) FILTER (WHERE
+            COALESCE(p.divergencia_municipio, e.divergencia_municipio) = 'divergente'
+            AND e.status NOT IN ('revisada', 'promovida_a_posto', 'descartada')
+          )::int AS div_divergente,
+          COUNT(*) FILTER (WHERE
+            COALESCE(p.divergencia_municipio, e.divergencia_municipio) = 'sem_coordenada'
+          )::int AS div_sem_coord,
+          -- Pendentes reais: tem observação E ainda precisa ação
+          COUNT(*) FILTER (WHERE
+            (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
+              OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
+              OR e.observacao_5 IS NOT NULL)
+            AND e.status NOT IN ('revisada', 'promovida_a_posto', 'descartada')
+          )::int AS total_pendencias_reais
         FROM ana_revisao_estacao e
+        LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
         WHERE e.lote_id = ${loteId}
       `;
       const r = linhas[0];
@@ -264,7 +291,9 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
         loteNome: r.lote_nome ?? '',
         prazoResposta: r.prazo_resposta,
         totalEstacoes: Number(r.total_estacoes ?? 0),
-        totalPendencias: Number(r.total_pendencias ?? 0),
+        // totalPendencias agora vem do COUNT real (status ainda não revisada/promovida/descartada).
+        // O r.total_pendencias original da tabela lote era o snapshot do import, não o estado atual.
+        totalPendencias: Number(r.total_pendencias_reais ?? r.total_pendencias ?? 0),
         operando: Number(r.operando ?? 0),
         desativadas: Number(r.desativadas ?? 0),
         semMatch: Number(r.sem_match ?? 0),
@@ -292,7 +321,9 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       // Filtro de cenário: a planilha ANA marca o cenário no início da
       // OBSERVAÇÃO 1, ex "[PLUVIÔMETRO] SEM DATA FIM..." ou texto livre
       // ("VERIFICAR AS COORDENADAS"). Match por LIKE no prefixo.
-      const cenarioPattern = filtros.cenario ? `${filtros.cenario}%` : null;
+      // Cenário aceita um termo chave (PLUVIÔMETRO, MUNICÍPIO, etc) e faz
+      // match com contains nas 5 observações.
+      const cenarioPattern = filtros.cenario ? `%${filtros.cenario}%` : null;
 
       // Operando
       const filtroOperando =
