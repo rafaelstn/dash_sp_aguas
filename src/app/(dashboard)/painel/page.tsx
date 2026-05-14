@@ -80,6 +80,7 @@ export default async function PaginaPainel() {
 
   // Auditoria ANA: visível apenas para aprovadores
   let proximaEstacao: { codigoAna: string; nome: string | null; municipio: string | null } | null = null;
+  let divergenciasPostos: { total: number; ativos: number } | null = null;
   try {
     const usuario = await obterUsuarioAtual();
     if (usuario) {
@@ -112,6 +113,23 @@ export default async function PaginaPainel() {
               municipio: escolha.municipioNome,
             };
           }
+        }
+
+        // Wave E: divergências geográficas em postos (proativo, sem ANA)
+        const divs = await (
+          await import('@/infrastructure/db/client')
+        ).sql<Array<{ total: number; ativos: number }>>`
+          SELECT COUNT(*)::int AS total,
+                 COUNT(*) FILTER (
+                   WHERE operacao_fim_ano IS NULL
+                     OR operacao_fim_ano >= EXTRACT(YEAR FROM CURRENT_DATE)::int - 1
+                 )::int AS ativos
+            FROM postos
+           WHERE deleted_at IS NULL
+             AND divergencia_municipio = 'divergente'
+        `;
+        if (divs[0]) {
+          divergenciasPostos = { total: divs[0].total, ativos: divs[0].ativos };
         }
       }
     }
@@ -297,6 +315,37 @@ export default async function PaginaPainel() {
               contexto="fora do escopo SPÁguas"
               severidade="info"
               icone={ClipboardCheck}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {divergenciasPostos && divergenciasPostos.total > 0 ? (
+        <section aria-labelledby="sec-div-postos" className="space-y-3">
+          <h2
+            id="sec-div-postos"
+            className="text-2xs font-semibold uppercase tracking-wider text-app-fg-muted"
+          >
+            Divergências geográficas (proativo, sem ANA)
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <CardKPI
+              titulo="Postos divergentes"
+              valor={divergenciasPostos.total}
+              contexto="coordenada >=10km da fronteira do município declarado"
+              severidade={divergenciasPostos.ativos > 0 ? 'critica' : 'alta'}
+              icone={AlertTriangle}
+              href="/postos/divergencias-geo"
+              rotuloAcao="Investigar"
+            />
+            <CardKPI
+              titulo="Divergentes ATIVOS"
+              valor={divergenciasPostos.ativos}
+              contexto="postos transmitindo com coord errada"
+              severidade={divergenciasPostos.ativos > 0 ? 'critica' : 'sucesso'}
+              icone={AlertTriangle}
+              href="/postos/divergencias-geo?classificacao=divergente&operando=sim"
+              rotuloAcao="Corrigir primeiro"
             />
           </div>
         </section>
