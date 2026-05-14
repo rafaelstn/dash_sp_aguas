@@ -11,8 +11,15 @@ import {
   PowerOff,
   HelpCircle,
   Building2,
+  Search,
+  ClipboardCheck,
 } from 'lucide-react';
 import { painelRepository } from '@/infrastructure/db/painel-repository.pg';
+import {
+  anaRevisaoRepository,
+  papeisRepository,
+} from '@/infrastructure/repositories';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { CardKPI } from '@/components/features/painel/CardKPI';
 import { BarraProgresso } from '@/components/features/painel/BarraProgresso';
 import { Alerta } from '@/components/ui/Alerta';
@@ -53,6 +60,8 @@ export default async function PaginaPainel() {
   let statusOp: Awaited<ReturnType<typeof painelRepository.statusOperacional>> | null = null;
   let mantenedores: Awaited<ReturnType<typeof painelRepository.rankingMantenedores>> = [];
   let falha = false;
+  let resumoAna: Awaited<ReturnType<typeof anaRevisaoRepository.resumoPainel>> | null = null;
+  let prazoAna: Date | null = null;
 
   try {
     [resumo, tipos, ugrhis, classes, statusOp, mantenedores] =
@@ -67,6 +76,23 @@ export default async function PaginaPainel() {
   } catch (e) {
     console.error('[painel] Falha ao carregar agregações', e);
     falha = true;
+  }
+
+  // Inventário ANA: visível apenas para aprovadores
+  try {
+    const usuario = await obterUsuarioAtual();
+    if (usuario) {
+      const eh = await papeisRepository.ehAprovador(usuario.id);
+      if (eh) {
+        const lote = await anaRevisaoRepository.loteAtual();
+        if (lote) {
+          resumoAna = await anaRevisaoRepository.resumoPainel(lote.id);
+          prazoAna = lote.prazoResposta;
+        }
+      }
+    }
+  } catch {
+    /* tolera, painel continua */
   }
 
   if (falha || !resumo || !statusOp) {
@@ -116,6 +142,97 @@ export default async function PaginaPainel() {
           Dados atualizados em {formatarDataHora(new Date())}
         </p>
       </header>
+
+      {resumoAna ? (
+        <section aria-labelledby="sec-ana" className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2
+              id="sec-ana"
+              className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
+            >
+              Inventário ANA · Meta I.6 PROGESTÃO
+            </h2>
+            {prazoAna ? (
+              <p className="text-2xs text-app-fg-subtle">
+                Prazo:{' '}
+                <span className="font-semibold text-gov-perigo tabular">
+                  {new Intl.DateTimeFormat('pt-BR').format(new Date(prazoAna))}
+                </span>
+              </p>
+            ) : null}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <CardKPI
+              titulo="Pendências ANA"
+              valor={resumoAna.totalPendencias}
+              contexto={`de ${resumoAna.totalEstacoes.toLocaleString('pt-BR')} estações no inventário`}
+              severidade="alta"
+              icone={FileWarning}
+              href="/inventario-ana"
+              rotuloAcao="Abrir fila"
+            />
+            <CardKPI
+              titulo="Operando (prioridade)"
+              valor={resumoAna.operando}
+              contexto="estações ativas com observação"
+              severidade={resumoAna.operando > 0 ? 'critica' : 'sucesso'}
+              icone={AlertTriangle}
+              href="/inventario-ana?operando=sim"
+              rotuloAcao="Filtrar"
+            />
+            <CardKPI
+              titulo="Divergência geo (≥10km)"
+              valor={resumoAna.divergenciaDivergente}
+              contexto={`+ ${resumoAna.divergenciaMargem.toLocaleString('pt-BR')} em margem aceitável`}
+              severidade={resumoAna.divergenciaDivergente > 0 ? 'alta' : 'sucesso'}
+              icone={AlertTriangle}
+              href="/inventario-ana?divergencia=divergente"
+              rotuloAcao="Corrigir"
+            />
+            <CardKPI
+              titulo="Sem match no banco"
+              valor={resumoAna.semMatch}
+              contexto="ANA aponta estação que não está em postos"
+              severidade={resumoAna.semMatch > 0 ? 'media' : 'sucesso'}
+              icone={Search}
+              href="/inventario-ana?semMatch=true"
+              rotuloAcao="Investigar"
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <CardKPI
+              titulo="Já revisadas"
+              valor={resumoAna.statusRevisada}
+              contexto="aceitas, corrigidas ou descartadas"
+              severidade="sucesso"
+              icone={ClipboardCheck}
+              href="/inventario-ana?status=revisada"
+              rotuloAcao="Conferir"
+            />
+            <CardKPI
+              titulo="Em revisão"
+              valor={resumoAna.statusEmRevisao}
+              contexto="rascunhos salvos sem fechar"
+              severidade="info"
+              icone={ClipboardCheck}
+            />
+            <CardKPI
+              titulo="Pendente"
+              valor={resumoAna.statusPendente}
+              contexto="ainda não tocadas"
+              severidade={resumoAna.statusPendente > 0 ? 'alta' : 'sucesso'}
+              icone={FileWarning}
+            />
+            <CardKPI
+              titulo="Descartadas"
+              valor={resumoAna.statusDescartada}
+              contexto="fora do escopo SPÁguas"
+              severidade="info"
+              icone={ClipboardCheck}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {/* ═══════════════════════════════════════════════════
           AÇÕES NECESSÁRIAS

@@ -165,6 +165,18 @@ export const POLITICAS = {
     limite: 60,
     janelaSegundos: 60,
   },
+  /** Leitura geral do módulo Inventário ANA (lista, detalhe, painel). */
+  leituraInventarioAna: {
+    politica: 'leitura-inventario-ana',
+    limite: 200,
+    janelaSegundos: 60,
+  },
+  /** Mutações no Inventário ANA (revisar, bulk, exportar). */
+  decisaoInventarioAna: {
+    politica: 'decisao-inventario-ana',
+    limite: 60,
+    janelaSegundos: 60,
+  },
 } satisfies Record<string, ConfiguracaoRateLimit>;
 
 /** Headers HTTP padrão pra resposta — chamar após consumir. */
