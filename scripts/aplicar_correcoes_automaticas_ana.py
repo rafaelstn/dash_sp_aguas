@@ -275,6 +275,142 @@ def main() -> int:
         print()
 
         # =====================================================================
+        # BUCKET D: municipio mais proximo (coord fora de qualquer poligono SP)
+        # =====================================================================
+        # Para os casos onde a coord ANA cai fora de todos os 645 municipios SP
+        # (coord placeholder, sinal trocado, ou estacao em divisa interestadual),
+        # PostGIS calcula o municipio MAIS PROXIMO. Aplicamos com nivel de
+        # confianca anotado no audit:
+        #
+        #   <10km   -> alta confianca (estacao na fronteira do municipio)
+        #   10-30km -> media confianca (provavel cadastro impreciso)
+        #   >30km   -> baixa confianca (placeholder; manter declarado como
+        #              verdadeiro para Marcio decidir)
+        print("BUCKET D (municipio mais proximo, coord fora de poligono SP)")
+        print("-" * 60)
+
+        cur.execute(
+            """
+            WITH pendentes AS (
+              SELECT e.id, e.codigo_ana, e.municipio_nome,
+                     e.latitude AS lat_ana, e.longitude AS lng_ana,
+                     e.correcoes, e.status, e.justificativa
+                FROM ana_revisao_estacao e
+               WHERE e.divergencia_municipio = 'divergente'
+                 AND e.status = 'pendente'
+                 AND NOT (e.correcoes ? 'latitude')
+                 AND NOT (e.correcoes ? 'municipio_nome')
+                 AND e.geom IS NOT NULL
+            )
+            SELECT p.id, p.codigo_ana, p.municipio_nome,
+                   p.lat_ana, p.lng_ana,
+                   m.nome AS mun_proximo, m.codigo_ibge,
+                   ROUND(
+                     ST_Distance(m.geom::geography,
+                                 ST_SetSRID(ST_MakePoint(p.lng_ana::float, p.lat_ana::float), 4674)::geography
+                     )::numeric / 1000, 2
+                   ) AS dist_km,
+                   p.correcoes, p.status, p.justificativa
+              FROM pendentes p
+              CROSS JOIN LATERAL (
+                SELECT nome, codigo_ibge, geom
+                  FROM ibge_municipios_sp
+                 ORDER BY geom <-> ST_SetSRID(ST_MakePoint(p.lng_ana::float, p.lat_ana::float), 4674)
+                 LIMIT 1
+              ) m
+            """
+        )
+        candidatas_d = cur.fetchall()
+        print(f"  candidatas: {len(candidatas_d)}")
+
+        if not args.dry_run and candidatas_d:
+            for row in candidatas_d:
+                (
+                    estacao_id, cod_ana, mun_decl,
+                    lat_ana, lng_ana,
+                    mun_prox, mun_prox_cod, dist_km,
+                    correcoes_antes, status_antes, just_antes,
+                ) = row
+
+                dist_f = float(dist_km) if dist_km is not None else 999.0
+                if dist_f < 10:
+                    confianca = "alta"
+                elif dist_f < 30:
+                    confianca = "media"
+                else:
+                    confianca = "baixa"
+
+                novas_correcoes = dict(correcoes_antes or {})
+
+                # Confianca baixa: NAO substitui municipio (mantem o declarado),
+                # apenas grava a sugestao em campo separado para Marcio ver.
+                if confianca == "baixa":
+                    novas_correcoes["municipio_sugerido_baixa_confianca"] = mun_prox
+                    novas_correcoes["municipio_sugerido_dist_km"] = dist_f
+                    novas_correcoes["fonte_correcao"] = "postgis_municipio_proximo_baixa"
+                    nova_justificativa = (
+                        f"Automacao 2026-05-14 (confianca BAIXA): coord ANA "
+                        f"({lat_ana}, {lng_ana}) esta a {dist_f}km do municipio mais "
+                        f"proximo ({mun_prox}). Coord parece ser placeholder. "
+                        f"Mantido municipio declarado '{mun_decl}' por seguranca. "
+                        f"Marcio deve confirmar se mantem declarado ou aceita sugestao."
+                    )
+                else:
+                    novas_correcoes["municipio_nome"] = mun_prox
+                    novas_correcoes["municipio_codigo_ibge"] = mun_prox_cod
+                    novas_correcoes["fonte_correcao"] = f"postgis_municipio_proximo_{confianca}"
+                    novas_correcoes["distancia_municipio_proximo_km"] = dist_f
+                    nova_justificativa = (
+                        f"Automacao 2026-05-14 (confianca {confianca.upper()}): "
+                        f"coord ANA cai fora de qualquer municipio SP. "
+                        f"Municipio mais proximo no PostGIS IBGE eh '{mun_prox}' "
+                        f"a {dist_f}km. Substituido '{mun_decl}' por '{mun_prox}'."
+                    )
+
+                novas_correcoes["aplicado_em"] = timestamp
+
+                cur.execute(
+                    """
+                    UPDATE ana_revisao_estacao
+                       SET correcoes = %s::jsonb,
+                           justificativa = %s,
+                           status = 'em_revisao',
+                           revisado_em = NOW()
+                     WHERE id = %s
+                    """,
+                    (dumps(novas_correcoes), nova_justificativa, estacao_id),
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO ana_revisao_evento
+                      (estacao_id, evento, ator_id, valores_antes, valores_depois, observacao)
+                    VALUES (%s, 'corrigida_auto', NULL, %s::jsonb, %s::jsonb, %s)
+                    """,
+                    (
+                        estacao_id,
+                        dumps({
+                            "status": status_antes,
+                            "correcoes": correcoes_antes,
+                            "justificativa": just_antes,
+                            "coord_ana": [lat_ana, lng_ana],
+                        }),
+                        dumps({
+                            "status": "em_revisao",
+                            "correcoes": novas_correcoes,
+                            "justificativa": nova_justificativa,
+                            "confianca": confianca,
+                            "municipio_sugerido": mun_prox,
+                            "distancia_km": dist_f,
+                        }),
+                        f"Bucket D ({confianca}): municipio mais proximo '{mun_prox}' a {dist_f}km",
+                    ),
+                )
+
+        print(f"  aplicadas: {0 if args.dry_run else len(candidatas_d)}")
+        print()
+
+        # =====================================================================
         # BUCKET C (informativo apenas, nao mexe)
         # =====================================================================
         cur.execute(
