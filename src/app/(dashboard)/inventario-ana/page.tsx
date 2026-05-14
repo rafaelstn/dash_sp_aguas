@@ -19,7 +19,7 @@ import type {
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
-  title: 'Inventário ANA — SPÁguas',
+  title: 'Auditoria ANA — SPÁguas',
 };
 
 const POR_PAGINA = 50;
@@ -276,9 +276,11 @@ export default async function InventarioAnaPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-app-fg">Inventário ANA</h1>
+        <h1 className="text-xl font-semibold text-app-fg">Auditoria ANA · Meta I.6 PROGESTÃO</h1>
         <p className="mt-0.5 text-xs text-app-fg-muted">
-          Revisão das estações do PROGESTÃO (Meta I.6 Monitoramento Hidrológico). Cruzamento automático com a base de postos + análise geográfica via PostGIS.
+          A ANA aponta estações com inconsistência; você corrige direto em
+          <code className="mono"> postos</code> (fonte da verdade) e exporta o
+          relatório com as células alteradas em amarelo.
         </p>
       </header>
 

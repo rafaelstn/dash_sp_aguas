@@ -16,8 +16,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const corpoSchema = z.object({
-  correcoes: z.record(z.string(), z.unknown()).optional(),
-  justificativa: z.string().min(0).max(4000).nullable().optional(),
+  /**
+   * Observação livre que vai pro audit trail (ana_revisao_evento.observacao).
+   * Correções de campos do posto NÃO vão por aqui mais: usar
+   * PATCH /api/postos/[prefixo] (FASE 5, ADR-0011).
+   */
+  observacao: z.string().min(0).max(4000).nullable().optional(),
   novoStatus: z.enum([
     'pendente',
     'em_revisao',
@@ -100,8 +104,7 @@ export async function POST(
     const estacao = await anaRevisaoRepository.aplicarRevisao(
       atual.id,
       {
-        correcoes: corpo.correcoes,
-        justificativa: corpo.justificativa ?? null,
+        observacao: corpo.observacao ?? null,
         novoStatus: corpo.novoStatus,
       },
       {

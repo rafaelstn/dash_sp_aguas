@@ -56,28 +56,17 @@ describe('AnaRevisaoRepository: aplicarBulk', () => {
     expect(r).toEqual({ aplicadas: 5, falhadas: 0 });
   });
 
-  it('aceitar_sugestao_municipio aplica somente nas que têm sugestão', async () => {
+  it('aceitar_sugestao_municipio sempre falha após FASE 5 (correções vão via PATCH postos)', async () => {
     const idsDiverg = seedN(3, { divergente: true });
-    // Adiciona 2 estações OK (sem sugestão de município)
-    for (let i = 0; i < 2; i += 1) {
-      const id = `ok-${i}`;
-      _seedMockAnaEstacao(
-        _criarEstacaoMock({
-          id,
-          loteId: LOTE_ID,
-          codigoAna: `200${i}`,
-          divergenciaMunicipio: 'ok',
-        }),
-      );
-      idsDiverg.push(id);
-    }
     const r = await anaRevisaoRepository.aplicarBulk(
       LOTE_ID,
       { estacaoIds: idsDiverg, acao: 'aceitar_sugestao_municipio' },
       META_ATOR,
     );
-    expect(r.aplicadas).toBe(3);
-    expect(r.falhadas).toBe(2);
+    // Após FASE 5, essa ação não atualiza estações: marca como falha
+    // pra forçar uso da rota PATCH /api/postos/[prefixo] (fonte da verdade).
+    expect(r.aplicadas).toBe(0);
+    expect(r.falhadas).toBe(3);
   });
 
   it('descartar marca todas como descartadas', async () => {

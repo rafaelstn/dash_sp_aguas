@@ -100,7 +100,7 @@ export async function Sidenav() {
     });
     itens.push({
       href: '/inventario-ana',
-      rotulo: 'Inventário ANA',
+      rotulo: 'Auditoria ANA',
       icone: 'alert',
       contador: totalInventarioAna,
       atalho: 'A',

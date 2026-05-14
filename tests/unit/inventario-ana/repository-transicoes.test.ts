@@ -103,37 +103,32 @@ describe('AnaRevisaoRepository: transições de status', () => {
     ).rejects.toThrow(/transicao invalida/);
   });
 
-  it('correção é mesclada (não sobrescreve)', async () => {
+  it('múltiplas mudanças de status preservam todas no audit (FASE 5)', async () => {
     const e = seed('pendente');
-    // Primeira correção
+    // pendente -> em_revisao
     await anaRevisaoRepository.aplicarRevisao(
       e.id,
-      {
-        novoStatus: 'em_revisao',
-        correcoes: { codigoAdicional: '3D-001' },
-      },
+      { novoStatus: 'em_revisao', observacao: 'iniciando' },
       META_ATOR,
     );
-    // Segunda correção (campo diferente)
+    // em_revisao -> revisada
     const r = await anaRevisaoRepository.aplicarRevisao(
       e.id,
-      {
-        novoStatus: 'revisada',
-        correcoes: { municipioNome: 'Cruzeiro' },
-      },
+      { novoStatus: 'revisada', observacao: 'aceitei a sugestão' },
       META_ATOR,
     );
-    expect(r.correcoes).toEqual({
-      codigoAdicional: '3D-001',
-      municipioNome: 'Cruzeiro',
-    });
+    expect(r.status).toBe('revisada');
+    const eventos = _eventosMockAna();
+    expect(eventos).toHaveLength(2);
+    expect(eventos[0]!.evento).toBe('corrigida_manual'); // em_revisao
+    expect(eventos[1]!.evento).toBe('revisada');
   });
 
   it('audit trail registra evento em toda mutação', async () => {
     const e = seed('pendente');
     await anaRevisaoRepository.aplicarRevisao(
       e.id,
-      { novoStatus: 'revisada', correcoes: { latitude: -22.5 } },
+      { novoStatus: 'revisada', observacao: 'coord conferida no campo' },
       META_ATOR,
     );
     const eventos = _eventosMockAna();

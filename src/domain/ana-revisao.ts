@@ -90,10 +90,6 @@ export interface AnaRevisaoEstacao {
   /** Estado de revisão. */
   status: StatusRevisao;
 
-  /** Map { campo: novoValor }. Mantém alterações pendentes sem tocar postos. */
-  correcoes: Record<string, unknown>;
-  justificativa: string | null;
-
   /** Análise geográfica (PostGIS). */
   dentroMunicipioDeclarado: boolean | null;
   distanciaMunicipioDeclaradoM: number | null;

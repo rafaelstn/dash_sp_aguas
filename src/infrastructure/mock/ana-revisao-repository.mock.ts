@@ -151,21 +151,11 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       );
     }
 
-    const valoresAntes = {
-      status: atual.status,
-      correcoes: atual.correcoes,
-      justificativa: atual.justificativa,
-    };
-
-    const correcoesMerge = payload.correcoes
-      ? { ...(atual.correcoes ?? {}), ...payload.correcoes }
-      : atual.correcoes;
+    const valoresAntes = { status: atual.status };
 
     const atualizado: AnaRevisaoEstacao = {
       ...atual,
       status: payload.novoStatus,
-      correcoes: correcoesMerge,
-      justificativa: payload.justificativa ?? atual.justificativa,
       revisadoEm: new Date(),
       atualizadoEm: new Date(),
     };
@@ -181,11 +171,7 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             : 'corrigida_manual',
       atorId: ator.usuarioId,
       valoresAntes,
-      valoresDepois: {
-        status: payload.novoStatus,
-        correcoes: correcoesMerge,
-        justificativa: payload.justificativa ?? atual.justificativa,
-      },
+      valoresDepois: { status: payload.novoStatus },
       ocorreuEm: new Date(),
     });
 
@@ -210,22 +196,14 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       }
       const atual = estado.estacoes[idx]!;
       let novoStatus: StatusRevisao = atual.status;
-      let correcoesUpdate: Record<string, unknown> | null = null;
 
       if (acao.acao === 'marcar_revisada') novoStatus = 'revisada';
       else if (acao.acao === 'descartar') novoStatus = 'descartada';
       else if (acao.acao === 'restaurar') novoStatus = 'pendente';
       else if (acao.acao === 'aceitar_sugestao_municipio') {
-        if (!atual.municipioSugeridoNome) {
-          falhadas += 1;
-          continue;
-        }
-        correcoesUpdate = {
-          ...(atual.correcoes ?? {}),
-          municipioNome: atual.municipioSugeridoNome,
-          municipioCodigo: atual.municipioSugeridoCodigo,
-        };
-        novoStatus = 'revisada';
+        // FASE 5: correções vão direto pra postos (não há mais JSONB).
+        falhadas += 1;
+        continue;
       }
 
       if (!transicaoPermitida(atual.status, novoStatus)) {
@@ -236,8 +214,6 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       estado.estacoes[idx] = {
         ...atual,
         status: novoStatus,
-        correcoes: correcoesUpdate ?? atual.correcoes,
-        justificativa: acao.justificativa ?? atual.justificativa,
         revisadoEm: new Date(),
         atualizadoEm: new Date(),
       };
@@ -253,12 +229,8 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
                 ? 'revisada'
                 : 'corrigida_manual',
         atorId: ator.usuarioId,
-        valoresAntes: { status: atual.status, correcoes: atual.correcoes },
-        valoresDepois: {
-          status: novoStatus,
-          correcoes: correcoesUpdate ?? atual.correcoes,
-          justificativa: acao.justificativa ?? atual.justificativa,
-        },
+        valoresAntes: { status: atual.status },
+        valoresDepois: { status: novoStatus },
         ocorreuEm: new Date(),
       });
 
@@ -315,8 +287,6 @@ export function _criarEstacaoMock(
     postoPrefixo: null,
     matchTipo: null,
     status: 'pendente',
-    correcoes: {},
-    justificativa: null,
     dentroMunicipioDeclarado: null,
     distanciaMunicipioDeclaradoM: null,
     municipioSugeridoCodigo: null,

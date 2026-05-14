@@ -36,16 +36,16 @@ export interface AnaRevisaoRepository {
   ): Promise<AnaRevisaoEstacao | null>;
 
   /**
-   * Aplica correção / muda status em uma estação. Grava audit trail.
+   * Muda status de uma estação ANA. Grava audit trail.
    *
-   * - `correcoes` é mergeada no JSONB existente (sem sobrescrever total).
-   * - `novoStatus` faz transição (validada).
+   * Após a FASE 5 (ADR-0011), correcoes JSONB foi removido. A verdade
+   * agora vive em postos (via PATCH /api/postos/[prefixo]). Esta função
+   * só atualiza o workflow (status) e adiciona observação ao audit.
    */
   aplicarRevisao(
     estacaoId: string,
     payload: {
-      correcoes?: Record<string, unknown>;
-      justificativa?: string | null;
+      observacao?: string | null;
       novoStatus: StatusRevisao;
     },
     ator: ContextoAtor,

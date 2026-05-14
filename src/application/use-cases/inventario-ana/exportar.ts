@@ -61,7 +61,8 @@ interface LinhaJoin {
   ana_observacao_4: string | null;
   ana_observacao_5: string | null;
   ana_status: string;
-  ana_justificativa: string | null;
+  /** Texto do último evento de revisão (preserva audit narrativo). */
+  ana_observacao_revisao: string | null;
 
   // postos (fonte da verdade; null se não houver match)
   p_prefixo: string | null;
@@ -161,7 +162,11 @@ export async function exportarInventarioAna(
         e.observacao_4           AS ana_observacao_4,
         e.observacao_5           AS ana_observacao_5,
         e.status                 AS ana_status,
-        e.justificativa          AS ana_justificativa,
+        (
+          SELECT v.observacao FROM ana_revisao_evento v
+           WHERE v.estacao_id = e.id AND v.observacao IS NOT NULL
+           ORDER BY v.ocorreu_em DESC LIMIT 1
+        )                        AS ana_observacao_revisao,
         p.prefixo                AS p_prefixo,
         p.prefixo_ana            AS p_prefixo_ana,
         p.nome_estacao           AS p_nome_estacao,
@@ -294,7 +299,7 @@ export async function exportarInventarioAna(
         linha.ana_observacao_1, linha.ana_observacao_2, linha.ana_observacao_3,
         linha.ana_observacao_4, linha.ana_observacao_5,
         linha.ana_status,
-        linha.ana_justificativa,
+        linha.ana_observacao_revisao,
       ];
 
       const row = ws.addRow(values);

@@ -78,7 +78,8 @@ export default async function PaginaPainel() {
     falha = true;
   }
 
-  // Inventário ANA: visível apenas para aprovadores
+  // Auditoria ANA: visível apenas para aprovadores
+  let proximaEstacao: { codigoAna: string; nome: string | null; municipio: string | null } | null = null;
   try {
     const usuario = await obterUsuarioAtual();
     if (usuario) {
@@ -88,6 +89,29 @@ export default async function PaginaPainel() {
         if (lote) {
           resumoAna = await anaRevisaoRepository.resumoPainel(lote.id);
           prazoAna = lote.prazoResposta;
+
+          // F6 Fernanda: card "Próxima estação a corrigir".
+          // Prioriza: operando=sim AND divergente AND pendente.
+          const fila = await anaRevisaoRepository.listar(lote.id, {
+            operando: 'sim',
+            divergenciaMunicipio: 'divergente',
+            status: 'pendente',
+            porPagina: 1,
+          });
+          const escolha =
+            fila.itens[0] ??
+            (await anaRevisaoRepository.listar(lote.id, {
+              divergenciaMunicipio: 'divergente',
+              status: 'pendente',
+              porPagina: 1,
+            })).itens[0];
+          if (escolha) {
+            proximaEstacao = {
+              codigoAna: escolha.codigoAna,
+              nome: escolha.nome,
+              municipio: escolha.municipioNome,
+            };
+          }
         }
       }
     }
@@ -143,6 +167,50 @@ export default async function PaginaPainel() {
         </p>
       </header>
 
+      {resumoAna && proximaEstacao ? (
+        <section
+          aria-labelledby="sec-prox"
+          className="rounded-gov-card border-l-4 border-gov-azul bg-blue-50 p-4"
+        >
+          <h2 id="sec-prox" className="text-sm font-semibold text-app-fg">
+            Próxima estação a revisar
+          </h2>
+          <p className="mt-1 text-sm text-app-fg">
+            <strong className="mono">{proximaEstacao.codigoAna}</strong>{' '}
+            — {proximaEstacao.nome ?? 'Sem nome'}
+            {proximaEstacao.municipio ? (
+              <>
+                {' '}
+                <span className="text-app-fg-muted">
+                  ({proximaEstacao.municipio})
+                </span>
+              </>
+            ) : null}
+          </p>
+          <p className="mt-2 text-2xs text-app-fg-muted">
+            {resumoAna.totalPendencias.toLocaleString('pt-BR')} estações restantes ·{' '}
+            {resumoAna.statusRevisada.toLocaleString('pt-BR')} já revisadas ·
+            progresso da Meta I.6:{' '}
+            <strong className="tabular">
+              {resumoAna.totalPendencias > 0
+                ? (
+                    (resumoAna.statusRevisada /
+                      (resumoAna.totalPendencias + resumoAna.statusRevisada)) *
+                    100
+                  ).toFixed(0)
+                : 100}
+              %
+            </strong>
+          </p>
+          <Link
+            href={`/inventario-ana/${encodeURIComponent(proximaEstacao.codigoAna)}`}
+            className="mt-3 inline-block rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+          >
+            Abrir e corrigir
+          </Link>
+        </section>
+      ) : null}
+
       {resumoAna ? (
         <section aria-labelledby="sec-ana" className="space-y-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -150,7 +218,7 @@ export default async function PaginaPainel() {
               id="sec-ana"
               className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
             >
-              Inventário ANA · Meta I.6 PROGESTÃO
+              Auditoria ANA · Meta I.6 PROGESTÃO
             </h2>
             {prazoAna ? (
               <p className="text-2xs text-app-fg-subtle">

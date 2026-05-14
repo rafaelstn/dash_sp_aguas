@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnaRevisaoEstacao } from '@/domain/ana-revisao';
 import { BadgeDivergencia } from './BadgeDivergencia';
 import { BadgeStatus } from './BadgeStatus';
@@ -27,7 +27,16 @@ export function TabelaInventario({ itens }: Props) {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [enviando, setEnviando] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [confirmacao, setConfirmacao] = useState<AcaoBulk | null>(null);
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (!d) return;
+    if (confirmacao && !d.open) d.showModal();
+    else if (!confirmacao && d.open) d.close();
+  }, [confirmacao]);
 
   const todasSelecionadas = useMemo(
     () => itens.length > 0 && itens.every((i) => selecionadas.has(i.id)),
@@ -53,11 +62,14 @@ export function TabelaInventario({ itens }: Props) {
     });
   }
 
-  async function executarBulk(acao: AcaoBulk) {
+  function pedirConfirmacao(acao: AcaoBulk) {
     if (selecionadas.size === 0) return;
-    if (!confirm(`Confirmar ${ROTULOS_ACAO[acao].toLowerCase()} em ${selecionadas.size} estação(ões)?`)) {
-      return;
-    }
+    setConfirmacao(acao);
+  }
+
+  async function executarBulk(acao: AcaoBulk) {
+    setConfirmacao(null);
+    if (selecionadas.size === 0) return;
     setEnviando(true);
     setFeedback(null);
     try {
@@ -110,25 +122,19 @@ export function TabelaInventario({ itens }: Props) {
           <BotaoBulk
             acao="marcar_revisada"
             cor="bg-green-700 hover:bg-green-800"
-            onClick={() => executarBulk('marcar_revisada')}
-            disabled={enviando}
-          />
-          <BotaoBulk
-            acao="aceitar_sugestao_municipio"
-            cor="bg-gov-azul hover:bg-gov-azul-escuro"
-            onClick={() => executarBulk('aceitar_sugestao_municipio')}
+            onClick={() => pedirConfirmacao('marcar_revisada')}
             disabled={enviando}
           />
           <BotaoBulk
             acao="descartar"
             cor="bg-gov-perigo hover:bg-red-900"
-            onClick={() => executarBulk('descartar')}
+            onClick={() => pedirConfirmacao('descartar')}
             disabled={enviando}
           />
           <BotaoBulk
             acao="restaurar"
             cor="bg-stone-600 hover:bg-stone-700"
-            onClick={() => executarBulk('restaurar')}
+            onClick={() => pedirConfirmacao('restaurar')}
             disabled={enviando}
           />
           <button
@@ -172,12 +178,13 @@ export function TabelaInventario({ itens }: Props) {
               <Th>Op</Th>
               <Th>Match</Th>
               <Th>Status</Th>
+              <Th>Ação</Th>
             </tr>
           </thead>
           <tbody>
             {itens.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-sm text-app-fg-muted">
+                <td colSpan={10} className="px-3 py-6 text-center text-sm text-app-fg-muted">
                   Nenhuma estação com os filtros aplicados.
                 </td>
               </tr>
@@ -244,6 +251,19 @@ export function TabelaInventario({ itens }: Props) {
                     <Td>
                       <BadgeStatus status={it.status} />
                     </Td>
+                    <Td>
+                      {it.postoPrefixo ? (
+                        <Link
+                          href={`/postos/${encodeURIComponent(it.postoPrefixo)}/editar`}
+                          className="text-2xs text-gov-azul hover:underline"
+                          aria-label={`Editar posto ${it.postoPrefixo}`}
+                        >
+                          Editar
+                        </Link>
+                      ) : (
+                        <span className="text-2xs text-app-fg-subtle">—</span>
+                      )}
+                    </Td>
                   </tr>
                 );
               })
@@ -251,6 +271,54 @@ export function TabelaInventario({ itens }: Props) {
           </tbody>
         </table>
       </div>
+
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="conf-titulo"
+        onCancel={() => setConfirmacao(null)}
+        className="m-0 max-w-md rounded-gov-card border border-app-border-subtle bg-app-surface p-0 text-app-fg shadow-gov-card-hover backdrop:bg-black/40 sm:m-auto"
+      >
+        {confirmacao ? (
+          <form
+            method="dialog"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void executarBulk(confirmacao);
+            }}
+          >
+            <header className="border-b border-app-border-subtle px-5 py-3">
+              <h2 id="conf-titulo" className="text-base font-semibold">
+                Confirmar ação em lote
+              </h2>
+            </header>
+            <div className="px-5 py-4 text-sm">
+              <p>
+                Aplicar <strong>{ROTULOS_ACAO[confirmacao].toLowerCase()}</strong> em{' '}
+                <strong className="tabular">{selecionadas.size}</strong> estação(ões)?
+              </p>
+              <p className="mt-2 text-2xs text-app-fg-muted">
+                A ação é registrada no histórico de auditoria. Pode ser revertida
+                via &quot;restaurar para pendente&quot;.
+              </p>
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-app-border-subtle bg-app-surface-2 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setConfirmacao(null)}
+                className="rounded border border-app-border-subtle bg-app-surface px-3 py-1.5 text-sm text-app-fg hover:bg-app-surface-2"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro"
+              >
+                Confirmar
+              </button>
+            </footer>
+          </form>
+        ) : null}
+      </dialog>
     </div>
   );
 }

@@ -67,8 +67,6 @@ type LinhaEstacao = {
   posto_prefixo: string | null;
   match_tipo: string | null;
   status: string;
-  correcoes: Record<string, unknown>;
-  justificativa: string | null;
   dentro_municipio_declarado: boolean | null;
   distancia_municipio_declarado_m: string | null;
   municipio_sugerido_codigo: string | null;
@@ -143,8 +141,6 @@ function mapearEstacao(l: LinhaEstacao): AnaRevisaoEstacao {
     postoPrefixo: l.posto_prefixo,
     matchTipo: (l.match_tipo as MatchTipo) ?? null,
     status: l.status as StatusRevisao,
-    correcoes: l.correcoes ?? {},
-    justificativa: l.justificativa,
     dentroMunicipioDeclarado: l.dentro_municipio_declarado,
     distanciaMunicipioDeclaradoM:
       l.distancia_municipio_declarado_m !== null
@@ -430,22 +426,11 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
           );
         }
 
-        const valoresAntes = {
-          status: atual.status,
-          correcoes: atual.correcoes,
-          justificativa: atual.justificativa,
-        };
-
-        // Merge das correções (não sobrescreve total)
-        const correcoesMerge = payload.correcoes
-          ? { ...(atual.correcoes ?? {}), ...payload.correcoes }
-          : atual.correcoes;
+        const valoresAntes = { status: atual.status };
 
         await tx`
           UPDATE ana_revisao_estacao
              SET status = ${payload.novoStatus},
-                 correcoes = ${JSON.stringify(correcoesMerge)}::jsonb,
-                 justificativa = ${payload.justificativa ?? atual.justificativa ?? null},
                  revisado_por = ${ator.usuarioId},
                  revisado_em = NOW()
            WHERE id = ${estacaoId}
@@ -461,17 +446,14 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
         await tx`
           INSERT INTO ana_revisao_evento
-            (estacao_id, evento, ator_id, valores_antes, valores_depois, ip, user_agent)
+            (estacao_id, evento, ator_id, valores_antes, valores_depois, observacao, ip, user_agent)
           VALUES (
             ${estacaoId},
             ${evento},
             ${ator.usuarioId},
             ${JSON.stringify(valoresAntes)}::jsonb,
-            ${JSON.stringify({
-              status: payload.novoStatus,
-              correcoes: correcoesMerge,
-              justificativa: payload.justificativa ?? atual.justificativa,
-            })}::jsonb,
+            ${JSON.stringify({ status: payload.novoStatus })}::jsonb,
+            ${payload.observacao ?? null},
             ${ator.ip}::inet,
             ${ator.userAgent}
           )
@@ -521,8 +503,6 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
         for (const atual of linhas) {
           const statusAtual = atual.status as StatusRevisao;
           let novoStatus: StatusRevisao = statusAtual;
-          let correcoesUpdate: Record<string, unknown> | null = null;
-          const justUpdate: string | null = acao.justificativa ?? null;
           let evento = 'corrigida_manual';
 
           if (acao.acao === 'marcar_revisada') {
@@ -535,17 +515,11 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             novoStatus = 'pendente';
             evento = 'restaurada';
           } else if (acao.acao === 'aceitar_sugestao_municipio') {
-            if (!atual.municipio_sugerido_nome) {
-              falhadas += 1;
-              continue;
-            }
-            correcoesUpdate = {
-              ...(atual.correcoes ?? {}),
-              municipio_nome: atual.municipio_sugerido_nome,
-              municipio_codigo: atual.municipio_sugerido_codigo,
-            };
-            novoStatus = 'revisada';
-            evento = 'corrigida_manual';
+            // FASE 5: correções agora vão direto pra postos via PATCH
+            // /api/postos/[prefixo]. Bulk de aceitar sugestão de município
+            // foi removido; usar a UI individual.
+            falhadas += 1;
+            continue;
           }
 
           if (!transicaoPermitida(statusAtual, novoStatus)) {
@@ -556,8 +530,6 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
           await tx`
             UPDATE ana_revisao_estacao
                SET status = ${novoStatus},
-                   correcoes = ${JSON.stringify(correcoesUpdate ?? atual.correcoes ?? {})}::jsonb,
-                   justificativa = ${justUpdate ?? atual.justificativa ?? null},
                    revisado_por = ${ator.usuarioId},
                    revisado_em = NOW()
              WHERE id = ${atual.id}
@@ -565,17 +537,14 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
           await tx`
             INSERT INTO ana_revisao_evento
-              (estacao_id, evento, ator_id, valores_antes, valores_depois, ip, user_agent)
+              (estacao_id, evento, ator_id, valores_antes, valores_depois, observacao, ip, user_agent)
             VALUES (
               ${atual.id},
               ${evento},
               ${ator.usuarioId},
-              ${JSON.stringify({ status: atual.status, correcoes: atual.correcoes })}::jsonb,
-              ${JSON.stringify({
-                status: novoStatus,
-                correcoes: correcoesUpdate ?? atual.correcoes,
-                justificativa: justUpdate ?? atual.justificativa,
-              })}::jsonb,
+              ${JSON.stringify({ status: atual.status })}::jsonb,
+              ${JSON.stringify({ status: novoStatus })}::jsonb,
+              ${acao.justificativa ?? null},
               ${ator.ip}::inet,
               ${ator.userAgent}
             )

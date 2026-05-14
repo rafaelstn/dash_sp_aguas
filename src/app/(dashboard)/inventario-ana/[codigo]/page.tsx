@@ -3,12 +3,14 @@ import { notFound } from 'next/navigation';
 import {
   anaRevisaoRepository,
   papeisRepository,
+  postosRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { Alerta } from '@/components/ui/Alerta';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
 import { BadgeStatus } from '@/components/features/inventario-ana/BadgeStatus';
-import { FormularioCorrecao } from '@/components/features/inventario-ana/FormularioCorrecao';
+import { ReconciliacaoAnaVsPostos } from '@/components/features/inventario-ana/ReconciliacaoAnaVsPostos';
+import { AcoesRevisao } from '@/components/features/inventario-ana/AcoesRevisao';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,13 +49,18 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
   const estacao = await anaRevisaoRepository.obterPorCodigo(lote.id, codigo);
   if (!estacao) notFound();
 
+  // Carrega o posto correspondente (fonte da verdade)
+  const posto = estacao.postoPrefixo
+    ? await postosRepository.buscarPorPrefixo(estacao.postoPrefixo)
+    : null;
+
   return (
     <div className="space-y-4">
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>
             <Link href="/inventario-ana" className="text-gov-azul hover:underline">
-              Inventário ANA
+              Auditoria ANA
             </Link>
           </li>
           <li aria-hidden="true">›</li>
@@ -82,7 +89,7 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
               </>
             ) : (
               <>
-                {' '}· <span className="text-amber-800">Sem match no banco</span>
+                {' '}· <span className="text-amber-800">Sem match no banco SP</span>
               </>
             )}
           </p>
@@ -96,11 +103,10 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
         </div>
       </header>
 
-      {/* ANA observações */}
       {estacao.observacoes.length > 0 ? (
         <section aria-labelledby="sec-obs" className="rounded-gov-card border border-amber-300 bg-amber-50 p-4">
           <h2 id="sec-obs" className="mb-2 text-sm font-semibold text-amber-900">
-            Observações da ANA
+            Apontamentos da ANA (auditor)
           </h2>
           <ul className="space-y-1 text-sm text-amber-900">
             {estacao.observacoes.map((obs, i) => (
@@ -112,7 +118,6 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {/* Análise geográfica */}
       {estacao.divergenciaMunicipio === 'divergente' ||
       estacao.divergenciaMunicipio === 'margem_aceitavel' ? (
         <section
@@ -120,15 +125,15 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
           className={`rounded-gov-card border p-4 ${estacao.divergenciaMunicipio === 'divergente' ? 'border-gov-perigo bg-red-50' : 'border-amber-300 bg-amber-50'}`}
         >
           <h2 id="sec-geo" className="mb-2 text-sm font-semibold">
-            ⚠ Município divergente
+            <span aria-hidden="true">⚠</span> Município divergente
           </h2>
           <dl className="grid gap-1 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-2xs uppercase text-app-fg-muted">Coordenada informada</dt>
+              <dt className="text-2xs uppercase text-app-fg-muted">Coordenada informada pela ANA</dt>
               <dd className="mono">{estacao.latitude}, {estacao.longitude}</dd>
             </div>
             <div>
-              <dt className="text-2xs uppercase text-app-fg-muted">Município declarado</dt>
+              <dt className="text-2xs uppercase text-app-fg-muted">Município declarado pela ANA</dt>
               <dd>
                 {estacao.municipioNome}
                 {estacao.distanciaMunicipioDeclaradoM !== null ? (
@@ -139,7 +144,7 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
               </dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-2xs uppercase text-app-fg-muted">Município que contém a coordenada</dt>
+              <dt className="text-2xs uppercase text-app-fg-muted">Município que de fato contém a coordenada (PostGIS)</dt>
               <dd className="font-semibold text-app-fg">
                 {estacao.municipioSugeridoNome ?? '— (coordenada fora de qualquer município SP)'}
               </dd>
@@ -148,11 +153,22 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
         </section>
       ) : null}
 
-      {/* Formulário de correção */}
-      <FormularioCorrecao estacao={estacao} />
+      <ReconciliacaoAnaVsPostos estacao={estacao} posto={posto} />
+
+      <AcoesRevisao estacao={estacao} />
+
+      {!posto ? (
+        <Alerta tipo="aviso" titulo="Esta estação não está cadastrada como posto SP">
+          A ANA listou no inventário, mas não há registro correspondente em
+          <code className="mono">postos</code>. Decisão necessária: cadastrar
+          como posto novo (use o script{' '}
+          <code className="mono">scripts/promover_correcoes_ana_para_postos.py --criar-postos-novos</code>)
+          ou marcar como descartada (não é da rede SPÁguas).
+        </Alerta>
+      ) : null}
 
       <p className="text-2xs text-app-fg-subtle">
-        Última atualização:{' '}
+        Última atualização desta entrada ANA:{' '}
         {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(estacao.atualizadoEm))}
       </p>
     </div>
