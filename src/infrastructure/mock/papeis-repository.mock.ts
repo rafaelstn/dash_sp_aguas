@@ -3,10 +3,9 @@ import type { PapeisRepository } from '@/application/ports/papeis-repository';
 /**
  * Mock do RBAC pra dev local sem Supabase Auth real.
  *
- * Configurável via env vars:
- *   - DEV_APROVADOR_USUARIO_ID  : UUID do usuário tratado como aprovador.
- *                                 Default: aceita qualquer um.
- *   - DEV_APROVADOR_TEM_MFA     : '0' pra simular falha de MFA. Default: 'TRUE'.
+ * Configurável via env var:
+ *   DEV_APROVADOR_USUARIO_ID  UUID do usuário tratado como aprovador.
+ *                             Default: aceita qualquer um.
  *
  * Em modo demo (sem DB) ou em teste local com DEV_BYPASS_AUTH_EMAIL,
  * Fernanda pode trabalhar sem Supabase rodando.
@@ -20,11 +19,5 @@ export const papeisRepository: PapeisRepository = {
     const restricao = lerEnv('DEV_APROVADOR_USUARIO_ID');
     if (!restricao) return true; // dev permissivo
     return restricao === usuarioId;
-  },
-
-  async temMFAVerificado() {
-    const flag = lerEnv('DEV_APROVADOR_TEM_MFA');
-    if (flag === '0' || flag === 'false' || flag === 'FALSE') return false;
-    return true;
   },
 };

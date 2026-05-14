@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |-------|-------|
-| Status | Aceito — 2026-05-08; ajustado em implementação na mesma data |
+| Status | Aceito 2026-05-08; ajustado em implementação na mesma data; §2.3 (MFA obrigatório) **superseded pelo ADR-0010 em 2026-05-14** |
 | Autor | Damasceno Dev OS (Bruno — Engenharia; Lucas — Backend revisou na implementação) |
 | Contexto | Módulo mobile do Sistema de Ficha Técnica de Postos Hidrológicos SPÁguas — Fase 2.A |
 | Complementa | ADR-0007 (PWA + Capacitor); migration `0022_fichas_visita.sql` |

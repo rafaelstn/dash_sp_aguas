@@ -128,35 +128,9 @@ Investigar: SELECT * FROM auditoria WHERE ator_id = '{usuarioId}' ORDER BY ocorr
 
 ---
 
-### A2 — MFA rejected (sessão sem AAL2)
+### A2 — MFA rejected (REMOVIDO pelo ADR-0010)
 
-| Campo | Valor |
-|-------|-------|
-| Evento | `seg.triagem.aal_insuficiente` |
-| Severidade do log | `security` |
-| Onde é emitido | `src/app/api/triagem/_helpers.ts` (função `exigirSessaoAal2`) |
-| Trigger do alerta | **>5 ocorrências do mesmo `usuarioId` em 5min** |
-| Janela | 5min sliding |
-| Destino | webhook |
-| Severidade do alerta | **ALTA** |
-| Ação | Possível phishing/cookie roubado de aprovador. Forçar logout + rotação MFA. |
-
-**Filtro:**
-```
-severidade:"security" AND evento:"seg.triagem.aal_insuficiente"
-```
-
-**Lógica de threshold:** agregar por `usuarioId` em janela 5min. Disparar quando `count >= 5`.
-
-**Implementação no destino:** em Slack, usar Bolt + Redis pra contagem; em e-mail, configurar threshold no log drain (Vercel suporta filtro com `count` em alguns drains).
-
-**Body:**
-```
-[A2] MFA REJECTED
-Usuário {usuarioId} teve {N} tentativas em sessão aal1 nos últimos 5min.
-AAL atual: {aalAtual}.
-Ação imediata: forçar logout e revisar fatores MFA do usuário no Supabase Dashboard.
-```
+Alerta descontinuado em 2026-05-14. O MFA foi removido do sistema (ADR-0010); a função `exigirSessaoAal2` que emitia `seg.triagem.aal_insuficiente` foi deletada. Nada a configurar no destino para este slot.
 
 ---
 
@@ -262,7 +236,7 @@ Ação sugerida: bloquear IP por 1h via Vercel Firewall.
 | Alerta | Trigger | Janela | Severidade | SLA de resposta |
 |--------|---------|--------|------------|-----------------|
 | A1 IDOR | 1 evento | imediata | crítica | 1h |
-| A2 MFA rejected | >5 / usuário | 5min | alta | 4h |
+| A2 MFA rejected | *removido pelo ADR-0010* | n/a | n/a | n/a |
 | A3 Cron ausente | >10min sem heartbeat | check 5min | alta | 4h |
 | A4 5xx pico | >5% de requests | 5min | média | 8h |
 | A5 Brute force | >10 / IP | 1min | média | 4h |

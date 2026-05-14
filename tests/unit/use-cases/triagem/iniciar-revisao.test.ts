@@ -7,7 +7,6 @@ import {
   _resetTriagemMock,
 } from '@/infrastructure/mock/triagem-repository.mock';
 import {
-  AprovadorSemMFA,
   EstadoTriagemInvalido,
   FichaTriagemNaoEncontrada,
   LockRevisaoNegado,
@@ -26,7 +25,7 @@ describe('use-case/iniciarRevisao', () => {
     _resetTriagemMock();
   });
 
-  it('happy path — aprovador com MFA adquire lock e estado vira em_revisao', async () => {
+  it('happy path: aprovador adquire lock e estado vira em_revisao', async () => {
     const ficha = await submeterFichaTriagem(
       triagemRepository,
       entradaSubmissaoValida(),
@@ -74,22 +73,6 @@ describe('use-case/iniciarRevisao', () => {
     await expect(
       iniciarRevisao(triagemRepository, papeis, ficha.id, APROVADOR_A, META),
     ).rejects.toThrow(UsuarioNaoEhAprovador);
-  });
-
-  it('rejeita aprovador sem MFA verificado (403)', async () => {
-    const ficha = await submeterFichaTriagem(
-      triagemRepository,
-      entradaSubmissaoValida(),
-      META,
-    );
-    const papeis = papeisFake({
-      aprovadores: [APROVADOR_A],
-      semMfa: [APROVADOR_A],
-    });
-
-    await expect(
-      iniciarRevisao(triagemRepository, papeis, ficha.id, APROVADOR_A, META),
-    ).rejects.toThrow(AprovadorSemMFA);
   });
 
   it('rejeita ficha inexistente com FichaTriagemNaoEncontrada', async () => {

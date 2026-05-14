@@ -11,7 +11,7 @@ import {
   consumirRateLimit,
   extrairIp,
 } from '@/infrastructure/security/rate-limit';
-import { exigirSessaoAal2, respostaDeErro } from '../../_helpers';
+import { respostaDeErro } from '../../_helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,10 +51,6 @@ export async function POST(
   };
 
   try {
-    // Camada 3 da defesa MFA: confirma que ESTA sessão passou MFA challenge
-    // (aal2). Camadas 1 e 2 são trigger SQL + papeisRepository.temMFAVerificado
-    // dentro do use case. Ver `_helpers.ts#exigirSessaoAal2`.
-    await exigirSessaoAal2(usuario.id);
     const resultado = await aprovarFichaTriagem(
       triagemRepository,
       papeisRepository,

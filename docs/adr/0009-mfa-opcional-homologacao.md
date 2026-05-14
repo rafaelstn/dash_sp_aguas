@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |-------|-------|
-| Status | Aceito |
+| Status | **Superseded pelo ADR-0010 em 2026-05-14** (mesma data). MFA removido por completo, este ADR perde validade. |
 | Data | 2026-05-14 |
 | Decisor | Rafael Damasceno (proprietário) |
 | Escopo | Apenas homologação (URL pública `dash-sp-aguas.vercel.app` enquanto cliente final não estiver usando) |

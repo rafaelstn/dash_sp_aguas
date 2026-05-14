@@ -10,7 +10,9 @@
 | Documentos pais | `docs/seguranca/checklist-modulo-mobile.md`, ADR-0008 §8 |
 | Commits revisados | até `97226cc` (Sprint 1.S1) |
 
-Este documento aplica o **OWASP Top 10 (2021)** ao código real entregue pelo Lucas em `fdbe02e` (backend de triagem). Substitui o §2 do checklist — aquele documento era plano; este é veredito.
+Este documento aplica o **OWASP Top 10 (2021)** ao código real entregue pelo Lucas em `fdbe02e` (backend de triagem). Substitui o §2 do checklist, aquele documento era plano; este é veredito.
+
+> **Nota 2026-05-14 (ADR-0010):** as defesas de MFA documentadas em §A07 (camadas 1–3) foram removidas. Sistema passa a usar apenas email + senha. §A07 segue como histórico; nova revisão necessária quando cliente real entrar em produção.
 
 PCI-DSS continua **não aplicável** (sem dado de cartão, sem gateway de pagamento; reafirmado conforme `banco.md`).
 

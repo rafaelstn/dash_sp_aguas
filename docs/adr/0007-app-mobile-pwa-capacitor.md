@@ -83,7 +83,7 @@ Componentes da decisão:
 
 Sem mudança no provedor (Supabase Auth). Mesmo `signInWithPassword`, mesma allowlist, mesmo `current-user.ts`. Layout do `/app/login` é dedicado (mais largo, sem sidenav), mas `actions.ts` é o mesmo do web (`app/login/actions.ts` — pode ser refatorado para `application/auth/login.ts` chamado por ambos os layouts).
 
-**MFA é exigido apenas para o aprovador (web)** — ver ADR-0008. Técnico no app **não tem MFA**, conforme constraint do Rafael.
+~~**MFA é exigido apenas para o aprovador (web)**, ver ADR-0008. Técnico no app **não tem MFA**, conforme constraint do Rafael.~~ **Revogado pelo ADR-0010 (2026-05-14):** MFA removido por completo, login fica em email + senha tanto para aprovador quanto para técnico.
 
 ### 2.7 Build pipeline
 

@@ -50,14 +50,13 @@ export interface DialogConfirmarDecisaoProps {
 }
 
 /**
- * Modal de confirmação de decisão da triagem (aprovar / rejeitar /
- * devolver). Usa `<dialog>` nativo do HTML — sem dependência externa.
+ * Modal de confirmação de decisão da triagem (aprovar, rejeitar,
+ * devolver). Usa `<dialog>` nativo do HTML, sem dependência externa.
  *
- * - Aprovar: confirmação simples + warning de irreversibilidade.
- * - Rejeitar / Devolver: textarea obrigatória ≥ 20 chars com contador.
+ * Aprovar: confirmação simples + warning de irreversibilidade.
+ * Rejeitar / Devolver: textarea obrigatória ≥ 20 chars com contador.
  *
- * Erros do backend são mapeados via `mensagemErroTriagem`. O caso 403
- * `mfa_obrigatorio` mostra link pra `/perfil/mfa`.
+ * Erros do backend são mapeados via `mensagemErroTriagem`.
  */
 export function DialogConfirmarDecisao({
   triagemId,
@@ -71,7 +70,6 @@ export function DialogConfirmarDecisao({
   const [motivo, setMotivo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erroMensagem, setErroMensagem] = useState<string | null>(null);
-  const [erroSlug, setErroSlug] = useState<string | null>(null);
   const erroId = useId();
   const motivoId = useId();
 
@@ -105,7 +103,6 @@ export function DialogConfirmarDecisao({
     if (aberto) {
       setMotivo('');
       setErroMensagem(null);
-      setErroSlug(null);
       setEnviando(false);
     }
   }, [aberto, acao]);
@@ -123,7 +120,6 @@ export function DialogConfirmarDecisao({
     }
     setEnviando(true);
     setErroMensagem(null);
-    setErroSlug(null);
     try {
       if (acao === 'aprovar') {
         await aprovarTriagemCliente(triagemId);
@@ -135,7 +131,6 @@ export function DialogConfirmarDecisao({
       aoSucesso();
     } catch (e) {
       if (e instanceof ErroTriagemAPI) {
-        setErroSlug(e.slug);
         setErroMensagem(mensagemErroTriagem(e));
       } else {
         setErroMensagem(
@@ -242,13 +237,7 @@ export function DialogConfirmarDecisao({
                 </span>
               </div>
             </div>
-          ) : (
-            <p className="rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-              Esta operação exige segundo fator de autenticação verificado. Caso
-              o segundo fator ainda não tenha sido configurado, o sistema
-              exibirá o link para a configuração antes de concluir a aprovação.
-            </p>
-          )}
+          ) : null}
 
           {erroMensagem ? (
             <div
@@ -260,17 +249,6 @@ export function DialogConfirmarDecisao({
                 Não foi possível concluir a operação.
               </p>
               <p className="mt-0.5">{erroMensagem}</p>
-              {erroSlug === 'mfa_obrigatorio' ||
-              erroSlug === 'mfa_nao_validado_na_sessao' ? (
-                <p className="mt-2">
-                  <a
-                    href="/perfil/mfa"
-                    className="font-medium text-gov-azul underline"
-                  >
-                    Configurar segundo fator
-                  </a>
-                </p>
-              ) : null}
             </div>
           ) : null}
         </div>

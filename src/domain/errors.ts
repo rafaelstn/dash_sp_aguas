@@ -40,12 +40,11 @@ export class IndexacaoPendente extends Error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Erros do módulo de triagem (Fase 2.A — ADR-0008).
+// Erros do módulo de triagem (Fase 2.A, ADR-0008 revisado pelo ADR-0010).
 // Tradução pra HTTP é responsabilidade da camada de apresentação:
 //   EstadoTriagemInvalido           → 409 Conflict
 //   LockRevisaoNegado               → 423 Locked
 //   MotivoRejeicaoInsuficiente      → 400 Bad Request
-//   AprovadorSemMFA                 → 403 Forbidden
 //   FichaTriagemNaoEncontrada       → 404 Not Found
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -82,13 +81,6 @@ export class MotivoRejeicaoInsuficiente extends Error {
       `Motivo de rejeição/devolução exige ao menos 20 caracteres (recebido: ${tamanhoRecebido}).`,
     );
     this.name = 'MotivoRejeicaoInsuficiente';
-  }
-}
-
-export class AprovadorSemMFA extends Error {
-  constructor(public readonly usuarioId: string) {
-    super(`Usuário ${usuarioId} é aprovador mas não tem MFA verificado.`);
-    this.name = 'AprovadorSemMFA';
   }
 }
 

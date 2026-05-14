@@ -12,8 +12,7 @@ import { logger } from '@/infrastructure/logging/logger';
  * Default: estados `pendente` + `em_revisao`, ordenado por mais antigas primeiro
  * (delegado à query do repositório).
  *
- * Validação: usuário deve ser aprovador. MFA é checado separadamente nos use
- * cases de ação (não é necessário pra listar).
+ * Validação: usuário deve ser aprovador.
  */
 export async function listarTriagemPendentes(
   repo: TriagemRepository,

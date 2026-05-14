@@ -1,5 +1,5 @@
 """
-Diagnostico ad-hoc: lista usuarios, papeis e estado MFA no banco.
+Diagnostico ad-hoc: lista usuarios e papeis no banco.
 Saida formato tabela pra triagem manual antes de promover aprovador.
 
 Rodar:
@@ -30,11 +30,7 @@ def main() -> None:
                 u.email,
                 u.raw_user_meta_data ->> 'nome' AS nome,
                 u.created_at,
-                COALESCE(p.aprovador, FALSE) AS aprovador,
-                (
-                    SELECT COUNT(*) FROM auth.mfa_factors
-                    WHERE user_id = u.id AND status = 'verified'
-                ) AS mfa_fatores
+                COALESCE(p.aprovador, FALSE) AS aprovador
             FROM auth.users u
             LEFT JOIN usuarios_papeis p ON p.usuario_id = u.id
             ORDER BY u.created_at ASC
@@ -44,15 +40,14 @@ def main() -> None:
 
         print(f"Total usuarios: {len(linhas)}")
         print()
-        print(f"{'id':36}  {'email':40}  {'nome':30}  apr  mfa")
-        print("-" * 120)
-        for usuario_id, email, nome, _criado, apr, mfa in linhas:
+        print(f"{'id':36}  {'email':40}  {'nome':30}  apr")
+        print("-" * 115)
+        for usuario_id, email, nome, _criado, apr in linhas:
             print(
                 f"{str(usuario_id):36}  "
                 f"{(email or '')[:40]:40}  "
                 f"{(nome or '')[:30]:30}  "
-                f"{'sim' if apr else '---'}  "
-                f"{mfa}"
+                f"{'sim' if apr else '---'}"
             )
 
         print()

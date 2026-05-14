@@ -95,9 +95,6 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
   const eventos = await triagemRepository.listarEventos(id);
   const lock = calcularInfoLock(ficha, eventos, usuario.id);
   const ehAprovador = await papeisRepository.ehAprovador(usuario.id);
-  const temMFA = ehAprovador
-    ? await papeisRepository.temMFAVerificado(usuario.id)
-    : false;
 
   const tipoRotulo = rotuloTipoDocumento(ficha.codTipoDocumento);
   const dataVisitaTexto = ficha.dataVisita.toLocaleDateString('pt-BR');
@@ -146,21 +143,6 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
             className="font-medium underline"
           >
             Consultar a ficha de origem
-          </Link>
-          .
-        </Alerta>
-      ) : null}
-
-      {ehAprovador && !temMFA ? (
-        <Alerta tipo="aviso" titulo="Segundo fator pendente">
-          O papel de aprovador está atribuído a esta conta, porém o segundo
-          fator de autenticação ainda não foi configurado. Aprovar, rejeitar e
-          devolver fichas exigem segundo fator verificado.{' '}
-          <Link
-            href="/perfil/mfa"
-            className="font-medium underline"
-          >
-            Configurar segundo fator
           </Link>
           .
         </Alerta>

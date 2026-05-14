@@ -10,6 +10,8 @@
 
 Este documento substitui o §3 do checklist agora que o código foi entregue. Cada vetor é avaliado contra o **código real** do commit `97226cc`, com mitigações implementadas e gap residual.
 
+> **Nota 2026-05-14 (ADR-0010):** as mitigações de MFA (camadas 1–3) referenciadas em V3 e V4 foram revogadas. Sistema usa apenas email + senha; controle de acesso à triagem segue via flag `aprovador`. Risco residual aceito pelo proprietário (ADR-0010 §3).
+
 Frame: **STRIDE** + **abuse cases** específicos do domínio (triagem).
 
 ---

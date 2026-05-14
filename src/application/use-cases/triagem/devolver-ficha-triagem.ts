@@ -3,15 +3,13 @@ import type { PapeisRepository } from '@/application/ports/papeis-repository';
 import type { FichaTriagem } from '@/domain/triagem';
 import { MotivoDecisao, MotivoDecisaoInsuficienteError } from '@/domain/triagem';
 import {
-  AprovadorSemMFA,
   MotivoRejeicaoInsuficiente,
   UsuarioNaoEhAprovador,
 } from '@/domain/errors';
-import { mfaObrigatorio } from '@/infrastructure/auth/mfa-config';
 
 /**
  * Devolve ficha pro técnico com solicitação de correção.
- * Estado vai pra `devolvida` — técnico pode re-enviar (cria NOVA linha,
+ * Estado vai pra `devolvida`. Técnico pode re-enviar (cria NOVA linha,
  * use case `reenviarFichaTriagem`).
  */
 export async function devolverFichaTriagem(
@@ -25,12 +23,6 @@ export async function devolverFichaTriagem(
   const ehAprovador = await papeis.ehAprovador(aprovadorId);
   if (!ehAprovador) {
     throw new UsuarioNaoEhAprovador(aprovadorId);
-  }
-  if (mfaObrigatorio()) {
-    const temMFA = await papeis.temMFAVerificado(aprovadorId);
-    if (!temMFA) {
-      throw new AprovadorSemMFA(aprovadorId);
-    }
   }
 
   let solicitacao: MotivoDecisao;

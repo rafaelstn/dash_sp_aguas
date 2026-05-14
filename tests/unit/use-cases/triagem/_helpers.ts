@@ -13,7 +13,7 @@ import type { EntradaSubmeterTriagem } from '@/application/ports/triagem-reposit
  * transforma Date em string, e o `.sort` chama `.getTime()`. Os asserts
  * dos testes evitam `listarEventos` e validam o efeito do evento via
  * estado observável da ficha (motivoDecisao, decididaPor, fichaVisitaId).
- * Owner do fix: Lucas — trocar `clonar` por versão que preserve Date.
+ * Owner do fix: Lucas, trocar `clonar` por versão que preserve Date.
  */
 
 export const TECNICO_ID_PADRAO = '11111111-1111-4111-8111-111111111111';
@@ -22,18 +22,13 @@ export const APROVADOR_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 interface OpcoesPapeis {
   aprovadores?: string[];
-  semMfa?: string[];
 }
 
 export function papeisFake(opts: OpcoesPapeis = {}): PapeisRepository {
   const aprovadores = new Set(opts.aprovadores ?? []);
-  const semMfa = new Set(opts.semMfa ?? []);
   return {
     async ehAprovador(id: string) {
       return aprovadores.has(id);
-    },
-    async temMFAVerificado(id: string) {
-      return !semMfa.has(id);
     },
   };
 }

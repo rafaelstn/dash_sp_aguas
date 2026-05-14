@@ -7,7 +7,6 @@ import {
   _resetTriagemMock,
 } from '@/infrastructure/mock/triagem-repository.mock';
 import {
-  AprovadorSemMFA,
   EstadoTriagemInvalido,
   LockRevisaoNegado,
   MotivoRejeicaoInsuficiente,
@@ -98,24 +97,6 @@ describe('use-case/devolverFichaTriagem', () => {
         META,
       ),
     ).rejects.toThrow(UsuarioNaoEhAprovador);
-  });
-
-  it('rejeita aprovador sem MFA', async () => {
-    const { ficha } = await fichaEmRevisao();
-    const papeisSemMfa = papeisFake({
-      aprovadores: [APROVADOR_A],
-      semMfa: [APROVADOR_A],
-    });
-    await expect(
-      devolverFichaTriagem(
-        triagemRepository,
-        papeisSemMfa,
-        ficha.id,
-        APROVADOR_A,
-        SOLICITACAO_VALIDA,
-        META,
-      ),
-    ).rejects.toThrow(AprovadorSemMFA);
   });
 
   it('rejeita aprovador que não detém o lock', async () => {

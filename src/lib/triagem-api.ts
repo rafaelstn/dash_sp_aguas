@@ -274,22 +274,19 @@ export async function submeterFichaApp(
  * endpoints em `src/app/api/triagem/*` e `src/app/api/app/fichas/route.ts`.
  *
  * Slugs cobertos:
- *  - `nao_autenticado`               (401)
- *  - `rate_limit`                    (429)
- *  - `id_invalido` / `query_invalida`/ `body_invalido` / `json_invalido`
- *                                    (400)
- *  - `dados_invalidos`               (422 — Zod do payload)
- *  - `motivo_insuficiente`           (400 — justificativa < 20 chars)
- *  - `tipo_indisponivel`             (409 — schema da ficha não habilitado)
- *  - `nao_encontrada`                (404)
- *  - `sem_papel_aprovador`           (403)
- *  - `mfa_obrigatorio`               (403)
- *  - `mfa_nao_validado_na_sessao`    (403 — AAL < aal2)
- *  - `estado_invalido`               (409 — ficha já decidida)
- *  - `lock_negado`                   (409 — disputa de revisão)
- *  - `idempotency_duplicada`         (409 — Idempotency-Key reaproveitada)
- *  - `idempotency_invalida`          (400 — UUIDv4 inválido)
- *  - `erro_interno`                  (500)
+ *   `nao_autenticado`               (401)
+ *   `rate_limit`                    (429)
+ *   `id_invalido` , `query_invalida`, `body_invalido`, `json_invalido` (400)
+ *   `dados_invalidos`               (422, Zod do payload)
+ *   `motivo_insuficiente`           (400, justificativa < 20 chars)
+ *   `tipo_indisponivel`             (409, schema da ficha não habilitado)
+ *   `nao_encontrada`                (404)
+ *   `sem_papel_aprovador`           (403)
+ *   `estado_invalido`               (409, ficha já decidida)
+ *   `lock_negado`                   (409, disputa de revisão)
+ *   `idempotency_duplicada`         (409, Idempotency-Key reaproveitada)
+ *   `idempotency_invalida`          (400, UUIDv4 inválido)
+ *   `erro_interno`                  (500)
  */
 export function mensagemErroTriagem(erro: ErroTriagemAPI): string {
   switch (erro.slug) {
@@ -323,12 +320,6 @@ export function mensagemErroTriagem(erro: ErroTriagemAPI): string {
 
     case 'sem_papel_aprovador':
       return 'Acesso restrito ao papel de aprovador. Solicite ao gestor a atribuição do papel para concluir esta operação.';
-
-    case 'mfa_obrigatorio':
-      return 'Esta operação exige segundo fator de autenticação verificado. Configure o segundo fator no perfil antes de prosseguir.';
-
-    case 'mfa_nao_validado_na_sessao':
-      return 'Esta sessão ainda não validou o segundo fator. Encerre a sessão e acesse o sistema informando o segundo fator.';
 
     case 'estado_invalido':
       return 'A ficha já foi decidida. Recarregue a página para visualizar a situação atual.';

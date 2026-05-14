@@ -18,7 +18,7 @@
          - viewport mobile (Pixel 7 por padrao, 412x915)
          - user-agent Android Chrome
          - perfil isolado em .run/chrome-profile (nao bagunca o navegador
-           principal: cookies, MFA, tudo separado)
+           principal: cookies, sessao, tudo separado)
          - DevTools abertos por padrao (cancele com -NoDevTools)
 
     O script termina apos abrir a janela; o Chrome continua rodando.
@@ -26,7 +26,7 @@
 
 .PARAMETER Path
     Rota a abrir dentro do app. Default: /app.
-    Exemplos: /app/postos, /triagem, /perfil/mfa.
+    Exemplos: /app/postos, /triagem, /minhas-fichas.
 
 .PARAMETER Device
     Preset de dispositivo. Opcoes: Pixel7 (default, 412x915), iPhone14

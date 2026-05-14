@@ -12,7 +12,7 @@ import {
   consumirRateLimit,
   extrairIp,
 } from '@/infrastructure/security/rate-limit';
-import { exigirSessaoAal2, respostaDeErro } from '../../_helpers';
+import { respostaDeErro } from '../../_helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,8 +77,6 @@ export async function POST(
   };
 
   try {
-    // Camada 3 MFA — sessão precisa estar em aal2.
-    await exigirSessaoAal2(usuario.id);
     const ficha = await devolverFichaTriagem(
       triagemRepository,
       papeisRepository,

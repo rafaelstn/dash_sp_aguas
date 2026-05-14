@@ -11,7 +11,7 @@ import {
   consumirRateLimit,
   extrairIp,
 } from '@/infrastructure/security/rate-limit';
-import { exigirSessaoAal2, respostaDeErro } from '../../_helpers';
+import { respostaDeErro } from '../../_helpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ const uuidRegex =
 /**
  * POST /api/triagem/[id]/iniciar-revisao
  * Adquire lock pessimista. 423 se outro aprovador já tem lock vivo.
- * Exige papel aprovador + MFA.
+ * Exige papel aprovador.
  */
 export async function POST(
   request: NextRequest,
@@ -52,9 +52,6 @@ export async function POST(
   };
 
   try {
-    // Camada 3 MFA — sessão precisa estar em aal2 mesmo só pra adquirir lock.
-    // Adversário com cookie aal1 vazado não consegue nem reservar uma ficha.
-    await exigirSessaoAal2(usuario.id);
     const resultado = await iniciarRevisao(
       triagemRepository,
       papeisRepository,
