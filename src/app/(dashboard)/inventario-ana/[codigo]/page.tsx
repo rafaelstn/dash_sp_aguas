@@ -11,6 +11,7 @@ import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDive
 import { BadgeStatus } from '@/components/features/inventario-ana/BadgeStatus';
 import { ReconciliacaoAnaVsPostos } from '@/components/features/inventario-ana/ReconciliacaoAnaVsPostos';
 import { AcoesRevisao } from '@/components/features/inventario-ana/AcoesRevisao';
+import { BotaoCadastrarPosto } from '@/components/features/inventario-ana/BotaoCadastrarPosto';
 
 export const dynamic = 'force-dynamic';
 
@@ -158,13 +159,22 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
       <AcoesRevisao estacao={estacao} />
 
       {!posto ? (
-        <Alerta tipo="aviso" titulo="Esta estação não está cadastrada como posto SP">
-          A ANA listou no inventário, mas não há registro correspondente em
-          <code className="mono">postos</code>. Decisão necessária: cadastrar
-          como posto novo (use o script{' '}
-          <code className="mono">scripts/promover_correcoes_ana_para_postos.py --criar-postos-novos</code>)
-          ou marcar como descartada (não é da rede SPÁguas).
-        </Alerta>
+        <section
+          aria-labelledby="sec-sem-match"
+          className="rounded-gov-card border border-amber-300 bg-amber-50 p-4 space-y-3"
+        >
+          <h2 id="sec-sem-match" className="text-sm font-semibold text-amber-900">
+            Esta estação não está cadastrada como posto SP
+          </h2>
+          <p className="text-sm text-app-fg">
+            A ANA listou no inventário, mas não há registro correspondente em{' '}
+            <code className="mono">postos</code>. Cadastre como posto novo (vai
+            criar a entrada com origem <code className="mono">ana_promocao_manual</code>{' '}
+            e você refina os dados na próxima tela) ou descarte se não for da
+            rede SPÁguas (use o botão &quot;Descartar&quot; nas ações de revisão).
+          </p>
+          <BotaoCadastrarPosto estacao={estacao} />
+        </section>
       ) : null}
 
       <p className="text-2xs text-app-fg-subtle">

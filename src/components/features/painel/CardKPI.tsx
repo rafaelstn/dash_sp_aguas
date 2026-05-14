@@ -3,6 +3,14 @@ import { ArrowRight, type LucideIcon } from 'lucide-react';
 
 export type SeveridadeKPI = 'critica' | 'alta' | 'media' | 'info' | 'sucesso';
 
+const ROTULOS_SEVERIDADE: Record<SeveridadeKPI, string> = {
+  critica: 'Crítico',
+  alta: 'Alta atenção',
+  media: 'Atenção',
+  info: 'Informativo',
+  sucesso: 'Sob controle',
+};
+
 export interface CardKPIProps {
   titulo: string;
   valor: number | string;
@@ -79,13 +87,14 @@ export function CardKPI({
         ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-app-fg-muted">
+            <span className="sr-only">{ROTULOS_SEVERIDADE[severidade]}: </span>
             {titulo}
           </p>
           <p className="tabular mt-0.5 text-2xl font-semibold text-app-fg">
             {valorFormatado}
           </p>
           {contexto ? (
-            <p className="text-xs text-app-fg-subtle">{contexto}</p>
+            <p className="text-xs text-app-fg-muted">{contexto}</p>
           ) : null}
         </div>
       </div>

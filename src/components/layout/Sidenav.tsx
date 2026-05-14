@@ -77,58 +77,101 @@ export async function Sidenav() {
     atalho?: string;
   };
 
-  const itens: ItemSide[] = [
+  type GrupoSide = {
+    titulo: string;
+    totalContador?: number;
+    itens: ItemSide[];
+  };
+
+  const grupos: GrupoSide[] = [];
+
+  // Pendências (alta prioridade, no topo, com badge agregado)
+  if (ehAprovador) {
+    const pendencias: ItemSide[] = [
+      {
+        href: '/inventario-ana',
+        rotulo: 'Auditoria ANA',
+        icone: 'alert',
+        contador: totalInventarioAna,
+        atalho: 'A',
+      },
+      {
+        href: '/triagem',
+        rotulo: 'Triagem',
+        icone: 'inbox',
+        contador: totalTriagem,
+        atalho: 'T',
+      },
+      {
+        href: '/desconformidades',
+        rotulo: 'Desconformidades',
+        icone: 'alert',
+        contador: totalDesconformidades,
+        atalho: 'D',
+      },
+    ];
+    grupos.push({
+      titulo: 'Pendências',
+      totalContador:
+        totalInventarioAna + totalTriagem + totalDesconformidades,
+      itens: pendencias,
+    });
+  }
+
+  // Navegação principal (todos os usuários autenticados)
+  const navegacao: ItemSide[] = [
     { href: '/painel', rotulo: 'Painel', icone: 'dashboard', contador: null, atalho: 'P' },
     { href: '/', rotulo: 'Buscar postos', icone: 'search', contador: null, atalho: '/' },
     { href: '/favoritos', rotulo: 'Favoritos', icone: 'star', contador: totalFavoritos, atalho: 'F' },
-    {
+  ];
+  if (!ehAprovador) {
+    // Para usuário comum, Desconformidades fica em Navegação
+    navegacao.push({
       href: '/desconformidades',
       rotulo: 'Desconformidades',
       icone: 'alert',
       contador: totalDesconformidades,
       atalho: 'D',
-    },
-  ];
-
-  if (ehAprovador) {
-    itens.push({
-      href: '/triagem',
-      rotulo: 'Triagem',
-      icone: 'inbox',
-      contador: totalTriagem,
-      atalho: 'T',
-    });
-    itens.push({
-      href: '/inventario-ana',
-      rotulo: 'Auditoria ANA',
-      icone: 'alert',
-      contador: totalInventarioAna,
-      atalho: 'A',
     });
   }
+  grupos.push({ titulo: 'Navegação', itens: navegacao });
 
   return (
     <aside
       aria-label="Navegação principal"
       className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-sidenav lg:shrink-0 lg:flex-col border-r border-app-border-subtle bg-app-surface"
     >
-      <nav className="flex-1 p-2">
-        <p className="px-2 pb-2 pt-1 text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle">
-          Navegação
-        </p>
-        <ul className="space-y-0.5">
-          {itens.map((item) => (
-            <li key={item.href}>
-              <ItemSidenav
-                href={item.href}
-                rotulo={item.rotulo}
-                icone={item.icone}
-                contador={item.contador}
-                atalho={item.atalho}
-              />
-            </li>
-          ))}
-        </ul>
+      <nav className="flex-1 p-2 space-y-4">
+        {grupos.map((grupo, gIdx) => (
+          <div key={grupo.titulo}>
+            <div className="flex items-baseline justify-between px-2 pb-2 pt-1">
+              <p className="text-2xs font-semibold uppercase tracking-wider text-app-fg-muted">
+                {grupo.titulo}
+              </p>
+              {grupo.totalContador !== undefined && grupo.totalContador > 0 ? (
+                <span
+                  aria-label={`${grupo.totalContador} pendência(s) no total`}
+                  className="rounded-full bg-gov-perigo px-1.5 text-2xs font-semibold text-white tabular"
+                >
+                  {grupo.totalContador.toLocaleString('pt-BR')}
+                </span>
+              ) : null}
+            </div>
+            <ul className="space-y-0.5" aria-labelledby={`grupo-${gIdx}`}>
+              {grupo.itens.map((item) => (
+                <li key={item.href}>
+                  <ItemSidenav
+                    href={item.href}
+                    rotulo={item.rotulo}
+                    icone={item.icone}
+                    contador={item.contador}
+                    atalho={item.atalho}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-app-border-subtle px-3 py-2.5 text-xs text-app-fg-muted">

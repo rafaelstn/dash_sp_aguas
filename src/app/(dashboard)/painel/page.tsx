@@ -525,6 +525,7 @@ export default async function PaginaPainel() {
                   <td className="px-3 py-1.5">
                     <Link
                       href={`/?mantenedor=${encodeURIComponent(m.nome)}`}
+                      aria-label={`Filtrar postos do mantenedor ${m.nome} (${m.total.toLocaleString('pt-BR')} postos, ${m.ativos.toLocaleString('pt-BR')} ativos)`}
                       className="inline-flex items-center gap-2 text-app-fg hover:text-gov-azul hover:underline"
                     >
                       <Building2
@@ -608,6 +609,7 @@ export default async function PaginaPainel() {
                   <td className="px-3 py-1.5">
                     <Link
                       href={`/?ugrhi=${encodeURIComponent(u.numero)}`}
+                      aria-label={`Filtrar postos da UGRHI ${u.numero} ${u.nome} (${u.desconformes} desconformes de ${u.total})`}
                       className="block"
                     >
                       <span className="mono text-2xs text-app-fg-subtle">

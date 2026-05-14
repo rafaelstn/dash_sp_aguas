@@ -7,6 +7,7 @@ import {
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { Alerta } from '@/components/ui/Alerta';
 import { FormularioEditarPosto } from '@/components/features/postos/FormularioEditarPosto';
+import { HistoricoPostoEventos } from '@/components/features/postos/HistoricoPostoEventos';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,7 +77,9 @@ export default async function EditarPostoPage({ params }: PageProps) {
 
       <FormularioEditarPosto posto={posto} />
 
-      <p className="text-2xs text-app-fg-subtle">
+      <HistoricoPostoEventos postoId={posto.id} />
+
+      <p className="text-2xs text-app-fg-muted">
         Toda alteração é registrada em <code className="mono">postos_evento</code> com
         timestamp, IP e identificação do aprovador (governo.md §4 LGPD).
       </p>
