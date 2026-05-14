@@ -21,7 +21,7 @@ import {
 import { listarFichasDoPosto } from '@/application/use-cases/fichas-visita';
 import { IndexacaoPendente, PostoNaoEncontrado } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { favoritosRepository } from '@/infrastructure/repositories';
+import { favoritosRepository, papeisRepository } from '@/infrastructure/repositories';
 import { BotaoFavoritar } from '@/components/features/favoritos/BotaoFavoritar';
 
 export const dynamic = 'force-dynamic';
@@ -234,12 +234,18 @@ export default async function PaginaPosto({ params }: PageProps) {
     });
 
     let favoritadoInicial = false;
+    let ehAprovador = false;
     if (usuario) {
       try {
         const set = await favoritosRepository.prefixosFavoritos(usuario.id);
         favoritadoInicial = set.has(posto.prefixo);
       } catch {
         /* ignora — botão inicia como não-favoritado */
+      }
+      try {
+        ehAprovador = await papeisRepository.ehAprovador(usuario.id);
+      } catch {
+        /* sem papel = sem botão Editar */
       }
     }
 
@@ -274,11 +280,21 @@ export default async function PaginaPosto({ params }: PageProps) {
                 .join(' · ')}
             </p>
           </div>
-          <BotaoFavoritar
-            prefixo={posto.prefixo}
-            favoritadoInicial={favoritadoInicial}
-            autenticado={Boolean(usuario)}
-          />
+          <div className="flex items-center gap-2">
+            <BotaoFavoritar
+              prefixo={posto.prefixo}
+              favoritadoInicial={favoritadoInicial}
+              autenticado={Boolean(usuario)}
+            />
+            {ehAprovador ? (
+              <Link
+                href={`/postos/${encodeURIComponent(posto.prefixo)}/editar`}
+                className="rounded border border-gov-azul bg-white px-3 py-1.5 text-xs font-medium text-gov-azul hover:bg-app-surface-2"
+              >
+                Editar
+              </Link>
+            ) : null}
+          </div>
         </header>
 
         {/* Grid: ficha ocupa 2/3, mapa fica na direita em desktop */}

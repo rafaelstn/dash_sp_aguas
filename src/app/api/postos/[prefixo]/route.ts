@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
-import { postosRepository, auditoriaRepository } from '@/infrastructure/repositories';
+import {
+  postosRepository,
+  auditoriaRepository,
+  papeisRepository,
+} from '@/infrastructure/repositories';
 import { PostoNaoEncontrado } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import type { RespostaErro, RespostaFicha } from '@/types/dto';
@@ -11,6 +16,12 @@ import {
   tentarLock,
   WorkerTimeoutError,
 } from '@/infrastructure/indexer/lazy-indexer';
+import {
+  POLITICAS,
+  aplicarHeadersRateLimit,
+  consumirRateLimit,
+  extrairIp,
+} from '@/infrastructure/security/rate-limit';
 
 // Lazy indexing é read-heavy em HD de rede; o runtime Node é obrigatório
 // pra permitir `spawn` do worker Python.
@@ -177,5 +188,132 @@ export async function POST(
       },
     };
     return NextResponse.json(body, { status: 500 });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PATCH /api/postos/[prefixo] — edição manual do cadastro do posto.
+// Acesso restrito ao papel `aprovador`. Audit trail obrigatório em
+// postos_evento. Validação Zod estrita.
+// ─────────────────────────────────────────────────────────────────────────
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const camposEdicaoSchema = z.object({
+  mantenedor: z.string().max(200).nullable().optional(),
+  prefixoAna: z.string().max(40).nullable().optional(),
+  nomeEstacao: z.string().max(200).nullable().optional(),
+  operacaoInicioAno: z.number().int().min(1900).max(2100).nullable().optional(),
+  operacaoFimAno: z.number().int().min(0).max(2100).nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  municipio: z.string().max(120).nullable().optional(),
+  municipioAlt: z.string().max(120).nullable().optional(),
+  baciaHidrografica: z.string().max(120).nullable().optional(),
+  ugrhiNome: z.string().max(120).nullable().optional(),
+  ugrhiNumero: z.string().max(20).nullable().optional(),
+  subUgrhiNome: z.string().max(120).nullable().optional(),
+  subUgrhiNumero: z.string().max(20).nullable().optional(),
+  rede: z.string().max(120).nullable().optional(),
+  proprietario: z.string().max(120).nullable().optional(),
+  tipoPosto: z.string().max(20).nullable().optional(),
+  areaKm2: z.number().min(0).nullable().optional(),
+  btl: z.string().max(120).nullable().optional(),
+  ciaAmbiental: z.string().max(20).nullable().optional(),
+  cobacia: z.string().max(40).nullable().optional(),
+  observacoes: z.string().max(2000).nullable().optional(),
+  altimetria: z.number().nullable().optional(),
+  aquifero: z.string().max(120).nullable().optional(),
+  anaEscalaInicio: isoDate.nullable().optional(),
+  anaEscalaFim: isoDate.nullable().optional(),
+  anaDescargaLiquidaInicio: isoDate.nullable().optional(),
+  anaDescargaLiquidaFim: isoDate.nullable().optional(),
+  anaSedimentosInicio: isoDate.nullable().optional(),
+  anaSedimentosFim: isoDate.nullable().optional(),
+  anaQualidadeInicio: isoDate.nullable().optional(),
+  anaQualidadeFim: isoDate.nullable().optional(),
+  anaPluviometroInicio: isoDate.nullable().optional(),
+  anaPluviometroFim: isoDate.nullable().optional(),
+  anaTelemetriaInicio: isoDate.nullable().optional(),
+  anaTelemetriaFim: isoDate.nullable().optional(),
+});
+
+export async function PATCH(
+  request: NextRequest,
+  ctx: { params: Promise<{ prefixo: string }> },
+) {
+  const usuario = await obterUsuarioAtual();
+  if (!usuario) {
+    return NextResponse.json({ erro: 'nao_autenticado' }, { status: 401 });
+  }
+  const ehAprovador = await papeisRepository.ehAprovador(usuario.id);
+  if (!ehAprovador) {
+    return NextResponse.json({ erro: 'sem_papel_aprovador' }, { status: 403 });
+  }
+
+  const rl = consumirRateLimit(POLITICAS.decisaoInventarioAna, usuario.id);
+  const headers = new Headers();
+  aplicarHeadersRateLimit(headers, POLITICAS.decisaoInventarioAna, rl);
+  if (!rl.permitido) {
+    return NextResponse.json(
+      { erro: 'rate_limit' },
+      { status: 429, headers },
+    );
+  }
+
+  let bruto: unknown;
+  try {
+    bruto = await request.json();
+  } catch {
+    return NextResponse.json(
+      { erro: 'json_invalido' },
+      { status: 400, headers },
+    );
+  }
+
+  const parsed = camposEdicaoSchema.safeParse(bruto);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        erro: 'body_invalido',
+        motivos: parsed.error.issues.map(
+          (i) => `${i.path.join('.')}: ${i.message}`,
+        ),
+      },
+      { status: 400, headers },
+    );
+  }
+
+  const { prefixo: prefixoRaw } = await ctx.params;
+  const prefixo = decodeURIComponent(prefixoRaw);
+  const ip = extrairIp(request);
+
+  try {
+    const posto = await postosRepository.atualizar(prefixo, parsed.data, {
+      usuarioId: usuario.id,
+      ip: ip === 'unknown' ? null : ip,
+      userAgent: request.headers.get('user-agent'),
+      origemEvento: 'ui_edicao',
+      observacao: 'Edição manual via tela /postos/[prefixo]/editar',
+    });
+    return NextResponse.json({ posto }, { headers });
+  } catch (e) {
+    const mensagem = e instanceof Error ? e.message : 'Falha ao atualizar.';
+    if (mensagem.includes('nao encontrado')) {
+      return NextResponse.json(
+        { erro: 'nao_encontrado' },
+        { status: 404, headers },
+      );
+    }
+    if (mensagem.includes('removido')) {
+      return NextResponse.json(
+        { erro: 'posto_removido', mensagem },
+        { status: 409, headers },
+      );
+    }
+    return NextResponse.json(
+      { erro: 'falha_atualizacao', mensagem },
+      { status: 500, headers },
+    );
   }
 }
