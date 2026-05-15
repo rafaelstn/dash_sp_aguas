@@ -18,7 +18,6 @@ import {
   anaRevisaoRepository,
   papeisRepository,
 } from '@/infrastructure/repositories';
-import { sql } from '@/infrastructure/db/client';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { CardKPI } from '@/components/features/painel/CardKPI';
 import { BarraProgresso } from '@/components/features/painel/BarraProgresso';
@@ -52,7 +51,7 @@ function rotuloClasse(classe: string): string {
 }
 
 interface ProximaAcao {
-  tipo: 'divergencia_geo' | 'ana';
+  tipo: 'ana';
   rotulo: string;
   href: string;
 }
@@ -67,7 +66,6 @@ export default async function PaginaPainel() {
   let falha = false;
   let resumoAna: Awaited<ReturnType<typeof anaRevisaoRepository.resumoPainel>> | null = null;
   let prazoAna: Date | null = null;
-  let divergenciasPostos: { total: number; ativos: number } | null = null;
   let proxima: ProximaAcao | null = null;
 
   try {
@@ -85,7 +83,7 @@ export default async function PaginaPainel() {
     falha = true;
   }
 
-  // Auditoria ANA + divergências geo + CTA: visíveis apenas para aprovadores
+  // Auditoria ANA + CTA: visíveis apenas para aprovadores
   try {
     const usuario = await obterUsuarioAtual();
     if (usuario) {
@@ -95,40 +93,9 @@ export default async function PaginaPainel() {
         if (lote) {
           resumoAna = await anaRevisaoRepository.resumoPainel(lote.id);
           prazoAna = lote.prazoResposta;
-        }
 
-        const divs = await sql<Array<{ total: number; ativos: number }>>`
-          SELECT COUNT(*)::int AS total,
-                 COUNT(*) FILTER (
-                   WHERE operacao_fim_ano IS NULL
-                     OR operacao_fim_ano >= EXTRACT(YEAR FROM CURRENT_DATE)::int - 1
-                 )::int AS ativos
-            FROM postos
-           WHERE deleted_at IS NULL
-             AND divergencia_municipio = 'divergente'
-        `;
-        if (divs[0]) {
-          divergenciasPostos = { total: divs[0].total, ativos: divs[0].ativos };
-        }
-
-        // CTA: prioriza divergente ATIVO; fallback ANA operando
-        const r1 = await sql<Array<{ prefixo: string }>>`
-          SELECT prefixo FROM postos
-           WHERE deleted_at IS NULL
-             AND divergencia_municipio = 'divergente'
-             AND (operacao_fim_ano IS NULL OR operacao_fim_ano >= EXTRACT(YEAR FROM CURRENT_DATE)::int - 1)
-           ORDER BY distancia_municipio_m DESC LIMIT 1
-        `;
-        if (r1[0]) {
-          proxima = {
-            tipo: 'divergencia_geo',
-            rotulo: `posto ${r1[0].prefixo} com coord errada`,
-            href: `/postos/${encodeURIComponent(r1[0].prefixo)}/editar`,
-          };
-        } else if (lote) {
           const fila = await anaRevisaoRepository.listar(lote.id, {
             operando: 'sim',
-            divergenciaMunicipio: 'divergente',
             status: 'pendente',
             porPagina: 1,
           });
@@ -264,38 +231,6 @@ export default async function PaginaPainel() {
               icone={FolderX}
               href="/inventario-ana?semMatch=true"
               rotuloAcao="Investigar"
-            />
-          </div>
-        </section>
-      ) : null}
-
-      {/* DIVERGÊNCIAS GEO PROATIVAS */}
-      {divergenciasPostos && divergenciasPostos.total > 0 ? (
-        <section aria-labelledby="sec-div-postos" className="space-y-3">
-          <h2
-            id="sec-div-postos"
-            className="text-2xs font-semibold uppercase tracking-wider text-app-fg-muted"
-          >
-            Divergências geográficas em postos (proativo)
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <CardKPI
-              titulo="Postos divergentes"
-              valor={divergenciasPostos.total}
-              contexto="coord ≥10km da fronteira do município declarado"
-              severidade={divergenciasPostos.ativos > 0 ? 'critica' : 'alta'}
-              icone={AlertTriangle}
-              href="/postos/divergencias-geo"
-              rotuloAcao="Investigar"
-            />
-            <CardKPI
-              titulo="Divergentes ATIVOS"
-              valor={divergenciasPostos.ativos}
-              contexto="postos transmitindo com coord errada"
-              severidade={divergenciasPostos.ativos > 0 ? 'critica' : 'sucesso'}
-              icone={AlertTriangle}
-              href="/postos/divergencias-geo?classificacao=divergente&operando=sim"
-              rotuloAcao="Corrigir primeiro"
             />
           </div>
         </section>

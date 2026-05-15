@@ -26,7 +26,6 @@ export async function Sidenav() {
   let ehAprovador = false;
   let totalTriagem = 0;
   let totalInventarioAna = 0;
-  let totalDivergenciasGeo = 0;
 
   try {
     if (usuario) totalFavoritos = await favoritosRepository.contar(usuario.id);
@@ -67,16 +66,6 @@ export async function Sidenav() {
       } catch {
         /* idem */
       }
-      try {
-        const { sql } = await import('@/infrastructure/db/client');
-        const r = await sql<Array<{ total: number }>>`
-          SELECT COUNT(*)::int AS total FROM postos
-           WHERE divergencia_municipio = 'divergente' AND deleted_at IS NULL
-        `;
-        totalDivergenciasGeo = r[0]?.total ?? 0;
-      } catch {
-        /* idem */
-      }
     }
   }
 
@@ -109,19 +98,6 @@ export async function Sidenav() {
       icone: 'inbox',
       contador: totalTriagem,
       atalho: 'T',
-    });
-    itens.push({
-      href: '/postos/divergencias-geo',
-      rotulo: 'Divergências',
-      icone: 'alert',
-      contador: totalDivergenciasGeo,
-      atalho: 'G',
-    });
-    itens.push({
-      href: '/postos/duplicatas-candidatas',
-      rotulo: 'Duplicatas',
-      icone: 'alert',
-      contador: null,
     });
   }
 
