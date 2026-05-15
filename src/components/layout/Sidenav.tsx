@@ -117,6 +117,12 @@ export async function Sidenav() {
       contador: totalDivergenciasGeo,
       atalho: 'G',
     });
+    itens.push({
+      href: '/postos/duplicatas-candidatas',
+      rotulo: 'Duplicatas',
+      icone: 'alert',
+      contador: null,
+    });
   }
 
   return (

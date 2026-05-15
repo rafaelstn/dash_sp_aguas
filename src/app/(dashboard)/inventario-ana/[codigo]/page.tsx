@@ -6,12 +6,14 @@ import {
   postosRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { sql } from '@/infrastructure/db/client';
 import { Alerta } from '@/components/ui/Alerta';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
 import { BadgeStatus } from '@/components/features/inventario-ana/BadgeStatus';
 import { ReconciliacaoAnaVsPostos } from '@/components/features/inventario-ana/ReconciliacaoAnaVsPostos';
 import { AcoesRevisao } from '@/components/features/inventario-ana/AcoesRevisao';
 import { BotaoCadastrarPosto } from '@/components/features/inventario-ana/BotaoCadastrarPosto';
+import { BlocoMatchSugerido } from '@/components/features/inventario-ana/BlocoMatchSugerido';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +56,48 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
   const posto = estacao.postoPrefixo
     ? await postosRepository.buscarPorPrefixo(estacao.postoPrefixo)
     : null;
+
+  // Match sugerido (quando estação não tem posto vinculado mas sistema
+  // calculou candidato por similaridade nome + coord + município).
+  let matchSugerido:
+    | {
+        prefixo: string;
+        nome: string | null;
+        municipio: string | null;
+        confianca: 'alta' | 'media' | 'baixa';
+        score: number;
+      }
+    | null = null;
+  if (!posto) {
+    const r = await sql<
+      Array<{
+        prefixo: string;
+        nome_estacao: string | null;
+        municipio: string | null;
+        confianca: 'alta' | 'media' | 'baixa';
+        score: string;
+      }>
+    >`
+      SELECT p.prefixo, p.nome_estacao, p.municipio,
+             e.match_sugerido_confianca AS confianca,
+             e.match_sugerido_score::text AS score
+        FROM ana_revisao_estacao e
+        JOIN postos p ON p.id = e.match_sugerido_posto_id
+       WHERE e.id = ${estacao.id}::uuid
+         AND e.match_sugerido_posto_id IS NOT NULL
+         AND p.deleted_at IS NULL
+       LIMIT 1
+    `;
+    if (r[0]) {
+      matchSugerido = {
+        prefixo: r[0].prefixo,
+        nome: r[0].nome_estacao,
+        municipio: r[0].municipio,
+        confianca: r[0].confianca,
+        score: Number(r[0].score),
+      };
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -156,9 +200,20 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
 
       <ReconciliacaoAnaVsPostos estacao={estacao} posto={posto} />
 
+      {matchSugerido ? (
+        <BlocoMatchSugerido
+          codigoAna={estacao.codigoAna}
+          postoPrefixo={matchSugerido.prefixo}
+          postoNome={matchSugerido.nome}
+          postoMunicipio={matchSugerido.municipio}
+          confianca={matchSugerido.confianca}
+          score={matchSugerido.score}
+        />
+      ) : null}
+
       <AcoesRevisao estacao={estacao} />
 
-      {!posto ? (
+      {!posto && !matchSugerido ? (
         <section
           aria-labelledby="sec-sem-match"
           className="rounded-gov-card border border-amber-300 bg-amber-50 p-4 space-y-3"
