@@ -90,12 +90,23 @@ export interface AnaRevisaoEstacao {
   /** Estado de revisão. */
   status: StatusRevisao;
 
-  /** Análise geográfica (PostGIS). */
+  /** Análise geográfica original (PostGIS, calculada no import sobre a coord ANA). */
   dentroMunicipioDeclarado: boolean | null;
   distanciaMunicipioDeclaradoM: number | null;
   municipioSugeridoCodigo: string | null;
   municipioSugeridoNome: string | null;
   divergenciaMunicipio: DivergenciaMunicipio | null;
+
+  /**
+   * Estado EFETIVO após correção (postos > resposta_* > snapshot ANA).
+   * Usado na listagem operacional. Os campos brutos acima são preservados
+   * para a planilha de devolução à ANA (precisa mostrar o problema original).
+   */
+  municipioEfetivo: string | null;
+  divergenciaEfetiva: DivergenciaMunicipio | null;
+  distanciaEfetivaM: number | null;
+  /** Origem da correção quando aplicada ('banco_spaguas' | 'postgis_ibge' | 'manual_aprovador' | 'sem_correcao'). */
+  respostaFonte: string | null;
 
   revisadoEm: Date | null;
   atualizadoEm: Date;

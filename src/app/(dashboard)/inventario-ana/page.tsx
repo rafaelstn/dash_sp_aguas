@@ -293,6 +293,11 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="sec-fila" className="text-sm font-semibold text-app-fg">
             Fila de revisão · {resultado.total.toLocaleString('pt-BR')} estações
+            {!filtros.status ? (
+              <span className="ml-2 text-2xs font-normal text-app-fg-muted">
+                (apenas pendente/em revisão; para ver fechadas use o filtro de status)
+              </span>
+            ) : null}
           </h2>
           <Link
             href="/api/inventario-ana/exportar"

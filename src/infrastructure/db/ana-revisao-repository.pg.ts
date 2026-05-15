@@ -75,6 +75,13 @@ type LinhaEstacao = {
   divergencia_municipio: string | null;
   revisado_em: Date | null;
   atualizado_em: Date;
+  // Trazidos via JOIN com postos / colunas resposta_*; opcionais (ausentes em
+  // queries antigas como obterPorCodigo, que não fazem o JOIN completo).
+  p_municipio?: string | null;
+  p_divergencia_municipio?: string | null;
+  p_distancia_municipio_m?: string | null;
+  resposta_municipio_nome?: string | null;
+  resposta_fonte?: string | null;
 };
 
 function isoOuNull(d: Date | null): string | null {
@@ -150,9 +157,36 @@ function mapearEstacao(l: LinhaEstacao): AnaRevisaoEstacao {
     municipioSugeridoCodigo: l.municipio_sugerido_codigo,
     municipioSugeridoNome: l.municipio_sugerido_nome,
     divergenciaMunicipio: (l.divergencia_municipio as DivergenciaMunicipio) ?? null,
+    municipioEfetivo:
+      l.p_municipio ?? l.resposta_municipio_nome ?? l.municipio_nome,
+    divergenciaEfetiva: resolverDivergenciaEfetiva(l),
+    distanciaEfetivaM:
+      l.p_distancia_municipio_m != null
+        ? Number(l.p_distancia_municipio_m)
+        : l.distancia_municipio_declarado_m != null
+          ? Number(l.distancia_municipio_declarado_m)
+          : null,
+    respostaFonte: l.resposta_fonte ?? null,
     revisadoEm: l.revisado_em,
     atualizadoEm: l.atualizado_em,
   };
+}
+
+/**
+ * Divergência exibida na listagem operacional.
+ *   1. Se há match com postos, manda a classificação de postos (verdade atual).
+ *   2. Se não há match mas há resposta_fonte gravada (centroide IBGE etc.),
+ *      considera 'ok' (a coord ANA foi substituída pela resposta SPÁguas).
+ *   3. Caso contrário, fallback no snapshot original.
+ */
+function resolverDivergenciaEfetiva(l: LinhaEstacao): DivergenciaMunicipio | null {
+  if (l.p_divergencia_municipio) {
+    return l.p_divergencia_municipio as DivergenciaMunicipio;
+  }
+  if (l.resposta_fonte && l.resposta_fonte !== 'sem_correcao') {
+    return 'ok';
+  }
+  return (l.divergencia_municipio as DivergenciaMunicipio) ?? null;
 }
 
 // Transições válidas de status (defesa em profundidade)
@@ -353,10 +387,11 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             ? sql`AND e.operando = FALSE`
             : sql``;
 
-      // Status
+      // Status: se não informado, mostra apenas o trabalho aberto
+      // (pendente + em_revisao). Para ver fechadas, passa status explícito.
       const filtroStatus = filtros.status
         ? sql`AND e.status = ${filtros.status}`
-        : sql``;
+        : sql`AND e.status IN ('pendente', 'em_revisao')`;
 
       // Divergência
       const filtroDivergencia = filtros.divergenciaMunicipio
@@ -408,9 +443,13 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
       // Itens
       const itens = await sql<LinhaEstacao[]>`
-        SELECT e.*, p.prefixo AS posto_prefixo
+        SELECT e.*,
+               p.prefixo               AS posto_prefixo,
+               p.municipio             AS p_municipio,
+               p.divergencia_municipio AS p_divergencia_municipio,
+               p.distancia_municipio_m AS p_distancia_municipio_m
           FROM ana_revisao_estacao e
-          LEFT JOIN postos p ON p.id = e.posto_id
+          LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
          WHERE e.lote_id = ${loteId}
            ${filtroOperando}
            ${filtroStatus}
@@ -441,9 +480,13 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
   async obterPorCodigo(loteId, codigoAna) {
     try {
       const linhas = await sql<LinhaEstacao[]>`
-        SELECT e.*, p.prefixo AS posto_prefixo
+        SELECT e.*,
+               p.prefixo               AS posto_prefixo,
+               p.municipio             AS p_municipio,
+               p.divergencia_municipio AS p_divergencia_municipio,
+               p.distancia_municipio_m AS p_distancia_municipio_m
           FROM ana_revisao_estacao e
-          LEFT JOIN postos p ON p.id = e.posto_id
+          LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
          WHERE e.lote_id = ${loteId}
            AND e.codigo_ana = ${codigoAna}
          LIMIT 1
@@ -459,9 +502,13 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       // Lê estado atual (transação)
       return await sql.begin(async (tx) => {
         const linhas = await tx<LinhaEstacao[]>`
-          SELECT e.*, p.prefixo AS posto_prefixo
+          SELECT e.*,
+                 p.prefixo               AS posto_prefixo,
+                 p.municipio             AS p_municipio,
+                 p.divergencia_municipio AS p_divergencia_municipio,
+                 p.distancia_municipio_m AS p_distancia_municipio_m
             FROM ana_revisao_estacao e
-            LEFT JOIN postos p ON p.id = e.posto_id
+            LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
            WHERE e.id = ${estacaoId}
              FOR UPDATE
         `;
@@ -512,9 +559,13 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
         // Retorna estado final
         const atualizadas = await tx<LinhaEstacao[]>`
-          SELECT e.*, p.prefixo AS posto_prefixo
+          SELECT e.*,
+                 p.prefixo               AS posto_prefixo,
+                 p.municipio             AS p_municipio,
+                 p.divergencia_municipio AS p_divergencia_municipio,
+                 p.distancia_municipio_m AS p_distancia_municipio_m
             FROM ana_revisao_estacao e
-            LEFT JOIN postos p ON p.id = e.posto_id
+            LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
            WHERE e.id = ${estacaoId}
         `;
         return mapearEstacao(atualizadas[0]!);
@@ -540,9 +591,13 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       return await sql.begin(async (tx) => {
         // Carrega estações selecionadas (com lock)
         const linhas = await tx<LinhaEstacao[]>`
-          SELECT e.*, p.prefixo AS posto_prefixo
+          SELECT e.*,
+                 p.prefixo               AS posto_prefixo,
+                 p.municipio             AS p_municipio,
+                 p.divergencia_municipio AS p_divergencia_municipio,
+                 p.distancia_municipio_m AS p_distancia_municipio_m
             FROM ana_revisao_estacao e
-            LEFT JOIN postos p ON p.id = e.posto_id
+            LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
            WHERE e.lote_id = ${loteId}
              AND e.id = ANY(${acao.estacaoIds})
              FOR UPDATE

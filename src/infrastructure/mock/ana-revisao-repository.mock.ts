@@ -107,7 +107,14 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
     if (filtros.operando === 'sim') itens = itens.filter((e) => e.operando === true);
     if (filtros.operando === 'nao') itens = itens.filter((e) => e.operando === false);
-    if (filtros.status) itens = itens.filter((e) => e.status === filtros.status);
+    if (filtros.status) {
+      itens = itens.filter((e) => e.status === filtros.status);
+    } else {
+      // Default: só trabalho aberto (alinhado com a query SQL)
+      itens = itens.filter(
+        (e) => e.status === 'pendente' || e.status === 'em_revisao',
+      );
+    }
     if (filtros.divergenciaMunicipio) {
       itens = itens.filter((e) => e.divergenciaMunicipio === filtros.divergenciaMunicipio);
     }
@@ -301,6 +308,10 @@ export function _criarEstacaoMock(
     municipioSugeridoCodigo: null,
     municipioSugeridoNome: null,
     divergenciaMunicipio: null,
+    municipioEfetivo: null,
+    divergenciaEfetiva: null,
+    distanciaEfetivaM: null,
+    respostaFonte: null,
     revisadoEm: null,
     atualizadoEm: new Date(),
     ...override,

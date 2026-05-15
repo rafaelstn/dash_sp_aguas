@@ -172,9 +172,9 @@ export function TabelaInventario({ itens }: Props) {
               </th>
               <Th>Código ANA</Th>
               <Th>Nome</Th>
-              <Th>Município (declarado)</Th>
+              <Th>Município (ANA)</Th>
               <Th>Município ↔ coord</Th>
-              <Th>Município sugerido</Th>
+              <Th>Município SPÁguas</Th>
               <Th>Op</Th>
               <Th>Match</Th>
               <Th>Status</Th>
@@ -216,15 +216,15 @@ export function TabelaInventario({ itens }: Props) {
                     <Td>{it.municipioNome ?? '—'}</Td>
                     <Td>
                       <BadgeDivergencia
-                        divergencia={it.divergenciaMunicipio}
-                        distanciaM={it.distanciaMunicipioDeclaradoM}
+                        divergencia={it.divergenciaEfetiva}
+                        distanciaM={it.distanciaEfetivaM}
                       />
                     </Td>
                     <Td>
-                      {it.municipioSugeridoNome &&
-                      it.municipioSugeridoNome !== it.municipioNome ? (
+                      {it.municipioEfetivo &&
+                      it.municipioEfetivo !== it.municipioNome ? (
                         <span className="text-amber-900">
-                          {it.municipioSugeridoNome}
+                          {it.municipioEfetivo}
                         </span>
                       ) : (
                         <span className="text-app-fg-subtle">—</span>
