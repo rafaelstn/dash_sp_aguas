@@ -6,17 +6,14 @@ import { FalhaRepositorio } from '@/domain/errors';
 /**
  * Exportador do inventário ANA.
  *
- * Decisão Rafael 2026-05-14: `postos` é a fonte da verdade. O export sai
- * de `postos` (não mais de `ana_revisao_estacao`). A planilha resultante
- * marca em AMARELO toda célula cujo valor atual em `postos` difere do
- * snapshot original que a ANA mandou (`ana_revisao_estacao`).
+ * Ordem de prioridade (mais autoritativa primeiro):
+ *   1. postos (fonte da verdade quando há match)
+ *   2. ana_revisao_estacao.resposta_* (correção SPÁguas para estações sem
+ *      match, ex.: centroide IBGE para coord ANA truncada)
+ *   3. ana_revisao_estacao (snapshot ANA original, read-only)
  *
- * Lógica:
- *   1. JOIN ana_revisao_estacao e (snapshot ANA, read-only) LEFT JOIN postos p
- *   2. Para cada coluna ANA, escolhe valor:
- *      - se p IS NOT NULL: valor de postos (a verdade)
- *      - se p IS NULL    : valor do snapshot ANA (estação ainda sem match)
- *   3. Pinta amarelo onde valor_atual != snapshot_ana.
+ * Para cada coluna, o valor final é `posto ?? resposta ?? snapshot`. Onde
+ * o valor final difere do snapshot ANA, a célula é pintada em AMARELO.
  *
  * Saída: XLSX com cabeçalho idêntico à aba DÚVIDAS + 2 colunas controle
  * (STATUS_REVISAO_SPAGUAS, JUSTIFICATIVA_SPAGUAS).
@@ -61,8 +58,14 @@ interface LinhaJoin {
   ana_observacao_4: string | null;
   ana_observacao_5: string | null;
   ana_status: string;
-  /** Texto do último evento de revisão (preserva audit narrativo). */
-  ana_observacao_revisao: string | null;
+
+  // resposta SPÁguas (preenchida quando há correção para estação sem match)
+  r_municipio_codigo: string | null;
+  r_municipio_nome: string | null;
+  r_latitude: string | null;
+  r_longitude: string | null;
+  r_justificativa: string | null;
+  r_fonte: string | null;
 
   // postos (fonte da verdade; null se não houver match)
   p_prefixo: string | null;
@@ -94,6 +97,15 @@ function valOuFallback<T>(valPosto: T | null, valAna: T | null): T | null {
   // Quando o posto existe e tem o campo preenchido, ele manda (é a verdade).
   // Senão, mantém o que a ANA disse no snapshot.
   return valPosto ?? valAna;
+}
+
+function valOuFallback3<T>(
+  valPosto: T | null,
+  valResposta: T | null,
+  valAna: T | null,
+): T | null {
+  // postos (autoritativo) > resposta SPÁguas (correção sem-match) > snapshot ANA.
+  return valPosto ?? valResposta ?? valAna;
 }
 
 function dataISO(d: Date | null): string | null {
@@ -162,11 +174,12 @@ export async function exportarInventarioAna(
         e.observacao_4           AS ana_observacao_4,
         e.observacao_5           AS ana_observacao_5,
         e.status                 AS ana_status,
-        (
-          SELECT v.observacao FROM ana_revisao_evento v
-           WHERE v.estacao_id = e.id AND v.observacao IS NOT NULL
-           ORDER BY v.ocorreu_em DESC LIMIT 1
-        )                        AS ana_observacao_revisao,
+        e.resposta_municipio_codigo AS r_municipio_codigo,
+        e.resposta_municipio_nome   AS r_municipio_nome,
+        e.resposta_latitude::text   AS r_latitude,
+        e.resposta_longitude::text  AS r_longitude,
+        e.resposta_justificativa    AS r_justificativa,
+        e.resposta_fonte            AS r_fonte,
         p.prefixo                AS p_prefixo,
         p.prefixo_ana            AS p_prefixo_ana,
         p.nome_estacao           AS p_nome_estacao,
@@ -240,16 +253,17 @@ export async function exportarInventarioAna(
     let totalComDiff = 0;
 
     for (const linha of linhas) {
-      // Resolve cada campo: postos manda, ANA snapshot é fallback
+      // postos > resposta SPÁguas > snapshot ANA
       const finalNome = valOuFallback(linha.p_nome_estacao, linha.ana_nome);
       const finalCodigoAdicional = valOuFallback(linha.p_prefixo, linha.ana_codigo_adicional);
-      const finalLat = valOuFallback(linha.p_latitude, linha.ana_latitude);
-      const finalLng = valOuFallback(linha.p_longitude, linha.ana_longitude);
+      const finalLat = valOuFallback3(linha.p_latitude, linha.r_latitude, linha.ana_latitude);
+      const finalLng = valOuFallback3(linha.p_longitude, linha.r_longitude, linha.ana_longitude);
       const finalAltitude = valOuFallback(linha.p_altimetria, linha.ana_altitude);
       const finalArea = valOuFallback(linha.p_area_km2, linha.ana_area_drenagem_km2);
       const finalBacia = valOuFallback(linha.p_bacia_hidrografica, linha.ana_bacia_nome);
       const finalSubBacia = valOuFallback(linha.p_sub_ugrhi_nome, linha.ana_subbacia_nome);
-      const finalMunicipio = valOuFallback(linha.p_municipio, linha.ana_municipio_nome);
+      const finalMunicipio = valOuFallback3(linha.p_municipio, linha.r_municipio_nome, linha.ana_municipio_nome);
+      const finalMunicipioCodigo = valOuFallback(linha.r_municipio_codigo, linha.ana_municipio_codigo);
       const finalTipo = valOuFallback(linha.p_tipo_posto, linha.ana_estacao_tipo);
       const finalEscIni = dataISO(valOuFallback(linha.p_ana_escala_inicio, linha.ana_escala_inicio));
       const finalEscFim = dataISO(valOuFallback(linha.p_ana_escala_fim, linha.ana_escala_fim));
@@ -284,7 +298,7 @@ export async function exportarInventarioAna(
         linha.ana_rio_nome,
         null, // estado_codigo
         linha.ana_estado_sigla,
-        linha.ana_municipio_codigo,
+        finalMunicipioCodigo,
         finalMunicipio,
         null, null, // responsavel_codigo, responsavel_nome
         linha.ana_responsavel_sigla,
@@ -299,7 +313,7 @@ export async function exportarInventarioAna(
         linha.ana_observacao_1, linha.ana_observacao_2, linha.ana_observacao_3,
         linha.ana_observacao_4, linha.ana_observacao_5,
         linha.ana_status,
-        linha.ana_observacao_revisao,
+        linha.r_justificativa,
       ];
 
       const row = ws.addRow(values);
@@ -315,6 +329,7 @@ export async function exportarInventarioAna(
         { colIdx: 10, novo: finalArea, antigo: linha.ana_area_drenagem_km2 },
         { colIdx: 12, novo: finalBacia, antigo: linha.ana_bacia_nome },
         { colIdx: 14, novo: finalSubBacia, antigo: linha.ana_subbacia_nome },
+        { colIdx: 19, novo: finalMunicipioCodigo, antigo: linha.ana_municipio_codigo },
         { colIdx: 20, novo: finalMunicipio, antigo: linha.ana_municipio_nome },
         { colIdx: 24, novo: finalTipo, antigo: linha.ana_estacao_tipo },
         { colIdx: 25, novo: finalEscIni, antigo: dataISO(linha.ana_escala_inicio) },

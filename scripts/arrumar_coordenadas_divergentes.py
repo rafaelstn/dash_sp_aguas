@@ -52,8 +52,8 @@ def main() -> int:
 
     with psycopg.connect(url, prepare_threshold=None) as conn, conn.cursor() as cur:
         # Aplica migration 0035 (idempotente)
-        print("Aplicando migration 0035 (function mover_coord)...")
-        cur.execute(Path("supabase/migrations/0035_func_mover_coord_para_municipio.sql").read_text(encoding="utf-8"))
+        print("Aplicando migration 0036 (function mover_coord)...")
+        cur.execute(Path("supabase/migrations/0036_func_mover_coord_para_municipio.sql").read_text(encoding="utf-8"))
         conn.commit()
         print("  OK")
         print()
