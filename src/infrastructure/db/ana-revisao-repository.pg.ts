@@ -8,6 +8,7 @@ import type {
   StatusRevisao,
 } from '@/domain/ana-revisao';
 import { FalhaRepositorio } from '@/domain/errors';
+import { patternDeCenario } from '@/domain/ana-cenarios';
 import { sql } from './client';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -232,11 +233,29 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
           -- Sem match: ainda pendente de cadastro (não conta o que já foi descartado)
           COUNT(*) FILTER (WHERE e.posto_id IS NULL
             AND e.status NOT IN ('revisada', 'promovida_a_posto', 'descartada'))::int AS sem_match,
-          COUNT(*) FILTER (WHERE e.status = 'pendente')::int AS status_pendente,
-          COUNT(*) FILTER (WHERE e.status = 'em_revisao')::int AS status_em_revisao,
-          COUNT(*) FILTER (WHERE e.status = 'revisada')::int AS status_revisada,
-          COUNT(*) FILTER (WHERE e.status = 'descartada')::int AS status_descartada,
-          COUNT(*) FILTER (WHERE e.status = 'promovida_a_posto')::int AS status_promovida,
+          -- Andamento da revisão: conta APENAS estações com observação ANA.
+          -- As 1.668 sem observação ficaram com status=pendente por default
+          -- do import, mas não precisam ação — não inflamos a UI com elas.
+          COUNT(*) FILTER (WHERE e.status = 'pendente'
+            AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
+              OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
+              OR e.observacao_5 IS NOT NULL))::int AS status_pendente,
+          COUNT(*) FILTER (WHERE e.status = 'em_revisao'
+            AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
+              OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
+              OR e.observacao_5 IS NOT NULL))::int AS status_em_revisao,
+          COUNT(*) FILTER (WHERE e.status = 'revisada'
+            AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
+              OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
+              OR e.observacao_5 IS NOT NULL))::int AS status_revisada,
+          COUNT(*) FILTER (WHERE e.status = 'descartada'
+            AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
+              OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
+              OR e.observacao_5 IS NOT NULL))::int AS status_descartada,
+          COUNT(*) FILTER (WHERE e.status = 'promovida_a_posto'
+            AND (e.observacao_1 IS NOT NULL OR e.observacao_2 IS NOT NULL
+              OR e.observacao_3 IS NOT NULL OR e.observacao_4 IS NOT NULL
+              OR e.observacao_5 IS NOT NULL))::int AS status_promovida,
           -- Divergência geo: contagem PENDENTE (postos.divergencia_municipio é a verdade,
           -- não a coluna em ana_revisao_estacao que é snapshot da planilha).
           -- Quando posto associado está OK ou margem_aceitavel, NÃO conta como divergência pendente.
@@ -320,10 +339,11 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
       // Filtro de cenário: a planilha ANA marca o cenário no início da
       // OBSERVAÇÃO 1, ex "[PLUVIÔMETRO] SEM DATA FIM..." ou texto livre
-      // ("VERIFICAR AS COORDENADAS"). Match por LIKE no prefixo.
-      // Cenário aceita um termo chave (PLUVIÔMETRO, MUNICÍPIO, etc) e faz
-      // match com contains nas 5 observações.
-      const cenarioPattern = filtros.cenario ? `%${filtros.cenario}%` : null;
+      // ("VERIFICAR AS COORDENADAS"). Casamos a chave estável vinda do URL
+      // (ex VERIFICAR_COORD) ao pattern real ('VERIFICAR%COORDENADAS%') via
+      // CENARIOS_ANA em src/domain/ana-cenarios.ts. Se a chave for desconhecida,
+      // ignoramos o filtro em vez de aplicar pattern literal sem sentido.
+      const cenarioPattern = patternDeCenario(filtros.cenario);
 
       // Operando
       const filtroOperando =

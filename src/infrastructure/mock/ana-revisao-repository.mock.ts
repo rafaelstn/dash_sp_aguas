@@ -6,6 +6,13 @@ import type {
   ContextoAtor,
   StatusRevisao,
 } from '@/domain/ana-revisao';
+import { patternDeCenario } from '@/domain/ana-cenarios';
+
+function ilikeMatch(texto: string, pattern: string): boolean {
+  const escapado = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp('^' + escapado.replace(/%/g, '.*') + '$', 'i');
+  return regex.test(texto);
+}
 
 /**
  * Mock in-memory do AnaRevisaoRepository, usado em testes e modo demo.
@@ -116,10 +123,12 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       );
     }
     if (filtros.cenario) {
-      const prefix = filtros.cenario.toLowerCase();
-      itens = itens.filter((e) =>
-        e.observacoes.some((o) => o.toLowerCase().startsWith(prefix)),
-      );
+      const pattern = patternDeCenario(filtros.cenario);
+      if (pattern) {
+        itens = itens.filter((e) =>
+          e.observacoes.some((o) => ilikeMatch(o, pattern)),
+        );
+      }
     }
 
     const total = itens.length;

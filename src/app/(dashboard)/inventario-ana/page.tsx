@@ -13,6 +13,7 @@ import { CardKPI } from '@/components/features/painel/CardKPI';
 import { FiltrosInventario } from '@/components/features/inventario-ana/FiltrosInventario';
 import { TabelaInventario } from '@/components/features/inventario-ana/TabelaInventario';
 import { sql } from '@/infrastructure/db/client';
+import { CENARIOS_ANA } from '@/domain/ana-cenarios';
 import type {
   DivergenciaMunicipio,
   StatusRevisao,
@@ -147,23 +148,11 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
     }),
   ]);
 
-  // Contagens por cenário (só pendentes/em_revisao)
-  const CHIPS: Array<{ chave: string; rotulo: string; pattern: string }> = [
-    { chave: 'PLUVIÔMETRO', rotulo: 'Pluviômetro', pattern: '[PLUVIÔMETRO]%' },
-    { chave: 'TELEMETRIA', rotulo: 'Telemetria', pattern: '[TELEMETRIA]%' },
-    { chave: 'DESCARGA', rotulo: 'Descarga líquida', pattern: '[DESCARGA LÍQUIDA]%' },
-    { chave: 'QUALIDADE', rotulo: 'Qualidade água', pattern: '[QUALIDADE DA ÁGUA]%' },
-    { chave: 'VERIFICAR_COORD', rotulo: 'Verificar coordenadas', pattern: 'VERIFICAR%COORDENADAS%' },
-    { chave: 'MUN_INCOMP', rotulo: 'Município incompatível', pattern: 'MUNICÍPIO%INCOMPAT%' },
-    { chave: 'RIO_INCOMP', rotulo: 'Rio incompatível', pattern: 'RIO%INCOMPAT%' },
-    { chave: 'SUBBACIA', rotulo: 'Sub-bacia', pattern: 'VERIFICAR%SUB-BACIA%' },
-    { chave: 'EST_DUP', rotulo: 'Estação duplicada', pattern: 'ESTAÇÃO DUPLICADA%' },
-    { chave: 'COD_DUP', rotulo: 'Cód. adicional duplicado', pattern: 'CÓDIGO ADICIONAL DUPLICADO%' },
-    { chave: 'SEM_COD', rotulo: 'Sem cód. adicional', pattern: 'ESTAÇÃO SEM%CÓDIGO ADICIONAL%' },
-  ];
-
+  // Contagens por cenário (só pendentes/em_revisao). Lista canônica vem
+  // de src/domain/ana-cenarios.ts para garantir que o repository usa
+  // exatamente o mesmo pattern que mostramos aqui.
   const chipsContagem: Array<CenarioChip> = [];
-  for (const c of CHIPS) {
+  for (const c of CENARIOS_ANA) {
     const r = await sql<Array<{ total: number }>>`
       SELECT COUNT(*)::int AS total
         FROM ana_revisao_estacao
@@ -239,7 +228,7 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
           <CardKPI
             titulo="Divergência geo (≥10km)"
             valor={resumo.divergenciaDivergente}
-            contexto={`+ ${resumo.divergenciaMargem.toLocaleString('pt-BR')} em margem aceitável`}
+            contexto="estações com coordenada fora do município declarado"
             severidade={resumo.divergenciaDivergente > 0 ? 'alta' : 'sucesso'}
             icone={AlertTriangle}
             href="/inventario-ana?divergencia=divergente"
@@ -249,19 +238,53 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
       </section>
 
       {/* ═══════════════════════════════════════════════════
-          ANDAMENTO
+          ANDAMENTO — só mostra o que ainda tem trabalho.
+          Resolvidos viram linha de resumo no rodapé do painel.
           ═══════════════════════════════════════════════════ */}
-      <section aria-labelledby="sec-andamento" className="space-y-3">
-        <h2 id="sec-andamento" className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle">
-          Andamento da revisão
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <CardKPI titulo="Pendente" valor={resumo.statusPendente} severidade="info" icone={Clock} />
-          <CardKPI titulo="Em revisão" valor={resumo.statusEmRevisao} severidade="info" icone={Clock} />
-          <CardKPI titulo="Revisadas" valor={resumo.statusRevisada} severidade="sucesso" icone={CheckCircle2} />
-          <CardKPI titulo="Descartadas" valor={resumo.statusDescartada} severidade="info" icone={CheckCircle2} />
-        </div>
-      </section>
+      {resumo.statusPendente + resumo.statusEmRevisao > 0 ? (
+        <section aria-labelledby="sec-andamento" className="space-y-3">
+          <h2
+            id="sec-andamento"
+            className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
+          >
+            Pendente de revisão
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {resumo.statusPendente > 0 ? (
+              <CardKPI
+                titulo="Pendente"
+                valor={resumo.statusPendente}
+                contexto="aguardando aprovador"
+                severidade="info"
+                icone={Clock}
+                href="/inventario-ana?status=pendente"
+                rotuloAcao="Abrir fila"
+              />
+            ) : null}
+            {resumo.statusEmRevisao > 0 ? (
+              <CardKPI
+                titulo="Em revisão"
+                valor={resumo.statusEmRevisao}
+                contexto="já iniciada, falta concluir"
+                severidade="info"
+                icone={Clock}
+                href="/inventario-ana?status=em_revisao"
+                rotuloAcao="Continuar"
+              />
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <section
+          aria-labelledby="sec-andamento"
+          className="rounded-gov-card border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900"
+        >
+          <h2 id="sec-andamento" className="font-medium">
+            <CheckCircle2 className="mr-1.5 inline h-4 w-4 -translate-y-px" aria-hidden />
+            Nenhuma pendência ANA aberta neste lote.
+          </h2>
+        </section>
+      )}
 
       {/* ═══════════════════════════════════════════════════
           FILTROS + TABELA
@@ -346,6 +369,39 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
           rotuloAria="Paginação do inventário ANA"
         />
       </section>
+
+      {resumo.statusRevisada + resumo.statusPromovida + resumo.statusDescartada > 0 ? (
+        <p className="text-2xs text-app-fg-subtle">
+          Já fechadas neste lote:{' '}
+          {resumo.statusRevisada > 0 ? (
+            <Link
+              href="/inventario-ana?status=revisada"
+              className="text-gov-azul hover:underline"
+            >
+              {resumo.statusRevisada.toLocaleString('pt-BR')} revisada{resumo.statusRevisada === 1 ? '' : 's'}
+            </Link>
+          ) : null}
+          {resumo.statusRevisada > 0 && (resumo.statusPromovida > 0 || resumo.statusDescartada > 0) ? ' · ' : ''}
+          {resumo.statusPromovida > 0 ? (
+            <Link
+              href="/inventario-ana?status=promovida_a_posto"
+              className="text-gov-azul hover:underline"
+            >
+              {resumo.statusPromovida.toLocaleString('pt-BR')} promovida{resumo.statusPromovida === 1 ? '' : 's'} a posto
+            </Link>
+          ) : null}
+          {resumo.statusPromovida > 0 && resumo.statusDescartada > 0 ? ' · ' : ''}
+          {resumo.statusDescartada > 0 ? (
+            <Link
+              href="/inventario-ana?status=descartada"
+              className="text-gov-azul hover:underline"
+            >
+              {resumo.statusDescartada.toLocaleString('pt-BR')} descartada{resumo.statusDescartada === 1 ? '' : 's'}
+            </Link>
+          ) : null}
+          .
+        </p>
+      ) : null}
     </div>
   );
 }
