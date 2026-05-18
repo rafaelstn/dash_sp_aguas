@@ -218,7 +218,8 @@ function QuickLinks({
 export default async function Home({ searchParams }: PageProps) {
   const sp = await searchParams;
   const termo = (sp.q ?? '').trim();
-  const pagina = Math.max(1, Number(sp.pagina ?? 1));
+  const paginaParsed = Number(sp.pagina ?? 1);
+  const pagina = Math.max(1, Number.isFinite(paginaParsed) ? paginaParsed : 1);
 
   const ugrhi = sp.ugrhi || undefined;
   const municipio = sp.municipio || undefined;
@@ -228,11 +229,16 @@ export default async function Home({ searchParams }: PageProps) {
   const status: 'ativo' | 'desativado' | undefined =
     sp.status === 'ativo' || sp.status === 'desativado' ? sp.status : undefined;
 
-  // Latitude/longitude — só ativam o filtro quando ambos são números válidos.
+  // Latitude/longitude, só ativam o filtro quando ambos são números válidos
+  // e dentro do range geográfico (lat em [-90,90], lng em [-180,180]). Valor
+  // fora do range vira filtro descartado, sem ordenar resultado por distância
+  // sem sentido.
   const latNum = sp.lat ? Number(sp.lat) : NaN;
   const lngNum = sp.lng ? Number(sp.lng) : NaN;
-  const latitude = Number.isFinite(latNum) ? latNum : undefined;
-  const longitude = Number.isFinite(lngNum) ? lngNum : undefined;
+  const latitude =
+    Number.isFinite(latNum) && Math.abs(latNum) <= 90 ? latNum : undefined;
+  const longitude =
+    Number.isFinite(lngNum) && Math.abs(lngNum) <= 180 ? lngNum : undefined;
 
   const temFd = sp.tem_fd === '1';
   const temFi = sp.tem_fi === '1';

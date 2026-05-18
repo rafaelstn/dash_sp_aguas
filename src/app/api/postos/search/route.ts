@@ -15,8 +15,17 @@ function bool(valor: string | null): boolean | undefined {
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const termo = sp.get('q') ?? undefined;
-  const pagina = Number(sp.get('pagina') ?? 1);
-  const porPagina = Number(sp.get('porPagina') ?? 25);
+  const paginaParsed = Number(sp.get('pagina') ?? 1);
+  const porPaginaParsed = Number(sp.get('porPagina') ?? 25);
+  // Sem isFinite vira NaN propagado pro OFFSET, gerando comportamento
+  // imprevisivel no postgres.js. Clamp em range razoavel evita DOS por
+  // porPagina absurdo.
+  const pagina = Number.isFinite(paginaParsed) && paginaParsed >= 1
+    ? Math.floor(paginaParsed)
+    : 1;
+  const porPagina = Number.isFinite(porPaginaParsed) && porPaginaParsed >= 1
+    ? Math.min(100, Math.floor(porPaginaParsed))
+    : 25;
 
   const ugrhiNumero = sp.get('ugrhi') ?? undefined;
   const municipio = sp.get('municipio') ?? undefined;

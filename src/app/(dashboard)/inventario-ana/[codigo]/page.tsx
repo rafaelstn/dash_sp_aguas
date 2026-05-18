@@ -89,12 +89,13 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
        LIMIT 1
     `;
     if (r[0]) {
+      const scoreNum = Number(r[0].score);
       matchSugerido = {
         prefixo: r[0].prefixo,
         nome: r[0].nome_estacao,
         municipio: r[0].municipio,
         confianca: r[0].confianca,
-        score: Number(r[0].score),
+        score: Number.isFinite(scoreNum) ? scoreNum : 0,
       };
     }
   }
