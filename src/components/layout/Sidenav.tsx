@@ -4,7 +4,6 @@ import {
   desconformidadesRepository,
   papeisRepository,
   triagemRepository,
-  anaRevisaoRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { ItemSidenav, type IconeKey } from './ItemSidenav';
@@ -25,7 +24,6 @@ export async function Sidenav() {
   let totalDesconformidades = 0;
   let ehAprovador = false;
   let totalTriagem = 0;
-  let totalInventarioAna = 0;
 
   try {
     if (usuario) totalFavoritos = await favoritosRepository.contar(usuario.id);
@@ -55,17 +53,6 @@ export async function Sidenav() {
       } catch {
         /* badge ausente é melhor que sidenav quebrado */
       }
-      try {
-        const lote = await anaRevisaoRepository.loteAtual();
-        if (lote) {
-          const resumo = await anaRevisaoRepository.resumoPainel(lote.id);
-          // Badge mostra apenas pendências ainda não revisadas
-          totalInventarioAna =
-            resumo.statusPendente + resumo.statusEmRevisao;
-        }
-      } catch {
-        /* idem */
-      }
     }
   }
 
@@ -85,13 +72,6 @@ export async function Sidenav() {
   ];
 
   if (ehAprovador) {
-    itens.push({
-      href: '/inventario-ana',
-      rotulo: 'Auditoria ANA',
-      icone: 'alert',
-      contador: totalInventarioAna,
-      atalho: 'A',
-    });
     itens.push({
       href: '/triagem',
       rotulo: 'Triagem',
