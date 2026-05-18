@@ -3,6 +3,66 @@ import { createServerClient } from '@supabase/ssr';
 import { bypassAuthAtivo } from '@/infrastructure/auth/dev-bypass';
 
 /**
+ * Gera o cabeçalho Content-Security-Policy desta requisição usando um nonce
+ * único por response (substitui o `'unsafe-inline'` antigo em script-src).
+ *
+ * Em dev precisamos liberar `'unsafe-eval'` para o HMR/refresh do Next 15
+ * funcionar; em produção o nonce cobre todos os scripts inline que o Next
+ * injeta (o framework lê o header `x-nonce` setado neste middleware e
+ * propaga pra tags internas).
+ *
+ * style-src continua com `'unsafe-inline'` porque Tailwind e o runtime do
+ * Next geram estilos inline curtos; nonce em style exigiria refactor das
+ * libs e o vetor de ataque (CSS injection) é menor que script.
+ */
+function montarCsp(nonce: string): string {
+  const dev = process.env.NODE_ENV !== 'production';
+  const scriptSrc = dev
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`
+    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSrc}`,
+    "worker-src 'self' blob:",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.supabase.co",
+    "manifest-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join('; ');
+}
+
+function gerarNonce(): string {
+  // Web Crypto está disponível no Edge runtime do middleware.
+  const buffer = new Uint8Array(16);
+  crypto.getRandomValues(buffer);
+  // Base64 cabe nos limites de header e é aceito por CSP.
+  let bin = '';
+  for (const b of buffer) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/**
+ * Devolve novos request headers com o nonce setado em `x-nonce`. O Next 15
+ * lê esse header pra propagar nonce nos scripts internos que injeta.
+ */
+function requestHeadersComNonce(request: NextRequest, nonce: string): Headers {
+  const h = new Headers(request.headers);
+  h.set('x-nonce', nonce);
+  return h;
+}
+
+function aplicarCspResponse(response: NextResponse, nonce: string) {
+  response.headers.set('x-nonce', nonce);
+  response.headers.set('Content-Security-Policy', montarCsp(nonce));
+}
+
+/**
  * Middleware de autenticação — gate de todas as rotas exceto as públicas
  * abaixo. Requisito de deploy (ADR-0004): sistema no MVP passa a rodar em
  * Vercel (internet pública), portanto precisa de gate. Implementação isolada
@@ -44,6 +104,9 @@ function rotaPublica(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  const nonce = gerarNonce();
+  const requestHeaders = requestHeadersComNonce(request, nonce);
+
   // Dev: bypass completo da autenticação quando DEV_BYPASS_AUTH_EMAIL está
   // setada (ver infrastructure/auth/dev-bypass.ts). Guarda NODE_ENV interna.
   if (bypassAuthAtivo()) {
@@ -53,16 +116,22 @@ export async function middleware(request: NextRequest) {
       homeUrl.search = '';
       return NextResponse.redirect(homeUrl);
     }
-    return NextResponse.next();
+    const resp = NextResponse.next({ request: { headers: requestHeaders } });
+    aplicarCspResponse(resp, nonce);
+    return resp;
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // Dev local sem Supabase: libera (env.ts bloqueia em produção).
-  if (!url || !anon) return NextResponse.next();
+  if (!url || !anon) {
+    const resp = NextResponse.next({ request: { headers: requestHeaders } });
+    aplicarCspResponse(resp, nonce);
+    return resp;
+  }
 
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(url, anon, {
     cookies: {
@@ -71,7 +140,7 @@ export async function middleware(request: NextRequest) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
-        response = NextResponse.next({ request });
+        response = NextResponse.next({ request: { headers: requestHeaders } });
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
         }
@@ -103,6 +172,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl);
   }
 
+  aplicarCspResponse(response, nonce);
   return response;
 }
 

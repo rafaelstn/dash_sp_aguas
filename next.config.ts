@@ -65,30 +65,10 @@ const nextConfig: NextConfig = {
   // cobre os href <Link> suficientemente.
   // Cabeçalho de idioma pt-BR é requisito WCAG / e-MAG.
   async headers() {
-    // CSP base — aplicada GLOBALMENTE. Restritiva por padrão, sem `unsafe-eval`.
-    // Mantém `'unsafe-inline'` em script-src (Next.js runtime injeta scripts
-    // inline; migrar pra CSP nonce-based exige refactor de _document e está
-    // postergado pra fase de hardening pós-MVP).
-    const cspBase = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
-      "worker-src 'self' blob:",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://*.supabase.co",
-      "manifest-src 'self'",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      // Sem object-src = recusa <object>/<embed> — defesa contra Flash legacy.
-      "object-src 'none'",
-    ].join('; ');
-
-    // CSP do `/triagem/*` (web aprovador) — mesma base; futuramente pode
-    // remover `'unsafe-inline'` quando o time migrar pra nonce-based.
-    const cspTriagem = cspBase;
-
+    // Content-Security-Policy NÃO é setada aqui, é montada dinamicamente
+    // por request no `src/middleware.ts` com nonce único (substitui o
+    // antigo `'unsafe-inline'` em script-src). Este arquivo só serve os
+    // headers estáticos restantes (HSTS, COOP, Permissions-Policy, etc).
     return [
       {
         source: '/:path*',
@@ -119,8 +99,8 @@ const nextConfig: NextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=63072000; includeSubDomains',
           },
-          // CSP base aplicada a tudo, exceto onde sobrescrita abaixo.
-          { key: 'Content-Security-Policy', value: cspBase },
+          // Content-Security-Policy é setada por request pelo middleware
+          // (CSP com nonce). Não defina aqui pra evitar conflito.
           // Permissions-Policy default: nada liberado. Sobrescrito em /app/*.
           {
             key: 'Permissions-Policy',
@@ -134,8 +114,7 @@ const nextConfig: NextConfig = {
         ],
       },
       // Hardening específico das rotas /app/* — Permissions-Policy libera
-      // geolocation/camera (PWA precisa), CSP herdada do global mas com
-      // worker-src restrito ao mesmo origin.
+      // geolocation/camera (PWA precisa). CSP fica por conta do middleware.
       {
         source: '/app/:path*',
         headers: [
@@ -143,19 +122,13 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'geolocation=(self), camera=(self), microphone=()',
           },
-          {
-            // CSP idêntica à base — `worker-src 'self' blob:` permite o SW.
-            key: 'Content-Security-Policy',
-            value: cspBase,
-          },
         ],
       },
-      // Hardening específico de /triagem/* (web aprovador). Mantém HSTS +
-      // CSP. Sem permissões de hardware. Reforça frame-ancestors none.
+      // Hardening específico de /triagem/* (web aprovador). Sem permissões
+      // de hardware. CSP vem do middleware (nonce).
       {
         source: '/triagem/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: cspTriagem },
           {
             key: 'Permissions-Policy',
             value: 'geolocation=(), camera=(), microphone=()',
