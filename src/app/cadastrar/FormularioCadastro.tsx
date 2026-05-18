@@ -46,10 +46,10 @@ export function FormularioCadastro() {
         name="senha"
         type="password"
         rotulo="Senha"
-        descricao="Mínimo 6 caracteres."
+        descricao="Mínimo 12 caracteres. Combine letras, números e ao menos um caractere especial."
         required
         autoComplete="new-password"
-        minLength={6}
+        minLength={12}
         aria-describedby={estado ? 'mensagem-cadastro' : undefined}
         disabled={pendente}
       />

@@ -12,7 +12,33 @@ export interface ResultadoCadastro {
   mensagem: string;
 }
 
-const SENHA_MINIMA = 6;
+/**
+ * Política de senha do cadastro self-service, cliente Governo SP.
+ *
+ * Mínimo 12 caracteres com mistura de 3 classes (letra, número, especial),
+ * alinhado ao baseline CIS para sistemas governamentais. Bloqueio adicional
+ * contra senhas vazadas (haveibeenpwned) e listas comuns roda no painel
+ * Supabase (Auth → Password Strength → Pwned passwords), configuração de
+ * infraestrutura fora deste arquivo.
+ */
+const SENHA_MINIMA = 12;
+const SENHA_REGEX_LETRA = /[A-Za-zÀ-ÿ]/;
+const SENHA_REGEX_NUMERO = /\d/;
+const SENHA_REGEX_ESPECIAL = /[^A-Za-zÀ-ÿ0-9]/;
+
+function validarSenha(senha: string): string | null {
+  if (senha.length < SENHA_MINIMA) {
+    return `Senha precisa ter no mínimo ${SENHA_MINIMA} caracteres.`;
+  }
+  const classes =
+    Number(SENHA_REGEX_LETRA.test(senha)) +
+    Number(SENHA_REGEX_NUMERO.test(senha)) +
+    Number(SENHA_REGEX_ESPECIAL.test(senha));
+  if (classes < 3) {
+    return 'Senha precisa combinar letras, números e ao menos um caractere especial.';
+  }
+  return null;
+}
 
 /**
  * Cadastro self-service de usuário com email + senha + nome.
@@ -44,11 +70,9 @@ export async function cadastrar(
       mensagem: 'Informe seu nome (mínimo 2 caracteres).',
     };
   }
-  if (senha.length < SENHA_MINIMA) {
-    return {
-      ok: false,
-      mensagem: `Senha precisa ter no mínimo ${SENHA_MINIMA} caracteres.`,
-    };
+  const erroSenha = validarSenha(senha);
+  if (erroSenha) {
+    return { ok: false, mensagem: erroSenha };
   }
 
   const validado = emailEstaAutorizado(email);
