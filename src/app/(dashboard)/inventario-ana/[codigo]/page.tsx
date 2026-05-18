@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { AlertTriangle } from 'lucide-react';
 import {
   anaRevisaoRepository,
   papeisRepository,
@@ -170,8 +171,9 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
           aria-labelledby="sec-geo"
           className={`rounded-gov-card border p-4 ${estacao.divergenciaMunicipio === 'divergente' ? 'border-gov-perigo bg-red-50' : 'border-amber-300 bg-amber-50'}`}
         >
-          <h2 id="sec-geo" className="mb-2 text-sm font-semibold">
-            <span aria-hidden="true">⚠</span> Município divergente
+          <h2 id="sec-geo" className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+            <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+            Município divergente
           </h2>
           <dl className="grid gap-1 text-sm sm:grid-cols-2">
             <div>

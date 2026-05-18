@@ -207,14 +207,14 @@ export function TabelaInventario({ itens }: Props) {
                         onChange={() => toggleUma(it.id)}
                       />
                     </Td>
-                    <Td>
+                    <th scope="row" className="border-b border-app-border-subtle px-3 py-1.5 text-left font-normal">
                       <Link
                         href={`/inventario-ana/${encodeURIComponent(it.codigoAna)}`}
                         className="mono text-gov-azul hover:underline"
                       >
                         {it.codigoAna}
                       </Link>
-                    </Td>
+                    </th>
                     <Td>{it.nome ?? '—'}</Td>
                     <Td>{it.municipioNome ?? '—'}</Td>
                     <Td>
@@ -357,7 +357,7 @@ function BotaoBulk({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded px-2 py-1 text-xs font-medium text-white disabled:opacity-60 ${cor}`}
+      className={`rounded px-2 py-1 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul ${cor}`}
     >
       {ROTULOS_ACAO[acao]}
     </button>

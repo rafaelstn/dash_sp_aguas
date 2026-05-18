@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface AtalhoItem {
   tecla: string;
   acao: string;
-  contexto?: string;
 }
 
 const ATALHOS_GERAIS: AtalhoItem[] = [
@@ -37,50 +37,42 @@ export interface DialogAjudaAtalhosProps {
   aoFechar: () => void;
 }
 
+/**
+ * Diálogo de ajuda de atalhos, baseado em <dialog> HTML5 nativo. Ganha
+ * focus trap, ESC pra fechar e gerenciamento de foco "de graça" pelo
+ * browser. Substitui a versão anterior em <div role="dialog"> que vazava
+ * o foco para o resto da página (WCAG 2.4.3).
+ *
+ * Os blocos de atalhos de triagem só aparecem quando a rota atual é
+ * /triagem*, evitando o "atalho fantasma" reportado em auditoria. Para
+ * usuários comuns na home, o diálogo mostra apenas atalhos globais.
+ */
 export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDialogElement>(null);
+  const pathname = usePathname();
+  const naTriagem = pathname?.startsWith('/triagem') ?? false;
 
   useEffect(() => {
-    if (!aberto) return;
-    const alvoAnterior = document.activeElement as HTMLElement | null;
-    dialogRef.current?.focus();
-
-    function onEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        aoFechar();
-      }
-    }
-    document.addEventListener('keydown', onEsc);
-    return () => {
-      document.removeEventListener('keydown', onEsc);
-      alvoAnterior?.focus?.();
-    };
-  }, [aberto, aoFechar]);
-
-  if (!aberto) return null;
+    const d = ref.current;
+    if (!d) return;
+    if (aberto && !d.open) d.showModal();
+    else if (!aberto && d.open) d.close();
+  }, [aberto]);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={ref}
       aria-labelledby="titulo-ajuda-atalhos"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClose={aoFechar}
+      onClick={(e) => {
+        // Click no backdrop (fora do conteúdo) fecha o diálogo. O backdrop
+        // é o próprio <dialog>; o conteúdo está em <div role="document">.
+        if (e.target === ref.current) aoFechar();
+      }}
+      className="max-w-md w-full max-h-[85vh] overflow-y-auto rounded-gov-card border border-gov-borda bg-white p-5 shadow-gov-card-hover backdrop:bg-black/40"
     >
-      {/* Backdrop: botão invisível pra fechar ao clicar fora. Acessível via Esc. */}
-      <button
-        type="button"
-        aria-label="Fechar ajuda"
-        tabIndex={-1}
-        onClick={aoFechar}
-        className="absolute inset-0 w-full h-full cursor-default focus:outline-none"
-      />
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="relative max-w-md w-full max-h-[85vh] overflow-y-auto bg-white rounded-gov-card shadow-gov-card-hover border border-gov-borda p-5 focus:outline-none"
-      >
-        <div className="flex items-start justify-between gap-3 mb-3">
+      <div role="document" className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
           <h2 id="titulo-ajuda-atalhos" className="text-lg font-semibold text-gov-texto">
             Atalhos de teclado
           </h2>
@@ -88,21 +80,29 @@ export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps
             type="button"
             onClick={aoFechar}
             aria-label="Fechar ajuda"
-            className="text-gov-muted hover:text-gov-texto text-xl leading-none"
+            className="rounded text-xl leading-none text-gov-muted hover:text-gov-texto focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
           >
             ×
           </button>
         </div>
 
         <Bloco titulo="Navegação" itens={ATALHOS_GERAIS} />
-        <Bloco titulo="Lista de triagem" itens={ATALHOS_TRIAGEM_LISTA} />
-        <Bloco titulo="Detalhe da triagem" itens={ATALHOS_TRIAGEM_DETALHE} />
+        {naTriagem ? (
+          <>
+            <Bloco titulo="Lista de triagem" itens={ATALHOS_TRIAGEM_LISTA} />
+            <Bloco titulo="Detalhe da triagem" itens={ATALHOS_TRIAGEM_DETALHE} />
+          </>
+        ) : (
+          <p className="text-xs text-gov-muted">
+            Atalhos específicos de triagem (J/K, R/A/X/D) aparecem aqui quando você está em <code className="mono">/triagem</code>.
+          </p>
+        )}
 
-        <p className="mt-4 text-xs text-gov-muted">
+        <p className="text-xs text-gov-muted">
           Atalhos são ignorados quando você está digitando em um campo.
         </p>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -114,7 +114,7 @@ function Bloco({
   itens: AtalhoItem[];
 }) {
   return (
-    <section className="mt-3 first:mt-0">
+    <section>
       <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wider text-gov-muted">
         {titulo}
       </h3>
@@ -126,7 +126,7 @@ function Bloco({
           >
             <dt className="text-gov-muted">{a.acao}</dt>
             <dd>
-              <kbd className="font-mono text-xs bg-gov-superficie-2 border border-gov-borda rounded px-2 py-1 text-gov-texto">
+              <kbd className="rounded border border-gov-borda bg-gov-superficie-2 px-2 py-1 font-mono text-xs text-gov-texto">
                 {a.tecla}
               </kbd>
             </dd>
