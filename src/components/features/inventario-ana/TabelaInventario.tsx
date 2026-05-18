@@ -158,7 +158,7 @@ export function TabelaInventario({ itens }: Props) {
       ) : null}
 
       <div className="overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full min-w-[900px] border-collapse text-sm">
           <caption className="sr-only">
             Estações ANA pendentes de revisão, ordenadas por divergência
           </caption>

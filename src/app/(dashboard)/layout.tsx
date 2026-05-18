@@ -1,9 +1,11 @@
 import Image from 'next/image';
-import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { Sidenav } from '@/components/layout/Sidenav';
+import { MenuMobile } from '@/components/layout/MenuMobile';
+import { obterItensNav } from '@/components/layout/nav-itens';
 
 /**
- * Chrome do app autenticado: sidenav esquerdo + header com identidade
+ * Chrome do app autenticado: sidenav esquerdo (desktop) + drawer mobile
+ * (MenuMobile, abre via hamburger no header) + header com identidade
  * institucional + footer. Aplicado a TODAS as rotas dentro do route group
  * `(dashboard)`, ficha técnica do posto, busca, painel, favoritos, etc.
  *
@@ -15,15 +17,17 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const usuario = await obterUsuarioAtual();
+  const { usuario, itens } = await obterItensNav();
 
   return (
     <div className="lg:flex">
-      <Sidenav />
+      <Sidenav itens={itens} usuario={usuario} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 h-header border-b border-app-border-subtle bg-app-surface">
           <div className="mx-auto flex h-full max-w-content items-center gap-3 px-4">
+            <MenuMobile itens={itens} />
+
             <div className="flex items-center gap-2.5">
               <Image
                 src="/logo-spaguas.png"

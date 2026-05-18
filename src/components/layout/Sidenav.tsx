@@ -1,86 +1,22 @@
 import Link from 'next/link';
-import {
-  favoritosRepository,
-  desconformidadesRepository,
-  papeisRepository,
-  triagemRepository,
-} from '@/infrastructure/repositories';
-import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { ItemSidenav, type IconeKey } from './ItemSidenav';
+import { ItemSidenav } from './ItemSidenav';
+import type { ItemNav } from './nav-itens';
+import type { UsuarioAutenticado } from '@/infrastructure/auth/current-user';
+
+interface Props {
+  itens: ItemNav[];
+  usuario: UsuarioAutenticado | null;
+}
 
 /**
- * Navegação lateral fixa (desktop ≥ lg). Em telas menores, oculta-se com
- * `hidden lg:flex` — mobile usa links inline no header (futuro: drawer).
+ * Navegação lateral fixa para desktop ≥ lg. Em telas menores fica oculta
+ * via `hidden lg:flex`, o MenuMobile (drawer com hamburger) cobre o
+ * mesmo conteúdo via header em mobile/tablet.
  *
- * Contadores:
- *  - favoritos: do usuário autenticado (0 se deslogado).
- *  - desconformidades: total de postos desconformes (view v_postos_desconformes).
- *  - triagem: total de fichas pendentes/em revisão. Item é visível apenas
- *    para usuários com papel `aprovador` em `usuarios_papeis`.
+ * Itens e usuário vêm como props já calculados pela `obterItensNav` no
+ * layout (evita duplicar queries entre desktop e mobile).
  */
-export async function Sidenav() {
-  const usuario = await obterUsuarioAtual();
-  let totalFavoritos = 0;
-  let totalDesconformidades = 0;
-  let ehAprovador = false;
-  let totalTriagem = 0;
-
-  try {
-    if (usuario) totalFavoritos = await favoritosRepository.contar(usuario.id);
-  } catch {
-    /* tolera erro — sidenav ainda renderiza */
-  }
-  try {
-    const c = await desconformidadesRepository.contar();
-    totalDesconformidades = c.prefixoPrincipal + c.prefixoAna;
-  } catch {
-    /* idem */
-  }
-  if (usuario) {
-    try {
-      ehAprovador = await papeisRepository.ehAprovador(usuario.id);
-    } catch {
-      /* sem papel ainda assim renderiza sidenav — apenas oculta o item */
-    }
-    if (ehAprovador) {
-      try {
-        const r = await triagemRepository.listarPendentes({
-          estado: ['pendente', 'em_revisao'],
-          limite: 1,
-          offset: 0,
-        });
-        totalTriagem = r.total;
-      } catch {
-        /* badge ausente é melhor que sidenav quebrado */
-      }
-    }
-  }
-
-  type ItemSide = {
-    href: string;
-    rotulo: string;
-    icone: IconeKey;
-    contador: number | null;
-    atalho?: string;
-  };
-
-  const itens: ItemSide[] = [
-    { href: '/painel', rotulo: 'Painel', icone: 'dashboard', contador: null, atalho: 'P' },
-    { href: '/', rotulo: 'Buscar postos', icone: 'search', contador: null, atalho: '/' },
-    { href: '/favoritos', rotulo: 'Favoritos', icone: 'star', contador: totalFavoritos, atalho: 'F' },
-    { href: '/desconformidades', rotulo: 'Desconformidades', icone: 'alert', contador: totalDesconformidades, atalho: 'D' },
-  ];
-
-  if (ehAprovador) {
-    itens.push({
-      href: '/triagem',
-      rotulo: 'Triagem',
-      icone: 'inbox',
-      contador: totalTriagem,
-      atalho: 'T',
-    });
-  }
-
+export function Sidenav({ itens, usuario }: Props) {
   return (
     <aside
       aria-label="Navegação principal"
