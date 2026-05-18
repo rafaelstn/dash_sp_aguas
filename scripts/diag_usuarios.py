@@ -52,7 +52,7 @@ def main() -> None:
 
         print()
         cur.execute(
-            "SELECT COUNT(*), MIN(criado_em), MAX(criado_em) FROM fichas_triagem"
+            "SELECT COUNT(*), MIN(criada_em), MAX(criada_em) FROM fichas_triagem"
         )
         total, primeiro, ultimo = cur.fetchone()
         print(f"fichas_triagem: {total} registros  primeiro={primeiro}  ultimo={ultimo}")
