@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnaRevisaoEstacao } from '@/domain/ana-revisao';
 import { BadgeDivergencia } from './BadgeDivergencia';
@@ -24,6 +25,7 @@ const ROTULOS_ACAO: Record<AcaoBulk, string> = {
 };
 
 export function TabelaInventario({ itens }: Props) {
+  const router = useRouter();
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [enviando, setEnviando] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -94,9 +96,10 @@ export function TabelaInventario({ itens }: Props) {
         falhadas: number;
       };
       setFeedback(
-        `Aplicadas em ${json.aplicadas}. Falhas: ${json.falhadas}. Recarregue a página para ver as atualizações.`,
+        `Aplicadas em ${json.aplicadas}. Falhas: ${json.falhadas}.`,
       );
       setSelecionadas(new Set());
+      router.refresh();
     } catch (e) {
       setFeedback(
         e instanceof Error

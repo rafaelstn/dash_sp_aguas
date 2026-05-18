@@ -163,8 +163,9 @@ export function BarraAcoesTriagem({
             <button
               type="button"
               onClick={() => setAcaoAberta('devolver')}
+              disabled={acaoAberta !== null}
               aria-keyshortcuts="d"
-              className="rounded border border-orange-600 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+              className="rounded border border-orange-600 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
             >
               Devolver
               <kbd className="mono ml-2 rounded border border-orange-300 px-1 text-2xs">
@@ -174,8 +175,9 @@ export function BarraAcoesTriagem({
             <button
               type="button"
               onClick={() => setAcaoAberta('rejeitar')}
+              disabled={acaoAberta !== null}
               aria-keyshortcuts="x"
-              className="rounded border border-gov-perigo bg-white px-3 py-1.5 text-sm font-medium text-gov-perigo hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+              className="rounded border border-gov-perigo bg-white px-3 py-1.5 text-sm font-medium text-gov-perigo hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
             >
               Rejeitar
               <kbd className="mono ml-2 rounded border border-red-300 px-1 text-2xs">
@@ -185,8 +187,9 @@ export function BarraAcoesTriagem({
             <button
               type="button"
               onClick={() => setAcaoAberta('aprovar')}
+              disabled={acaoAberta !== null}
               aria-keyshortcuts="a"
-              className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+              className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
             >
               Aprovar
               <kbd className="mono ml-2 rounded bg-white/20 px-1 text-2xs">
