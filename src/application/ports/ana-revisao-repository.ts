@@ -57,4 +57,53 @@ export interface AnaRevisaoRepository {
     acao: AcaoBulkAna,
     ator: ContextoAtor,
   ): Promise<{ aplicadas: number; falhadas: number }>;
+
+  /**
+   * Busca o match sugerido (heurística PostGIS + similaridade) registrado
+   * pra uma estação ANA dentro do lote. Retorna null se a estação não
+   * existe ou não tem sugestão. Usado pela rota POST /aceitar-match.
+   */
+  obterSugestaoMatch(
+    loteId: string,
+    codigoAna: string,
+  ): Promise<{
+    estacaoId: string;
+    matchSugeridoPostoId: string;
+    prefixoSugerido: string;
+  } | null>;
+
+  /**
+   * Contagem de estações pendentes/em_revisao que casam com um pattern
+   * de cenário ANA nas colunas de observação. Usado pelos chips de
+   * filtro na tela de listagem. Espera o pattern já formatado pra
+   * `ILIKE` (com `%`).
+   */
+  contarPorCenario(loteId: string, pattern: string): Promise<number>;
+
+  /**
+   * Detalhe do match sugerido para mostrar na tela de revisão (prefixo,
+   * nome, município, confiança qualitativa e score 0..1). Retorna null
+   * quando a estação não tem sugestão ou o posto sugerido foi removido.
+   */
+  detalheSugestaoMatch(
+    estacaoId: string,
+  ): Promise<{
+    prefixo: string;
+    nome: string | null;
+    municipio: string | null;
+    confianca: 'alta' | 'media' | 'baixa';
+    score: number;
+  } | null>;
+
+  /**
+   * Vincula a estação ao posto sugerido e marca como revisada. Atualiza
+   * `posto_id`, `match_tipo='manual'`, `status='revisada'`, e grava
+   * evento no audit trail (`ana_revisao_evento`). Atômica.
+   */
+  aceitarMatch(
+    estacaoId: string,
+    postoIdSugerido: string,
+    prefixoSugerido: string,
+    ator: ContextoAtor,
+  ): Promise<void>;
 }

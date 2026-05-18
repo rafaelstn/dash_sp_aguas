@@ -7,7 +7,6 @@ import {
   postosRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { sql } from '@/infrastructure/db/client';
 import { Alerta } from '@/components/ui/Alerta';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
 import { BadgeStatus } from '@/components/features/inventario-ana/BadgeStatus';
@@ -70,35 +69,7 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
       }
     | null = null;
   if (!posto) {
-    const r = await sql<
-      Array<{
-        prefixo: string;
-        nome_estacao: string | null;
-        municipio: string | null;
-        confianca: 'alta' | 'media' | 'baixa';
-        score: string;
-      }>
-    >`
-      SELECT p.prefixo, p.nome_estacao, p.municipio,
-             e.match_sugerido_confianca AS confianca,
-             e.match_sugerido_score::text AS score
-        FROM ana_revisao_estacao e
-        JOIN postos p ON p.id = e.match_sugerido_posto_id
-       WHERE e.id = ${estacao.id}::uuid
-         AND e.match_sugerido_posto_id IS NOT NULL
-         AND p.deleted_at IS NULL
-       LIMIT 1
-    `;
-    if (r[0]) {
-      const scoreNum = Number(r[0].score);
-      matchSugerido = {
-        prefixo: r[0].prefixo,
-        nome: r[0].nome_estacao,
-        municipio: r[0].municipio,
-        confianca: r[0].confianca,
-        score: Number.isFinite(scoreNum) ? scoreNum : 0,
-      };
-    }
+    matchSugerido = await anaRevisaoRepository.detalheSugestaoMatch(estacao.id);
   }
 
   return (

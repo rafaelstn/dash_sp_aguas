@@ -163,4 +163,22 @@ export interface PostosRepository {
 
   /** Reverte soft delete (`deleted_at = NULL`). */
   restaurar(prefixo: string, ator: ContextoAtorPosto): Promise<Posto>;
+
+  /** Histórico de eventos auditados do posto (LGPD §4). Limitado ao `limite`. */
+  listarEventos(postoId: string, limite?: number): Promise<EventoPosto[]>;
+}
+
+/**
+ * Linha do audit trail (`postos_evento`). Mantida no port pra evitar que
+ * UI/use cases dependam do schema cru do banco.
+ */
+export interface EventoPosto {
+  id: string;
+  evento: string;
+  atorEmail: string | null;
+  origemEvento: string | null;
+  observacao: string | null;
+  valoresAntes: unknown;
+  valoresDepois: unknown;
+  ocorreuEm: Date;
 }

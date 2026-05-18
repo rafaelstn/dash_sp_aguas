@@ -13,10 +13,10 @@ import {
   PowerOff,
   Radio,
 } from 'lucide-react';
-import { painelRepository } from '@/infrastructure/db/painel-repository.pg';
 import {
   anaRevisaoRepository,
   papeisRepository,
+  painelRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { CardKPI } from '@/components/features/painel/CardKPI';

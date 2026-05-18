@@ -85,7 +85,17 @@ async function memoize<T>(chave: string, fn: () => Promise<T>): Promise<T> {
   return dados;
 }
 
-export const painelRepository = {
+export interface PainelRepository {
+  resumoPendencias(): Promise<ResumoPendencias>;
+  distribuicaoPorTipo(): Promise<DistribuicaoTipo[]>;
+  rankingUGRHI(): Promise<RankingUGRHI[]>;
+  classesDesconformidade(): Promise<ClasseDesconformidade[]>;
+  statusOperacional(): Promise<StatusOperacional>;
+  rankingMantenedores(limite?: number): Promise<RankingMantenedor[]>;
+  atividadeRecente(): Promise<AtividadeRecente>;
+}
+
+export const painelRepository: PainelRepository = {
   async resumoPendencias(): Promise<ResumoPendencias> {
     return memoize('resumo', async () => {
       try {

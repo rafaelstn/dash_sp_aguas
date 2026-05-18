@@ -551,6 +551,45 @@ export const postosRepository: PostosRepository = {
       throw new FalhaRepositorio('restaurar', e);
     }
   },
+
+  async listarEventos(postoId, limite = 20) {
+    try {
+      const linhas = await sql<
+        Array<{
+          id: string;
+          evento: string;
+          ator_email: string | null;
+          origem_evento: string | null;
+          observacao: string | null;
+          valores_antes: unknown;
+          valores_depois: unknown;
+          ocorreu_em: Date;
+        }>
+      >`
+        SELECT e.id, e.evento,
+               (SELECT email FROM auth.users WHERE id = e.ator_id) AS ator_email,
+               e.origem_evento, e.observacao,
+               e.valores_antes, e.valores_depois,
+               e.ocorreu_em
+          FROM postos_evento e
+         WHERE e.posto_id = ${postoId}
+         ORDER BY e.ocorreu_em DESC
+         LIMIT ${limite}
+      `;
+      return linhas.map((l) => ({
+        id: l.id,
+        evento: l.evento,
+        atorEmail: l.ator_email,
+        origemEvento: l.origem_evento,
+        observacao: l.observacao,
+        valoresAntes: l.valores_antes,
+        valoresDepois: l.valores_depois,
+        ocorreuEm: l.ocorreu_em,
+      }));
+    } catch (e) {
+      throw new FalhaRepositorio('postos.listarEventos', e);
+    }
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────

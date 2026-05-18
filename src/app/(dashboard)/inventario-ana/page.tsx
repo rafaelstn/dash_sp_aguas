@@ -12,7 +12,6 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { CardKPI } from '@/components/features/painel/CardKPI';
 import { FiltrosInventario } from '@/components/features/inventario-ana/FiltrosInventario';
 import { TabelaInventario } from '@/components/features/inventario-ana/TabelaInventario';
-import { sql } from '@/infrastructure/db/client';
 import { CENARIOS_ANA } from '@/domain/ana-cenarios';
 import type {
   DivergenciaMunicipio,
@@ -153,22 +152,12 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
   // exatamente o mesmo pattern que mostramos aqui.
   const chipsContagem: Array<CenarioChip> = [];
   for (const c of CENARIOS_ANA) {
-    const r = await sql<Array<{ total: number }>>`
-      SELECT COUNT(*)::int AS total
-        FROM ana_revisao_estacao
-       WHERE lote_id = ${lote.id}
-         AND status IN ('pendente', 'em_revisao')
-         AND (
-           observacao_1 ILIKE ${c.pattern}
-           OR observacao_2 ILIKE ${c.pattern}
-           OR observacao_3 ILIKE ${c.pattern}
-         )
-    `;
+    const total = await anaRevisaoRepository.contarPorCenario(lote.id, c.pattern);
     chipsContagem.push({
       chave: c.chave,
       rotulo: c.rotulo,
       pattern: c.pattern,
-      total: Number(r[0]?.total ?? 0),
+      total,
     });
   }
 

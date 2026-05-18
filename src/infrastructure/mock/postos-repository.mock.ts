@@ -60,6 +60,12 @@ export const postosRepository: PostosRepository = {
     throw new Error('Modo demo: restauração de posto indisponível sem banco.');
   },
 
+  async listarEventos() {
+    // Modo demo nao tem audit trail real; retorna lista vazia em vez de
+    // jogar erro, pra nao quebrar a tela de edicao.
+    return [];
+  },
+
   async pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa> {
     const offset = (params.pagina - 1) * params.porPagina;
     let filtrados: Posto[] = [];

@@ -1,16 +1,5 @@
 import 'server-only';
-import { sql } from '@/infrastructure/db/client';
-
-interface LinhaEvento {
-  id: string;
-  evento: string;
-  ator_email: string | null;
-  origem_evento: string | null;
-  observacao: string | null;
-  ocorreu_em: Date;
-  /** Diff resumido: lista de "campo: antigo → novo" */
-  resumo: string | null;
-}
+import { postosRepository } from '@/infrastructure/repositories';
 
 const ROTULOS_EVENTO: Record<string, string> = {
   criado: 'Criado',
@@ -65,38 +54,17 @@ interface Props {
 }
 
 /**
- * Histórico de mudanças do posto. Server component que consulta direto
- * `postos_evento`. Mostra até 20 eventos mais recentes; se houver mais,
- * mostra link "ver todos" (não implementado aqui ainda, futuro).
+ * Histórico de mudanças do posto. Server component que delega a leitura
+ * dos eventos ao `postosRepository.listarEventos`, mantendo o componente
+ * agnóstico ao schema do banco.
  *
  * Atende LGPD §4 (governo.md): toda alteração ao cadastro do posto
  * tem trilha audit visível pro responsável.
  */
 export async function HistoricoPostoEventos({ postoId }: Props) {
-  const linhas = await sql<
-    Array<{
-      id: string;
-      evento: string;
-      ator_email: string | null;
-      origem_evento: string | null;
-      observacao: string | null;
-      valores_antes: unknown;
-      valores_depois: unknown;
-      ocorreu_em: Date;
-    }>
-  >`
-    SELECT e.id, e.evento,
-           (SELECT email FROM auth.users WHERE id = e.ator_id) AS ator_email,
-           e.origem_evento, e.observacao,
-           e.valores_antes, e.valores_depois,
-           e.ocorreu_em
-      FROM postos_evento e
-     WHERE e.posto_id = ${postoId}
-     ORDER BY e.ocorreu_em DESC
-     LIMIT 20
-  `;
+  const eventos = await postosRepository.listarEventos(postoId, 20);
 
-  if (linhas.length === 0) {
+  if (eventos.length === 0) {
     return (
       <section
         aria-labelledby="sec-hist"
@@ -112,16 +80,6 @@ export async function HistoricoPostoEventos({ postoId }: Props) {
     );
   }
 
-  const eventos: LinhaEvento[] = linhas.map((l) => ({
-    id: l.id,
-    evento: l.evento,
-    ator_email: l.ator_email,
-    origem_evento: l.origem_evento,
-    observacao: l.observacao,
-    ocorreu_em: l.ocorreu_em,
-    resumo: diffResumo(l.valores_antes, l.valores_depois),
-  }));
-
   return (
     <section
       aria-labelledby="sec-hist"
@@ -136,37 +94,40 @@ export async function HistoricoPostoEventos({ postoId }: Props) {
         </p>
       </header>
       <ol className="space-y-2">
-        {eventos.map((e) => (
-          <li
-            key={e.id}
-            className={`rounded border-l-4 px-3 py-2 text-sm ${corBorda(e.evento)}`}
-          >
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-semibold text-app-fg">{rotulo(e.evento)}</span>
-              <time
-                dateTime={e.ocorreu_em.toISOString()}
-                className="mono text-2xs text-app-fg-muted tabular"
-              >
-                {new Intl.DateTimeFormat('pt-BR', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                }).format(e.ocorreu_em)}
-              </time>
-            </div>
-            <p className="mt-0.5 text-2xs text-app-fg-muted">
-              {e.ator_email ?? 'Automação (sem ator humano)'}
-              {e.origem_evento ? <> · origem: {e.origem_evento}</> : null}
-            </p>
-            {e.resumo ? (
-              <p className="mt-1 text-xs text-app-fg break-words">{e.resumo}</p>
-            ) : null}
-            {e.observacao ? (
-              <p className="mt-1 text-xs italic text-app-fg-muted">
-                &ldquo;{e.observacao}&rdquo;
+        {eventos.map((e) => {
+          const resumo = diffResumo(e.valoresAntes, e.valoresDepois);
+          return (
+            <li
+              key={e.id}
+              className={`rounded border-l-4 px-3 py-2 text-sm ${corBorda(e.evento)}`}
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-semibold text-app-fg">{rotulo(e.evento)}</span>
+                <time
+                  dateTime={e.ocorreuEm.toISOString()}
+                  className="mono text-2xs text-app-fg-muted tabular"
+                >
+                  {new Intl.DateTimeFormat('pt-BR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  }).format(e.ocorreuEm)}
+                </time>
+              </div>
+              <p className="mt-0.5 text-2xs text-app-fg-muted">
+                {e.atorEmail ?? 'Automação (sem ator humano)'}
+                {e.origemEvento ? <> · origem: {e.origemEvento}</> : null}
               </p>
-            ) : null}
-          </li>
-        ))}
+              {resumo ? (
+                <p className="mt-1 text-xs text-app-fg break-words">{resumo}</p>
+              ) : null}
+              {e.observacao ? (
+                <p className="mt-1 text-xs italic text-app-fg-muted">
+                  &ldquo;{e.observacao}&rdquo;
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

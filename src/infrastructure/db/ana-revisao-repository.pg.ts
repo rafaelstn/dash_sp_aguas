@@ -701,4 +701,123 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       throw new FalhaRepositorio('anaRevisao.aplicarBulk', e);
     }
   },
+
+  async obterSugestaoMatch(loteId, codigoAna) {
+    try {
+      const linhas = await sql<
+        Array<{
+          id: string;
+          match_sugerido_posto_id: string | null;
+          prefixo_sugerido: string | null;
+        }>
+      >`
+        SELECT e.id, e.match_sugerido_posto_id, p.prefixo AS prefixo_sugerido
+          FROM ana_revisao_estacao e
+          LEFT JOIN postos p ON p.id = e.match_sugerido_posto_id
+         WHERE e.lote_id = ${loteId} AND e.codigo_ana = ${codigoAna}
+         LIMIT 1
+      `;
+      const r = linhas[0];
+      if (!r) return null;
+      if (!r.match_sugerido_posto_id || !r.prefixo_sugerido) return null;
+      return {
+        estacaoId: r.id,
+        matchSugeridoPostoId: r.match_sugerido_posto_id,
+        prefixoSugerido: r.prefixo_sugerido,
+      };
+    } catch (e) {
+      throw new FalhaRepositorio('anaRevisao.obterSugestaoMatch', e);
+    }
+  },
+
+  async contarPorCenario(loteId, pattern) {
+    try {
+      const linhas = await sql<Array<{ total: number }>>`
+        SELECT COUNT(*)::int AS total
+          FROM ana_revisao_estacao
+         WHERE lote_id = ${loteId}
+           AND status IN ('pendente', 'em_revisao')
+           AND (
+             observacao_1 ILIKE ${pattern}
+             OR observacao_2 ILIKE ${pattern}
+             OR observacao_3 ILIKE ${pattern}
+           )
+      `;
+      return Number(linhas[0]?.total ?? 0);
+    } catch (e) {
+      throw new FalhaRepositorio('anaRevisao.contarPorCenario', e);
+    }
+  },
+
+  async detalheSugestaoMatch(estacaoId) {
+    try {
+      const linhas = await sql<
+        Array<{
+          prefixo: string;
+          nome_estacao: string | null;
+          municipio: string | null;
+          confianca: 'alta' | 'media' | 'baixa';
+          score: string;
+        }>
+      >`
+        SELECT p.prefixo, p.nome_estacao, p.municipio,
+               e.match_sugerido_confianca AS confianca,
+               e.match_sugerido_score::text AS score
+          FROM ana_revisao_estacao e
+          JOIN postos p ON p.id = e.match_sugerido_posto_id
+         WHERE e.id = ${estacaoId}::uuid
+           AND e.match_sugerido_posto_id IS NOT NULL
+           AND p.deleted_at IS NULL
+         LIMIT 1
+      `;
+      const r = linhas[0];
+      if (!r) return null;
+      const scoreNum = Number(r.score);
+      return {
+        prefixo: r.prefixo,
+        nome: r.nome_estacao,
+        municipio: r.municipio,
+        confianca: r.confianca,
+        score: Number.isFinite(scoreNum) ? scoreNum : 0,
+      };
+    } catch (e) {
+      throw new FalhaRepositorio('anaRevisao.detalheSugestaoMatch', e);
+    }
+  },
+
+  async aceitarMatch(estacaoId, postoIdSugerido, prefixoSugerido, ator) {
+    try {
+      await sql.begin(async (tx) => {
+        await tx`
+          UPDATE ana_revisao_estacao
+             SET posto_id = ${postoIdSugerido}::uuid,
+                 match_tipo = 'manual',
+                 status = 'revisada',
+                 revisado_por = ${ator.usuarioId}::uuid,
+                 revisado_em = NOW()
+           WHERE id = ${estacaoId}::uuid
+        `;
+
+        await tx`
+          INSERT INTO ana_revisao_evento
+            (estacao_id, evento, ator_id, valores_depois, observacao, ip, user_agent)
+          VALUES (
+            ${estacaoId}::uuid,
+            'revisada',
+            ${ator.usuarioId}::uuid,
+            ${JSON.stringify({
+              posto_id: postoIdSugerido,
+              posto_prefixo: prefixoSugerido,
+              status: 'revisada',
+            })}::jsonb,
+            ${`Match aceito: vinculado ao posto ${prefixoSugerido}`},
+            ${ator.ip}::inet,
+            ${ator.userAgent}
+          )
+        `;
+      });
+    } catch (e) {
+      throw new FalhaRepositorio('anaRevisao.aceitarMatch', e);
+    }
+  },
 };

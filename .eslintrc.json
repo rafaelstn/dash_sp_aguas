@@ -30,7 +30,7 @@
       }
     },
     {
-      "files": ["src/infrastructure/repositories.ts", "src/infrastructure/db/**", "src/components/features/postos/HistoricoPostoEventos.tsx", "**/inventario-ana/**/page.tsx", "src/app/(dashboard)/painel/page.tsx", "**/aceitar-match/route.ts", "src/app/api/health/route.ts", "src/application/use-cases/inventario-ana/exportar.ts"],
+      "files": ["src/infrastructure/repositories.ts", "src/infrastructure/db/**", "src/app/api/health/route.ts", "src/application/use-cases/inventario-ana/exportar.ts"],
       "rules": {
         "no-restricted-imports": "off"
       }

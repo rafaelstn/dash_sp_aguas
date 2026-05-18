@@ -255,6 +255,24 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
 
     return { aplicadas, falhadas };
   },
+
+  async obterSugestaoMatch() {
+    // Mock nao modela match sugerido; testes que precisam disso usam o
+    // adapter PG real ou stub dedicado.
+    return null;
+  },
+
+  async contarPorCenario() {
+    return 0;
+  },
+
+  async detalheSugestaoMatch() {
+    return null;
+  },
+
+  async aceitarMatch() {
+    throw new Error('Mock: aceitar match nao implementado.');
+  },
 };
 
 /**

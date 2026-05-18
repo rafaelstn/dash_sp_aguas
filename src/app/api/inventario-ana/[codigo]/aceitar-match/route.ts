@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import {
   anaRevisaoRepository,
   papeisRepository,
   postosRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { sql } from '@/infrastructure/db/client';
+import { logger } from '@/infrastructure/logging/logger';
 import {
   POLITICAS,
   aplicarHeadersRateLimit,
@@ -51,84 +52,62 @@ export async function POST(
   }
 
   const { codigo } = await ctx.params;
-  const linhas = await sql<
-    Array<{
-      id: string;
-      match_sugerido_posto_id: string | null;
-      prefixo_sugerido: string | null;
-    }>
-  >`
-    SELECT e.id, e.match_sugerido_posto_id, p.prefixo AS prefixo_sugerido
-      FROM ana_revisao_estacao e
-      LEFT JOIN postos p ON p.id = e.match_sugerido_posto_id
-     WHERE e.lote_id = ${lote.id} AND e.codigo_ana = ${codigo}
-     LIMIT 1
-  `;
-  const r = linhas[0];
-  if (!r) {
+  const sugestao = await anaRevisaoRepository.obterSugestaoMatch(lote.id, codigo);
+  if (!sugestao) {
     return NextResponse.json(
       { erro: 'nao_encontrada' },
       { status: 404, headers },
     );
   }
-  if (!r.match_sugerido_posto_id || !r.prefixo_sugerido) {
-    return NextResponse.json(
-      { erro: 'sem_sugestao' },
-      { status: 409, headers },
-    );
-  }
 
   const ip = extrairIp(request);
+  const ator = {
+    usuarioId: usuario.id,
+    ip: ip === 'unknown' ? null : ip,
+    userAgent: request.headers.get('user-agent'),
+  };
+
   try {
-    // 1. Atualiza postos.prefixo_ana
     await postosRepository.atualizar(
-      r.prefixo_sugerido,
+      sugestao.prefixoSugerido,
       { prefixoAna: codigo },
       {
-        usuarioId: usuario.id,
-        ip: ip === 'unknown' ? null : ip,
-        userAgent: request.headers.get('user-agent'),
+        ...ator,
         origemEvento: 'aceitar_match_ana',
         observacao: `Aceito match: estação ANA ${codigo} vinculada a este posto.`,
-        referenciaExternaId: r.id,
+        referenciaExternaId: sugestao.estacaoId,
       },
     );
 
-    // 2. Atualiza ana_revisao_estacao: liga ao posto e marca como revisada
-    await sql`
-      UPDATE ana_revisao_estacao
-         SET posto_id = ${r.match_sugerido_posto_id}::uuid,
-             match_tipo = 'manual',
-             status = 'revisada',
-             revisado_por = ${usuario.id}::uuid,
-             revisado_em = NOW()
-       WHERE id = ${r.id}::uuid
-    `;
+    await anaRevisaoRepository.aceitarMatch(
+      sugestao.estacaoId,
+      sugestao.matchSugeridoPostoId,
+      sugestao.prefixoSugerido,
+      ator,
+    );
 
-    await sql`
-      INSERT INTO ana_revisao_evento
-        (estacao_id, evento, ator_id, valores_depois, observacao, ip, user_agent)
-      VALUES (
-        ${r.id}::uuid,
-        'revisada',
-        ${usuario.id}::uuid,
-        ${JSON.stringify({
-          posto_id: r.match_sugerido_posto_id,
-          posto_prefixo: r.prefixo_sugerido,
-          status: 'revisada',
-        })}::jsonb,
-        ${`Match aceito: vinculado ao posto ${r.prefixo_sugerido}`},
-        ${ip === 'unknown' ? null : ip}::inet,
-        ${request.headers.get('user-agent')}
-      )
-    `;
-
-    return NextResponse.json({ ok: true, prefixo: r.prefixo_sugerido }, { headers });
+    return NextResponse.json(
+      { ok: true, prefixo: sugestao.prefixoSugerido },
+      { headers },
+    );
   } catch (e) {
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      {
+        correlationId,
+        rota: 'POST /api/inventario-ana/[codigo]/aceitar-match',
+        codigo,
+        prefixoSugerido: sugestao.prefixoSugerido,
+        erro: String(e),
+      },
+      'Falha ao aceitar match ANA',
+    );
     return NextResponse.json(
       {
-        erro: 'falha',
-        mensagem: e instanceof Error ? e.message : 'Falha ao aceitar match.',
+        erro: 'erro_interno',
+        mensagem: 'Falha ao aceitar match.',
+        correlationId,
       },
       { status: 500, headers },
     );

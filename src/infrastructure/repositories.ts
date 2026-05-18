@@ -14,6 +14,7 @@ import { fichasVisitaRepository as fichasVisitaPg } from './db/fichas-visita-rep
 import { triagemRepository as triagemPg } from './db/triagem-repository.pg';
 import { papeisRepository as papeisPg } from './db/papeis-repository.pg';
 import { anaRevisaoRepository as anaRevisaoPg } from './db/ana-revisao-repository.pg';
+import { painelRepository as painelPg } from './db/painel-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
 import { postosRepository as postosMock } from './mock/postos-repository.mock';
@@ -89,7 +90,63 @@ const anaRevisaoStubDemo: AnaRevisaoRepository = {
   async aplicarBulk() {
     return { aplicadas: 0, falhadas: 0 };
   },
+  async obterSugestaoMatch() {
+    return null;
+  },
+  async contarPorCenario() {
+    return 0;
+  },
+  async detalheSugestaoMatch() {
+    return null;
+  },
+  async aceitarMatch() {
+    throw new Error('Modo demo: aceitar match ANA indisponível sem banco.');
+  },
 };
 export const anaRevisaoRepository = demo ? anaRevisaoStubDemo : anaRevisaoPg;
+
+// Painel é só agregação read-only. Em modo demo, devolve um stub vazio
+// que mantém a tela renderizável sem banco.
+import type { PainelRepository } from './db/painel-repository.pg';
+const painelStubDemo: PainelRepository = {
+  async resumoPendencias() {
+    return {
+      totalPostos: 0,
+      postosComArquivos: 0,
+      postosSemArquivos: 0,
+      postosComCoordenadas: 0,
+      postosSemCoordenadas: 0,
+      postosComTelemetria: 0,
+      desconformidadesPostos: 0,
+      arquivosOrfaos: 0,
+    };
+  },
+  async distribuicaoPorTipo() {
+    return [];
+  },
+  async rankingUGRHI() {
+    return [];
+  },
+  async classesDesconformidade() {
+    return [];
+  },
+  async statusOperacional() {
+    return { ativos: 0, desativados: 0, indeterminados: 0, total: 0 };
+  },
+  async rankingMantenedores() {
+    return [];
+  },
+  async atividadeRecente() {
+    return {
+      ultimaIndexacao: null,
+      statusUltimaIndexacao: null,
+      totalLotesIndexacao: 0,
+      arquivosIndexadosTotal: 0,
+      acessosHoje: 0,
+      acessos7Dias: 0,
+    };
+  },
+};
+export const painelRepository = demo ? painelStubDemo : painelPg;
 
 export const modoDemoAtivo = demo;
