@@ -16,6 +16,15 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Lock em memória por usuário para serializar exports concorrentes do
+ * mesmo aprovador. O export materializa ~11k linhas + workbook + buffer
+ * antes de responder; duas requisições simultâneas dobram o consumo
+ * de heap. Lock local ao processo Node (cada instância Vercel tem o seu);
+ * combinado com o rate limit já existente, basta para proteger.
+ */
+const exportandoAgora = new Set<string>();
+
+/**
  * GET /api/inventario-ana/exportar
  *
  * Gera o XLSX no formato ANA com células alteradas em amarelo. A planilha
@@ -48,6 +57,17 @@ export async function GET() {
   if (!lote) {
     return NextResponse.json({ erro: 'sem_lote' }, { status: 404, headers });
   }
+
+  if (exportandoAgora.has(usuario.id)) {
+    return NextResponse.json(
+      {
+        erro: 'export_em_andamento',
+        mensagem: 'Já existe um export em andamento para sua conta. Aguarde concluir.',
+      },
+      { status: 409, headers },
+    );
+  }
+  exportandoAgora.add(usuario.id);
 
   try {
     const { buffer, nomeArquivo, estatisticas } = await exportarInventarioAna(
@@ -85,5 +105,7 @@ export async function GET() {
       { erro: 'erro_interno', mensagem: 'Falha ao gerar XLSX.' },
       { status: 500, headers },
     );
+  } finally {
+    exportandoAgora.delete(usuario.id);
   }
 }

@@ -288,8 +288,14 @@ def main() -> int:
         print("Dry-run: nao salvando.")
         return 0
 
+    # Escrita atomica: grava em <saida>.tmp e renomeia. openpyxl nao tem
+    # lock de arquivo, e duas execucoes simultaneas no mesmo destino podem
+    # corromper o XLSX. O rename de mesmo volume eh atomico em Windows e
+    # POSIX, garantindo que ninguem veja um arquivo a meio caminho.
     print(f"Salvando em {saida} ...")
-    wb.save(saida)
+    temp = saida.with_suffix(saida.suffix + ".tmp")
+    wb.save(temp)
+    temp.replace(saida)
     print("OK.")
     return 0
 

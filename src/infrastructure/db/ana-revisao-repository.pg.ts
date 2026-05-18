@@ -589,36 +589,41 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
       }
 
       return await sql.begin(async (tx) => {
-        // Carrega estações selecionadas (com lock)
-        const linhas = await tx<LinhaEstacao[]>`
-          SELECT e.*,
-                 p.prefixo               AS posto_prefixo,
-                 p.municipio             AS p_municipio,
-                 p.divergencia_municipio AS p_divergencia_municipio,
-                 p.distancia_municipio_m AS p_distancia_municipio_m
-            FROM ana_revisao_estacao e
-            LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
-           WHERE e.lote_id = ${loteId}
-             AND e.id = ANY(${acao.estacaoIds})
+        // Carrega estações selecionadas (com lock). Só precisamos do id e do
+        // status atual, o JOIN com postos é dispensável aqui.
+        const linhas = await tx<{ id: string; status: string }[]>`
+          SELECT id, status
+            FROM ana_revisao_estacao
+           WHERE lote_id = ${loteId}
+             AND id = ANY(${acao.estacaoIds})
              FOR UPDATE
         `;
 
-        let aplicadas = 0;
+        // Determina o destino para cada linha de uma só vez. Sem round trip
+        // por estação: o loop anterior fazia até 1000 queries dentro da
+        // transação (UPDATE + INSERT cada).
+        type Elegivel = {
+          id: string;
+          antes: StatusRevisao;
+          novo: StatusRevisao;
+          evento: string;
+        };
+        const elegiveis: Elegivel[] = [];
         let falhadas = 0;
 
-        for (const atual of linhas) {
-          const statusAtual = atual.status as StatusRevisao;
-          let novoStatus: StatusRevisao = statusAtual;
+        for (const linha of linhas) {
+          const antes = linha.status as StatusRevisao;
+          let novo: StatusRevisao = antes;
           let evento = 'corrigida_manual';
 
           if (acao.acao === 'marcar_revisada') {
-            novoStatus = 'revisada';
+            novo = 'revisada';
             evento = 'revisada';
           } else if (acao.acao === 'descartar') {
-            novoStatus = 'descartada';
+            novo = 'descartada';
             evento = 'descartada';
           } else if (acao.acao === 'restaurar') {
-            novoStatus = 'pendente';
+            novo = 'pendente';
             evento = 'restaurada';
           } else if (acao.acao === 'aceitar_sugestao_municipio') {
             // FASE 5: correções agora vão direto pra postos via PATCH
@@ -628,37 +633,68 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             continue;
           }
 
-          if (!transicaoPermitida(statusAtual, novoStatus)) {
+          if (!transicaoPermitida(antes, novo)) {
             falhadas += 1;
             continue;
           }
-
-          await tx`
-            UPDATE ana_revisao_estacao
-               SET status = ${novoStatus},
-                   revisado_por = ${ator.usuarioId},
-                   revisado_em = NOW()
-             WHERE id = ${atual.id}
-          `;
-
-          await tx`
-            INSERT INTO ana_revisao_evento
-              (estacao_id, evento, ator_id, valores_antes, valores_depois, observacao, ip, user_agent)
-            VALUES (
-              ${atual.id},
-              ${evento},
-              ${ator.usuarioId},
-              ${JSON.stringify({ status: atual.status })}::jsonb,
-              ${JSON.stringify({ status: novoStatus })}::jsonb,
-              ${acao.justificativa ?? null},
-              ${ator.ip}::inet,
-              ${ator.userAgent}
-            )
-          `;
-          aplicadas += 1;
+          elegiveis.push({ id: linha.id, antes, novo, evento });
         }
 
-        return { aplicadas, falhadas };
+        if (elegiveis.length === 0) {
+          return { aplicadas: 0, falhadas };
+        }
+
+        // UPDATE em lote, particionado por status destino. Para os 3
+        // destinos possíveis (revisada, descartada, pendente) ficam no
+        // máximo 3 queries, em vez de 1 query por estação.
+        const porNovo = new Map<StatusRevisao, string[]>();
+        for (const el of elegiveis) {
+          const arr = porNovo.get(el.novo) ?? [];
+          arr.push(el.id);
+          porNovo.set(el.novo, arr);
+        }
+        for (const [novo, ids] of porNovo) {
+          await tx`
+            UPDATE ana_revisao_estacao
+               SET status = ${novo},
+                   revisado_por = ${ator.usuarioId},
+                   revisado_em = NOW()
+             WHERE id = ANY(${ids}::uuid[])
+          `;
+        }
+
+        // INSERT em uma única query usando unnest para os arrays paralelos.
+        // Evita N inserções dentro da transação.
+        const ids = elegiveis.map((e) => e.id);
+        const eventos = elegiveis.map((e) => e.evento);
+        const antesJson = elegiveis.map((e) =>
+          JSON.stringify({ status: e.antes }),
+        );
+        const depoisJson = elegiveis.map((e) =>
+          JSON.stringify({ status: e.novo }),
+        );
+        await tx`
+          INSERT INTO ana_revisao_evento
+            (estacao_id, evento, ator_id, valores_antes, valores_depois,
+             observacao, ip, user_agent)
+          SELECT
+            t.estacao_id::uuid,
+            t.evento,
+            ${ator.usuarioId}::uuid,
+            t.valores_antes::jsonb,
+            t.valores_depois::jsonb,
+            ${acao.justificativa ?? null},
+            ${ator.ip}::inet,
+            ${ator.userAgent}
+          FROM unnest(
+            ${ids}::uuid[],
+            ${eventos}::text[],
+            ${antesJson}::text[],
+            ${depoisJson}::text[]
+          ) AS t(estacao_id, evento, valores_antes, valores_depois)
+        `;
+
+        return { aplicadas: elegiveis.length, falhadas };
       });
     } catch (e) {
       if (e instanceof FalhaRepositorio) throw e;
