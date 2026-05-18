@@ -56,6 +56,28 @@ describe('use-case/submeterFichaTriagem', () => {
     expect(ficha.atualizadaEm).toBeTruthy();
   });
 
+  it('idempotência: retry com mesma idempotency_key devolve a ficha existente', async () => {
+    const entrada = entradaSubmissaoValida({ idempotencyKey: 'cli-abc-123' });
+    const primeira = await submeterFichaTriagem(triagemRepository, entrada, META);
+    const segunda = await submeterFichaTriagem(triagemRepository, entrada, META);
+    expect(segunda.id).toBe(primeira.id);
+    expect(segunda.estado).toBe('pendente');
+  });
+
+  it('idempotência: chaves diferentes do mesmo tecnico criam fichas distintas', async () => {
+    const a = await submeterFichaTriagem(
+      triagemRepository,
+      entradaSubmissaoValida({ idempotencyKey: 'cli-a' }),
+      META,
+    );
+    const b = await submeterFichaTriagem(
+      triagemRepository,
+      entradaSubmissaoValida({ idempotencyKey: 'cli-b' }),
+      META,
+    );
+    expect(b.id).not.toBe(a.id);
+  });
+
   it('rejeita tipo de documento indisponível', async () => {
     // Forçando código fora dos disponíveis (manipulando schemas para simular)
     // Como todos os 7 estão disponíveis, usamos um cast pra simular.

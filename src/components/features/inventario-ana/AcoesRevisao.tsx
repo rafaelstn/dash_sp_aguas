@@ -103,9 +103,10 @@ export function AcoesRevisao({ estacao }: Props) {
           type="button"
           onClick={() => aplicarStatus('em_revisao')}
           disabled={enviando}
+          title="Marca esta estação ANA como em análise. Não cria lock da triagem, é só o status do registro de auditoria."
           className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro disabled:opacity-60"
         >
-          Marcar em revisão
+          Mover para &quot;em análise&quot;
         </button>
         <button
           type="button"

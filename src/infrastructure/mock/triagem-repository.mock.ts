@@ -87,6 +87,20 @@ function novaFichaBase(entrada: EntradaSubmeterTriagem): FichaTriagem {
 
 export const triagemRepository: TriagemRepository = {
   async submeter(entrada, metadata) {
+    // Idempotência: retry com mesma idempotency_key devolve a ficha já
+    // gravada em vez de tentar criar duplicata. Espelha o comportamento
+    // do adapter Postgres (ver triagem-repository.pg.ts).
+    if (entrada.idempotencyKey) {
+      for (const f of fichas.values()) {
+        if (
+          f.tecnicoId === entrada.tecnicoId &&
+          f.idempotencyKey === entrada.idempotencyKey
+        ) {
+          return clonar(f);
+        }
+      }
+    }
+
     const ficha = novaFichaBase(entrada);
     fichas.set(ficha.id, ficha);
     novoEvento({

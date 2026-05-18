@@ -31,10 +31,11 @@
     --gov-azul-escuro: 224 76% 32%;  /* #1E3A8A */
     --gov-azul-claro: 214 95% 93%;   /* #DBEAFE — fundo de pílula */
 
-    /* Semântica */
-    --status-danger: 0 70% 35%;      /* #991B1B — 8.7:1 */
-    --status-success: 142 64% 24%;   /* #166534 — 6.3:1 */
-    --status-warn: 28 84% 31%;       /* #92400E — 7.4:1 */
+    /* Semântica. Ratios calculados sobre #FFFFFF; sobre bg-red-50 / bg-amber-50
+       / bg-emerald-50 (próximo de branco) o ratio cai ~0.1, mantendo AA. */
+    --status-danger: 0 70% 35%;      /* #991B1B, 8.7:1 branco, 8.6:1 sobre bg-red-50 */
+    --status-success: 142 64% 24%;   /* #166534, 6.3:1 branco, 6.2:1 sobre bg-emerald-50 */
+    --status-warn: 28 84% 31%;       /* #92400E, 7.4:1 branco, 7.3:1 sobre bg-amber-50 */
 
     /* Focus ring */
     --ring: var(--gov-azul);

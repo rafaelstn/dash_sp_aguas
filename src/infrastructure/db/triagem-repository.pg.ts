@@ -133,6 +133,21 @@ export const triagemRepository: TriagemRepository = {
   async submeter(entrada, metadata) {
     try {
       return await sql.begin(async (tx) => {
+        // Idempotência: se o cliente retentou com a mesma idempotency_key
+        // antes da resposta chegar, devolve a ficha existente em vez de
+        // tentar INSERT que vai falhar no UNIQUE e estourar FalhaRepositorio.
+        if (entrada.idempotencyKey) {
+          const existentes = await tx<LinhaTriagem[]>`
+            SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+             WHERE tecnico_id = ${entrada.tecnicoId}::uuid
+               AND idempotency_key = ${entrada.idempotencyKey}
+             LIMIT 1
+          `;
+          if (existentes[0]) {
+            return mapearTriagem(existentes[0]);
+          }
+        }
+
         const linhas = await tx<LinhaTriagem[]>`
           INSERT INTO fichas_triagem (
             prefixo, cod_tipo_documento, data_visita, hora_inicio, hora_fim,
