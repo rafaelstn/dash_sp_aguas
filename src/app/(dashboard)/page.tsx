@@ -329,9 +329,18 @@ export default async function Home({ searchParams }: PageProps) {
         </p>
       </header>
 
-      <CampoBusca />
+      {/*
+        Suspense boundary obrigatório em volta de Client Components que
+        chamam useSearchParams. Sem ele, Next 15 deopta a rota inteira
+        para client-side rendering e emite warning em build.
+      */}
+      <Suspense fallback={<div className="h-[64px]" aria-hidden="true" />}>
+        <CampoBusca />
+      </Suspense>
 
-      <ChipsFiltrosAtivos mostrarFavoritos={Boolean(usuario)} />
+      <Suspense fallback={null}>
+        <ChipsFiltrosAtivos mostrarFavoritos={Boolean(usuario)} />
+      </Suspense>
 
       <details className="rounded-gov-card border border-app-border-subtle bg-app-surface">
         <summary className="cursor-pointer rounded-gov-card px-3 py-2 text-xs font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul">
