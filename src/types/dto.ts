@@ -28,5 +28,7 @@ export interface RespostaErro {
   erro: {
     codigo: string;
     mensagem: string;
+    /** Apenas em 5xx, identifica o trace no log do servidor. */
+    correlationId?: string;
   };
 }

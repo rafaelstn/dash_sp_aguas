@@ -10,6 +10,29 @@ export class PostoNaoEncontrado extends Error {
   }
 }
 
+/**
+ * Posto existe na tabela mas foi removido (soft delete, `deleted_at`).
+ * Não pode receber edição nem ser usado em fluxo de aprovação até ser
+ * restaurado. Tradução padrão: HTTP 409.
+ */
+export class PostoRemovido extends Error {
+  constructor(public readonly prefixo: string) {
+    super(`Posto ${prefixo} foi removido e não aceita edição.`);
+    this.name = 'PostoRemovido';
+  }
+}
+
+/**
+ * Tentativa de cadastrar ou renomear um posto cujo prefixo (ou prefixo
+ * ANA) colide com um existente. Tradução padrão: HTTP 409.
+ */
+export class PrefixoDuplicado extends Error {
+  constructor(public readonly prefixo: string) {
+    super(`Já existe um posto com prefixo ${prefixo}.`);
+    this.name = 'PrefixoDuplicado';
+  }
+}
+
 export class TermoBuscaInvalido extends Error {
   constructor(motivo: string) {
     super(`Termo de busca inválido: ${motivo}`);

@@ -1,13 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
 import {
   postosRepository,
   auditoriaRepository,
   papeisRepository,
 } from '@/infrastructure/repositories';
-import { PostoNaoEncontrado } from '@/domain/errors';
+import {
+  PostoNaoEncontrado,
+  PostoRemovido,
+  PrefixoDuplicado,
+} from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { logger } from '@/infrastructure/logging/logger';
 import type { RespostaErro, RespostaFicha } from '@/types/dto';
 import {
   checarCache,
@@ -106,8 +112,18 @@ export async function GET(
       };
       return NextResponse.json(body, { status: 404 });
     }
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'GET /api/postos/[prefixo]', prefixo, erro: String(e) },
+      'Falha ao obter ficha do posto',
+    );
     const body: RespostaErro = {
-      erro: { codigo: 'ERRO_INTERNO', mensagem: 'Falha ao obter ficha do posto.' },
+      erro: {
+        codigo: 'ERRO_INTERNO',
+        mensagem: 'Falha ao obter ficha do posto.',
+        correlationId,
+      },
     };
     return NextResponse.json(body, { status: 500 });
   }
@@ -174,17 +190,20 @@ export async function POST(
       duracao_s: worker.duracao_s,
     });
   } catch (e) {
-    // NÃO expõe e.message no body — pode conter caminho de HD de rede
+    // NÃO expõe e.message no body, pode conter caminho de HD de rede
     // (Y:\...) ou stack do Postgres. Detalhe vai pros logs do servidor.
-    console.error('[api/reindexar] Falha', {
-      prefixo,
-      mensagem: e instanceof Error ? e.message : String(e),
-    });
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'POST /api/postos/[prefixo] (reindexar)', prefixo, erro: String(e) },
+      'Falha ao reindexar posto',
+    );
     const body: RespostaErro = {
       erro: {
         codigo: 'ERRO_INTERNO',
         mensagem:
           'Falha ao reindexar este posto. Tente novamente em instantes ou contate o administrador.',
+        correlationId,
       },
     };
     return NextResponse.json(body, { status: 500 });
@@ -298,21 +317,26 @@ export async function PATCH(
     });
     return NextResponse.json({ posto }, { headers });
   } catch (e) {
-    const mensagem = e instanceof Error ? e.message : 'Falha ao atualizar.';
-    if (mensagem.includes('nao encontrado')) {
+    if (e instanceof PostoNaoEncontrado) {
       return NextResponse.json(
-        { erro: 'nao_encontrado' },
+        { erro: 'nao_encontrado', mensagem: e.message },
         { status: 404, headers },
       );
     }
-    if (mensagem.includes('removido')) {
+    if (e instanceof PostoRemovido) {
       return NextResponse.json(
-        { erro: 'posto_removido', mensagem },
+        { erro: 'posto_removido', mensagem: e.message },
         { status: 409, headers },
       );
     }
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'PATCH /api/postos/[prefixo]', prefixo, usuarioId: usuario.id, erro: String(e) },
+      'Falha ao atualizar posto',
+    );
     return NextResponse.json(
-      { erro: 'falha_atualizacao', mensagem },
+      { erro: 'falha_atualizacao', mensagem: 'Falha ao atualizar.', correlationId },
       { status: 500, headers },
     );
   }

@@ -1,6 +1,7 @@
 import { desconformidadesRepository } from '@/infrastructure/repositories';
 import { TabelaArquivosDesconformes } from '@/components/features/desconformidades/TabelaArquivosDesconformes';
 import { Alerta } from '@/components/ui/Alerta';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,12 @@ export default async function PaginaArquivosMalformados() {
         />
       </section>
     );
-  } catch {
+  } catch (e) {
+    logger.error(
+      'erro_inesperado',
+      { rota: '/desconformidades/arquivos-malformados', erro: String(e) },
+      'Falha ao listar arquivos malformados',
+    );
     return (
       <Alerta tipo="erro" titulo="Falha ao carregar arquivos malformados">
         Não foi possível recuperar a listagem. Tente novamente em instantes.

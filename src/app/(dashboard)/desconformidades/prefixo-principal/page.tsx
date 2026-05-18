@@ -1,6 +1,7 @@
 import { desconformidadesRepository } from '@/infrastructure/repositories';
 import { TabelaPrefixosPrincipais } from '@/components/features/desconformidades/TabelaPrefixosPrincipais';
 import { Alerta } from '@/components/ui/Alerta';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,12 @@ export default async function PaginaPrefixoPrincipal() {
         <TabelaPrefixosPrincipais itens={itens} />
       </section>
     );
-  } catch {
+  } catch (e) {
+    logger.error(
+      'erro_inesperado',
+      { rota: '/desconformidades/prefixo-principal', erro: String(e) },
+      'Falha ao listar desconformidades de prefixo principal',
+    );
     return (
       <Alerta tipo="erro" titulo="Falha ao carregar desconformidades de prefixo principal">
         Não foi possível recuperar a listagem. Tente novamente em instantes.

@@ -1,6 +1,7 @@
 import { desconformidadesRepository } from '@/infrastructure/repositories';
 import { TabelaPrefixosAna } from '@/components/features/desconformidades/TabelaPrefixosAna';
 import { Alerta } from '@/components/ui/Alerta';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,12 @@ export default async function PaginaPrefixoAna() {
         <TabelaPrefixosAna itens={itens} />
       </section>
     );
-  } catch {
+  } catch (e) {
+    logger.error(
+      'erro_inesperado',
+      { rota: '/desconformidades/prefixo-ana', erro: String(e) },
+      'Falha ao listar desconformidades de prefixo ANA',
+    );
     return (
       <Alerta tipo="erro" titulo="Falha ao carregar desconformidades de prefixo ANA">
         Não foi possível recuperar a listagem. Tente novamente em instantes.

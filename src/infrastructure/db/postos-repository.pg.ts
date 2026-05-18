@@ -8,7 +8,12 @@ import type {
   ResultadoPesquisa,
 } from '@/application/ports/postos-repository';
 import type { Posto } from '@/domain/posto';
-import { FalhaRepositorio } from '@/domain/errors';
+import {
+  FalhaRepositorio,
+  PostoNaoEncontrado,
+  PostoRemovido,
+  PrefixoDuplicado,
+} from '@/domain/errors';
 import { sql } from './client';
 
 type LinhaPosto = {
@@ -312,13 +317,10 @@ export const postosRepository: PostosRepository = {
              FOR UPDATE
         `;
         if (!antes[0]) {
-          throw new FalhaRepositorio('atualizar', `posto nao encontrado: ${prefixo}`);
+          throw new PostoNaoEncontrado(prefixo);
         }
         if (antes[0].deleted_at !== null) {
-          throw new FalhaRepositorio(
-            'atualizar',
-            `posto ${prefixo} esta removido (deleted_at). Restaurar antes de editar.`,
-          );
+          throw new PostoRemovido(prefixo);
         }
 
         const valoresAntes = mapear(antes[0]);
@@ -361,7 +363,13 @@ export const postosRepository: PostosRepository = {
         return mapear(depois[0]!);
       });
     } catch (e) {
-      if (e instanceof FalhaRepositorio) throw e;
+      if (
+        e instanceof FalhaRepositorio ||
+        e instanceof PostoNaoEncontrado ||
+        e instanceof PostoRemovido
+      ) {
+        throw e;
+      }
       throw new FalhaRepositorio('atualizar', e);
     }
   },
@@ -373,10 +381,7 @@ export const postosRepository: PostosRepository = {
           SELECT id FROM postos WHERE prefixo = ${dados.prefixo} LIMIT 1
         `;
         if (existente[0]) {
-          throw new FalhaRepositorio(
-            'criar',
-            `prefixo ${dados.prefixo} ja existe`,
-          );
+          throw new PrefixoDuplicado(dados.prefixo);
         }
 
         const inserido = await tx<LinhaPosto[]>`
@@ -475,7 +480,7 @@ export const postosRepository: PostosRepository = {
         return novo;
       });
     } catch (e) {
-      if (e instanceof FalhaRepositorio) throw e;
+      if (e instanceof FalhaRepositorio || e instanceof PrefixoDuplicado) throw e;
       throw new FalhaRepositorio('criar', e);
     }
   },

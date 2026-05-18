@@ -8,6 +8,8 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { Alerta } from '@/components/ui/Alerta';
 import { FormularioEditarPosto } from '@/components/features/postos/FormularioEditarPosto';
 import { HistoricoPostoEventos } from '@/components/features/postos/HistoricoPostoEventos';
+import { logger } from '@/infrastructure/logging/logger';
+import type { Posto } from '@/domain/posto';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +37,23 @@ export default async function EditarPostoPage({ params }: PageProps) {
 
   const { prefixo: prefixoRaw } = await params;
   const prefixo = decodeURIComponent(prefixoRaw);
-  const posto = await postosRepository.buscarPorPrefixo(prefixo);
+
+  let posto: Posto | null;
+  try {
+    posto = await postosRepository.buscarPorPrefixo(prefixo);
+  } catch (e) {
+    logger.error(
+      'erro_inesperado',
+      { rota: '/postos/[prefixo]/editar', prefixo, usuarioId: usuario.id, erro: String(e) },
+      'Falha ao carregar posto para edição',
+    );
+    return (
+      <Alerta tipo="erro" titulo="Falha ao carregar o posto">
+        Não foi possível recuperar o cadastro deste posto agora. Tente
+        novamente em alguns instantes.
+      </Alerta>
+    );
+  }
   if (!posto) notFound();
 
   return (
