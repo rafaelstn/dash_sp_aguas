@@ -63,6 +63,27 @@ function aplicarCspResponse(response: NextResponse, nonce: string) {
 }
 
 /**
+ * Bloqueia cache compartilhado (CDN/proxy) em qualquer rota que possa carregar
+ * dado de sessão. Aplicado a TUDO que passa pelo middleware, porque o matcher
+ * já exclui estáticos. Incidente 2026-05-18, Vistos recentemente da Adayana
+ * apareceu pro Rafael, sinal de cache cross-user em camada intermediaria.
+ *
+ *   private          -> apenas browser do usuário pode cachear
+ *   no-store         -> nem o browser deve persistir
+ *   must-revalidate  -> sem servir stale sob nenhuma condição
+ *   Vary: Cookie     -> cinto e suspensório, qualquer cache que ignore
+ *                       no-store ainda assim separa por cookie de sessão
+ */
+function aplicarNoCacheAutenticado(response: NextResponse) {
+  response.headers.set(
+    'Cache-Control',
+    'private, no-store, no-cache, must-revalidate, max-age=0',
+  );
+  response.headers.set('Pragma', 'no-cache');
+  response.headers.set('Vary', 'Cookie');
+}
+
+/**
  * Middleware de autenticação — gate de todas as rotas exceto as públicas
  * abaixo. Requisito de deploy (ADR-0004): sistema no MVP passa a rodar em
  * Vercel (internet pública), portanto precisa de gate. Implementação isolada
@@ -114,10 +135,13 @@ export async function middleware(request: NextRequest) {
       const homeUrl = request.nextUrl.clone();
       homeUrl.pathname = '/';
       homeUrl.search = '';
-      return NextResponse.redirect(homeUrl);
+      const redir = NextResponse.redirect(homeUrl);
+      aplicarNoCacheAutenticado(redir);
+      return redir;
     }
     const resp = NextResponse.next({ request: { headers: requestHeaders } });
     aplicarCspResponse(resp, nonce);
+    aplicarNoCacheAutenticado(resp);
     return resp;
   }
 
@@ -128,6 +152,7 @@ export async function middleware(request: NextRequest) {
   if (!url || !anon) {
     const resp = NextResponse.next({ request: { headers: requestHeaders } });
     aplicarCspResponse(resp, nonce);
+    aplicarNoCacheAutenticado(resp);
     return resp;
   }
 
@@ -157,7 +182,9 @@ export async function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     loginUrl.searchParams.set('returnTo', request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    const redir = NextResponse.redirect(loginUrl);
+    aplicarNoCacheAutenticado(redir);
+    return redir;
   }
 
   // Usuário autenticado tentando acessar /login ou /cadastrar -> manda pra home.
@@ -169,10 +196,13 @@ export async function middleware(request: NextRequest) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = '/';
     homeUrl.search = '';
-    return NextResponse.redirect(homeUrl);
+    const redir = NextResponse.redirect(homeUrl);
+    aplicarNoCacheAutenticado(redir);
+    return redir;
   }
 
   aplicarCspResponse(response, nonce);
+  aplicarNoCacheAutenticado(response);
   return response;
 }
 
