@@ -59,6 +59,11 @@ docs/relatorios/
 # comentar se for repo privado e quiser versionar a planilha base
 # *.csv
 # *.xlsx
+
+# Snapshots gerados por scripts de manutenção (limpar_fim_operacao_ativos.py, etc.)
+# Contêm dados de produção — manter sempre fora do git.
+data/backup_*.csv
+
 .vercel
 
 # Settings locais do harness Claude Code (per-repo overrides)
