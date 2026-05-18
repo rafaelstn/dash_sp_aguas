@@ -131,10 +131,35 @@ const PREENCHIMENTO_CINZA: ExcelJS.FillPattern = {
   fgColor: { argb: 'FFE0E0E0' },
 };
 
+/**
+ * Normaliza nome de município para lookup case e acento insensitivo:
+ * minúsculas + remove diacríticos. Usado para resolver `codigo_ibge`
+ * a partir do nome quando o município efetivo veio de `postos`.
+ */
+function chaveNomeMunicipio(nome: string): string {
+  return nome
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim();
+}
+
 export async function exportarInventarioAna(
   loteId: string,
 ): Promise<{ buffer: Buffer; nomeArquivo: string; estatisticas: { total: number; comDiff: number } }> {
   try {
+    // Carrega o mapa nome (normalizado) → codigo_ibge uma única vez,
+    // pra resolver `municipio_codigo` quando o nome efetivo veio de
+    // `postos`. Sem este lookup, o XLSX pode sair com nome de um
+    // município e código IBGE de outro (Q08 da auditoria 2026-05-18).
+    const municipios = await sql<{ codigo_ibge: string; nome: string }[]>`
+      SELECT codigo_ibge, nome FROM ibge_municipios_sp
+    `;
+    const mapaCodigoIbge = new Map<string, string>();
+    for (const m of municipios) {
+      mapaCodigoIbge.set(chaveNomeMunicipio(m.nome), m.codigo_ibge);
+    }
+
     const linhas = await sql<LinhaJoin[]>`
       SELECT
         e.codigo_ana             AS ana_codigo,
@@ -263,7 +288,19 @@ export async function exportarInventarioAna(
       const finalBacia = valOuFallback(linha.p_bacia_hidrografica, linha.ana_bacia_nome);
       const finalSubBacia = valOuFallback(linha.p_sub_ugrhi_nome, linha.ana_subbacia_nome);
       const finalMunicipio = valOuFallback3(linha.p_municipio, linha.r_municipio_nome, linha.ana_municipio_nome);
-      const finalMunicipioCodigo = valOuFallback(linha.r_municipio_codigo, linha.ana_municipio_codigo);
+      // Q08: quando o nome veio de `postos`, o codigo precisa vir do IBGE
+      // pelo nome efetivo, senao o XLSX pode sair com "Atibaia, cod SP".
+      // Resolve via lookup no mapa carregado uma vez antes do loop.
+      let finalMunicipioCodigo: string | null;
+      if (linha.p_municipio && linha.p_municipio !== linha.ana_municipio_nome) {
+        finalMunicipioCodigo =
+          mapaCodigoIbge.get(chaveNomeMunicipio(linha.p_municipio)) ?? null;
+      } else {
+        finalMunicipioCodigo = valOuFallback(
+          linha.r_municipio_codigo,
+          linha.ana_municipio_codigo,
+        );
+      }
       const finalTipo = valOuFallback(linha.p_tipo_posto, linha.ana_estacao_tipo);
       const finalEscIni = dataISO(valOuFallback(linha.p_ana_escala_inicio, linha.ana_escala_inicio));
       const finalEscFim = dataISO(valOuFallback(linha.p_ana_escala_fim, linha.ana_escala_fim));

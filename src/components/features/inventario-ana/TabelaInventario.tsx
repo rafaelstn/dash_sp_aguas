@@ -157,7 +157,85 @@ export function TabelaInventario({ itens }: Props) {
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface">
+      {/* Mobile: lista de cards com os campos críticos. A tabela completa
+          fica oculta para evitar scroll horizontal de 10 colunas no celular. */}
+      <ul className="space-y-2 sm:hidden" aria-label="Estações ANA, visão mobile">
+        {itens.length === 0 ? (
+          <li className="rounded-gov-card border border-app-border-subtle bg-app-surface px-3 py-4 text-center text-sm text-app-fg-muted">
+            Nenhuma estação com os filtros aplicados.
+          </li>
+        ) : (
+          itens.map((it) => {
+            const checked = selecionadas.has(it.id);
+            return (
+              <li
+                key={it.id}
+                className={`rounded-gov-card border bg-app-surface px-3 py-2.5 text-sm ${checked ? 'border-gov-azul bg-blue-50' : 'border-app-border-subtle'}`}
+              >
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    aria-label={`Selecionar estação ${it.codigoAna}`}
+                    checked={checked}
+                    onChange={() => toggleUma(it.id)}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        href={`/inventario-ana/${encodeURIComponent(it.codigoAna)}`}
+                        className="mono truncate text-gov-azul hover:underline"
+                      >
+                        {it.codigoAna}
+                      </Link>
+                      <BadgeStatus status={it.status} />
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-app-fg" title={it.nome ?? undefined}>
+                      {it.nome ?? '—'}
+                    </p>
+                    <p className="mt-0.5 truncate text-2xs text-app-fg-muted">
+                      {it.municipioNome ?? '—'}
+                      {it.municipioEfetivo && it.municipioEfetivo !== it.municipioNome ? (
+                        <>
+                          {' → '}
+                          <span className="text-amber-900">{it.municipioEfetivo}</span>
+                        </>
+                      ) : null}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <BadgeDivergencia
+                        divergencia={it.divergenciaEfetiva}
+                        distanciaM={it.distanciaEfetivaM}
+                      />
+                      {it.operando === true ? (
+                        <span className="text-2xs text-green-800">operando</span>
+                      ) : it.operando === false ? (
+                        <span className="text-2xs text-app-fg-subtle">parado</span>
+                      ) : null}
+                      {it.postoPrefixo ? (
+                        <span className="mono text-2xs text-app-fg">{it.postoPrefixo}</span>
+                      ) : it.matchTipo === 'sem_match' ? (
+                        <span className="text-2xs text-amber-800">sem match</span>
+                      ) : null}
+                      {it.postoPrefixo ? (
+                        <Link
+                          href={`/postos/${encodeURIComponent(it.postoPrefixo)}/editar`}
+                          className="ml-auto text-2xs text-gov-azul hover:underline"
+                          aria-label={`Editar posto ${it.postoPrefixo}`}
+                        >
+                          Editar posto
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            );
+          })
+        )}
+      </ul>
+
+      <div className="hidden overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface sm:block">
         <table className="w-full min-w-[900px] border-collapse text-sm">
           <caption className="sr-only">
             Estações ANA pendentes de revisão, ordenadas por divergência
