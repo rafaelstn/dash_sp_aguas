@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 //
 // Service Worker do app móvel — escopo /app/.
 //

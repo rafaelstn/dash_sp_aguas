@@ -86,7 +86,7 @@ export default async function MobileAppLayout({
         update (mantido por compatibilidade futura).
       */}
       <script
-        // eslint-disable-next-line react/no-danger
+         
         dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator &&

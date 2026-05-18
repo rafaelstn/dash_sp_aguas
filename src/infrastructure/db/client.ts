@@ -11,7 +11,7 @@ import { getEnv } from '@/infrastructure/config/env';
  * `.pg.ts` coexistam com os mocks no mesmo bundle sem quebrar o boot.
  */
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __pg_singleton__: Sql | undefined;
 }
 

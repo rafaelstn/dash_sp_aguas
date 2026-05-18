@@ -144,7 +144,7 @@ function despacharDrain(entry: LogEntry, linha: string): void {
     keepalive: true,
   })
     .catch((erro: unknown) => {
-      // eslint-disable-next-line no-console
+       
       console.error(
         JSON.stringify({
           ts: new Date().toISOString(),
