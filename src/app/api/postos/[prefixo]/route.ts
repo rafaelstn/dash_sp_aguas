@@ -10,7 +10,6 @@ import {
 import {
   PostoNaoEncontrado,
   PostoRemovido,
-  PrefixoDuplicado,
 } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { logger } from '@/infrastructure/logging/logger';

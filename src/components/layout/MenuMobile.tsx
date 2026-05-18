@@ -50,6 +50,10 @@ export function MenuMobile({ itens }: Props) {
         <Menu aria-hidden="true" className="h-5 w-5" />
       </button>
 
+      {/* ESC e click no backdrop fecham. <dialog> nativo é interativo por
+          especificação, mas jsx-a11y o classifica como "non-interactive"
+          e dispara falsos positivos em onClick. */}
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */}
       <dialog
         id="menu-mobile-dialog"
         ref={ref}

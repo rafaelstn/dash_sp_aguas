@@ -60,13 +60,15 @@ export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps
   }, [aberto]);
 
   return (
+    // ESC e click no backdrop fecham o dialog. <dialog> nativo é elemento
+    // interativo por especificação, mas o plugin jsx-a11y classifica como
+    // "non-interactive" e dispara dois falsos positivos quando há onClick.
+    /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
     <dialog
       ref={ref}
       aria-labelledby="titulo-ajuda-atalhos"
       onClose={aoFechar}
       onClick={(e) => {
-        // Click no backdrop (fora do conteúdo) fecha o diálogo. O backdrop
-        // é o próprio <dialog>; o conteúdo está em <div role="document">.
         if (e.target === ref.current) aoFechar();
       }}
       className="max-w-md w-full max-h-[85vh] overflow-y-auto rounded-gov-card border border-gov-borda bg-white p-5 shadow-gov-card-hover backdrop:bg-black/40"
@@ -103,6 +105,7 @@ export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps
         </p>
       </div>
     </dialog>
+    /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/click-events-have-key-events */
   );
 }
 

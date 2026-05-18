@@ -4,11 +4,11 @@
 |-------|-------|
 | Cliente | SPÁguas — Governo do Estado de São Paulo |
 | Responsável pela arquitetura | Bruno — PO Engenharia (Damasceno Dev OS) |
-| Versão | 1.2 — MVP (Fase 1) |
-| Data | 2026-04-22 |
-| Status | Rascunho — atualizado com documentação oficial do cliente (22/04/2026) |
+| Versão | 1.3 — Fase 2.A + Inventário ANA |
+| Data | 2026-05-18 (atualizado após auditoria pré compartilhamento) |
+| Status | Aceito — em produção restrita |
 | Especificação de referência | `./spec.md` (Camila) — v1.2 |
-| ADRs relacionadas | `./adr/0001-stack-inicial.md`, `./adr/0002-db-client-postgres-js.md`, `./adr/0003-modulo-desconformidade.md` |
+| ADRs relacionadas | `./adr/0001` a `./adr/0014` (14 ADRs no total). Fluxo Inventário ANA: 0011, 0012, 0013, 0014. Auth: 0004, 0006, 0008, 0010. |
 
 ---
 
@@ -288,6 +288,69 @@ Ver §8 (reescrita). Resumo:
 - Nome do arquivo → regex oficial → `prefixo`, `cod_doc`, `cod_enc`, `opcional`, `data`.
 - Prefixo capturado → *lookup* em `postos` (coluna conforme tipo_dado).
 - Destino: `arquivos_indexados` (match total), `arquivos_orfaos` com `categoria = 'PREFIXO_DESCONHECIDO'` (parse OK, sem match cadastral), ou `arquivos_orfaos` com `categoria = 'NOME_FORA_DO_PADRAO'` (parse falhou).
+
+---
+
+## 4ter. Módulo de Triagem (Fase 2.A — ADR-0008 e ADR-0010)
+
+Fila de aprovação intermediária entre o técnico em campo (PWA `/app/*`) e a base oficial de fichas (`fichas_visita`). O técnico submete via app; um aprovador (`usuarios_papeis.aprovador = TRUE`) abre um *lock* exclusivo, decide aprovar/rejeitar/devolver, e somente após aprovação a ficha é promovida atomicamente. Toda transição grava em `triagem_eventos` (auditoria *append-only*).
+
+| Camada | Arquivo | Responsabilidade |
+|--------|---------|------------------|
+| Domain | `src/domain/ficha-triagem.ts` | Entidade + máquina de estados |
+| Domain | `src/domain/triagem-evento.ts` | *Value object* do evento |
+| Domain | `src/domain/errors.ts` | `EstadoTriagemInvalido`, `LockRevisaoNegado`, `IdempotencyKeyDuplicada`, `UsuarioNaoEhAprovador` |
+| Application | `src/application/use-cases/triagem/` | 6 use cases: submeter, iniciar revisão, aprovar, rejeitar, devolver, liberar locks expirados |
+| Application | `src/application/ports/triagem-repository.ts` | Port para o repositório |
+| Infra | `src/infrastructure/db/triagem-repository.pg.ts` | Adapter Postgres com transações `FOR UPDATE` em todas as transições |
+| API | `src/app/api/triagem/**` | Rotas RESTful, mapeamento HTTP via `respostaDeErro` centralizada |
+| UI | `src/components/features/triagem/` | Lista, detalhe, barra de ações, diálogos `<dialog>` HTML5 |
+| Cron | `src/app/api/cron/liberar-locks-expirados` | Vercel Cron 5/min, libera locks > TTL via `timingSafeEqual` no secret |
+
+Máquina de estados: `pendente → em_revisao → {aprovada | rejeitada | devolvida}`. `devolvida` permite reenvio criando nova ficha (cadeia via `ficha_anterior_id`). Reabertura de aprovada/rejeitada é bloqueada no domínio.
+
+MFA removido pelo ADR-0010, autenticação fica em email + senha apenas. RBAC mínimo via flag em `usuarios_papeis`. Política de senha (12+ chars com 3 classes) em `src/app/cadastrar/actions.ts`.
+
+---
+
+## 4quater. Módulo Inventário ANA / Auditoria ANA (ADR-0011, 0012, 0013, 0014)
+
+Comparação automatizada entre o snapshot oficial da ANA (~11k estações) e o cadastro interno de postos SP. Detecta divergências geográficas (município declarado vs. real via PostGIS), sugere matches assistidos para estações ainda não promovidas e produz o XLSX oficial de resposta para a ANA.
+
+### Fluxo de resposta (3 níveis de fallback)
+
+Para cada estação ANA, o backend resolve os campos efetivos (`municipio_efetivo`, `divergencia_efetiva`, etc.) na seguinte ordem:
+
+1. **Postos** (ADR-0012): se a estação tem `posto_id`, lê do cadastro oficial.
+2. **resposta_*** (ADR-0014): se é estação órfã (sem posto), lê dos campos `resposta_*` da própria `ana_revisao_estacao`.
+3. **Snapshot ANA**: fallback final, mostra o dado original que veio na planilha.
+
+Lógica implementada idêntica em TS (`src/application/use-cases/inventario-ana/exportar.ts`) e Python (`scripts/aplicar_resposta_na_planilha_sharepoint.py`).
+
+### Componentes
+
+| Camada | Arquivo | Responsabilidade |
+|--------|---------|------------------|
+| Domain | `src/domain/ana-revisao.ts` | Entidade `AnaRevisaoEstacao`, `AnaRevisaoLote`, enums de divergência e status |
+| Domain | `src/domain/ana-cenarios.ts` | Cenários de pendência (definidos pela ANA) |
+| Application | `src/application/use-cases/inventario-ana/` | Casos de uso (listar, revisar, exportar, bulk) |
+| Application | `src/application/ports/ana-revisao-repository.ts` | Port |
+| Infra | `src/infrastructure/db/ana-revisao-repository.pg.ts` | Adapter Postgres, bulk usa UPDATE/INSERT em lote (ver migration 0041 e código pós auditoria 2026-05-18) |
+| API | `src/app/api/inventario-ana/**` | Rotas REST (listar, resumo, revisar, bulk, exportar, aceitar match) com rate limit por usuário |
+| UI | `src/app/(dashboard)/inventario-ana/`, `src/components/features/inventario-ana/` | Tabela com seleção em massa, detalhe com reconciliação ANA vs. postos, ações de revisão |
+
+### Tabelas (migrations 0029 a 0039)
+
+- `ana_revisao_lote`: pacote de revisão (data, prazo de resposta, total).
+- `ana_revisao_estacao`: linha por estação, com snapshot original + `resposta_*` (ADR-0014) + sugestão de match (ADR-0013).
+- `ana_revisao_evento`: auditoria append only.
+- `ibge_municipios_sp`: polígonos IBGE (PostGIS) para detecção de divergência.
+
+Decisão importante: a coluna `correcoes JSONB` mencionada no ADR-0011 §2.1 foi removida pelo ADR-0012, substituída por leitura direta de `postos` + `resposta_*` para evitar janela de inconsistência.
+
+### Item de menu
+
+A "Auditoria ANA" foi escondida do `Sidenav` em 2026-05-18 (commit `8596f61`) por decisão de produto, já que a Meta I.6 PROGESTÃO foi entregue. As rotas e APIs continuam ativas para permitir consultas ad hoc e reuso pelo script de SharePoint. Acesso direto: `/inventario-ana`.
 
 ---
 

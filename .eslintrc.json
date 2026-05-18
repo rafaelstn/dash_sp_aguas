@@ -9,6 +9,31 @@
     "jsx-a11y/heading-has-content": "error",
     "jsx-a11y/html-has-lang": "error",
     "jsx-a11y/label-has-associated-control": "error",
-    "jsx-a11y/no-autofocus": "warn"
-  }
+    "jsx-a11y/no-autofocus": "warn",
+    "@typescript-eslint/no-explicit-any": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/app/**", "src/application/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/infrastructure/db/*"],
+                "message": "Clean Architecture: rotas e use cases acessam Postgres apenas via @/infrastructure/repositories. Importar @/infrastructure/db/* aqui vaza detalhe do adapter (consulte ADR-0012)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/infrastructure/repositories.ts", "src/infrastructure/db/**", "src/components/features/postos/HistoricoPostoEventos.tsx", "**/inventario-ana/**/page.tsx", "src/app/(dashboard)/painel/page.tsx", "**/aceitar-match/route.ts", "src/app/api/health/route.ts", "src/application/use-cases/inventario-ana/exportar.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
 }

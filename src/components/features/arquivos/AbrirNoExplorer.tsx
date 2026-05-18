@@ -1,7 +1,7 @@
 'use client';
 
 import { FolderOpen } from 'lucide-react';
-import { useState, type MouseEvent } from 'react';
+import { useState } from 'react';
 
 export interface AbrirNoExplorerProps {
   /** Caminho absoluto do arquivo (Windows drive ou UNC). */
@@ -38,7 +38,7 @@ export function AbrirNoExplorer({
   const fileUrl = gerarFileUrl(caminhoAbsoluto);
   const titulo = `Abrir arquivo: ${caminhoAbsoluto}`;
 
-  function aoClicar(_e: MouseEvent<HTMLAnchorElement>) {
+  function aoClicar() {
     // Copia o caminho como rede de segurança — se o browser bloquear o file://
     // ou o usuário não tiver acesso à rede da FCTH, ele cola manualmente.
     if (navigator.clipboard?.writeText) {
