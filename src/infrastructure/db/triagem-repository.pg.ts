@@ -457,11 +457,14 @@ export const triagemRepository: TriagemRepository = {
           throw new LockRevisaoNegado(triagemId, 'lock_expirado');
         }
 
-        // Verifica posto ativo (regra ADR-0008 §2.4).
-        const postos = await tx<{ ativo: boolean }[]>`
-          SELECT ativo FROM postos WHERE prefixo = ${ficha.prefixo}
+        // Verifica posto ativo (regra ADR-0008 §2.4). O esquema usa
+        // deleted_at IS NULL como flag de atividade (migration 0002), nao
+        // existe coluna `ativo` separada. Aprovar uma ficha cujo posto foi
+        // removido (soft delete) viola a invariante de auditoria.
+        const postos = await tx<{ deleted_at: Date | null }[]>`
+          SELECT deleted_at FROM postos WHERE prefixo = ${ficha.prefixo}
         `;
-        if (!postos[0] || postos[0].ativo === false) {
+        if (!postos[0] || postos[0].deleted_at !== null) {
           throw new EstadoTriagemInvalido('posto_inativo', 'aprovada');
         }
 
