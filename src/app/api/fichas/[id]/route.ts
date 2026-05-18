@@ -6,28 +6,39 @@ import {
   DadosFichaInvalidos,
   obterFichaVisita,
 } from '@/application/use-cases/fichas-visita';
+import { exigirUsuario, permitirDonoOuAprovador } from '@/app/api/_helpers/auth';
+import { logger } from '@/infrastructure/logging/logger';
+import { randomUUID } from 'node:crypto';
 
 export const runtime = 'nodejs';
 
-/** GET /api/fichas/[id] — detalhe da ficha. */
+/** GET /api/fichas/[id], detalhe da ficha. Requer autenticação. */
 export async function GET(
   _request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await ctx.params;
   try {
     const ficha = await obterFichaVisita(fichasVisitaRepository, id);
     if (!ficha) {
       return NextResponse.json(
-        { erro: 'Ficha não encontrada.' },
+        { erro: 'nao_encontrada', mensagem: 'Ficha não encontrada.' },
         { status: 404 },
       );
     }
     return NextResponse.json({ ficha });
   } catch (e) {
-    console.error('[api fichas/:id] Falha ao obter', { id, erro: e });
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'GET /api/fichas/[id]', id, erro: String(e) },
+      'Falha ao obter ficha',
+    );
     return NextResponse.json(
-      { erro: 'Falha ao consultar ficha.' },
+      { erro: 'erro_interno', mensagem: 'Falha ao consultar ficha.', correlationId },
       { status: 500 },
     );
   }
@@ -45,17 +56,38 @@ interface CorpoEdicao {
   status?: 'rascunho' | 'enviada' | 'aprovada';
 }
 
-/** PATCH /api/fichas/[id] — atualização parcial. */
+/**
+ * PATCH /api/fichas/[id], atualização parcial. Requer autenticação e que
+ * o usuário seja o autor da ficha (campo tecnicoId) ou tenha papel de
+ * aprovador. Bloqueia IDOR entre técnicos.
+ */
 export async function PATCH(
   request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await ctx.params;
+
+  const fichaExistente = await fichasVisitaRepository.obterPorId(id);
+  if (!fichaExistente) {
+    return NextResponse.json(
+      { erro: 'nao_encontrada', mensagem: 'Ficha não encontrada.' },
+      { status: 404 },
+    );
+  }
+  const permissao = await permitirDonoOuAprovador(auth, fichaExistente.tecnicoId);
+  if (permissao !== true) return permissao;
+
   let corpo: CorpoEdicao;
   try {
     corpo = (await request.json()) as CorpoEdicao;
   } catch {
-    return NextResponse.json({ erro: 'JSON inválido.' }, { status: 400 });
+    return NextResponse.json(
+      { erro: 'corpo_invalido', mensagem: 'JSON inválido.' },
+      { status: 400 },
+    );
   }
 
   try {
@@ -78,31 +110,55 @@ export async function PATCH(
   } catch (e) {
     if (e instanceof DadosFichaInvalidos) {
       return NextResponse.json(
-        { erro: e.message, motivos: e.motivos },
+        { erro: 'dados_invalidos', mensagem: e.message, motivos: e.motivos },
         { status: 422 },
       );
     }
-    console.error('[api fichas/:id] Falha ao atualizar', { id, erro: e });
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'PATCH /api/fichas/[id]', id, erro: String(e) },
+      'Falha ao atualizar ficha',
+    );
     return NextResponse.json(
-      { erro: 'Falha ao atualizar ficha.' },
+      { erro: 'erro_interno', mensagem: 'Falha ao atualizar ficha.', correlationId },
       { status: 500 },
     );
   }
 }
 
-/** DELETE /api/fichas/[id] — hard delete. */
+/** DELETE /api/fichas/[id], hard delete. Mesma autorização do PATCH. */
 export async function DELETE(
   _request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   const { id } = await ctx.params;
+
+  const fichaExistente = await fichasVisitaRepository.obterPorId(id);
+  if (!fichaExistente) {
+    return NextResponse.json(
+      { erro: 'nao_encontrada', mensagem: 'Ficha não encontrada.' },
+      { status: 404 },
+    );
+  }
+  const permissao = await permitirDonoOuAprovador(auth, fichaExistente.tecnicoId);
+  if (permissao !== true) return permissao;
+
   try {
     await apagarFichaVisita(fichasVisitaRepository, id);
     return new NextResponse(null, { status: 204 });
   } catch (e) {
-    console.error('[api fichas/:id] Falha ao apagar', { id, erro: e });
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'DELETE /api/fichas/[id]', id, erro: String(e) },
+      'Falha ao apagar ficha',
+    );
     return NextResponse.json(
-      { erro: 'Falha ao apagar ficha.' },
+      { erro: 'erro_interno', mensagem: 'Falha ao apagar ficha.', correlationId },
       { status: 500 },
     );
   }

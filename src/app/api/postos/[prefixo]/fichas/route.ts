@@ -6,7 +6,9 @@ import {
   listarFichasDoPosto,
   TipoFichaIndisponivel,
 } from '@/application/use-cases/fichas-visita';
-import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { exigirUsuario } from '@/app/api/_helpers/auth';
+import { logger } from '@/infrastructure/logging/logger';
+import { randomUUID } from 'node:crypto';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
 
 export const runtime = 'nodejs';
@@ -14,11 +16,15 @@ export const runtime = 'nodejs';
 /**
  * GET /api/postos/[prefixo]/fichas[?tipo=N]
  * Lista as fichas digitais do posto. Filtro opcional por tipo de documento.
+ * Requer autenticação.
  */
 export async function GET(
   request: NextRequest,
   ctx: { params: Promise<{ prefixo: string }> },
 ) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   const { prefixo: prefixoRaw } = await ctx.params;
   const prefixo = decodeURIComponent(prefixoRaw);
 
@@ -35,9 +41,14 @@ export async function GET(
     );
     return NextResponse.json({ fichas });
   } catch (e) {
-    console.error('[api fichas] Falha ao listar', { prefixo, erro: e });
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'GET /api/postos/[prefixo]/fichas', prefixo, erro: String(e) },
+      'Falha ao listar fichas do posto',
+    );
     return NextResponse.json(
-      { erro: 'Falha ao listar fichas do posto.' },
+      { erro: 'erro_interno', mensagem: 'Falha ao listar fichas do posto.', correlationId },
       { status: 500 },
     );
   }
@@ -59,12 +70,16 @@ interface CorpoCriacao {
 
 /**
  * POST /api/postos/[prefixo]/fichas
- * Cria uma ficha digital pro posto. Valida payload via Zod (use case).
+ * Cria uma ficha digital pro posto. Requer autenticação. O tecnicoId é
+ * fixado a partir da sessão (corpo da requisição não pode forjar autoria).
  */
 export async function POST(
   request: NextRequest,
   ctx: { params: Promise<{ prefixo: string }> },
 ) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   const { prefixo: prefixoRaw } = await ctx.params;
   const prefixo = decodeURIComponent(prefixoRaw);
 
@@ -72,23 +87,24 @@ export async function POST(
   try {
     corpo = (await request.json()) as CorpoCriacao;
   } catch {
-    return NextResponse.json({ erro: 'JSON inválido.' }, { status: 400 });
+    return NextResponse.json(
+      { erro: 'corpo_invalido', mensagem: 'JSON inválido.' },
+      { status: 400 },
+    );
   }
 
   if (!corpo.tecnicoNome?.trim()) {
     return NextResponse.json(
-      { erro: 'tecnicoNome é obrigatório.' },
+      { erro: 'campo_obrigatorio', mensagem: 'tecnicoNome é obrigatório.' },
       { status: 400 },
     );
   }
   if (!corpo.dataVisita) {
     return NextResponse.json(
-      { erro: 'dataVisita é obrigatória.' },
+      { erro: 'campo_obrigatorio', mensagem: 'dataVisita é obrigatória.' },
       { status: 400 },
     );
   }
-
-  const usuario = await obterUsuarioAtual();
 
   try {
     const ficha = await criarFichaVisita(fichasVisitaRepository, {
@@ -98,7 +114,7 @@ export async function POST(
       horaInicio: corpo.horaInicio ?? null,
       horaFim: corpo.horaFim ?? null,
       tecnicoNome: corpo.tecnicoNome.trim(),
-      tecnicoId: usuario?.id ?? null,
+      tecnicoId: auth.id,
       latitudeCapturada: corpo.latitudeCapturada ?? null,
       longitudeCapturada: corpo.longitudeCapturada ?? null,
       observacoes: corpo.observacoes ?? null,
@@ -109,17 +125,25 @@ export async function POST(
     return NextResponse.json({ ficha }, { status: 201 });
   } catch (e) {
     if (e instanceof TipoFichaIndisponivel) {
-      return NextResponse.json({ erro: e.message }, { status: 400 });
+      return NextResponse.json(
+        { erro: 'tipo_indisponivel', mensagem: e.message },
+        { status: 400 },
+      );
     }
     if (e instanceof DadosFichaInvalidos) {
       return NextResponse.json(
-        { erro: e.message, motivos: e.motivos },
+        { erro: 'dados_invalidos', mensagem: e.message, motivos: e.motivos },
         { status: 422 },
       );
     }
-    console.error('[api fichas] Falha ao criar', { prefixo, erro: e });
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      { correlationId, rota: 'POST /api/postos/[prefixo]/fichas', prefixo, erro: String(e) },
+      'Falha ao criar ficha',
+    );
     return NextResponse.json(
-      { erro: 'Falha ao criar ficha. Tente novamente.' },
+      { erro: 'erro_interno', mensagem: 'Falha ao criar ficha.', correlationId },
       { status: 500 },
     );
   }

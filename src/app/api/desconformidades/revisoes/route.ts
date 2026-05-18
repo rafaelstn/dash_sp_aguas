@@ -5,7 +5,7 @@ import { revisoesRepository } from '@/infrastructure/repositories';
 import { marcarRevisaoDesconformidade } from '@/application/use-cases/marcar-revisao-desconformidade';
 import type { CategoriaDesconformidade } from '@/domain/desconformidade';
 import type { TipoEntidadeRevisada } from '@/domain/revisao-desconformidade';
-import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { exigirUsuario } from '@/app/api/_helpers/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +41,9 @@ function validar(body: unknown): Payload | null {
 }
 
 export async function POST(request: Request) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -59,8 +62,6 @@ export async function POST(request: Request) {
     h.get('x-real-ip') ??
     null;
 
-  const usuario = await obterUsuarioAtual();
-
   try {
     const revisao = await marcarRevisaoDesconformidade(revisoesRepository, {
       tipoEntidade: payload.tipoEntidade,
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       categoria: payload.categoria,
       nota: payload.nota,
       ip,
-      usuarioId: usuario?.id ?? null,
+      usuarioId: auth.id,
     });
     return NextResponse.json({ revisao }, { status: 200 });
   } catch {
