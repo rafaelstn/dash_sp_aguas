@@ -22,6 +22,7 @@ const config = [
       'dist/**',
       'build/**',
       'coverage/**',
+      'android/**',
       'public/sw.js',
       'public/sw.js.map',
       'public/workbox-*.js',
