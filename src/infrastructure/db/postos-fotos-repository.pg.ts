@@ -64,4 +64,18 @@ export const postosFotosRepository: PostosFotosRepository = {
       throw new FalhaRepositorio('postosFotos.capaAtual', e);
     }
   },
+
+  async listarDoPosto(prefixo: string) {
+    try {
+      const linhas = await sql<LinhaFoto[]>`
+        SELECT id, prefixo, storage_path, tirada_em, tirada_por, created_at
+          FROM postos_fotos
+         WHERE prefixo = ${prefixo}
+         ORDER BY tirada_em DESC
+      `;
+      return linhas.map(mapear);
+    } catch (e) {
+      throw new FalhaRepositorio('postosFotos.listarDoPosto', e);
+    }
+  },
 };

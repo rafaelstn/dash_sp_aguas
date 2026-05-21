@@ -54,6 +54,35 @@ export async function obterCapaPosto(
   };
 }
 
+/** Uma foto do histórico pronta para exibição (signed URL + idade em dias). */
+export interface FotoHistoricoView {
+  id: string;
+  url: string | null;
+  tiradaEm: Date;
+  idadeDias: number | null;
+}
+
+/**
+ * Histórico de fotos do posto (acompanhamento ao longo dos anos), da mais
+ * recente para a mais antiga, cada uma com signed URL. Usado no painel do
+ * posto no sistema; o app só consome a vigente via `obterCapaPosto`.
+ */
+export async function listarFotosPosto(
+  repo: PostosFotosRepository,
+  prefixo: string,
+  agora: Date = new Date(),
+): Promise<FotoHistoricoView[]> {
+  const fotos = await repo.listarDoPosto(prefixo);
+  return Promise.all(
+    fotos.map(async (foto) => ({
+      id: foto.id,
+      url: await urlAssinadaFotoPosto(foto.storagePath),
+      tiradaEm: foto.tiradaEm,
+      idadeDias: idadeFotoEmDias(foto, agora),
+    })),
+  );
+}
+
 function decodificarDataUrlJpeg(dataUrl: string): Buffer {
   const match = /^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/.exec(dataUrl);
   if (!match || !match[2]) {

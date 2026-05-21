@@ -9,8 +9,10 @@ export interface RegistroFotoPosto {
 }
 
 export interface PostosFotosRepository {
-  /** Registra a foto no histórico e a torna a capa atual (mais recente). */
+  /** Registra a foto no histórico do posto e a torna a vigente (mais recente). */
   registrar(registro: RegistroFotoPosto): Promise<PostoFoto>;
-  /** Capa atual do posto (foto mais recente), ou null se não houver. */
+  /** Foto vigente do posto (mais recente), ou null se não houver. */
   capaAtual(prefixo: string): Promise<PostoFoto | null>;
+  /** Histórico completo do posto, da mais recente para a mais antiga. */
+  listarDoPosto(prefixo: string): Promise<PostoFoto[]>;
 }

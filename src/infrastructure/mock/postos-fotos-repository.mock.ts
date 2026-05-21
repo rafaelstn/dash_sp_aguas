@@ -22,9 +22,16 @@ export const postosFotosRepository: PostosFotosRepository = {
   },
 
   async capaAtual(prefixo: string) {
-    const doPosto = memoria
-      .filter((f) => f.prefixo === prefixo)
-      .sort((a, b) => b.tiradaEm.getTime() - a.tiradaEm.getTime());
-    return doPosto[0] ?? null;
+    return ordenarDoPosto(prefixo)[0] ?? null;
+  },
+
+  async listarDoPosto(prefixo: string) {
+    return ordenarDoPosto(prefixo);
   },
 };
+
+function ordenarDoPosto(prefixo: string): PostoFoto[] {
+  return memoria
+    .filter((f) => f.prefixo === prefixo)
+    .sort((a, b) => b.tiradaEm.getTime() - a.tiradaEm.getTime());
+}
