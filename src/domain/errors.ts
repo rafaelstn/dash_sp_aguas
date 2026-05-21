@@ -47,6 +47,14 @@ export class FalhaRepositorio extends Error {
   }
 }
 
+/** Entrada inválida de uso geral (mapeia para 400 nas rotas). */
+export class DadosInvalidos extends Error {
+  constructor(motivo: string) {
+    super(motivo);
+    this.name = 'DadosInvalidos';
+  }
+}
+
 /**
  * Sinaliza que o backend aceitou a solicitação de indexação mas ela não
  * concluiu no tempo síncrono esperado (>8s). O frontend deve fazer polling

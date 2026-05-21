@@ -9,6 +9,7 @@ import { auditoriaRepository as auditoriaPg } from './db/auditoria-repository.pg
 import { desconformidadesRepository as desconformidadesPg } from './db/desconformidades-repository.pg';
 import { revisoesRepository as revisoesPg } from './db/revisoes-repository.pg';
 import { favoritosRepository as favoritosPg } from './db/favoritos-repository.pg';
+import { postosFotosRepository as postosFotosPg } from './db/postos-fotos-repository.pg';
 import { facetasRepository as facetasPg } from './db/facetas-repository.pg';
 import { fichasVisitaRepository as fichasVisitaPg } from './db/fichas-visita-repository.pg';
 import { triagemRepository as triagemPg } from './db/triagem-repository.pg';
@@ -23,6 +24,7 @@ import { auditoriaRepository as auditoriaMock } from './mock/auditoria-repositor
 import { desconformidadesRepository as desconformidadesMock } from './mock/desconformidades-repository.mock';
 import { revisoesRepository as revisoesMock } from './mock/revisoes-repository.mock';
 import { favoritosRepository as favoritosMock } from './mock/favoritos-repository.mock';
+import { postosFotosRepository as postosFotosMock } from './mock/postos-fotos-repository.mock';
 import { facetasRepository as facetasMock } from './mock/facetas-repository.mock';
 import { fichasVisitaRepository as fichasVisitaMock } from './mock/fichas-visita-repository.mock';
 import { triagemRepository as triagemMock } from './mock/triagem-repository.mock';
@@ -45,6 +47,7 @@ export const desconformidadesRepository = demo
   : desconformidadesPg;
 export const revisoesRepository = demo ? revisoesMock : revisoesPg;
 export const favoritosRepository = demo ? favoritosMock : favoritosPg;
+export const postosFotosRepository = demo ? postosFotosMock : postosFotosPg;
 export const facetasRepository = demo ? facetasMock : facetasPg;
 export const fichasVisitaRepository = demo ? fichasVisitaMock : fichasVisitaPg;
 export const triagemRepository = demo ? triagemMock : triagemPg;

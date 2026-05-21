@@ -1,9 +1,43 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { HeaderMobile } from '@/components/mobile/HeaderMobile';
 import { CardTipoFicha } from '@/components/mobile/CardTipoFicha';
-import { postosRepository } from '@/infrastructure/repositories';
+import { FotoCapaPosto } from '@/components/mobile/FotoCapaPosto';
+import {
+  postosRepository,
+  auditoriaRepository,
+} from '@/infrastructure/repositories';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { SCHEMAS_FICHA } from '@/domain/fichas/schemas';
 import { CODIGOS_TIPO_DOCUMENTO } from '@/domain/tipo-documento';
+import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
+
+/**
+ * Registra o acesso ao detalhe ('visualizou_ficha') para alimentar a aba
+ * Recentes. Best-effort: nunca bloqueia nem quebra o render. Erro de auditoria
+ * é logado e engolido, pois aqui a trilha é UX (acesso rápido), não a trilha
+ * LGPD obrigatória do use case obter-ficha.
+ */
+async function registrarAcessoRecente(prefixo: string): Promise<void> {
+  try {
+    const h = await headers();
+    const ip =
+      h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      h.get('x-real-ip') ??
+      null;
+    const userAgent = h.get('user-agent');
+    const usuario = await obterUsuarioAtual();
+    await auditoriaRepository.registrarAcesso({
+      prefixo,
+      acao: 'visualizou_ficha',
+      ip,
+      userAgent,
+      usuarioId: usuario?.id ?? null,
+    });
+  } catch (erro) {
+    console.error('[posto] Falha ao registrar acesso recente', erro);
+  }
+}
 
 /**
  * Detalhes do posto + grade de tipos de ficha (US-MOB-003 + US-MOB-004).
@@ -25,11 +59,21 @@ export const dynamic = 'force-dynamic';
 
 export default async function DetalhePostoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ prefixo: string }>;
+  searchParams: Promise<{ tipo?: string }>;
 }) {
   const { prefixo: prefixoRaw } = await params;
+  const { tipo: tipoRaw } = await searchParams;
   const prefixo = decodeURIComponent(prefixoRaw);
+
+  const tipoNumero = Number(tipoRaw);
+  const tipoSelecionado: CodigoTipoDocumento | null =
+    Number.isInteger(tipoNumero) &&
+    (CODIGOS_TIPO_DOCUMENTO as readonly number[]).includes(tipoNumero)
+      ? (tipoNumero as CodigoTipoDocumento)
+      : null;
 
   const posto = await postosRepository.buscarPorPrefixo(prefixo);
 
@@ -57,6 +101,11 @@ export default async function DetalhePostoPage({
       </>
     );
   }
+
+  // Best-effort: alimenta a aba Recentes. Aguardamos a escrita pra garantir a
+  // persistência (fire-and-forget em server component pode ser cortado no fim
+  // do request); falhas são engolidas dentro da função, não bloqueiam o render.
+  await registrarAcessoRecente(posto.prefixo);
 
   const linhasIdentificacao: Array<{ rotulo: string; valor: string | null }> = [
     { rotulo: 'Município', valor: posto.municipio ?? null },
@@ -98,12 +147,25 @@ export default async function DetalhePostoPage({
           </dl>
         </section>
 
+        <FotoCapaPosto prefixo={posto.prefixo} />
+
+        {tipoSelecionado ? (
+          <Link
+            href={`/app/postos/${encodeURIComponent(posto.prefixo)}/fichas/nova/${tipoSelecionado}`}
+            className="flex min-h-[48px] items-center justify-center rounded bg-gov-azul px-4 text-sm font-semibold text-white hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
+          >
+            Preencher ficha de {SCHEMAS_FICHA[tipoSelecionado].rotulo}
+          </Link>
+        ) : null}
+
         <section aria-labelledby="tipos-titulo" className="space-y-2">
           <h2
             id="tipos-titulo"
             className="text-xs font-semibold uppercase tracking-wider text-app-fg-muted"
           >
-            Tipos de ficha disponíveis para este posto
+            {tipoSelecionado
+              ? 'Ou escolha outro tipo de ficha'
+              : 'Tipos de ficha disponíveis para este posto'}
           </h2>
           <ul
             className="grid grid-cols-2 gap-3 md:grid-cols-3"

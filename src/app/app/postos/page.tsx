@@ -6,7 +6,33 @@ import {
   type CodigoTipoDocumento,
 } from '@/domain/tipo-documento';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { BuscaPostosMobile } from './BuscaPostosMobile';
+import {
+  favoritosRepository,
+  auditoriaRepository,
+  postosRepository,
+} from '@/infrastructure/repositories';
+import { listarFavoritos } from '@/application/use-cases/listar-favoritos';
+import { listarPostosRecentes } from '@/application/use-cases/listar-postos-recentes';
+import {
+  BuscaPostosMobile,
+  type PostoLista,
+} from './BuscaPostosMobile';
+
+/**
+ * Reduz o objeto Posto (37+ campos) ao mínimo que o card mobile precisa.
+ * Mantém a fronteira server/client enxuta: só serializa o necessário.
+ */
+function paraItemLista(posto: {
+  prefixo: string;
+  nomeEstacao: string | null;
+  municipio: string | null;
+}): PostoLista {
+  return {
+    prefixo: posto.prefixo,
+    nomeEstacao: posto.nomeEstacao,
+    municipio: posto.municipio,
+  };
+}
 
 /**
  * Busca de posto — US-MOB-003.
@@ -40,6 +66,31 @@ export default async function PostosPage({
     redirect('/app/login');
   }
 
+  // Favoritos e recentes alimentam as abas. Degrada para vazio se o repo
+  // falhar: a aba Buscar continua funcional e a tela não quebra.
+  let favoritos: PostoLista[] = [];
+  let recentes: PostoLista[] = [];
+  try {
+    const itens = await listarFavoritos(
+      favoritosRepository,
+      postosRepository,
+      usuario.id,
+    );
+    favoritos = itens.map((i) => paraItemLista(i.posto));
+  } catch (erro) {
+    console.error('[postos] Falha ao listar favoritos do usuário', erro);
+  }
+  try {
+    const itens = await listarPostosRecentes(
+      auditoriaRepository,
+      postosRepository,
+      usuario.id,
+    );
+    recentes = itens.map((i) => paraItemLista(i.posto));
+  } catch (erro) {
+    console.error('[postos] Falha ao listar postos recentes do usuário', erro);
+  }
+
   return (
     <>
       <HeaderMobile
@@ -56,6 +107,8 @@ export default async function PostosPage({
           <BuscaPostosMobile
             tipo={tipoValido ? tipoNumero : null}
             usuarioId={usuario.id}
+            favoritos={favoritos}
+            recentes={recentes}
           />
         </Suspense>
       </div>

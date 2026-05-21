@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Posto } from '@/domain/posto';
 import type { RespostaBusca } from '@/types/dto';
@@ -10,11 +10,33 @@ const MIN_CHARS = 3;
 const HIST_KEY = 'spaguas:postos:historico';
 const HIST_LIMITE = 5;
 
+/**
+ * Subconjunto do Posto que as abas Favoritos/Recentes precisam pra renderizar
+ * o card. O server reduz o Posto completo a isto antes de serializar.
+ */
+export interface PostoLista {
+  prefixo: string;
+  nomeEstacao: string | null;
+  municipio: string | null;
+}
+
+type AbaId = 'buscar' | 'favoritos' | 'recentes';
+
+const ABAS: ReadonlyArray<{ id: AbaId; rotulo: string }> = [
+  { id: 'buscar', rotulo: 'Buscar' },
+  { id: 'favoritos', rotulo: 'Favoritos' },
+  { id: 'recentes', rotulo: 'Recentes' },
+];
+
 interface BuscaPostosMobileProps {
   /** Código do tipo de ficha (1..7) ou null se não passado. */
   tipo: number | null;
   /** ID do usuário autenticado — usado para isolar histórico por conta. */
   usuarioId: string;
+  /** Favoritos do usuário, resolvidos no server (aba Favoritos). */
+  favoritos: PostoLista[];
+  /** Postos vistos recentemente, da auditoria no server (aba Recentes). */
+  recentes: PostoLista[];
 }
 
 interface ItemHistorico {
@@ -34,23 +56,57 @@ type Estado =
   | { kind: 'erro'; mensagem: string };
 
 /**
- * Search de posto mobile-first. Reusa o endpoint `/api/postos/search`.
- * Debounce 300ms, mínimo 3 caracteres (US-MOB-003).
+ * Seleção de posto mobile-first com três abas: Buscar, Favoritos, Recentes.
  *
- * Estados cobertos (regra `padrao.md` §Features): idle, carregando, vazio,
- * resultados, erro de rede (offline), erro 500.
+ * Aba Buscar: reusa o endpoint `/api/postos/search` (debounce 300ms, mínimo 3
+ * caracteres, US-MOB-003). Estados cobertos (regra `padrao.md` §Features):
+ * idle, carregando, vazio, resultados, erro de rede (offline), erro 500.
  *
- * Sprint 3 — Fernanda endureceu com histórico recente em localStorage por
- * usuário (5 últimos postos). Aparece quando o termo está vazio. Click em
- * resultado registra acesso antes de navegar.
+ * Aba Favoritos / Recentes: listas resolvidas no server e recebidas por props,
+ * renderizadas com o MESMO card de resultado.
+ *
+ * Histórico local (localStorage por usuário, 5 postos) foi mantido dentro da
+ * aba Buscar como atalho que funciona offline e sem ida ao server. Não é
+ * redundante com a aba Recentes: a aba lê a trilha de auditoria do server
+ * (cross-device, alimentada ao abrir o detalhe), enquanto o atalho local
+ * reflete só os toques recentes neste aparelho e aparece sob o campo de busca.
  */
-export function BuscaPostosMobile({ tipo, usuarioId }: BuscaPostosMobileProps) {
+export function BuscaPostosMobile({
+  tipo,
+  usuarioId,
+  favoritos,
+  recentes,
+}: BuscaPostosMobileProps) {
   const [termo, setTermo] = useState('');
   const [estado, setEstado] = useState<Estado>({ kind: 'idle' });
   const [historico, setHistorico] = useState<ItemHistorico[]>([]);
+  const [abaAtiva, setAbaAtiva] = useState<AbaId>('buscar');
   const inputId = useId();
+  const baseId = useId();
+  const refsAbas = useRef<Array<HTMLButtonElement | null>>([]);
 
   const chaveHist = useMemo(() => `${HIST_KEY}:${usuarioId}`, [usuarioId]);
+
+  function aoTeclarAba(evento: React.KeyboardEvent<HTMLButtonElement>) {
+    const indiceAtual = ABAS.findIndex((a) => a.id === abaAtiva);
+    let proximo = indiceAtual;
+    if (evento.key === 'ArrowRight') {
+      proximo = (indiceAtual + 1) % ABAS.length;
+    } else if (evento.key === 'ArrowLeft') {
+      proximo = (indiceAtual - 1 + ABAS.length) % ABAS.length;
+    } else if (evento.key === 'Home') {
+      proximo = 0;
+    } else if (evento.key === 'End') {
+      proximo = ABAS.length - 1;
+    } else {
+      return;
+    }
+    evento.preventDefault();
+    const alvo = ABAS[proximo];
+    if (!alvo) return;
+    setAbaAtiva(alvo.id);
+    refsAbas.current[proximo]?.focus();
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -167,57 +223,160 @@ export function BuscaPostosMobile({ tipo, usuarioId }: BuscaPostosMobileProps) {
   return (
     <section aria-labelledby="busca-postos-titulo" className="space-y-3">
       <h2 id="busca-postos-titulo" className="sr-only">
-        Buscar posto
+        Seleção de posto
       </h2>
 
-      <div>
-        <label
-          htmlFor={inputId}
-          className="block text-xs font-medium text-app-fg"
-        >
-          Prefixo, nome ou município
-        </label>
-        <input
-          id={inputId}
-          type="search"
-          inputMode="search"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          value={termo}
-          onChange={(e) => setTermo(e.target.value)}
-          placeholder="Exemplo: 4D-001 ou Itu"
-          className="mt-1 block w-full min-h-[44px] rounded border border-app-border bg-app-surface px-3 text-md text-app-fg placeholder:text-app-fg-muted focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
-          aria-describedby={`${inputId}-ajuda`}
-        />
-        <p id={`${inputId}-ajuda`} className="mt-1 text-2xs text-app-fg-muted">
-          Mínimo {MIN_CHARS} caracteres.
-        </p>
+      <div
+        role="tablist"
+        aria-label="Modo de seleção de posto"
+        className="flex gap-1 rounded border border-app-border bg-app-surface-2 p-1"
+      >
+        {ABAS.map((aba, indice) => {
+          const selecionada = aba.id === abaAtiva;
+          return (
+            <button
+              key={aba.id}
+              ref={(el) => {
+                refsAbas.current[indice] = el;
+              }}
+              type="button"
+              role="tab"
+              id={`${baseId}-tab-${aba.id}`}
+              aria-selected={selecionada}
+              aria-controls={`${baseId}-painel-${aba.id}`}
+              tabIndex={selecionada ? 0 : -1}
+              onClick={() => setAbaAtiva(aba.id)}
+              onKeyDown={aoTeclarAba}
+              className={`flex min-h-[44px] flex-1 items-center justify-center rounded px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul ${
+                selecionada
+                  ? 'bg-app-surface text-gov-azul shadow-sm'
+                  : 'text-app-fg-muted hover:text-app-fg'
+              }`}
+            >
+              {aba.rotulo}
+            </button>
+          );
+        })}
       </div>
 
-      {exibirHistorico ? (
-        <HistoricoRecente
-          itens={historico}
-          tipo={tipo}
-          onLimpar={limparHistorico}
-          onAcessar={(prefixo) => {
-            const item = historico.find((h) => h.prefixo === prefixo);
-            if (!item) return;
-            registrarAcesso({
-              prefixo: item.prefixo,
-              nomeEstacao: item.nome,
-              municipio: item.municipio,
-            });
-          }}
-        />
-      ) : null}
+      <div
+        role="tabpanel"
+        id={`${baseId}-painel-buscar`}
+        aria-labelledby={`${baseId}-tab-buscar`}
+        hidden={abaAtiva !== 'buscar'}
+        className="space-y-3"
+      >
+        <div>
+          <label
+            htmlFor={inputId}
+            className="block text-xs font-medium text-app-fg"
+          >
+            Prefixo, nome ou município
+          </label>
+          <input
+            id={inputId}
+            type="search"
+            inputMode="search"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={termo}
+            onChange={(e) => setTermo(e.target.value)}
+            placeholder="Exemplo: 4D-001 ou Itu"
+            className="mt-1 block w-full min-h-[44px] rounded border border-app-border bg-app-surface px-3 text-md text-app-fg placeholder:text-app-fg-muted focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+            aria-describedby={`${inputId}-ajuda`}
+          />
+          <p id={`${inputId}-ajuda`} className="mt-1 text-2xs text-app-fg-muted">
+            Mínimo {MIN_CHARS} caracteres.
+          </p>
+        </div>
 
-      <ResultadosBusca
-        estado={estado}
-        tipo={tipo}
-        onAcessar={registrarAcesso}
-      />
+        {exibirHistorico ? (
+          <HistoricoRecente
+            itens={historico}
+            tipo={tipo}
+            onLimpar={limparHistorico}
+            onAcessar={(prefixo) => {
+              const item = historico.find((h) => h.prefixo === prefixo);
+              if (!item) return;
+              registrarAcesso({
+                prefixo: item.prefixo,
+                nomeEstacao: item.nome,
+                municipio: item.municipio,
+              });
+            }}
+          />
+        ) : null}
+
+        <ResultadosBusca
+          estado={estado}
+          tipo={tipo}
+          onAcessar={registrarAcesso}
+        />
+      </div>
+
+      <div
+        role="tabpanel"
+        id={`${baseId}-painel-favoritos`}
+        aria-labelledby={`${baseId}-tab-favoritos`}
+        hidden={abaAtiva !== 'favoritos'}
+      >
+        <ListaPostos
+          itens={favoritos}
+          tipo={tipo}
+          rotuloLista="Postos favoritos"
+          mensagemVazia="Você ainda não favoritou postos."
+        />
+      </div>
+
+      <div
+        role="tabpanel"
+        id={`${baseId}-painel-recentes`}
+        aria-labelledby={`${baseId}-tab-recentes`}
+        hidden={abaAtiva !== 'recentes'}
+      >
+        <ListaPostos
+          itens={recentes}
+          tipo={tipo}
+          rotuloLista="Postos acessados recentemente"
+          mensagemVazia="Nenhum posto acessado recentemente."
+        />
+      </div>
     </section>
+  );
+}
+
+/**
+ * Lista de postos das abas Favoritos/Recentes. Reaproveita o card de resultado
+ * da busca. Estado vazio amigável quando não há itens. Sem callback de acesso:
+ * a trilha de auditoria já é registrada no server ao abrir o detalhe.
+ */
+function ListaPostos({
+  itens,
+  tipo,
+  rotuloLista,
+  mensagemVazia,
+}: {
+  itens: PostoLista[];
+  tipo: number | null;
+  rotuloLista: string;
+  mensagemVazia: string;
+}) {
+  if (itens.length === 0) {
+    return (
+      <p className="rounded border border-app-border-subtle bg-app-surface p-3 text-sm text-app-fg-muted">
+        {mensagemVazia}
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-2" aria-label={rotuloLista}>
+      {itens.map((posto) => (
+        <li key={posto.prefixo}>
+          <CardResultadoPosto posto={posto} tipo={tipo} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -261,7 +420,7 @@ function HistoricoRecente({
             <Link
               href={
                 tipo
-                  ? `/app/postos/${encodeURIComponent(item.prefixo)}/fichas/nova/${tipo}`
+                  ? `/app/postos/${encodeURIComponent(item.prefixo)}?tipo=${tipo}`
                   : `/app/postos/${encodeURIComponent(item.prefixo)}`
               }
               onClick={() => onAcessar(item.prefixo)}
@@ -296,7 +455,7 @@ function ResultadosBusca({
 }: {
   estado: Estado;
   tipo: number | null;
-  onAcessar: (posto: Posto) => void;
+  onAcessar: (posto: PostoLista) => void;
 }) {
   if (estado.kind === 'idle') {
     return (
@@ -384,18 +543,18 @@ function CardResultadoPosto({
   tipo,
   onAcessar,
 }: {
-  posto: Posto;
+  posto: PostoLista;
   tipo: number | null;
-  onAcessar: (posto: Posto) => void;
+  onAcessar?: (posto: PostoLista) => void;
 }) {
   const href = tipo
-    ? `/app/postos/${encodeURIComponent(posto.prefixo)}/fichas/nova/${tipo}`
+    ? `/app/postos/${encodeURIComponent(posto.prefixo)}?tipo=${tipo}`
     : `/app/postos/${encodeURIComponent(posto.prefixo)}`;
 
   return (
     <Link
       href={href}
-      onClick={() => onAcessar(posto)}
+      onClick={onAcessar ? () => onAcessar(posto) : undefined}
       className="flex min-h-[64px] items-center gap-3 rounded-gov-card border border-app-border bg-app-surface p-3 hover:border-gov-azul focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1"
     >
       <div

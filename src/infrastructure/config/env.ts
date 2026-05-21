@@ -15,6 +15,8 @@ const schema = z.object({
   // Supabase Auth (desvio autorizado da US-008 para Fase 1 — ver ADR-0004)
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
+  // Service role (server-only): usada para upload no Storage (foto de capa).
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   // Domínios permitidos pra magic link, separados por vírgula.
   AUTH_ALLOWED_EMAIL_DOMAINS: z
     .string()

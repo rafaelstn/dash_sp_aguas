@@ -6,6 +6,7 @@ import { FichaPosto } from '@/components/features/ficha/FichaPosto';
 import { ListaArquivos } from '@/components/features/arquivos/ListaArquivos';
 import { HistoricoFichas } from '@/components/features/fichas/HistoricoFichas';
 import { MapaPosto } from '@/components/features/posto/MapaPosto';
+import { CapaPosto } from '@/components/features/posto/CapaPosto';
 import { Alerta } from '@/components/ui/Alerta';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { BadgeIndexacao } from '@/components/features/posto/BadgeIndexacao';
@@ -312,6 +313,9 @@ export default async function PaginaPosto({ params }: PageProps) {
               nomeEstacao={posto.nomeEstacao}
               prefixo={posto.prefixo}
             />
+            <Suspense fallback={<Skeleton className="mt-4 h-48 w-full rounded-gov-card" />}>
+              <CapaPosto prefixo={posto.prefixo} />
+            </Suspense>
           </aside>
         </div>
 
