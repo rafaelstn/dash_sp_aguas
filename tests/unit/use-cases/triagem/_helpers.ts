@@ -49,9 +49,10 @@ export function entradaSubmissaoValida(
     precisaoGpsM: 8.5,
     observacoes: 'Ficha de teste',
     dados: {
-      tipo_manutencao: 'preventiva',
-      acesso: 'boa',
-      limpeza: 'boa',
+      tipo_inspecao: 'fluviometrica',
+      escala_acesso: 'bom',
+      escala_limpeza: 'bom',
+      controle_nivelamento: 'sim',
     },
     origem: 'app_campo',
     fichaOrigemId: null,

@@ -96,8 +96,7 @@ describe('use-case/submeterFichaTriagem', () => {
         triagemRepository,
         entradaSubmissaoValida({
           dados: {
-            tipo_manutencao: 'preventiva',
-            tensao_bateria_v: 'doze' as never, // deveria ser number
+            escala_leitura_m: 'doze' as never, // deveria ser number
           },
         }),
         META,
@@ -111,7 +110,6 @@ describe('use-case/submeterFichaTriagem', () => {
         triagemRepository,
         entradaSubmissaoValida({
           dados: {
-            tipo_manutencao: 'preventiva',
             campo_inventado: 'tentativa_de_injecao',
           },
         }),
@@ -121,12 +119,13 @@ describe('use-case/submeterFichaTriagem', () => {
   });
 
   it('rejeita campo obrigatório ausente', async () => {
-    // tipo_manutencao é obrigatório no schema do tipo 3
+    // Tipo 1 (Ficha Descritiva) tem tipo_estacao, rio e posto_nome obrigatórios.
     await expect(
       submeterFichaTriagem(
         triagemRepository,
         entradaSubmissaoValida({
-          dados: { acesso: 'boa' }, // falta tipo_manutencao
+          codTipoDocumento: 1,
+          dados: { rio: 'Tietê' }, // faltam tipo_estacao e posto_nome
         }),
         META,
       ),

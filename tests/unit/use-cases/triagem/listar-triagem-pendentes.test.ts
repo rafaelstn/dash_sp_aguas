@@ -52,7 +52,7 @@ describe('use-case/listarTriagemPendentes', () => {
       entradaSubmissaoValida({
         prefixo: '3D-002',
         codTipoDocumento: 7,
-        dados: { metodo_medicao: 'molinete' },
+        dados: { rio: 'Jaguari', medicao_realizada: 'sim' },
       }),
       META,
     );

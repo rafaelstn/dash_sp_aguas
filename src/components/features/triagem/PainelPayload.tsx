@@ -1,7 +1,9 @@
 import {
   type CampoFicha,
+  type ColunaTabela,
   type SchemaFicha,
   obterSchema,
+  secaoVisivel,
 } from '@/domain/fichas/schemas';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
 
@@ -40,7 +42,9 @@ export function PainelPayload({
 
   return (
     <div className="space-y-5">
-      {schema.secoes.map((secao) => (
+      {schema.secoes
+        .filter((secao) => secaoVisivel(secao, dados))
+        .map((secao) => (
         <fieldset
           key={secao.titulo}
           className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
@@ -96,7 +100,7 @@ export function PainelPayload({
 function ItemValor({ campo, valor }: { campo: CampoFicha; valor: unknown }) {
   const renderizado = renderizarValor(campo, valor);
   return (
-    <div>
+    <div className={campo.tipo === 'tabela' ? 'sm:col-span-2' : undefined}>
       <dt className="text-2xs uppercase tracking-wider text-app-fg-subtle">
         {campo.rotulo}
         {campo.unidade ? (
@@ -153,6 +157,45 @@ function renderizarValor(campo: CampoFicha, valor: unknown): React.ReactNode {
       return (
         <span className="whitespace-pre-wrap break-words">{String(valor)}</span>
       );
+    case 'tabela': {
+      const linhas = Array.isArray(valor)
+        ? (valor as Array<Record<string, unknown>>)
+        : [];
+      const colunas = campo.colunas ?? [];
+      if (linhas.length === 0) {
+        return <span className="text-app-fg-subtle">Nenhuma linha informada</span>;
+      }
+      const celulaClass = 'border border-app-border-subtle px-2 py-1 text-left';
+      return (
+        <div className="mt-1 overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className={celulaClass}>#</th>
+                {colunas.map((c) => (
+                  <th key={c.chave} className={celulaClass}>
+                    {c.rotulo}
+                    {c.unidade ? ` (${c.unidade})` : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((linha, i) => (
+                <tr key={i}>
+                  <td className={celulaClass}>{i + 1}</td>
+                  {colunas.map((c) => (
+                    <td key={c.chave} className={celulaClass}>
+                      {formatarCelulaTabela(c, linha?.[c.chave])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
     default: {
       const texto = String(valor);
       const url = detectarURL(texto);
@@ -171,6 +214,21 @@ function renderizarValor(campo: CampoFicha, valor: unknown): React.ReactNode {
       return texto;
     }
   }
+}
+
+function formatarCelulaTabela(col: ColunaTabela, valor: unknown): React.ReactNode {
+  if (valor === null || valor === undefined || valor === '') return '—';
+  if (col.tipo === 'select') {
+    const opcao = col.opcoes?.find((o) => o.valor === valor);
+    return opcao ? opcao.rotulo : String(valor);
+  }
+  if (col.tipo === 'numero') {
+    const num = typeof valor === 'number' ? valor : Number(valor);
+    return Number.isFinite(num)
+      ? num.toLocaleString('pt-BR', { maximumFractionDigits: 4 })
+      : String(valor);
+  }
+  return String(valor);
 }
 
 function formatarBruto(valor: unknown): string {

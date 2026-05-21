@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation';
 import {
   construirSchemaZodEstrito,
+  secaoVisivel,
   type CampoFicha,
   type SchemaFicha,
 } from '@/domain/fichas/schemas';
@@ -131,9 +132,16 @@ export function FormularioFichaMobile({
     salvarRascunho(rascunho);
   }, [rascunho]);
 
-  const todosCampos: CampoFicha[] = useMemo(() => {
-    return schema.secoes.flatMap((s) => s.campos);
-  }, [schema]);
+  // Seções visíveis dado o estado atual (variantes condicionais, ex.: tipo
+  // de inspeção). Só os campos visíveis entram na validação e no payload.
+  const secoesVisiveis = useMemo(
+    () => schema.secoes.filter((s) => secaoVisivel(s, rascunho.dados)),
+    [schema, rascunho.dados],
+  );
+  const camposVisiveis: CampoFicha[] = useMemo(
+    () => secoesVisiveis.flatMap((s) => s.campos),
+    [secoesVisiveis],
+  );
 
   const setDado = useCallback(
     (chave: string, valor: unknown) => {
@@ -315,8 +323,29 @@ export function FormularioFichaMobile({
     // valores que o Zod entenda. Para campos opcionais vazios, manda null
     // pra que o `.nullable().optional()` aceite.
     const normalizados: Record<string, unknown> = {};
-    for (const campo of todosCampos) {
+    for (const campo of camposVisiveis) {
       const bruto = rascunho.dados[campo.chave];
+      if (campo.tipo === 'tabela') {
+        const linhas = Array.isArray(bruto) ? (bruto as Array<Record<string, unknown>>) : [];
+        normalizados[campo.chave] = linhas.map((linha) => {
+          const obj: Record<string, unknown> = {};
+          for (const col of campo.colunas ?? []) {
+            const cru = linha?.[col.chave];
+            if (col.tipo === 'numero') {
+              if (cru === '' || cru === null || cru === undefined) {
+                obj[col.chave] = null;
+                continue;
+              }
+              const n = parseNumeroPtBR(typeof cru === 'string' ? cru : String(cru));
+              obj[col.chave] = Number.isNaN(n) ? cru : n;
+              continue;
+            }
+            obj[col.chave] = cru === '' || cru === undefined ? null : cru;
+          }
+          return obj;
+        });
+        continue;
+      }
       if (campo.tipo === 'numero') {
         if (bruto === '' || bruto === null || bruto === undefined) {
           normalizados[campo.chave] = campo.obrigatorio ? undefined : null;
@@ -736,10 +765,10 @@ export function FormularioFichaMobile({
         </p>
       </fieldset>
 
-      {/* ───── Seções dinâmicas ───── */}
-      {schema.secoes.map((secao, idxSecao) => (
+      {/* ───── Seções dinâmicas (filtra variantes ocultas) ───── */}
+      {secoesVisiveis.map((secao) => (
         <fieldset
-          key={`${idxSecao}-${secao.titulo}`}
+          key={secao.titulo}
           className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
         >
           <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-app-fg-muted">
@@ -892,7 +921,8 @@ function mensagemZodPtBR(codigo: string, original: string): string {
     case 'invalid_enum_value':
       return 'Selecione uma opção válida.';
     case 'invalid_string':
-      return 'Texto inválido.';
+      // Regex de formato (coordenada, mês/ano) carrega mensagem pt-BR própria.
+      return original || 'Texto inválido.';
     default:
       return original || 'Valor inválido.';
   }

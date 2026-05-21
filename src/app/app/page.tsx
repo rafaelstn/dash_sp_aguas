@@ -17,13 +17,13 @@ import { CODIGOS_TIPO_DOCUMENTO } from '@/domain/tipo-documento';
  */
 
 const DESCRICOES_TIPO_FICHA: Record<number, string> = {
-  1: 'Caracterização do posto: estação, bacia, acesso e infraestrutura.',
-  2: 'Configuração e parâmetros operacionais da PCD do posto.',
-  3: 'Situação do posto, leituras e serviços executados em campo.',
+  1: 'Cadastro do posto: rio, localização, referências de nível e escalas.',
+  2: 'Inspeção da PCD: condições do posto, leituras e estado dos sensores.',
+  3: 'Inspeção fluviométrica ou pluviométrica do posto e da caderneta.',
   4: 'Cotas das RNs e das réguas do posto, com erro de fechamento.',
   5: 'Seção transversal do curso d’água: largura, profundidade, verticais.',
-  6: 'Substituição do observador responsável pelo posto.',
-  7: 'Medição de descarga líquida com molinete, ADCP ou flutuador.',
+  6: 'Troca de observador: dados do novo, gratificação e ex-observador.',
+  7: 'Medição de vazão por molinete: verticais, rotações e resultados.',
 };
 
 export default async function MobileHomePage() {

@@ -11,7 +11,58 @@ export type TipoCampo =
   | 'textarea'
   | 'numero'
   | 'select'
-  | 'checkbox';
+  | 'checkbox'
+  | 'tabela';
+
+/**
+ * Coluna de um campo `tabela` (grade de linhas dinâmicas, ex.: verticais da
+ * medição de vazão). Só os tipos simples fazem sentido numa célula.
+ */
+export interface ColunaTabela {
+  chave: string;
+  rotulo: string;
+  tipo: 'texto' | 'numero' | 'select';
+  unidade?: string;
+  opcoes?: Array<{ valor: string; rotulo: string }>;
+  min?: number;
+  max?: number;
+}
+
+/**
+ * Formato de validação para campos `texto`. Aplica regex no Zod (app +
+ * backend) e habilita máscara/placeholder no widget. Adicionar formato é
+ * estender `REGRAS_FORMATO` abaixo, o restante segue automático.
+ *   - coordenada_gms : graus/minutos/segundos, ex. `22°52'18"`
+ *   - mes_ano        : período mensal `MM/AAAA`
+ *   - data_br        : data `DD/MM/AAAA`
+ *   - hora_hm        : horário `HH:MM`
+ *   - hora_hms       : horário `HH:MM:SS`
+ *   - telefone       : telefone BR `(XX) XXXXX-XXXX`
+ *   - email          : endereço de e-mail
+ *   - cpf            : CPF `XXX.XXX.XXX-XX` (valida dígito verificador)
+ */
+export type FormatoCampo =
+  | 'coordenada_gms'
+  | 'mes_ano'
+  | 'data_br'
+  | 'hora_hm'
+  | 'hora_hms'
+  | 'telefone'
+  | 'email'
+  | 'cpf';
+
+/** Valida CPF pelos dois dígitos verificadores (rejeita os de dígitos iguais). */
+export function cpfValido(bruto: string): boolean {
+  const d = bruto.replace(/\D/g, '');
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  const dv = (base: number): number => {
+    let soma = 0;
+    for (let i = 0; i < base - 1; i++) soma += Number(d[i]) * (base - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  return dv(10) === Number(d[9]) && dv(11) === Number(d[10]);
+}
 
 export interface CampoFicha {
   chave: string;
@@ -27,11 +78,103 @@ export interface CampoFicha {
   /** Min/max para `numero` — usados na validação Zod e no atributo HTML. */
   min?: number;
   max?: number;
+  /** Formato de texto validado (regex no Zod + máscara/placeholder no UI). */
+  formato?: FormatoCampo;
+  /** Placeholder do input (sugestão de preenchimento). */
+  placeholder?: string;
+  /** Colunas, apenas para `tabela`. Cada linha é um objeto com estas chaves. */
+  colunas?: ColunaTabela[];
+  /** Rótulo de uma linha da `tabela` (ex.: "Vertical"). Default: "Linha". */
+  rotuloLinha?: string;
 }
+
+/**
+ * Regras de cada formato: regex de validação e mensagem pt-BR exibida tanto
+ * no submit client-side quanto na resposta do backend. A mensagem viaja no
+ * `issue.message` do Zod, então é a fonte única de verdade.
+ */
+export const REGRAS_FORMATO: Record<
+  FormatoCampo,
+  {
+    regex: RegExp;
+    mensagem: string;
+    placeholder: string;
+    /** Validação extra além do regex (ex.: dígito verificador de CPF). */
+    validar?: (v: string) => boolean;
+  }
+> = {
+  // Aceita `22°52'18"`, `22° 52' 18"` ou `22°52'18.5"`, com hemisfério
+  // opcional (N/S/L/O/E/W). Tolerante a espaços; rejeita lixo.
+  coordenada_gms: {
+    regex: /^\s*\d{1,3}\s*°\s*\d{1,2}\s*'\s*\d{1,2}(?:[.,]\d+)?\s*"?\s*[NSLOEWnsloew]?\s*$/,
+    mensagem: 'Use graus, minutos e segundos. Ex.: 22°52\'18".',
+    placeholder: '22°52\'18"',
+  },
+  // Período mensal MM/AAAA (01 a 12 / ano de 4 dígitos).
+  mes_ano: {
+    regex: /^(0[1-9]|1[0-2])\/\d{4}$/,
+    mensagem: 'Use o formato MM/AAAA. Ex.: 04/2014.',
+    placeholder: 'MM/AAAA',
+  },
+  // Data DD/MM/AAAA (dia 01 a 31, mês 01 a 12, ano de 4 dígitos).
+  data_br: {
+    regex: /^(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/,
+    mensagem: 'Use o formato DD/MM/AAAA. Ex.: 19/12/2025.',
+    placeholder: 'DD/MM/AAAA',
+  },
+  // Horário HH:MM (24h).
+  hora_hm: {
+    regex: /^([01]\d|2[0-3]):[0-5]\d$/,
+    mensagem: 'Use o formato HH:MM. Ex.: 11:30.',
+    placeholder: 'HH:MM',
+  },
+  // Horário HH:MM:SS (24h).
+  hora_hms: {
+    regex: /^([01]\d|2[0-3]):[0-5]\d:[0-5]\d$/,
+    mensagem: 'Use o formato HH:MM:SS. Ex.: 13:28:11.',
+    placeholder: 'HH:MM:SS',
+  },
+  // Telefone BR com DDD: fixo (8 dígitos) ou celular (9 dígitos).
+  telefone: {
+    regex: /^\(\d{2}\) \d{4,5}-\d{4}$/,
+    mensagem: 'Use o formato (XX) XXXXX-XXXX.',
+    placeholder: '(11) 91234-5678',
+  },
+  // E-mail simples: local@dominio.tld.
+  email: {
+    regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    mensagem: 'Informe um e-mail válido. Ex.: nome@dominio.gov.br.',
+    placeholder: 'nome@dominio.gov.br',
+  },
+  // CPF formatado, com validação de dígito verificador.
+  cpf: {
+    regex: /^\d{3}\.\d{3}\.\d{3}-\d{2}$/,
+    mensagem: 'Informe um CPF válido. Ex.: 123.456.789-09.',
+    placeholder: '000.000.000-00',
+    validar: cpfValido,
+  },
+};
 
 export interface SecaoFicha {
   titulo: string;
   campos: CampoFicha[];
+  /**
+   * Condição de visibilidade. A seção só aparece (e seus dados só são
+   * enviados) quando `dados[campo]` estiver em `em`. Sem `quando`, a seção
+   * é sempre visível. Usado para variantes (ex.: inspeção fluviométrica vs
+   * pluviométrica no tipo 3).
+   */
+  quando?: { campo: string; em: string[] };
+}
+
+/** Decide se uma seção condicional deve aparecer dado o estado atual. */
+export function secaoVisivel(
+  secao: SecaoFicha,
+  dados: Record<string, unknown>,
+): boolean {
+  if (!secao.quando) return true;
+  const valor = dados[secao.quando.campo];
+  return typeof valor === 'string' && secao.quando.em.includes(valor);
 }
 
 export interface SchemaFicha {
@@ -46,9 +189,49 @@ export interface SchemaFicha {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Schema do tipo Inspeção (código 3) — espelha o modelo de "Ficha de
-// Inspeção da Estação Hidrometeorológica" usado pela FCTH em campo.
+// Escalas de constatação reutilizadas pelas fichas (Bom/Regular/Ruim e os
+// pares binários da Inspeção Fluviométrica). Definidas antes dos schemas
+// porque `const` não tem hoisting de valor.
 // ─────────────────────────────────────────────────────────────────────────
+
+const ESCALA_BRR = [
+  { valor: 'bom', rotulo: 'Bom' },
+  { valor: 'regular', rotulo: 'Regular' },
+  { valor: 'ruim', rotulo: 'Ruim' },
+];
+
+const ESCALA_BOM_RUIM = [
+  { valor: 'bom', rotulo: 'Bom' },
+  { valor: 'ruim', rotulo: 'Ruim' },
+];
+
+const ESCALA_CERTO_ERRADO = [
+  { valor: 'certo', rotulo: 'Certo' },
+  { valor: 'errado', rotulo: 'Errado' },
+];
+
+const ESCALA_SIM_NAO = [
+  { valor: 'sim', rotulo: 'Sim' },
+  { valor: 'nao', rotulo: 'Não' },
+];
+
+const ESCALA_SEM_COM = [
+  { valor: 'sem', rotulo: 'Sem' },
+  { valor: 'com', rotulo: 'Com' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────
+// Inspeção (código 3): espelha as fichas DAEE-CTH "INSPEÇÃO FLUVIOMÉTRICA"
+// e "INSPEÇÃO PLUVIOMÉTRICA". Variantes do mesmo tipo, escolhidas pelo campo
+// `tipo_inspecao`: as seções marcadas com `quando` só aparecem na variante
+// correspondente. Cada item tem uma constatação; a coluna "Serviço" da ficha
+// de papel é capturada de forma agregada em "Informes gerais".
+// Posto/rio/município identificam; o prefixo vem da rota. Data/técnico vêm
+// do cabeçalho do formulário.
+// ─────────────────────────────────────────────────────────────────────────
+
+const QUANDO_FLUVIO = { campo: 'tipo_inspecao', em: ['fluviometrica'] };
+const QUANDO_PLUVIO = { campo: 'tipo_inspecao', em: ['pluviometrica'] };
 
 const SCHEMA_INSPECAO: SchemaFicha = {
   codigo: 3,
@@ -56,151 +239,289 @@ const SCHEMA_INSPECAO: SchemaFicha = {
   disponivel: true,
   secoes: [
     {
-      titulo: 'Situação encontrada',
+      titulo: 'Identificação',
       campos: [
         {
-          chave: 'acesso',
-          rotulo: 'Acesso',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'boa', rotulo: 'Boa' },
-            { valor: 'ruim', rotulo: 'Ruim' },
-          ],
-        },
-        {
-          chave: 'cercado_abrigo',
-          rotulo: 'Cercado / abrigo',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'boa', rotulo: 'Boa' },
-            { valor: 'ruim', rotulo: 'Ruim' },
-          ],
-        },
-        {
-          chave: 'exposicao',
-          rotulo: 'Exposição',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'boa', rotulo: 'Boa' },
-            { valor: 'ruim', rotulo: 'Ruim' },
-          ],
-        },
-        {
-          chave: 'limpeza',
-          rotulo: 'Limpeza',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'boa', rotulo: 'Boa' },
-            { valor: 'ruim', rotulo: 'Ruim' },
-          ],
-        },
-      ],
-    },
-    {
-      titulo: 'PCD e equipamentos',
-      campos: [
-        {
-          chave: 'tipo_manutencao',
-          rotulo: 'Tipo de manutenção',
+          chave: 'tipo_inspecao',
+          rotulo: 'Tipo de inspeção',
           tipo: 'select',
           obrigatorio: true,
           opcoes: [
-            { valor: 'preventiva', rotulo: 'Preventiva' },
-            { valor: 'corretiva', rotulo: 'Corretiva' },
+            { valor: 'fluviometrica', rotulo: 'Fluviométrica' },
+            { valor: 'pluviometrica', rotulo: 'Pluviométrica' },
           ],
         },
-        {
-          chave: 'pcd_deixada',
-          rotulo: 'PCD deixada',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'registrando_transmitindo', rotulo: 'Registrando e Transmitindo' },
-            { valor: 'somente_registrando', rotulo: 'Somente Registrando' },
-            { valor: 'parada', rotulo: 'Parada' },
-          ],
-        },
-        {
-          chave: 'sensor_nivel_tipo',
-          rotulo: 'Tipo do sensor de nível',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'pressao', rotulo: 'Pressão (transdutor)' },
-            { valor: 'ultrassonico', rotulo: 'Ultrassônico' },
-            { valor: 'radar', rotulo: 'Radar' },
-          ],
-        },
-        {
-          chave: 'transmissao',
-          rotulo: 'Transmissão',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'gprs', rotulo: 'GPRS' },
-            { valor: 'satelite', rotulo: 'Satélite' },
-            { valor: 'sem_transmissao', rotulo: 'Sem transmissão' },
-          ],
-        },
+        { chave: 'municipio', rotulo: 'Município', tipo: 'texto' },
+        { chave: 'nome_posto', rotulo: 'Nome do posto', tipo: 'texto' },
+        { chave: 'rio', rotulo: 'Rio', tipo: 'texto' },
       ],
     },
     {
-      titulo: 'Leituras',
+      titulo: 'Escalas',
+      quando: QUANDO_FLUVIO,
       campos: [
+        { chave: 'escala_leitura_m', rotulo: 'Leitura', tipo: 'numero', unidade: 'm' },
+        { chave: 'escala_leitura_hora', rotulo: 'Hora da leitura', tipo: 'texto', formato: 'hora_hm' },
+        { chave: 'escala_acesso', rotulo: 'Acesso', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'escala_estabilidade', rotulo: 'Estabilidade', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'escala_prumo', rotulo: 'Prumo', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'escala_pintura', rotulo: 'Pintura', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'escala_limpeza', rotulo: 'Limpeza', tipo: 'select', opcoes: ESCALA_BRR },
         {
-          chave: 'na_saisp_metros',
-          rotulo: 'N.A. SAISP',
-          tipo: 'numero',
-          unidade: 'm',
-          ajuda: 'Nível d’água lido no SAISP no momento da visita.',
+          chave: 'escala_cotas',
+          rotulo: 'Cotas',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'iguais', rotulo: 'Iguais' },
+            { valor: 'corrigidas', rotulo: 'Corrigidas' },
+          ],
         },
         {
-          chave: 'zero_regua_metros',
-          rotulo: 'Zero da régua',
-          tipo: 'numero',
-          unidade: 'm',
+          chave: 'escala_amplitudes',
+          rotulo: 'Amplitudes',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'iguais', rotulo: 'Iguais' },
+            { valor: 'alteradas', rotulo: 'Alteradas' },
+          ],
         },
-        {
-          chave: 'cota_regua_inicial_cm',
-          rotulo: 'Cota da régua (inicial)',
-          tipo: 'numero',
-          unidade: 'cm',
-        },
-        {
-          chave: 'cota_regua_final_cm',
-          rotulo: 'Cota da régua (final)',
-          tipo: 'numero',
-          unidade: 'cm',
-        },
-        {
-          chave: 'tensao_bateria_v',
-          rotulo: 'Tensão da bateria 12V',
-          tipo: 'numero',
-          unidade: 'V',
-        },
-        {
-          chave: 'precipitacao_pluviometro_mm',
-          rotulo: 'Precipitação (pluviômetro)',
-          tipo: 'numero',
-          unidade: 'mm',
-        },
-        {
-          chave: 'precipitacao_pcd_mm',
-          rotulo: 'Precipitação (PCD)',
-          tipo: 'numero',
-          unidade: 'mm',
-        },
+        { chave: 'escala_empecilhos', rotulo: 'Empecilhos', tipo: 'select', opcoes: ESCALA_SIM_NAO },
       ],
     },
     {
-      titulo: 'Serviços executados',
+      titulo: 'Controle e RRNN',
+      quando: QUANDO_FLUVIO,
       campos: [
-        { chave: 'svc_limpeza_reguas', rotulo: 'Limpeza próximo às réguas', tipo: 'checkbox' },
-        { chave: 'svc_nivelamento_reguas', rotulo: 'Nivelamento de réguas', tipo: 'checkbox' },
-        { chave: 'svc_desassoreamento', rotulo: 'Desassoreamento', tipo: 'checkbox' },
-        { chave: 'svc_inspecao_pcd', rotulo: 'Inspeção e limpeza da PCD', tipo: 'checkbox' },
-        { chave: 'svc_calibracao_transdutor', rotulo: 'Calibração do transdutor', tipo: 'checkbox' },
-        { chave: 'svc_aferição_transdutor', rotulo: 'Aferição do transdutor', tipo: 'checkbox' },
-        { chave: 'svc_conferencia_pluviometro', rotulo: 'Conferência da altura do pluviômetro', tipo: 'checkbox' },
-        { chave: 'svc_reforma_cercado', rotulo: 'Reforma do cercado / abrigo', tipo: 'checkbox' },
-        { chave: 'svc_orientacao_zelador', rotulo: 'Orientação ao zelador', tipo: 'checkbox' },
+        { chave: 'controle_leit_escala_antes', rotulo: 'Leit. escala (antes)', tipo: 'numero', unidade: 'm' },
+        { chave: 'controle_leit_escala_depois', rotulo: 'Leit. escala (depois)', tipo: 'numero', unidade: 'm' },
+        { chave: 'controle_nivelamento', rotulo: 'Nivelamento', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'rn1_cota_m', rotulo: 'RN 1', tipo: 'numero', unidade: 'm' },
+        { chave: 'rn2_cota_m', rotulo: 'RN 2', tipo: 'numero', unidade: 'm' },
+      ],
+    },
+    {
+      titulo: 'Seção de medição',
+      quando: QUANDO_FLUVIO,
+      campos: [
+        { chave: 'medicoes_realizadas', rotulo: 'Medições', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        {
+          chave: 'margens',
+          rotulo: 'Margens',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'limpas', rotulo: 'Limpas' },
+            { valor: 'sujas', rotulo: 'Sujas' },
+          ],
+        },
+        {
+          chave: 'leito',
+          rotulo: 'Leito',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'natural', rotulo: 'Natural' },
+            { valor: 'alterado', rotulo: 'Alterado' },
+          ],
+        },
+        {
+          chave: 'instalacoes_fixas',
+          rotulo: 'Instalações fixas',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'boas', rotulo: 'Boas' },
+            { valor: 'ruins', rotulo: 'Ruins' },
+          ],
+        },
+        { chave: 'local_distancia_m', rotulo: 'Local (distância das escalas)', tipo: 'numero', unidade: 'm' },
+        {
+          chave: 'local_posicao',
+          rotulo: 'Local (posição)',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'montante', rotulo: 'A montante das escalas' },
+            { valor: 'jusante', rotulo: 'A jusante das escalas' },
+          ],
+        },
+        { chave: 'esconsidade', rotulo: 'Esconsidade', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+      ],
+    },
+    {
+      titulo: 'Limnígrafo',
+      quando: QUANDO_FLUVIO,
+      campos: [
+        { chave: 'limn_leit_escala_m', rotulo: 'Leit. escala', tipo: 'numero', unidade: 'm' },
+        { chave: 'limn_leit_grafico_m', rotulo: 'Leit. gráfico', tipo: 'numero', unidade: 'm' },
+        { chave: 'limn_hora_certa', rotulo: 'Hora certa', tipo: 'texto', formato: 'hora_hm' },
+        { chave: 'limn_hora_grafico', rotulo: 'Hora gráfico', tipo: 'texto', formato: 'hora_hm' },
+        { chave: 'limn_relojoaria', rotulo: 'Relojoaria', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'limn_pena', rotulo: 'Pena', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'limn_boia', rotulo: 'Bóia', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'limn_tomada_dagua', rotulo: 'Tomada d’água', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'limn_cadeado', rotulo: 'Cadeado', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'limn_estado_geral', rotulo: 'Estado geral', tipo: 'select', opcoes: ESCALA_BRR },
+      ],
+    },
+    {
+      titulo: 'Gráfico',
+      quando: QUANDO_FLUVIO,
+      campos: [
+        {
+          chave: 'grafico_coerencia',
+          rotulo: 'Coerência observador / gráfico',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'coerente', rotulo: 'Coerente' },
+            { valor: 'incoerente', rotulo: 'Incoerente' },
+          ],
+        },
+        { chave: 'grafico_periodo_inicio', rotulo: 'Período verificado (início)', tipo: 'texto', formato: 'data_br' },
+        { chave: 'grafico_periodo_fim', rotulo: 'Período verificado (fim)', tipo: 'texto', formato: 'data_br' },
+      ],
+    },
+    {
+      titulo: 'Caderneta fluviométrica',
+      quando: QUANDO_FLUVIO,
+      campos: [
+        { chave: 'cad_uso_3_vias', rotulo: 'Uso das 3 vias', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cad_cabecalho', rotulo: 'Cabeçalho', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cad_rodape', rotulo: 'Rodapé', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cad_sequencia_meses', rotulo: 'Sequência dos meses', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cad_ultimo_dia_mes', rotulo: 'Último dia do mês', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cad_legibilidade', rotulo: 'Legibilidade', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cad_rasuras', rotulo: 'Rasuras', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        { chave: 'cad_ponto_virgula', rotulo: 'Ponto ou vírgula', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cad_arredondamentos', rotulo: 'Arredondamentos', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        {
+          chave: 'cad_coerencia_leituras',
+          rotulo: 'Coerência das leituras',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'boa', rotulo: 'Boa' },
+            { valor: 'duvidosa', rotulo: 'Duvidosa' },
+          ],
+        },
+        { chave: 'cad_dia_sem_anotacao', rotulo: 'Dia sem anotação', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'cad_envelopes', rotulo: 'Envelopes', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'cad_periodo_inicio', rotulo: 'Período verificado (início)', tipo: 'texto', formato: 'data_br' },
+        { chave: 'cad_periodo_fim', rotulo: 'Período verificado (fim)', tipo: 'texto', formato: 'data_br' },
+        { chave: 'cad_visto', rotulo: 'Visto', tipo: 'checkbox' },
+      ],
+    },
+    {
+      titulo: 'Pluviômetro',
+      quando: QUANDO_PLUVIO,
+      campos: [
+        { chave: 'pluv_nivelamento', rotulo: 'Nivelamento', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluv_altura_m', rotulo: 'Altura', tipo: 'numero', unidade: 'm' },
+        { chave: 'pluv_agua_aparelho', rotulo: 'Água no aparelho', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        { chave: 'pluv_obstrucao', rotulo: 'Obstrução', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        { chave: 'pluv_vazamento', rotulo: 'Vazamento', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        { chave: 'pluv_torneira', rotulo: 'Torneira', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluv_corpo_funil', rotulo: 'Corpo / funil', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluv_limpeza', rotulo: 'Limpeza', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluv_suporte', rotulo: 'Suporte', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluv_provetas', rotulo: 'Provetas', tipo: 'select', opcoes: ESCALA_BRR },
+      ],
+    },
+    {
+      titulo: 'Cercado',
+      quando: QUANDO_PLUVIO,
+      campos: [
+        { chave: 'cerc_exposicao', rotulo: 'Exposição', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'cerc_acesso', rotulo: 'Acesso', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'cerc_madeiramento', rotulo: 'Madeiramento', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cerc_tela', rotulo: 'Tela', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cerc_pintura', rotulo: 'Pintura', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cerc_portao', rotulo: 'Portão', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cerc_cadeado', rotulo: 'Cadeado', tipo: 'select', opcoes: ESCALA_BRR },
+        {
+          chave: 'cerc_piso',
+          rotulo: 'Piso',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'limpo', rotulo: 'Limpo' },
+            { valor: 'sujo', rotulo: 'Sujo' },
+          ],
+        },
+        { chave: 'cerc_limpeza', rotulo: 'Limpeza', tipo: 'select', opcoes: ESCALA_BRR },
+      ],
+    },
+    {
+      titulo: 'Pluviógrafo',
+      quando: QUANDO_PLUVIO,
+      campos: [
+        { chave: 'pluvg_nivelamento', rotulo: 'Nivelamento', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluvg_altura_m', rotulo: 'Altura', tipo: 'numero', unidade: 'm' },
+        { chave: 'pluvg_obstrucao', rotulo: 'Obstrução', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        { chave: 'pluvg_hora_certa', rotulo: 'Hora certa', tipo: 'texto', formato: 'hora_hm' },
+        { chave: 'pluvg_hora_grafico', rotulo: 'Hora gráfico', tipo: 'texto', formato: 'hora_hm' },
+        { chave: 'pluvg_relojoaria', rotulo: 'Relojoaria', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'pluvg_haste_boia', rotulo: 'Haste / bóia', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'pluvg_pena', rotulo: 'Pena', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'pluvg_sifao', rotulo: 'Sifão', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        { chave: 'pluvg_tintas', rotulo: 'Tintas', tipo: 'select', opcoes: ESCALA_BOM_RUIM },
+        {
+          chave: 'pluvg_tirantes',
+          rotulo: 'Tirantes',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'bons', rotulo: 'Bons' },
+            { valor: 'frouxos', rotulo: 'Frouxos' },
+          ],
+        },
+        { chave: 'pluvg_carcaca', rotulo: 'Carcaça', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'pluvg_proveta', rotulo: 'Proveta', tipo: 'select', opcoes: ESCALA_BRR },
+      ],
+    },
+    {
+      titulo: 'Caderneta pluviométrica',
+      quando: QUANDO_PLUVIO,
+      campos: [
+        { chave: 'cadp_carbonos', rotulo: 'Carbonos', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_uso_3_vias', rotulo: 'Uso das 3 vias', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_cabecalho', rotulo: 'Cabeçalho', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_rodape', rotulo: 'Rodapé', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_sequencia_meses', rotulo: 'Sequência dos meses', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_ultimo_dia_mes', rotulo: 'Último dia do mês', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_legibilidade', rotulo: 'Legibilidade', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cadp_rasuras', rotulo: 'Rasuras', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        { chave: 'cadp_ponto_virgula', rotulo: 'Ponto ou vírgula', tipo: 'select', opcoes: ESCALA_CERTO_ERRADO },
+        { chave: 'cadp_arredondamentos', rotulo: 'Arredondamentos', tipo: 'select', opcoes: ESCALA_SEM_COM },
+        {
+          chave: 'cadp_coerencia_leituras',
+          rotulo: 'Coerência das leituras',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'boa', rotulo: 'Boa' },
+            { valor: 'duvidosa', rotulo: 'Duvidosa' },
+          ],
+        },
+        { chave: 'cadp_dia_sem_anotacao', rotulo: 'Dia sem anotação', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'cadp_granizo', rotulo: 'Granizo', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'cadp_geada', rotulo: 'Geada', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'cadp_envelopes', rotulo: 'Envelopes', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'cadp_periodo_inicio', rotulo: 'Período verificado (início)', tipo: 'texto', formato: 'data_br' },
+        { chave: 'cadp_periodo_fim', rotulo: 'Período verificado (fim)', tipo: 'texto', formato: 'data_br' },
+        { chave: 'cadp_visto', rotulo: 'Visto', tipo: 'checkbox' },
+      ],
+    },
+    {
+      titulo: 'Observador',
+      campos: [
+        { chave: 'observador_nome', rotulo: 'Nome', tipo: 'texto' },
+        { chave: 'observador_instruido', rotulo: 'Instruído', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'observador_presente', rotulo: 'Presente', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+      ],
+    },
+    {
+      titulo: 'Informes gerais e inspeção',
+      campos: [
+        {
+          chave: 'informes_gerais',
+          rotulo: 'Informes gerais',
+          tipo: 'textarea',
+          ajuda: 'Detalhamento dos itens marcados como "detalhar em INFORMES" e serviços executados.',
+        },
+        { chave: 'inspecionado_por', rotulo: 'Inspecionado por', tipo: 'texto' },
       ],
     },
   ],
@@ -213,35 +534,66 @@ const SCHEMA_INSPECAO: SchemaFicha = {
 // o form, a validação Zod e o detalhe seguem automaticamente.
 // ─────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────
+// Ficha Descritiva (código 1): espelha o formulário oficial DAEE-CTH
+// "POSTO FLUVIOMÉTRICO · FICHA DESCRITIVA" (MOD. F 3/80, folha 1/4).
+// As folhas 2/4 a 4/4 (croqui, seção, complementos) entram quando o cliente
+// enviar os modelos. Variantes pluviométrica e piezométrica reaproveitam
+// estas seções com poucos ajustes, diferenciadas por `tipo_estacao`.
+// ─────────────────────────────────────────────────────────────────────────
+
 const SCHEMA_FICHA_DESCRITIVA: SchemaFicha = {
   codigo: 1,
   rotulo: TIPOS_DOCUMENTO[1].rotulo,
   disponivel: true,
   secoes: [
     {
-      titulo: 'Características da estação',
+      titulo: 'Identificação do posto',
       campos: [
         {
           chave: 'tipo_estacao',
           rotulo: 'Tipo de estação',
           tipo: 'select',
+          obrigatorio: true,
           opcoes: [
             { valor: 'fluviometrica', rotulo: 'Fluviométrica' },
             { valor: 'pluviometrica', rotulo: 'Pluviométrica' },
-            { valor: 'evaporimetrica', rotulo: 'Evaporimétrica' },
-            { valor: 'qualidade_agua', rotulo: 'Qualidade da água' },
-            { valor: 'sedimentometrica', rotulo: 'Sedimentométrica' },
+            { valor: 'piezometrica', rotulo: 'Piezométrica' },
           ],
         },
         {
-          chave: 'curso_dagua',
-          rotulo: 'Curso d’água',
+          chave: 'rio',
+          rotulo: 'Rio',
+          tipo: 'texto',
+          obrigatorio: true,
+        },
+        {
+          chave: 'posto_nome',
+          rotulo: 'Posto',
+          tipo: 'texto',
+          obrigatorio: true,
+        },
+        {
+          chave: 'zona_hidrografica',
+          rotulo: 'Zona hidrográfica',
+          tipo: 'texto',
+        },
+        {
+          chave: 'municipio',
+          rotulo: 'Município',
+          tipo: 'texto',
+          ajuda: 'Município e UF (ex.: Extrema - MG).',
+        },
+        {
+          chave: 'local',
+          rotulo: 'Local',
           tipo: 'texto',
         },
         {
           chave: 'bacia',
-          rotulo: 'Bacia hidrográfica',
+          rotulo: 'Bacia',
           tipo: 'texto',
+          ajuda: 'Bacia / sub-bacia (ex.: Jaguari / Piracicaba / Tietê).',
         },
         {
           chave: 'area_drenagem_km2',
@@ -251,46 +603,172 @@ const SCHEMA_FICHA_DESCRITIVA: SchemaFicha = {
           min: 0,
         },
         {
-          chave: 'altimetria_m',
-          rotulo: 'Altimetria',
+          chave: 'latitude',
+          rotulo: 'Latitude (S)',
+          tipo: 'texto',
+          formato: 'coordenada_gms',
+        },
+        {
+          chave: 'longitude',
+          rotulo: 'Longitude (W)',
+          tipo: 'texto',
+          formato: 'coordenada_gms',
+        },
+        {
+          chave: 'carta_50k_nome',
+          rotulo: 'Carta 1:50.000 (de)',
+          tipo: 'texto',
+        },
+        {
+          chave: 'carta_50k_numero',
+          rotulo: 'Carta 1:50.000 (nº)',
+          tipo: 'texto',
+        },
+      ],
+    },
+    {
+      titulo: 'Localização e acesso',
+      campos: [
+        {
+          chave: 'localizacao',
+          rotulo: 'Localização',
+          tipo: 'textarea',
+          ajuda: 'Margem, referências e distâncias (ex.: margem direita, a 50 m da ponte).',
+        },
+        {
+          chave: 'roteiro_acesso',
+          rotulo: 'Roteiro de acesso',
+          tipo: 'textarea',
+          ajuda: 'Como chegar à estação (rodovias, km, sentido, entradas).',
+        },
+      ],
+    },
+    {
+      titulo: 'Referências de nível',
+      campos: [
+        {
+          chave: 'rn1_cota_m',
+          rotulo: 'RN 1',
+          tipo: 'numero',
+          unidade: 'm',
+        },
+        {
+          chave: 'rn1_altitude_m',
+          rotulo: 'Altitude do RN 1',
+          tipo: 'numero',
+          unidade: 'm',
+        },
+        {
+          chave: 'rn1_entidade',
+          rotulo: 'Entidade',
+          tipo: 'texto',
+          ajuda: 'Entidade responsável pela RN (ex.: DAEE).',
+        },
+        {
+          chave: 'rn2_cota_m',
+          rotulo: 'RN 2',
+          tipo: 'numero',
+          unidade: 'm',
+        },
+        {
+          chave: 'zero_escala_m',
+          rotulo: 'Zero da escala',
+          tipo: 'numero',
+          unidade: 'm',
+        },
+        {
+          chave: 'transbordamento_escala_m',
+          rotulo: 'Transbordamento na escala',
           tipo: 'numero',
           unidade: 'm',
         },
       ],
     },
     {
-      titulo: 'Acesso e infraestrutura',
+      titulo: 'Escalas limnimétricas',
       campos: [
         {
-          chave: 'descricao_acesso',
-          rotulo: 'Descrição do acesso',
-          tipo: 'textarea',
-          ajuda: 'Roteiro pra chegar à estação (referências, vias, distâncias).',
+          chave: 'escalas_instaladas_por',
+          rotulo: 'Instaladas por',
+          tipo: 'texto',
         },
         {
-          chave: 'tem_cercado',
-          rotulo: 'Possui cercado/abrigo',
-          tipo: 'checkbox',
+          chave: 'numero_lances',
+          rotulo: 'Número de lances',
+          tipo: 'numero',
+          min: 0,
+          max: 20,
         },
         {
-          chave: 'tem_energia',
-          rotulo: 'Energia elétrica disponível',
-          tipo: 'checkbox',
+          chave: 'observacao_inicio',
+          rotulo: 'Período de observação (início)',
+          tipo: 'texto',
+          formato: 'mes_ano',
         },
         {
-          chave: 'tem_telefonia',
-          rotulo: 'Cobertura de telefonia',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'gprs', rotulo: 'GPRS' },
-            { valor: 'satelite', rotulo: 'Satélite' },
-            { valor: 'sem_sinal', rotulo: 'Sem sinal' },
-          ],
+          chave: 'observacao_fim',
+          rotulo: 'Período de observação (fim)',
+          tipo: 'texto',
+          formato: 'mes_ano',
+          ajuda: 'Deixe em branco se o posto continua em operação.',
         },
+      ],
+    },
+    {
+      // A ficha pré-impressa prevê até 4 lances (numeração de–até + comprimento).
+      // Modelados como campos fixos: o nº de lances reais é pequeno e estável,
+      // não justifica um widget de tabela dinâmica neste momento.
+      titulo: 'Lances da escala',
+      campos: [
+        { chave: 'lance1_de_m', rotulo: '1º lance: de', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance1_ate_m', rotulo: '1º lance: até', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance1_comprimento_m', rotulo: '1º lance: comprimento', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'lance2_de_m', rotulo: '2º lance: de', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance2_ate_m', rotulo: '2º lance: até', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance2_comprimento_m', rotulo: '2º lance: comprimento', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'lance3_de_m', rotulo: '3º lance: de', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance3_ate_m', rotulo: '3º lance: até', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance3_comprimento_m', rotulo: '3º lance: comprimento', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'lance4_de_m', rotulo: '4º lance: de', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance4_ate_m', rotulo: '4º lance: até', tipo: 'numero', unidade: 'm' },
+        { chave: 'lance4_comprimento_m', rotulo: '4º lance: comprimento', tipo: 'numero', unidade: 'm', min: 0 },
       ],
     },
   ],
 };
+
+// ─────────────────────────────────────────────────────────────────────────
+// PCD (código 2): espelha a "FICHA DE INSPEÇÃO DE POSTO DE COLETA DE DADOS
+// (PCD)" DAEE/CTH (Rede Hidrológica Básica). Ficha separada da Inspeção
+// (tipo 3): compartilha o posto/prefixo, mas tem linha própria.
+// Data, hora e técnico da visita vêm do cabeçalho do formulário; o prefixo
+// vem da rota do posto. As condições visuais e os sensores usam a mesma
+// escala Bom/Regular/Ruim.
+// ─────────────────────────────────────────────────────────────────────────
+
+const SERVICOS_SENSOR = [
+  { valor: 'limpeza', rotulo: 'Limpeza' },
+  { valor: 'reparo', rotulo: 'Reparo' },
+  { valor: 'substituicao', rotulo: 'Substituição' },
+];
+
+/** Gera o par condição + serviço de um sensor da tabela de sensores. */
+function camposSensor(chave: string, rotulo: string): CampoFicha[] {
+  return [
+    {
+      chave: `sensor_${chave}_condicao`,
+      rotulo: `${rotulo}: condição`,
+      tipo: 'select',
+      opcoes: ESCALA_BRR,
+    },
+    {
+      chave: `sensor_${chave}_servico`,
+      rotulo: `${rotulo}: serviço realizado`,
+      tipo: 'select',
+      opcoes: SERVICOS_SENSOR,
+    },
+  ];
+}
 
 const SCHEMA_PCD: SchemaFicha = {
   codigo: 2,
@@ -298,82 +776,131 @@ const SCHEMA_PCD: SchemaFicha = {
   disponivel: true,
   secoes: [
     {
-      titulo: 'Configuração da PCD',
+      titulo: 'Identificação',
       campos: [
+        { chave: 'municipio', rotulo: 'Município', tipo: 'texto' },
+        { chave: 'nome_posto', rotulo: 'Nome do posto', tipo: 'texto' },
+        { chave: 'rio_acude', rotulo: 'Nome do rio / açude', tipo: 'texto' },
+        { chave: 'medicao_pluviometro', rotulo: 'Medição: pluviômetro', tipo: 'checkbox' },
+        { chave: 'medicao_fluviometro', rotulo: 'Medição: fluviômetro', tipo: 'checkbox' },
+        { chave: 'medicao_piezometro', rotulo: 'Medição: piezômetro', tipo: 'checkbox' },
         {
-          chave: 'tipo_servico',
-          rotulo: 'Tipo de serviço',
+          chave: 'tipo_pcd',
+          rotulo: 'Tipo de PCD',
           tipo: 'select',
-          obrigatorio: true,
           opcoes: [
-            { valor: 'instalacao', rotulo: 'Instalação' },
-            { valor: 'manutencao', rotulo: 'Manutenção' },
-            { valor: 'substituicao', rotulo: 'Substituição' },
-            { valor: 'desativacao', rotulo: 'Desativação' },
+            { valor: 'fcth', rotulo: 'FCTH' },
+            { valor: 'campbell', rotulo: 'Campbell' },
+            { valor: 'solinst', rotulo: 'Solinst' },
+            { valor: 'agweather', rotulo: 'Agweather' },
+            { valor: 'hobo', rotulo: 'HOBO' },
+            { valor: 'hobeco', rotulo: 'HOBECO' },
+            { valor: 'outros', rotulo: 'Outros' },
           ],
         },
         {
-          chave: 'modelo_datalogger',
-          rotulo: 'Modelo do datalogger',
+          chave: 'tipo_pcd_outros',
+          rotulo: 'Tipo de PCD (outros)',
           tipo: 'texto',
+          ajuda: 'Preencher quando o tipo for "Outros".',
         },
         {
-          chave: 'modelo_sensor_nivel',
-          rotulo: 'Modelo do sensor de nível',
+          chave: 'identificacao_remota',
+          rotulo: 'Identificação da remota',
           tipo: 'texto',
+          ajuda: 'Nº de patrimônio / #ID / nº de série.',
+        },
+        { chave: 'equipe', rotulo: 'Equipe', tipo: 'texto' },
+        { chave: 'responsavel', rotulo: 'Responsável', tipo: 'texto' },
+        {
+          chave: 'responsavel_cel',
+          rotulo: 'Celular do responsável',
+          tipo: 'texto',
+          formato: 'telefone',
         },
         {
-          chave: 'modelo_modem',
-          rotulo: 'Modelo do modem',
+          chave: 'responsavel_email',
+          rotulo: 'E-mail do responsável',
           tipo: 'texto',
-        },
-        {
-          chave: 'transmissao',
-          rotulo: 'Transmissão',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'gprs', rotulo: 'GPRS' },
-            { valor: 'satelite', rotulo: 'Satélite' },
-            { valor: 'sem_transmissao', rotulo: 'Sem transmissão' },
-          ],
+          formato: 'email',
         },
       ],
     },
     {
-      titulo: 'Parâmetros operacionais',
+      titulo: 'Condições visuais do posto',
+      campos: [
+        { chave: 'cond_limpeza_posto', rotulo: 'Limpeza do posto (cercado)', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cond_abrigo_gabinete', rotulo: 'Condição do abrigo / gabinete', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cond_suporte_pcd', rotulo: 'Condição do suporte (PCD)', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cond_passagem_fluv', rotulo: 'Condição da passagem (fluviométrico)', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cond_suporte_pluv', rotulo: 'Condição do suporte (pluviômetro)', tipo: 'select', opcoes: ESCALA_BRR },
+        { chave: 'cond_exposicao_pluviometro', rotulo: 'Exposição do pluviômetro', tipo: 'select', opcoes: ESCALA_BRR },
+      ],
+    },
+    {
+      titulo: 'PCD encontrada',
       campos: [
         {
-          chave: 'intervalo_registro_min',
-          rotulo: 'Intervalo de registro',
-          tipo: 'numero',
-          unidade: 'min',
-          min: 1,
+          chave: 'pcd_status',
+          rotulo: 'Situação da PCD',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'registrando_transmitindo', rotulo: 'Registrando e transmitindo' },
+            { valor: 'somente_registrando', rotulo: 'Somente registrando' },
+            { valor: 'parada', rotulo: 'Parada' },
+          ],
         },
+        { chave: 'logger_data', rotulo: 'Data do logger', tipo: 'texto', formato: 'data_br' },
+        { chave: 'logger_hora', rotulo: 'Hora do logger', tipo: 'texto', formato: 'hora_hms' },
+        { chave: 'pluviometro_acumulado_mm', rotulo: 'Pluviômetro acumulado', tipo: 'numero', unidade: 'mm', min: 0 },
+        { chave: 'levellogger_m', rotulo: 'Levellogger', tipo: 'numero', unidade: 'm' },
+        { chave: 'barologger_kpa', rotulo: 'Barologger', tipo: 'numero', unidade: 'kPa' },
+        { chave: 'level_compensado_m', rotulo: 'Level compensado', tipo: 'numero', unidade: 'm' },
+        { chave: 'nivel_regua_m', rotulo: 'Nível da régua', tipo: 'numero', unidade: 'm' },
+        { chave: 'nivel_sensor_m', rotulo: 'Nível do sensor', tipo: 'numero', unidade: 'm' },
+        { chave: 'offset_m', rotulo: 'Off set', tipo: 'numero', unidade: 'm' },
+        { chave: 'piezometro_trena_m', rotulo: 'Piezômetro (trena)', tipo: 'numero', unidade: 'm' },
+        { chave: 'altitude_boca_poco_m', rotulo: 'Altitude da boca do poço (GPS)', tipo: 'numero', unidade: 'm' },
+        { chave: 'altitude_rn1_m', rotulo: 'Altitude RN1 (GPS)', tipo: 'numero', unidade: 'm' },
+        { chave: 'tensao_bateria_12v_v', rotulo: 'Tensão da bateria 12V', tipo: 'numero', unidade: 'V' },
+        { chave: 'tensao_painel_solar_v', rotulo: 'Tensão do painel solar', tipo: 'numero', unidade: 'V', ajuda: 'Medir com o painel solar desconectado.' },
+      ],
+    },
+    {
+      titulo: 'Registro e coleta',
+      campos: [
         {
-          chave: 'intervalo_transmissao_min',
-          rotulo: 'Intervalo de transmissão',
-          tipo: 'numero',
-          unidade: 'min',
-          min: 1,
+          chave: 'registro_numero',
+          rotulo: 'Registro nº',
+          tipo: 'texto',
+          ajuda: 'Leitura remota / FCTH.',
         },
+        { chave: 'pasta', rotulo: 'Pasta', tipo: 'texto' },
         {
-          chave: 'tensao_bateria_v',
-          rotulo: 'Tensão da bateria',
-          tipo: 'numero',
-          unidade: 'V',
+          chave: 'coleta_dados',
+          rotulo: 'Coleta de dados (todas as PCDs)',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'sim', rotulo: 'Sim' },
+            { valor: 'nao', rotulo: 'Não' },
+          ],
         },
-        {
-          chave: 'corrente_painel_solar_ma',
-          rotulo: 'Corrente do painel solar',
-          tipo: 'numero',
-          unidade: 'mA',
-        },
-        {
-          chave: 'offset_transdutor_cm',
-          rotulo: 'Offset do transdutor',
-          tipo: 'numero',
-          unidade: 'cm',
-        },
+        { chave: 'arquivo', rotulo: 'Arquivo', tipo: 'texto' },
+        { chave: 'id_pcd', rotulo: '#ID', tipo: 'texto' },
+      ],
+    },
+    {
+      titulo: 'Sensores',
+      campos: [
+        ...camposSensor('remota_datalogger', 'Remota / datalogger'),
+        ...camposSensor('modem_gprs', 'Modem GPRS'),
+        ...camposSensor('antena', 'Antena'),
+        ...camposSensor('painel_solar', 'Painel solar'),
+        ...camposSensor('pluviometro', 'Pluviômetro'),
+        ...camposSensor('sensor_pressao', 'Sensor de pressão'),
+        ...camposSensor('ultrassonico', 'Ultrassônico'),
+        ...camposSensor('barometro', 'Barômetro'),
+        ...camposSensor('bateria', 'Bateria'),
       ],
     },
   ],
@@ -536,77 +1063,68 @@ const SCHEMA_LEV_SECAO: SchemaFicha = {
   ],
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// Troca de Observador (código 6): espelha a ficha DAEE-CTH "TROCA DE
+// OBSERVADOR". Dados do novo observador (atual), gratificação/conta bancária
+// e o nome do ex-observador. Posto/prefixo vêm da rota; data e técnico
+// (hidrometrista) vêm do cabeçalho do formulário.
+// ─────────────────────────────────────────────────────────────────────────
+
 const SCHEMA_TROCA_OBSERVADOR: SchemaFicha = {
   codigo: 6,
   rotulo: TIPOS_DOCUMENTO[6].rotulo,
   disponivel: true,
   secoes: [
     {
-      titulo: 'Observador anterior',
+      titulo: 'Novo observador',
       campos: [
-        {
-          chave: 'observador_anterior_nome',
-          rotulo: 'Nome do observador anterior',
-          tipo: 'texto',
-        },
-        {
-          chave: 'observador_anterior_data_inicio',
-          rotulo: 'Data de início (anterior)',
-          tipo: 'texto',
-          ajuda: 'Formato AAAA-MM-DD ou descritivo (ex.: "início 2018").',
-        },
-        {
-          chave: 'observador_anterior_motivo_saida',
-          rotulo: 'Motivo da saída',
-          tipo: 'select',
-          opcoes: [
-            { valor: 'aposentadoria', rotulo: 'Aposentadoria' },
-            { valor: 'mudanca', rotulo: 'Mudança de localidade' },
-            { valor: 'falecimento', rotulo: 'Falecimento' },
-            { valor: 'desinteresse', rotulo: 'Desinteresse' },
-            { valor: 'outro', rotulo: 'Outro' },
-          ],
-        },
+        { chave: 'novo_nome', rotulo: 'Nome', tipo: 'texto', obrigatorio: true },
+        { chave: 'novo_rg', rotulo: 'RG', tipo: 'texto' },
+        { chave: 'novo_cpf', rotulo: 'CPF', tipo: 'texto', formato: 'cpf' },
+        { chave: 'novo_profissao', rotulo: 'Profissão', tipo: 'texto' },
+        { chave: 'novo_data_nascimento', rotulo: 'Data de nascimento', tipo: 'texto', formato: 'data_br' },
+        { chave: 'novo_grau_instrucao', rotulo: 'Grau de instrução', tipo: 'texto' },
+        { chave: 'novo_end_residencial', rotulo: 'Endereço residencial', tipo: 'textarea' },
+        { chave: 'novo_distancia_resid_posto_m', rotulo: 'Distância residência/posto', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'novo_cidade', rotulo: 'Cidade', tipo: 'texto' },
+        { chave: 'novo_end_postal', rotulo: 'Endereço postal', tipo: 'texto' },
+        { chave: 'novo_telefone', rotulo: 'Telefone', tipo: 'texto', formato: 'telefone' },
+        { chave: 'novo_celular', rotulo: 'Celular', tipo: 'texto', formato: 'telefone' },
+        { chave: 'novo_inicio_leituras', rotulo: 'Início real das leituras', tipo: 'texto', formato: 'data_br' },
       ],
     },
     {
-      titulo: 'Novo observador',
+      titulo: 'Gratificação',
       campos: [
+        { chave: 'gratificar', rotulo: 'Gratificar', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'gratificar_a_partir', rotulo: 'A partir de', tipo: 'texto', formato: 'data_br' },
+        { chave: 'agencia', rotulo: 'Agência', tipo: 'texto' },
+        { chave: 'conta', rotulo: 'Conta', tipo: 'texto' },
+        { chave: 'conta_conjunta', rotulo: 'Conta conjunta', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+      ],
+    },
+    {
+      titulo: 'Ex-observador e encerramento',
+      campos: [
+        { chave: 'ex_observador_nome', rotulo: 'Nome do ex-observador', tipo: 'texto' },
+        { chave: 'data_troca', rotulo: 'Data da troca', tipo: 'texto', formato: 'data_br' },
         {
-          chave: 'observador_novo_nome',
-          rotulo: 'Nome do novo observador',
-          tipo: 'texto',
-          obrigatorio: true,
-        },
-        {
-          chave: 'observador_novo_documento',
-          rotulo: 'CPF ou documento',
-          tipo: 'texto',
-        },
-        {
-          chave: 'observador_novo_telefone',
-          rotulo: 'Telefone de contato',
-          tipo: 'texto',
-        },
-        {
-          chave: 'observador_novo_endereco',
-          rotulo: 'Endereço',
+          chave: 'observacoes_troca',
+          rotulo: 'Observações',
           tipo: 'textarea',
-        },
-        {
-          chave: 'observador_novo_data_inicio',
-          rotulo: 'Data de início (novo observador)',
-          tipo: 'texto',
-        },
-        {
-          chave: 'orientacao_realizada',
-          rotulo: 'Orientação/treinamento realizado nesta visita',
-          tipo: 'checkbox',
+          ajuda: 'Notas adicionais (ex.: era observador reserva).',
         },
       ],
     },
   ],
 };
+
+// ─────────────────────────────────────────────────────────────────────────
+// Medição de Vazão (código 7): espelha a ficha "MEDIÇÃO DE VAZÃO" (molinete),
+// cobrindo as versões FCTH e F 6/93 do formulário. A tabela de verticais é
+// um campo `tabela` de linhas dinâmicas. Os resultados (vazão, área...) são
+// entrada manual; cálculo automático a partir das verticais fica como futuro.
+// ─────────────────────────────────────────────────────────────────────────
 
 const SCHEMA_VAZAO: SchemaFicha = {
   codigo: 7,
@@ -614,88 +1132,87 @@ const SCHEMA_VAZAO: SchemaFicha = {
   disponivel: true,
   secoes: [
     {
-      titulo: 'Medição de descarga líquida',
+      titulo: 'Identificação',
       campos: [
+        { chave: 'nome_posto', rotulo: 'Nome do posto', tipo: 'texto' },
+        { chave: 'zona', rotulo: 'Zona', tipo: 'texto' },
+        { chave: 'rio', rotulo: 'Rio', tipo: 'texto' },
+        { chave: 'medicao_realizada', rotulo: 'Medição', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+        { chave: 'helice', rotulo: 'Hélice', tipo: 'texto' },
+        { chave: 'tempo_s', rotulo: 'Tempo', tipo: 'numero', unidade: 's', min: 0 },
+      ],
+    },
+    {
+      titulo: 'Início e fim',
+      campos: [
+        { chave: 'inicio_escala_m', rotulo: 'Escala (início)', tipo: 'numero', unidade: 'm' },
+        { chave: 'inicio_hora', rotulo: 'Hora (início)', tipo: 'texto', formato: 'hora_hm' },
+        { chave: 'fim_escala_m', rotulo: 'Escala (fim)', tipo: 'numero', unidade: 'm' },
+        { chave: 'fim_hora', rotulo: 'Hora (fim)', tipo: 'texto', formato: 'hora_hm' },
+      ],
+    },
+    {
+      titulo: 'Equipamento e método',
+      campos: [
+        { chave: 'molinete', rotulo: 'Molinete', tipo: 'texto' },
         {
-          chave: 'metodo_medicao',
-          rotulo: 'Método',
+          chave: 'contador',
+          rotulo: 'Contador',
           tipo: 'select',
-          obrigatorio: true,
           opcoes: [
-            { valor: 'molinete', rotulo: 'Molinete (convencional)' },
-            { valor: 'adcp', rotulo: 'ADCP (acústico Doppler)' },
-            { valor: 'flutuador', rotulo: 'Flutuador' },
-            { valor: 'eletromagnetico', rotulo: 'Eletromagnético' },
+            { valor: 'a_ott', rotulo: 'A. OTT' },
+            { valor: 'cth', rotulo: 'CTH' },
           ],
         },
+        { chave: 'lastro', rotulo: 'Lastro', tipo: 'texto' },
         {
-          chave: 'equipamento_modelo',
-          rotulo: 'Modelo do equipamento',
-          tipo: 'texto',
+          chave: 'acesso',
+          rotulo: 'Acesso',
+          tipo: 'select',
+          opcoes: [
+            { valor: 'a_vau', rotulo: 'A vau' },
+            { valor: 'barco', rotulo: 'Barco' },
+            { valor: 'guincho', rotulo: 'Guincho' },
+            { valor: 'haste', rotulo: 'Haste' },
+            { valor: 'ponte', rotulo: 'Ponte' },
+          ],
         },
+        { chave: 'esconsidade', rotulo: 'Esconsidade (croqui no verso)', tipo: 'checkbox' },
+        { chave: 'dist_polia_nivel_m', rotulo: 'Dist. polia até nível d’água', tipo: 'numero', unidade: 'm' },
+        { chave: 'lubrificacao', rotulo: 'Lubrificação', tipo: 'select', opcoes: ESCALA_SIM_NAO },
+      ],
+    },
+    {
+      titulo: 'Verticais (molinete)',
+      campos: [
         {
-          chave: 'cota_inicial_cm',
-          rotulo: 'Cota inicial',
-          tipo: 'numero',
-          unidade: 'cm',
-        },
-        {
-          chave: 'cota_final_cm',
-          rotulo: 'Cota final',
-          tipo: 'numero',
-          unidade: 'cm',
-        },
-        {
-          chave: 'cota_media_cm',
-          rotulo: 'Cota média',
-          tipo: 'numero',
-          unidade: 'cm',
-        },
-        {
-          chave: 'vazao_calculada_m3s',
-          rotulo: 'Vazão calculada',
-          tipo: 'numero',
-          unidade: 'm³/s',
-          min: 0,
-        },
-        {
-          chave: 'velocidade_media_ms',
-          rotulo: 'Velocidade média',
-          tipo: 'numero',
-          unidade: 'm/s',
-          min: 0,
-        },
-        {
-          chave: 'area_molhada_m2',
-          rotulo: 'Área molhada',
-          tipo: 'numero',
-          unidade: 'm²',
-          min: 0,
-        },
-        {
-          chave: 'largura_superficie_m',
-          rotulo: 'Largura na superfície',
-          tipo: 'numero',
-          unidade: 'm',
-          min: 0,
+          chave: 'verticais',
+          rotulo: 'Verticais',
+          tipo: 'tabela',
+          rotuloLinha: 'Vertical',
+          ajuda: 'Uma linha por vertical medida, na ordem da margem.',
+          colunas: [
+            { chave: 'distancia_m', rotulo: 'Distância', tipo: 'numero', unidade: 'm' },
+            { chave: 'profundidade_m', rotulo: 'Profundidade', tipo: 'numero', unidade: 'm', min: 0 },
+            { chave: 'rot_02h', rotulo: 'Rotações 0,2h', tipo: 'numero', min: 0 },
+            { chave: 'rot_06h', rotulo: 'Rotações 0,6h', tipo: 'numero', min: 0 },
+            { chave: 'rot_08h', rotulo: 'Rotações 0,8h', tipo: 'numero', min: 0 },
+            { chave: 'arrasto_grau', rotulo: 'Arrasto (ângulo α)', tipo: 'numero', unidade: '°' },
+          ],
         },
       ],
     },
     {
-      titulo: 'Sedimentometria (opcional)',
+      titulo: 'Resultados',
       campos: [
-        {
-          chave: 'mediu_sedimentos',
-          rotulo: 'Realizada medição de descarga sólida',
-          tipo: 'checkbox',
-        },
-        {
-          chave: 'concentracao_sedimentos_mgL',
-          rotulo: 'Concentração de sedimentos',
-          tipo: 'numero',
-          unidade: 'mg/L',
-          min: 0,
-        },
+        { chave: 'vazao_m3s', rotulo: 'Vazão', tipo: 'numero', unidade: 'm³/s', min: 0 },
+        { chave: 'area_molhada_m2', rotulo: 'Área molhada', tipo: 'numero', unidade: 'm²', min: 0 },
+        { chave: 'largura_m', rotulo: 'Largura', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'raio_m', rotulo: 'Raio', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'cota_media_m', rotulo: 'Cota média', tipo: 'numero', unidade: 'm' },
+        { chave: 'velocidade_media_ms', rotulo: 'Velocidade média', tipo: 'numero', unidade: 'm/s', min: 0 },
+        { chave: 'profundidade_media_m', rotulo: 'Profundidade média', tipo: 'numero', unidade: 'm', min: 0 },
+        { chave: 'delta_h_m', rotulo: 'ΔH (variação de nível)', tipo: 'numero', unidade: 'm' },
       ],
     },
   ],
@@ -739,10 +1256,43 @@ function zodCampo(campo: CampoFicha): z.ZodTypeAny {
         ? z.enum(campo.opcoes.map((o) => o.valor) as [string, ...string[]])
         : z.string();
       break;
-    case 'texto':
-    case 'textarea':
-      base = z.string();
+    case 'tabela': {
+      const shapeLinha: Record<string, z.ZodTypeAny> = {};
+      for (const col of campo.colunas ?? []) {
+        let celula: z.ZodTypeAny;
+        if (col.tipo === 'numero') {
+          let n = z.number().finite();
+          if (col.min !== undefined) n = n.min(col.min);
+          if (col.max !== undefined) n = n.max(col.max);
+          celula = n;
+        } else if (col.tipo === 'select') {
+          celula = col.opcoes && col.opcoes.length > 0
+            ? z.enum(col.opcoes.map((o) => o.valor) as [string, ...string[]])
+            : z.string();
+        } else {
+          celula = z.string();
+        }
+        // Células vazias são aceitas: o técnico nem sempre preenche todas.
+        shapeLinha[col.chave] = celula.nullable().optional();
+      }
+      base = z.array(z.object(shapeLinha).strict());
       break;
+    }
+    case 'texto':
+    case 'textarea': {
+      if (campo.formato) {
+        const regra = REGRAS_FORMATO[campo.formato];
+        const formatoOk = (v: string) =>
+          regra.regex.test(v) && (!regra.validar || regra.validar(v));
+        // Campo opcional vazio não deve falhar — só valida quando há conteúdo.
+        base = campo.obrigatorio
+          ? z.string().refine(formatoOk, regra.mensagem)
+          : z.string().refine((v) => v === '' || formatoOk(v), regra.mensagem);
+      } else {
+        base = z.string();
+      }
+      break;
+    }
   }
   return campo.obrigatorio ? base : base.nullable().optional();
 }
