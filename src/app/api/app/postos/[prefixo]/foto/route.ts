@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { postosFotosRepository } from '@/infrastructure/repositories';
+import { postosFotosRepository, postosRepository } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import {
   obterCapaPosto,
@@ -91,9 +91,21 @@ export async function POST(
     );
   }
 
+  const prefixoDecodificado = decodeURIComponent(prefixo);
+
+  // Confirma que o posto existe antes de subir ao Storage: evita arquivo
+  // órfão no bucket caso o prefixo seja inválido (a FK barraria só no INSERT).
+  const posto = await postosRepository.buscarPorPrefixo(prefixoDecodificado);
+  if (!posto) {
+    return NextResponse.json(
+      { erro: 'posto_nao_encontrado', mensagem: 'Posto não encontrado.' },
+      { status: 404 },
+    );
+  }
+
   try {
     const foto = await registrarFotoCapa(postosFotosRepository, {
-      prefixo: decodeURIComponent(prefixo),
+      prefixo: prefixoDecodificado,
       fotoDataUrl: parseado.data.fotoDataUrl,
       tiradaPor: usuario.id,
     });

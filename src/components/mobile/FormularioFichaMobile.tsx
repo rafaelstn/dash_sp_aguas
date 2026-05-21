@@ -25,10 +25,10 @@ import {
   type RascunhoFicha,
 } from '@/lib/rascunho-ficha';
 import { gerarUuidV4 } from '@/lib/uuid-cliente';
+import { arquivoParaDataUrl, comprimirImagemParaDataUrl } from '@/lib/imagem';
 
 const TAMANHO_MAX_FOTO_BYTES = 5 * 1024 * 1024;
 const ALVO_COMPRESSAO_BYTES = 2 * 1024 * 1024;
-const MAX_DIMENSAO_PX = 1600;
 
 interface FormularioFichaMobileProps {
   schema: SchemaFicha;
@@ -275,7 +275,10 @@ export function FormularioFichaMobile({
     try {
       const dataUrl =
         arquivo.size > ALVO_COMPRESSAO_BYTES
-          ? await comprimirImagemParaDataUrl(arquivo)
+          ? await comprimirImagemParaDataUrl(arquivo, {
+              maxDimensao: 1600,
+              alvoBytes: ALVO_COMPRESSAO_BYTES,
+            })
           : await arquivoParaDataUrl(arquivo);
       setCabecalho('fotoDataUrl', dataUrl);
     } catch (err) {
@@ -928,52 +931,3 @@ function mensagemZodPtBR(codigo: string, original: string): string {
   }
 }
 
-async function arquivoParaDataUrl(arquivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Falha ao ler arquivo.'));
-    reader.readAsDataURL(arquivo);
-  });
-}
-
-async function comprimirImagemParaDataUrl(arquivo: File): Promise<string> {
-  // Usa canvas pra reescalar a imagem mantendo aspect ratio e gerar JPEG ~80%.
-  const dataUrlOriginal = await arquivoParaDataUrl(arquivo);
-  const img = await carregarImagem(dataUrlOriginal);
-
-  const escala = Math.min(1, MAX_DIMENSAO_PX / Math.max(img.width, img.height));
-  const largura = Math.round(img.width * escala);
-  const altura = Math.round(img.height * escala);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = largura;
-  canvas.height = altura;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas indisponível para compressão.');
-  ctx.drawImage(img, 0, 0, largura, altura);
-
-  // Tenta qualidades decrescentes até caber no alvo.
-  for (const q of [0.82, 0.7, 0.55, 0.4]) {
-    const dataUrl = canvas.toDataURL('image/jpeg', q);
-    const bytes = aproximarBytesDataUrl(dataUrl);
-    if (bytes <= ALVO_COMPRESSAO_BYTES) return dataUrl;
-  }
-  return canvas.toDataURL('image/jpeg', 0.4);
-}
-
-function carregarImagem(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Falha ao decodificar imagem.'));
-    img.src = src;
-  });
-}
-
-function aproximarBytesDataUrl(dataUrl: string): number {
-  // base64 → bytes ≈ length * 3/4 (descontando header).
-  const idx = dataUrl.indexOf(',');
-  const base64 = idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
-  return Math.floor((base64.length * 3) / 4);
-}
