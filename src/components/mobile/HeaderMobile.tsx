@@ -40,15 +40,19 @@ export function HeaderMobile({
 }: HeaderMobileProps) {
   return (
     <header
-      className="sticky top-0 z-30 border-b border-app-border-subtle bg-app-surface"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0)' }}
+      className="sticky top-0 z-30 border-b border-app-border-subtle bg-app-surface/95 backdrop-blur supports-[backdrop-filter]:bg-app-surface/80"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0)',
+        paddingLeft: 'env(safe-area-inset-left, 0)',
+        paddingRight: 'env(safe-area-inset-right, 0)',
+      }}
     >
       <div className="mx-auto flex h-14 max-w-content items-center gap-2 px-3">
         {voltarHref ? (
           <Link
             href={voltarHref}
             aria-label="Voltar"
-            className="flex h-11 w-11 items-center justify-center rounded text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+            className="-ml-1 flex h-11 w-11 items-center justify-center rounded text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
           >
             {IconeVoltar}
           </Link>

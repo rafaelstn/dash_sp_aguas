@@ -9,7 +9,7 @@ export default function PostoDetalheLoading() {
     <>
       <HeaderMobile titulo="Carregando posto…" voltarHref="/app/postos" />
       <div
-        className="mx-auto w-full max-w-content px-4 py-5 pb-24 space-y-4"
+        className="px-safe pb-safe-nav mx-auto w-full max-w-content space-y-4 py-5"
         role="status"
         aria-live="polite"
         aria-label="Carregando dados do posto"

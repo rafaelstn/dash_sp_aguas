@@ -128,4 +128,19 @@
   /* Números tabulares — essencial em tabela densa */
   .tabular { font-variant-numeric: tabular-nums; }
   .mono { font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace; }
+
+  /* Padding lateral que respeita o notch em landscape (app mobile /app/*).
+     Soma o inset de safe-area ao recuo base de 1rem. Em telas sem notch o
+     env() resolve para 0 e o comportamento é idêntico a px-4. */
+  .px-safe {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  /* Espaço extra no fim do conteúdo rolável para a barra de gestos do
+     dispositivo (gesture bar), somado a um respiro fixo. Usado em telas que
+     terminam logo acima do bottom nav. */
+  .pb-safe-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+  }
 }

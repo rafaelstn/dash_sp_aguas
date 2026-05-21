@@ -45,7 +45,7 @@ export default async function MobileHomePage() {
         }
       />
 
-      <div className="mx-auto w-full max-w-content px-4 py-5">
+      <div className="px-safe mx-auto w-full max-w-content py-5">
         <p className="mb-4 text-xs text-app-fg-muted">
           Selecione o tipo de ficha a preencher. O posto será informado na
           próxima etapa.

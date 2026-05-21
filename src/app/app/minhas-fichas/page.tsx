@@ -66,7 +66,7 @@ export default async function MinhasFichasPage() {
   return (
     <>
       <HeaderMobile titulo="Minhas fichas" voltarHref="/app" />
-      <div className="mx-auto w-full max-w-content px-4 py-5 pb-24">
+      <div className="px-safe pb-safe-nav mx-auto w-full max-w-content py-5">
         {total === 0 ? (
           <section
             aria-labelledby="vazio-titulo"

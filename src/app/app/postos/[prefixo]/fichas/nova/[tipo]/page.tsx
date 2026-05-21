@@ -35,7 +35,7 @@ export default async function NovaFichaPage({
     return (
       <>
         <HeaderMobile titulo="Tipo de ficha inválido" voltarHref="/app" />
-        <div className="mx-auto w-full max-w-content px-4 py-4">
+        <div className="px-safe mx-auto w-full max-w-content py-4">
           <div
             role="alert"
             className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900"
@@ -71,7 +71,7 @@ export default async function NovaFichaPage({
         subtitulo={`Posto ${prefixo}`}
         voltarHref={`/app/postos?tipo=${codigoNumero}`}
       />
-      <div className="mx-auto w-full max-w-content px-4 pb-24 pt-4">
+      <div className="px-safe mx-auto w-full max-w-content pb-6 pt-4">
         <FormularioFichaMobile
           schema={schema}
           prefixo={prefixo}

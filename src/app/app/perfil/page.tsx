@@ -13,7 +13,7 @@ export default async function PerfilPage() {
   return (
     <>
       <HeaderMobile titulo="Perfil" />
-      <div className="mx-auto w-full max-w-content space-y-4 px-4 py-5">
+      <div className="px-safe mx-auto w-full max-w-content space-y-4 py-5">
         <section
           aria-labelledby="perfil-titulo"
           className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"

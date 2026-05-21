@@ -98,7 +98,7 @@ export default async function PostosPage({
         subtitulo={subtitulo}
         voltarHref="/app"
       />
-      <div className="mx-auto w-full max-w-content px-4 py-4">
+      <div className="px-safe mx-auto w-full max-w-content py-4">
         <Suspense
           fallback={
             <p className="text-sm text-app-fg-muted">Carregando consulta…</p>

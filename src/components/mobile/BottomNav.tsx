@@ -23,7 +23,7 @@ const IconeHome = (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="h-6 w-6"
+    className="h-5 w-5"
   >
     <path d="M3 12 12 4l9 8" />
     <path d="M5 10v10h14V10" />
@@ -39,7 +39,7 @@ const IconeLista = (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="h-6 w-6"
+    className="h-5 w-5"
   >
     <path d="M8 6h13" />
     <path d="M8 12h13" />
@@ -59,7 +59,7 @@ const IconePerfil = (
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className="h-6 w-6"
+    className="h-5 w-5"
   >
     <circle cx="12" cy="8" r="4" />
     <path d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8" />
@@ -99,9 +99,13 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Navegação principal do aplicativo"
-      className="sticky bottom-0 z-30 border-t border-app-border-subtle bg-app-surface"
-      // safe-area pra dispositivos com notch
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0)' }}
+      className="sticky bottom-0 z-30 border-t border-app-border-subtle bg-app-surface shadow-gov-sticky"
+      // safe-area: barra de gestos embaixo e notch nas laterais (landscape)
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0)',
+        paddingLeft: 'env(safe-area-inset-left, 0)',
+        paddingRight: 'env(safe-area-inset-right, 0)',
+      }}
     >
       <ul className="mx-auto flex max-w-content items-stretch justify-around">
         {ABAS.map((aba) => {
@@ -111,13 +115,26 @@ export function BottomNav() {
               <Link
                 href={aba.href}
                 aria-current={ativa ? 'page' : undefined}
-                className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-2xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gov-azul ${
+                className={`group relative flex min-h-[56px] flex-col items-center justify-center gap-1 px-2 py-1.5 text-2xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gov-azul ${
                   ativa
                     ? 'text-gov-azul'
-                    : 'text-app-fg-muted hover:text-app-fg'
+                    : 'text-app-fg-muted hover:text-app-fg active:text-app-fg'
                 }`}
               >
-                <span className="pointer-events-none">{aba.icone}</span>
+                {/* Indicador da aba ativa: barra no topo, não depende só de cor */}
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-x-4 top-0 h-0.5 rounded-full transition-opacity duration-150 ${
+                    ativa ? 'bg-gov-azul opacity-100' : 'opacity-0'
+                  }`}
+                />
+                <span
+                  className={`pointer-events-none flex h-7 w-12 items-center justify-center rounded-full transition-colors ${
+                    ativa ? 'bg-gov-azul-claro' : 'bg-transparent'
+                  }`}
+                >
+                  {aba.icone}
+                </span>
                 <span>{aba.rotulo}</span>
               </Link>
             </li>

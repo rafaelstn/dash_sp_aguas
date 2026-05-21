@@ -10,7 +10,7 @@ export default function MinhasFichasLoading() {
     <>
       <HeaderMobile titulo="Minhas fichas" voltarHref="/app" />
       <div
-        className="mx-auto w-full max-w-content px-4 py-5 pb-24"
+        className="px-safe pb-safe-nav mx-auto w-full max-w-content py-5"
         role="status"
         aria-live="polite"
         aria-label="Carregando fichas"

@@ -636,7 +636,7 @@ export function FormularioFichaMobile({
               <button
                 type="button"
                 onClick={pedirConsentimentoGps}
-                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
                 disabled={capturandoGps}
               >
                 {capturandoGps ? 'Capturando…' : 'Atualizar'}
@@ -644,7 +644,7 @@ export function FormularioFichaMobile({
               <button
                 type="button"
                 onClick={limparGps}
-                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
               >
                 Remover
               </button>
@@ -698,7 +698,7 @@ export function FormularioFichaMobile({
               <button
                 type="button"
                 onClick={negarConsentimentoGps}
-                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
               >
                 Agora não
               </button>
@@ -725,14 +725,14 @@ export function FormularioFichaMobile({
               <button
                 type="button"
                 onClick={() => inputFotoRef.current?.click()}
-                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
               >
                 Trocar
               </button>
               <button
                 type="button"
                 onClick={removerFoto}
-                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
               >
                 Remover
               </button>
@@ -742,7 +742,7 @@ export function FormularioFichaMobile({
           <button
             type="button"
             onClick={() => inputFotoRef.current?.click()}
-            className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+            className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
           >
             Adicionar foto da ficha
           </button>
@@ -845,9 +845,14 @@ export function FormularioFichaMobile({
         ) : null}
       </div>
 
-      {/* ───── Bottom action bar ───── */}
+      {/* ───── Bottom action bar ─────
+          Ancora logo acima do bottom nav (altura 56px) somando a barra de
+          gestos do dispositivo (safe-area-inset-bottom). `-mx-4` sangra a
+          barra até as bordas do container de conteúdo (px-safe = max(1rem,
+          inset)); em telas sem notch isso equivale a px-4. */}
       <div
-        className="sticky bottom-16 z-10 -mx-4 mt-4 flex gap-2 border-t border-app-border-subtle bg-app-surface p-3 shadow-gov-sticky"
+        className="sticky z-10 -mx-4 mt-4 flex gap-2 border-t border-app-border-subtle bg-app-surface p-3 shadow-gov-sticky"
+        style={{ bottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
         role="group"
         aria-label="Ações do formulário"
       >
@@ -861,7 +866,7 @@ export function FormularioFichaMobile({
         <button
           type="submit"
           disabled={submissao.kind === 'enviando'}
-          className="min-h-[44px] flex-1 rounded bg-gov-azul px-3 text-sm font-semibold text-white hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          className="min-h-[44px] flex-1 rounded bg-gov-azul px-3 text-sm font-semibold text-white shadow-gov-card transition-[background-color,transform] duration-150 hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
         >
           {submissao.kind === 'enviando' ? (
             <span className="inline-flex items-center justify-center gap-2">

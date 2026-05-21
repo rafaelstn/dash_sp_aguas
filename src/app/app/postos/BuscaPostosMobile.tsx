@@ -424,7 +424,7 @@ function HistoricoRecente({
                   : `/app/postos/${encodeURIComponent(item.prefixo)}`
               }
               onClick={() => onAcessar(item.prefixo)}
-              className="flex min-h-[44px] items-center gap-3 rounded border border-app-border-subtle bg-app-surface p-2 hover:border-gov-azul focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+              className="flex min-h-[44px] items-center gap-3 rounded border border-app-border-subtle bg-app-surface p-2 transition-[border-color,background-color] duration-150 hover:border-gov-azul focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-2"
             >
               <div
                 className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded bg-gov-azul-claro font-mono text-2xs font-bold text-gov-azul-escuro"
@@ -473,13 +473,23 @@ function ResultadosBusca({
   }
   if (estado.kind === 'carregando') {
     return (
-      <p
-        role="status"
-        aria-live="polite"
-        className="text-sm text-app-fg-muted"
-      >
-        Consultando postos…
-      </p>
+      <div role="status" aria-live="polite" aria-busy="true">
+        <span className="sr-only">Consultando postos…</span>
+        <ul className="space-y-2" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <li
+              key={i}
+              className="flex min-h-[64px] items-center gap-3 rounded-gov-card border border-app-border-subtle bg-app-surface p-3"
+            >
+              <div className="h-12 w-12 flex-shrink-0 animate-pulse rounded bg-app-surface-2" />
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="h-3.5 w-2/3 animate-pulse rounded bg-app-surface-2" />
+                <div className="h-3 w-2/5 animate-pulse rounded bg-app-surface-2" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     );
   }
   if (estado.kind === 'offline') {
@@ -555,7 +565,7 @@ function CardResultadoPosto({
     <Link
       href={href}
       onClick={onAcessar ? () => onAcessar(posto) : undefined}
-      className="flex min-h-[64px] items-center gap-3 rounded-gov-card border border-app-border bg-app-surface p-3 hover:border-gov-azul focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1"
+      className="flex min-h-[64px] items-center gap-3 rounded-gov-card border border-app-border bg-app-surface p-3 transition-[border-color,transform,background-color] duration-150 hover:border-gov-azul focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1 active:scale-[0.99] active:bg-app-surface-2"
     >
       <div
         className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-gov-azul-claro font-mono text-xs font-bold text-gov-azul-escuro"

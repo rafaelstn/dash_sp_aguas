@@ -81,7 +81,7 @@ export default async function DetalhePostoPage({
     return (
       <>
         <HeaderMobile titulo="Posto não encontrado" voltarHref="/app/postos" />
-        <div className="mx-auto w-full max-w-content px-4 py-4">
+        <div className="px-safe mx-auto w-full max-w-content py-4">
           <div
             role="alert"
             className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900"
@@ -122,7 +122,7 @@ export default async function DetalhePostoPage({
         subtitulo={`Posto ${posto.prefixo}`}
         voltarHref="/app/postos"
       />
-      <div className="mx-auto w-full max-w-content px-4 py-5 pb-24 space-y-4">
+      <div className="px-safe pb-safe-nav mx-auto w-full max-w-content space-y-4 py-5">
         <section
           aria-labelledby="ident-titulo"
           className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
@@ -152,9 +152,21 @@ export default async function DetalhePostoPage({
         {tipoSelecionado ? (
           <Link
             href={`/app/postos/${encodeURIComponent(posto.prefixo)}/fichas/nova/${tipoSelecionado}`}
-            className="flex min-h-[48px] items-center justify-center rounded bg-gov-azul px-4 text-sm font-semibold text-white hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
+            className="flex min-h-[48px] items-center justify-center gap-2 rounded bg-gov-azul px-4 text-sm font-semibold text-white shadow-gov-card transition-[background-color,transform] duration-150 hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2 active:scale-[0.99]"
           >
             Preencher ficha de {SCHEMAS_FICHA[tipoSelecionado].rotulo}
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
           </Link>
         ) : null}
 

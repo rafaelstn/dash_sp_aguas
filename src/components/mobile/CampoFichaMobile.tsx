@@ -26,6 +26,16 @@ import {
  * — a função `parseNumeroPtBR` cuida disso no `FormularioFichaMobile`.
  */
 
+/**
+ * Chevron do select nativo. SVG data-uri inline como background-image, cor
+ * `#6B7280` (token --fg-subtle, contraste suficiente sobre fundo branco).
+ * Necessário porque `appearance-none` remove a seta nativa; sem ela o select
+ * fica visualmente igual a um input de texto. Classe estática para o Tailwind
+ * detectar no build.
+ */
+const ICONE_CHEVRON =
+  "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")]";
+
 interface CampoFichaMobileProps {
   campo: CampoFicha;
   /** Valor atual do campo (string crua do input ou bool). */
@@ -139,7 +149,7 @@ export function CampoFichaMobile({
             id={idCampo}
             value={valorString}
             onChange={(e) => onChange(campo.chave, e.target.value)}
-            className={inputClass}
+            className={`${inputClass} appearance-none bg-[length:1.25rem] bg-[right_0.5rem_center] bg-no-repeat pr-9 ${ICONE_CHEVRON}`}
             aria-required={obrigatorio || undefined}
             aria-invalid={erro ? true : undefined}
             aria-describedby={describedBy}
