@@ -17,6 +17,9 @@
     "pwa:audit": "npx --yes lighthouse http://localhost:3000/app --only-categories=pwa,accessibility,performance,best-practices --chrome-flags=--headless --output=html --output-path=./docs/relatorios/lighthouse-pwa.html"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@serwist/next": "^9.5.11",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.104.1",

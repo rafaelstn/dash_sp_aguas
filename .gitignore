@@ -71,3 +71,9 @@ data/backup_*.csv
 
 # Locks internos do harness (ScheduleWakeup, /loop, etc) — runtime-only, nunca commitar
 .claude/*.lock
+
+# Capacitor / Android
+# Pasta nativa regenerada por `npx cap add android`; versionamos só o
+# capacitor.config.ts e o webDir (android-www). APK e artefatos em /dist.
+/dist/
+/android/
