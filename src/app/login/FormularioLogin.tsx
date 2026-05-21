@@ -12,7 +12,7 @@ const estadoInicial: ResultadoLogin | null = null;
  * em sucesso, o action redireciona pra `/` (não retorna nada pro estado).
  * Em erro, devolve `ResultadoLogin` que renderizamos abaixo do botão.
  */
-export function FormularioLogin() {
+export function FormularioLogin({ returnTo }: { returnTo?: string }) {
   const [estado, acaoSubmit, pendente] = useActionState(
     entrarComSenha,
     estadoInicial,
@@ -20,6 +20,7 @@ export function FormularioLogin() {
 
   return (
     <form action={acaoSubmit} className="mt-6 space-y-4" noValidate>
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <Input
         id="email"
         name="email"

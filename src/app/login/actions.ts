@@ -55,6 +55,19 @@ export async function entrarComSenha(
     };
   }
 
-  // Sessão persistida via cookie pelo Supabase. Redireciona pra home.
-  redirect('/');
+  // Volta para a origem (ex.: o app de campo em /app); home do sistema por
+  // padrão. Quem entra pelo app continua no app, não cai no dashboard.
+  redirect(destinoSeguro(String(formData.get('returnTo') ?? '')));
+}
+
+/**
+ * Restringe o redirect pós-login a caminhos internos, evitando open redirect.
+ * Aceita só paths absolutos do próprio site (ex.: `/app`); descarta URLs
+ * externas, protocol-relative (`//`) e backslashes.
+ */
+function destinoSeguro(valor: string): string {
+  if (valor.startsWith('/') && !valor.startsWith('//') && !valor.includes('\\')) {
+    return valor;
+  }
+  return '/';
 }

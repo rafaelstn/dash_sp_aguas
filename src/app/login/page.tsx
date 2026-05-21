@@ -6,7 +6,14 @@ export const metadata = {
   title: 'Acesso — Ficha Técnica de Postos Hidrológicos',
 };
 
-export default function PaginaLogin() {
+export default async function PaginaLogin({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string }>;
+}) {
+  const { returnTo } = await searchParams;
+  const ehApp = typeof returnTo === 'string' && returnTo.startsWith('/app');
+
   return (
     <main
       id="conteudo-principal"
@@ -39,12 +46,12 @@ export default function PaginaLogin() {
           id="titulo-login"
           className="mt-5 text-2xl font-semibold text-gov-texto"
         >
-          Acesso ao sistema
+          {ehApp ? 'Acesso ao aplicativo de campo' : 'Acesso ao sistema'}
         </h2>
         <p className="mt-2 text-sm text-gov-muted">
           Informe seu email e senha cadastrados.
         </p>
-        <FormularioLogin />
+        <FormularioLogin returnTo={returnTo} />
         <p className="mt-6 text-sm text-gov-muted">
           Ainda não tem conta?{' '}
           <Link href="/cadastrar" className="text-gov-azul hover:underline">
