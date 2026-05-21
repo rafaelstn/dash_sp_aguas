@@ -3,6 +3,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { RegistrarServiceWorker } from '@/components/mobile/RegistrarServiceWorker';
 import { InstallPWAPrompt } from '@/components/mobile/InstallPWAPrompt';
+import { VoltarAndroid } from '@/components/mobile/VoltarAndroid';
 
 /**
  * Layout do app móvel (rotas /app/*). Diferente do layout `(dashboard)`,
@@ -102,6 +103,7 @@ export default async function MobileAppLayout({
         }}
       />
       <RegistrarServiceWorker />
+      <VoltarAndroid />
 
       {/* Conteúdo principal — cada page renderiza seu próprio header */}
       <main
