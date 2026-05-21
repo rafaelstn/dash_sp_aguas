@@ -909,7 +909,9 @@ const SCHEMA_PCD: SchemaFicha = {
 const SCHEMA_NIVELAMENTO: SchemaFicha = {
   codigo: 4,
   rotulo: TIPOS_DOCUMENTO[4].rotulo,
-  disponivel: true,
+  // Placeholder genérico: desabilitado no app até o cliente enviar a ficha
+  // oficial. Evita que o agente preencha campos que não batem com o documento.
+  disponivel: false,
   secoes: [
     {
       titulo: 'Levantamento das RNs',
@@ -1002,7 +1004,9 @@ const SCHEMA_NIVELAMENTO: SchemaFicha = {
 const SCHEMA_LEV_SECAO: SchemaFicha = {
   codigo: 5,
   rotulo: TIPOS_DOCUMENTO[5].rotulo,
-  disponivel: true,
+  // Placeholder genérico: desabilitado no app até o cliente enviar a ficha
+  // oficial (mesmo motivo do tipo 4).
+  disponivel: false,
   secoes: [
     {
       titulo: 'Seção transversal',
