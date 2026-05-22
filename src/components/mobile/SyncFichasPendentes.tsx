@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   EVENTO_PENDENTES,
-  contarPendentes,
   listarPendentes,
   registrarFalhaEnvio,
   removerEnvio,
@@ -12,6 +11,11 @@ import {
 } from '@/lib/fila-envios';
 import { descartarRascunho } from '@/lib/rascunho-ficha';
 import { ErroTriagemAPI, mensagemErroTriagem, submeterFichaApp } from '@/lib/triagem-api';
+
+interface SyncFichasPendentesProps {
+  /** ID do técnico logado. Só as fichas dele são sincronizadas/contadas. */
+  usuarioId: string | null;
+}
 
 /**
  * Sincronizador da fila de envios offline (ADR-0007 §2.3).
@@ -28,21 +32,37 @@ import { ErroTriagemAPI, mensagemErroTriagem, submeterFichaApp } from '@/lib/tri
  * backend nunca cria ficha duplicada (slug `idempotency_duplicada` é
  * tratado aqui como sucesso).
  *
+ * Isolamento por usuário: o envio usa o cookie de sessão atual e o backend
+ * grava `tecnico_id` a partir dela. Em dispositivo compartilhado, sincronizar
+ * a ficha de outro técnico a atribuiria ao usuário logado. Por isso só
+ * drenamos/contamos itens cujo `chaveRascunho.usuarioId` é o usuário atual;
+ * os demais ficam parados até o dono logar.
+ *
  * Renderiza um banner discreto com a contagem de pendentes e o estado do
  * envio. Não bloqueia nenhuma navegação.
  */
-export function SyncFichasPendentes() {
+export function SyncFichasPendentes({ usuarioId }: SyncFichasPendentesProps) {
   const router = useRouter();
   const [total, setTotal] = useState(0);
   const [online, setOnline] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const emExecucao = useRef(false);
 
+  const meusPendentes = useCallback(async (): Promise<ItemFilaEnvio[]> => {
+    if (!usuarioId) return [];
+    const todos = await listarPendentes();
+    return todos.filter((item) => item.chaveRascunho.usuarioId === usuarioId);
+  }, [usuarioId]);
+
+  const recomputarTotal = useCallback(async () => {
+    setTotal((await meusPendentes()).length);
+  }, [meusPendentes]);
+
   const drenar = useCallback(async () => {
-    if (emExecucao.current) return;
+    if (emExecucao.current || !usuarioId) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
-    const pendentes = await listarPendentes();
+    const pendentes = await meusPendentes();
     if (pendentes.length === 0) return;
 
     emExecucao.current = true;
@@ -71,38 +91,37 @@ export function SyncFichasPendentes() {
     } finally {
       emExecucao.current = false;
       setSincronizando(false);
-      setTotal(await contarPendentes());
+      await recomputarTotal();
       if (houveSucesso) router.refresh();
     }
-  }, [router]);
+  }, [usuarioId, meusPendentes, recomputarTotal, router]);
 
   // Estado inicial + sync no mount (app reaberto já online).
   useEffect(() => {
     setOnline(typeof navigator === 'undefined' ? true : navigator.onLine);
-    contarPendentes().then(setTotal);
+    void recomputarTotal();
     void drenar();
-  }, [drenar]);
+  }, [recomputarTotal, drenar]);
 
-  // Reconexão e mudança de contagem.
+  // Reconexão e mudança da fila.
   useEffect(() => {
     const aoVoltar = () => {
       setOnline(true);
       void drenar();
     };
     const aoCair = () => setOnline(false);
-    const aoMudarPendentes = (e: Event) => {
-      const detail = (e as CustomEvent<number>).detail;
-      if (typeof detail === 'number') setTotal(detail);
+    const aoMudarFila = () => {
+      void recomputarTotal();
     };
     window.addEventListener('online', aoVoltar);
     window.addEventListener('offline', aoCair);
-    window.addEventListener(EVENTO_PENDENTES, aoMudarPendentes);
+    window.addEventListener(EVENTO_PENDENTES, aoMudarFila);
     return () => {
       window.removeEventListener('online', aoVoltar);
       window.removeEventListener('offline', aoCair);
-      window.removeEventListener(EVENTO_PENDENTES, aoMudarPendentes);
+      window.removeEventListener(EVENTO_PENDENTES, aoMudarFila);
     };
-  }, [drenar]);
+  }, [drenar, recomputarTotal]);
 
   if (total === 0) return null;
 

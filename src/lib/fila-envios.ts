@@ -24,7 +24,11 @@ const DB_NOME = 'spaguas-sync';
 const DB_VERSAO = 1;
 const STORE = 'fila-fichas';
 
-/** Evento global emitido sempre que a contagem de pendentes muda. */
+/**
+ * Evento global emitido sempre que a fila muda (item adicionado/removido).
+ * Serve só de gatilho: o consumidor recomputa a contagem por usuário, já
+ * que esta camada não conhece o usuário logado.
+ */
 export const EVENTO_PENDENTES = 'spaguas:fichas-pendentes';
 
 export interface ItemFilaEnvio {
@@ -85,7 +89,7 @@ function comTransacao<T>(
 export async function enfileirarEnvio(item: ItemFilaEnvio): Promise<void> {
   if (!temIndexedDb()) throw new Error('IndexedDB indisponível');
   await comTransacao('readwrite', (store) => store.put(item));
-  await notificarPendentes();
+  notificarPendentes();
 }
 
 export async function listarPendentes(): Promise<ItemFilaEnvio[]> {
@@ -103,7 +107,7 @@ export async function listarPendentes(): Promise<ItemFilaEnvio[]> {
 export async function removerEnvio(id: string): Promise<void> {
   if (!temIndexedDb()) return;
   await comTransacao('readwrite', (store) => store.delete(id));
-  await notificarPendentes();
+  notificarPendentes();
 }
 
 /** Atualiza tentativas/erro de um item que falhou no sync. */
@@ -117,19 +121,8 @@ export async function registrarFalhaEnvio(
   );
 }
 
-export async function contarPendentes(): Promise<number> {
-  if (!temIndexedDb()) return 0;
-  try {
-    const n = await comTransacao<number>('readonly', (store) => store.count());
-    return n ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** Emite o evento global com a contagem atual (consumido pela UI de sync). */
-export async function notificarPendentes(): Promise<void> {
+/** Gatilho para a UI recomputar a contagem (por usuário) após mudança na fila. */
+export function notificarPendentes(): void {
   if (typeof window === 'undefined') return;
-  const total = await contarPendentes();
-  window.dispatchEvent(new CustomEvent<number>(EVENTO_PENDENTES, { detail: total }));
+  window.dispatchEvent(new Event(EVENTO_PENDENTES));
 }

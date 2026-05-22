@@ -105,7 +105,7 @@ export default async function MobileAppLayout({
       />
       <RegistrarServiceWorker />
       <VoltarAndroid />
-      <SyncFichasPendentes />
+      <SyncFichasPendentes usuarioId={usuario?.id ?? null} />
 
       {/* Conteúdo principal — cada page renderiza seu próprio header */}
       <main
