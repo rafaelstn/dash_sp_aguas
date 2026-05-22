@@ -5,9 +5,9 @@ import { modoDemoAtivo } from '@/infrastructure/repositories';
 import { AtalhosTeclado } from '@/components/layout/AtalhosTeclado';
 
 export const metadata: Metadata = {
-  title: 'Ficha Técnica de Postos Hidrológicos — SPÁguas',
+  title: 'Ficha Técnica de Postos Hidrológicos — SP Águas - DMO',
   description:
-    'Consulta consolidada de postos hidrológicos da rede SPÁguas — Governo do Estado de São Paulo.',
+    'Consulta consolidada de postos hidrológicos da rede SP Águas — Governo do Estado de São Paulo.',
   // O <link rel="manifest"> é emitido via tag explícita dentro do <head>
   // (abaixo) — o `metadata.manifest` do Next 15 pode chegar tarde no
   // streaming e o Lighthouse não detecta. Manter em ambos garante que
@@ -40,9 +40,9 @@ export default function RootLayout({
         */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#1E40AF" />
-        <meta name="application-name" content="SPÁguas — Ficha Técnica" />
+        <meta name="application-name" content="SP Águas - DMO" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="SPÁguas" />
+        <meta name="apple-mobile-web-app-title" content="SP Águas - DMO" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>

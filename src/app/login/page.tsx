@@ -37,7 +37,7 @@ export default async function PaginaLogin({
               Governo do Estado de SP
             </p>
             <p className="text-sm font-semibold text-app-fg">
-              SPÁguas · Ficha Técnica
+              SP Águas - DMO
             </p>
           </div>
         </div>

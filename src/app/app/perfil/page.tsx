@@ -49,7 +49,7 @@ export default async function PerfilPage() {
         </a>
 
         <p className="text-2xs text-app-fg-muted">
-          Sistema institucional SPÁguas. Acesso restrito ao corpo técnico
+          Sistema institucional SP Águas. Acesso restrito ao corpo técnico
           autorizado.
         </p>
       </div>

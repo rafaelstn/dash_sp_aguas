@@ -27,17 +27,17 @@ import { SyncFichasPendentes } from '@/components/mobile/SyncFichasPendentes';
 
 export const metadata: Metadata = {
   title: {
-    default: 'SPÁguas — Ficha Técnica de Campo',
-    template: '%s · SPÁguas',
+    default: 'SP Águas - DMO',
+    template: '%s · SP Águas - DMO',
   },
   description:
-    'Aplicativo do técnico de campo para preencher fichas de inspeção, manutenção e medição dos postos hidrológicos da rede SPÁguas.',
+    'Aplicativo do técnico de campo para preencher fichas de inspeção, manutenção e medição dos postos hidrológicos da rede SP Águas.',
   manifest: '/manifest.json',
-  applicationName: 'SPÁguas — Ficha Técnica',
+  applicationName: 'SP Águas - DMO',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'SPÁguas',
+    title: 'SP Águas - DMO',
   },
   formatDetection: {
     telephone: false,
@@ -111,7 +111,7 @@ export default async function MobileAppLayout({
       <main
         id="conteudo-principal"
         role="main"
-        aria-label="Conteúdo do aplicativo SPÁguas"
+        aria-label="Conteúdo do aplicativo SP Águas - DMO"
         className="flex-1"
       >
         {children}

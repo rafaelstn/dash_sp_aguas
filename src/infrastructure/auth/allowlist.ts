@@ -54,7 +54,7 @@ export function mensagemErroAllowlist(motivo: string): string {
     case 'formato_invalido':
       return 'Endereço de email em formato inválido.';
     case 'dominio_nao_permitido':
-      return 'Acesso restrito a contas institucionais do setor SPÁguas. Contate o administrador do sistema.';
+      return 'Acesso restrito a contas institucionais do setor SP Águas. Contate o administrador do sistema.';
     default:
       return 'Não foi possível validar o endereço de email.';
   }

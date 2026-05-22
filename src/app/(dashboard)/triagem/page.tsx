@@ -28,7 +28,7 @@ import type { FichaTriagem } from '@/domain/triagem';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Triagem de fichas — SPÁguas',
+  title: 'Triagem de fichas — SP Águas - DMO',
 };
 
 const POR_PAGINA = 25;

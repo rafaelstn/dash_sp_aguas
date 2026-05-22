@@ -255,7 +255,7 @@ export function TabelaInventario({ itens }: Props) {
               <Th>Nome</Th>
               <Th>Município (ANA)</Th>
               <Th>Município ↔ coord</Th>
-              <Th>Município SPÁguas</Th>
+              <Th>Município SP Águas</Th>
               <Th>Op</Th>
               <Th>Match</Th>
               <Th>Status</Th>

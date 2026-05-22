@@ -25,7 +25,7 @@ import { Alerta } from '@/components/ui/Alerta';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
-  title: 'Painel — Ficha Técnica SPÁguas',
+  title: 'Painel — SP Águas - DMO',
 };
 
 function formatarDataHora(d: Date | null): string {

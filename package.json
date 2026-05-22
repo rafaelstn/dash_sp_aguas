@@ -2,7 +2,7 @@
   "name": "spaguas-ficha-tecnica",
   "version": "0.1.0",
   "private": true,
-  "description": "Dashboard de consulta da rede de postos hidrológicos SPÁguas — Governo do Estado de São Paulo",
+  "description": "Dashboard de consulta da rede de postos hidrológicos SP Águas - DMO — Governo do Estado de São Paulo",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

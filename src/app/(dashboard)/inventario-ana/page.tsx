@@ -20,7 +20,7 @@ import type {
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
-  title: 'Auditoria ANA — SPÁguas',
+  title: 'Auditoria ANA — SP Águas - DMO',
 };
 
 const POR_PAGINA = 50;

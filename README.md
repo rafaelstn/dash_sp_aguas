@@ -1,6 +1,6 @@
-# Ficha Técnica de Postos Hidrológicos — SPÁguas
+# Ficha Técnica de Postos Hidrológicos — SP Águas - DMO
 
-Dashboard de consulta da rede de postos hidrológicos (pluviométricos, fluviométricos, piezométricos) do programa SPÁguas — Governo do Estado de São Paulo.
+Dashboard de consulta da rede de postos hidrológicos (pluviométricos, fluviométricos, piezométricos) do programa SP Águas — Governo do Estado de São Paulo.
 
 Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/architecture.md`.
 

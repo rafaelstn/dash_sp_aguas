@@ -42,7 +42,7 @@ export default async function DashboardLayout({
                   Governo do Estado de SP
                 </p>
                 <p className="text-xs font-semibold text-app-fg">
-                  SPÁguas · Ficha Técnica
+                  SP Águas - DMO
                 </p>
               </div>
             </div>
@@ -86,7 +86,7 @@ export default async function DashboardLayout({
         <footer className="border-t border-app-border-subtle bg-app-surface">
           <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-app-fg-muted">
             <span>
-              Sistema em rede interna · Acesso restrito ao setor SPÁguas
+              Sistema em rede interna · Acesso restrito ao setor SP Águas
             </span>
             <span aria-label="Status da indexação do acervo">
               {/* Fase 2: substituir por "Dados do acervo atualizados em DD/MM/AAAA HH:MM" */}

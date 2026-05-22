@@ -103,7 +103,7 @@ export function ReconciliacaoAnaVsPostos({ estacao, posto }: Props) {
             Reconciliação ANA × Postos
           </h2>
           <p className="mt-0.5 text-2xs text-app-fg-muted">
-            ANA é auditor. Postos é a fonte da verdade. Amarelo = SPÁguas já
+            ANA é auditor. Postos é a fonte da verdade. Amarelo = SP Águas já
             corrigiu este campo desde a planilha que a ANA mandou.
           </p>
         </div>

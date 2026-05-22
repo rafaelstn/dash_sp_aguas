@@ -11,7 +11,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'br.gov.sp.spaguas.app',
-  appName: 'SPÁguas Fichas',
+  appName: 'SP Águas - DMO',
   webDir: 'android-www',
   server: {
     url: 'https://dash-sp-aguas.vercel.app/app',

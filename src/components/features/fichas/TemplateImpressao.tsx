@@ -163,7 +163,7 @@ export function TemplateImpressao({
         <header className="cabecalho-impressao">
           <div>
             <div className="gov-marca">Governo do Estado de São Paulo</div>
-            <h1>SPÁguas — Ficha Técnica</h1>
+            <h1>SP Águas - DMO</h1>
             <p style={{ margin: '2pt 0 0', fontSize: '9pt', color: '#475569' }}>
               {tipo?.rotulo ?? `Tipo de documento ${ficha.codTipoDocumento}`}
             </p>
@@ -264,7 +264,7 @@ export function TemplateImpressao({
 
         <footer className="rodape-impressao">
           <span>
-            Gerada em {new Date().toLocaleString('pt-BR')} pelo SPÁguas
+            Gerada em {new Date().toLocaleString('pt-BR')} pelo SP Águas - DMO
           </span>
           <span style={{ fontFamily: 'ui-monospace, monospace' }}>
             Ficha #{ficha.id.slice(0, 8)}

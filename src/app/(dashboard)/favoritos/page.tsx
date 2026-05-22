@@ -13,7 +13,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Meus favoritos — Ficha Técnica SPÁguas',
+  title: 'Meus favoritos — SP Águas - DMO',
 };
 
 export default async function PaginaFavoritos() {

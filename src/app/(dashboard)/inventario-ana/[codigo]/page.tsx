@@ -200,7 +200,7 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
             <code className="mono">postos</code>. Cadastre como posto novo (vai
             criar a entrada com origem <code className="mono">ana_promocao_manual</code>{' '}
             e você refina os dados na próxima tela) ou descarte se não for da
-            rede SPÁguas (use o botão &quot;Descartar&quot; nas ações de revisão).
+            rede SP Águas (use o botão &quot;Descartar&quot; nas ações de revisão).
           </p>
           <BotaoCadastrarPosto estacao={estacao} />
         </section>

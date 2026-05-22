@@ -1,8 +1,8 @@
 {
   "id": "/app",
-  "name": "SPÁguas — Ficha Técnica de Campo",
-  "short_name": "SPÁguas",
-  "description": "Aplicativo do técnico de campo para preencher fichas de inspeção, manutenção e medição dos postos hidrológicos da rede SPÁguas — Governo do Estado de São Paulo.",
+  "name": "SP Águas - DMO",
+  "short_name": "SP Águas - DMO",
+  "description": "Aplicativo do técnico de campo para preencher fichas de inspeção, manutenção e medição dos postos hidrológicos da rede SP Águas — Governo do Estado de São Paulo.",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
