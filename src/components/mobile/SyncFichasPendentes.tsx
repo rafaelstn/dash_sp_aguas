@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   EVENTO_PENDENTES,
   listarPendentes,
+  particionarEnvios,
   registrarFalhaEnvio,
   removerEnvio,
   selecionarPendentesDoUsuario,
@@ -44,7 +45,8 @@ interface SyncFichasPendentesProps {
  */
 export function SyncFichasPendentes({ usuarioId }: SyncFichasPendentesProps) {
   const router = useRouter();
-  const [total, setTotal] = useState(0);
+  const [ativos, setAtivos] = useState(0);
+  const [falhados, setFalhados] = useState(0);
   const [online, setOnline] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const emExecucao = useRef(false);
@@ -55,14 +57,17 @@ export function SyncFichasPendentes({ usuarioId }: SyncFichasPendentesProps) {
   }, [usuarioId]);
 
   const recomputarTotal = useCallback(async () => {
-    setTotal((await meusPendentes()).length);
+    const { ativos: at, falhados: fa } = particionarEnvios(await meusPendentes());
+    setAtivos(at.length);
+    setFalhados(fa.length);
   }, [meusPendentes]);
 
   const drenar = useCallback(async () => {
     if (emExecucao.current || !usuarioId) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
-    const pendentes = await meusPendentes();
+    // Só tenta os ativos; os que esgotaram tentativas aguardam ação manual.
+    const { ativos: pendentes } = particionarEnvios(await meusPendentes());
     if (pendentes.length === 0) return;
 
     emExecucao.current = true;
@@ -123,23 +128,38 @@ export function SyncFichasPendentes({ usuarioId }: SyncFichasPendentesProps) {
     };
   }, [drenar, recomputarTotal]);
 
-  if (total === 0) return null;
+  if (ativos === 0 && falhados === 0) return null;
 
-  const plural = total > 1;
-  const texto = sincronizando
-    ? `Enviando ${total} ficha${plural ? 's' : ''} pendente${plural ? 's' : ''}…`
+  const pa = ativos > 1;
+  const textoAtivos = sincronizando
+    ? `Enviando ${ativos} ficha${pa ? 's' : ''} pendente${pa ? 's' : ''}…`
     : online
-      ? `${total} ficha${plural ? 's' : ''} pendente${plural ? 's' : ''} de envio. Tentaremos novamente.`
-      : `${total} ficha${plural ? 's' : ''} aguardando conexão para envio.`;
+      ? `${ativos} ficha${pa ? 's' : ''} pendente${pa ? 's' : ''} de envio. Tentaremos novamente.`
+      : `${ativos} ficha${pa ? 's' : ''} aguardando conexão para envio.`;
+
+  const pf = falhados > 1;
+  const textoFalhados = `${falhados} ficha${pf ? 's' : ''} não enviada${pf ? 's' : ''} após várias tentativas. Reabra a ficha e tente novamente.`;
 
   return (
-    <p
-      aria-live="polite"
-      role="status"
-      className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900"
-    >
-      {texto}
-    </p>
+    <>
+      {ativos > 0 ? (
+        <p
+          aria-live="polite"
+          role="status"
+          className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900"
+        >
+          {textoAtivos}
+        </p>
+      ) : null}
+      {falhados > 0 ? (
+        <p
+          role="alert"
+          className="border-b border-red-300 bg-red-50 px-4 py-2 text-center text-xs text-red-900"
+        >
+          {textoFalhados}
+        </p>
+      ) : null}
+    </>
   );
 }
 

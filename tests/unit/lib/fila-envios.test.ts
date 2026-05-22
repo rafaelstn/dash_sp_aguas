@@ -10,8 +10,11 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  MAX_TENTATIVAS_ENVIO,
   enfileirarEnvio,
+  envioFalhouPermanente,
   listarPendentes,
+  particionarEnvios,
   registrarFalhaEnvio,
   removerEnvio,
   selecionarPendentesDoUsuario,
@@ -107,5 +110,29 @@ describe('selecionarPendentesDoUsuario (isolamento cross-user)', () => {
   it('retorna vazio quando não há usuário logado', () => {
     const itens = [itemFake('k1', 'user-a')];
     expect(selecionarPendentesDoUsuario(itens, null)).toEqual([]);
+  });
+});
+
+describe('expurgo de ficha presa (limite de tentativas)', () => {
+  function comTentativas(id: string, tentativas: number): ItemFilaEnvio {
+    return { ...itemFake(id, 'user-a'), tentativas };
+  }
+
+  it('não marca como falha permanente abaixo do limite', () => {
+    expect(envioFalhouPermanente(comTentativas('k1', MAX_TENTATIVAS_ENVIO - 1))).toBe(false);
+  });
+
+  it('marca como falha permanente ao atingir o limite', () => {
+    expect(envioFalhouPermanente(comTentativas('k1', MAX_TENTATIVAS_ENVIO))).toBe(true);
+  });
+
+  it('separa ativos de falhados', () => {
+    const { ativos, falhados } = particionarEnvios([
+      comTentativas('k1', 0),
+      comTentativas('k2', MAX_TENTATIVAS_ENVIO),
+      comTentativas('k3', 2),
+    ]);
+    expect(ativos.map((i) => i.id)).toEqual(['k1', 'k3']);
+    expect(falhados.map((i) => i.id)).toEqual(['k2']);
   });
 });

@@ -118,6 +118,34 @@ export function selecionarPendentesDoUsuario(
   return itens.filter((item) => item.chaveRascunho.usuarioId === usuarioId);
 }
 
+/**
+ * Limite de tentativas automáticas de envio. Atingido o teto, o item para de
+ * ser retentado a cada reconexão (evita retransmissão infinita de uma ficha
+ * que o servidor rejeita de forma permanente). O rascunho é preservado, então
+ * o técnico pode reabrir a ficha, corrigir e reenviar — o que zera a contagem.
+ */
+export const MAX_TENTATIVAS_ENVIO = 8;
+
+export function envioFalhouPermanente(item: ItemFilaEnvio): boolean {
+  return item.tentativas >= MAX_TENTATIVAS_ENVIO;
+}
+
+/**
+ * Separa a fila em itens que ainda devem ser tentados (`ativos`) e os que
+ * esgotaram as tentativas (`falhados`, exigem ação manual do técnico).
+ */
+export function particionarEnvios(itens: ItemFilaEnvio[]): {
+  ativos: ItemFilaEnvio[];
+  falhados: ItemFilaEnvio[];
+} {
+  const ativos: ItemFilaEnvio[] = [];
+  const falhados: ItemFilaEnvio[] = [];
+  for (const item of itens) {
+    (envioFalhouPermanente(item) ? falhados : ativos).push(item);
+  }
+  return { ativos, falhados };
+}
+
 export async function removerEnvio(id: string): Promise<void> {
   if (!temIndexedDb()) return;
   await comTransacao('readwrite', (store) => store.delete(id));

@@ -60,9 +60,9 @@ A severidade é **baixa a moderada**: o volume é pequeno, os dados são restrit
 |---|--------------|------------|--------|
 | 1 | Exigir bloqueio de tela e cifragem de disco do dispositivo via política de MDM do órgão (controle organizacional, complementa o controle técnico) | Alta | A cargo do órgão |
 | 2 | Avaliar cifragem em repouso do rascunho e da fila no dispositivo (Web Crypto API com chave derivada da sessão) | Média | Backlog |
-| 3 | Definir expurgo automático de itens de fila com falha permanente após limite de tentativas, evitando retenção indefinida | Baixa | Backlog |
+| 3 | Definir expurgo automático de itens de fila com falha permanente após limite de tentativas, evitando retenção indefinida | Baixa | Implementado (2026-05-22) |
 
-A recomendação nº 1 é organizacional e independe de software. As recomendações nº 2 e nº 3 são melhorias técnicas a serem priorizadas conforme exigência do órgão; não são bloqueantes para a operação, dado o perfil de risco descrito na seção 5.
+A recomendação nº 1 é organizacional e independe de software. A recomendação nº 2 é melhoria técnica a ser priorizada conforme exigência do órgão; não é bloqueante para a operação, dado o perfil de risco descrito na seção 5. A recomendação nº 3 foi implementada: após 8 tentativas automáticas de envio sem sucesso, o item para de ser retransmitido e é sinalizado ao técnico para reenvio manual (o rascunho é preservado para correção).
 
 ## 8. Conclusão
 
