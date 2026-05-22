@@ -104,6 +104,20 @@ export async function listarPendentes(): Promise<ItemFilaEnvio[]> {
   }
 }
 
+/**
+ * Filtra a fila para os itens do usuário informado. Controle de segurança:
+ * o sync só pode enviar fichas do técnico logado, senão um dispositivo
+ * compartilhado atribuiria a ficha ao usuário errado (o backend grava
+ * `tecnico_id` a partir da sessão atual). Pura e testável de propósito.
+ */
+export function selecionarPendentesDoUsuario(
+  itens: ItemFilaEnvio[],
+  usuarioId: string | null,
+): ItemFilaEnvio[] {
+  if (!usuarioId) return [];
+  return itens.filter((item) => item.chaveRascunho.usuarioId === usuarioId);
+}
+
 export async function removerEnvio(id: string): Promise<void> {
   if (!temIndexedDb()) return;
   await comTransacao('readwrite', (store) => store.delete(id));

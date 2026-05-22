@@ -60,6 +60,17 @@ Componentes da decisão:
 
 > Implementação técnica em runbook futuro (`runbooks/app-pwa-offline.md` — Rodrigo).
 
+> **Atualização 2026-05-22 (implementado):** rascunho em `localStorage` e fila
+> de envios em `IndexedDB` entregues. Desvios em relação ao proposto:
+> (a) a fila usa **wrapper IndexedDB próprio** (`src/lib/fila-envios.ts`), sem
+> `idb-keyval` — evita dependência nova na auditoria de governo;
+> (b) a drenagem é disparada pelo evento `online` (e no mount), não por
+> Background Sync API — esta é instável no iOS/WKWebView, que está no escopo;
+> (c) acrescentado **isolamento por usuário** na fila (controle de segurança
+> contra atribuição cruzada em dispositivo compartilhado), com teste em
+> `tests/unit/lib/fila-envios.test.ts`. Risco de dado em claro no dispositivo
+> documentado em `docs/seguranca/lgpd-dados-offline-dispositivo.md`.
+
 ### 2.4 Empacotamento APK via Capacitor (Fase 2.B, fora do MVP da Fase 2.A)
 
 - **Lib**: `@capacitor/core` + `@capacitor/android`. iOS futuro com `@capacitor/ios` (depende de conta Apple do cliente).
@@ -156,7 +167,7 @@ Sem migration de banco pra reverter.
 - [ ] Service Worker registrado no layout `/app/*` (Rodrigo)
 - [ ] Route group `(mobile)` com layout próprio (Fernanda)
 - [ ] Renderer dinâmico de formulário (Fernanda + Bruno)
-- [ ] Rascunho + fila offline (Lucas no backend de aceitação, Fernanda no client)
+- [x] Rascunho + fila offline (concluído 2026-05-22 — `src/lib/fila-envios.ts`, `SyncFichasPendentes.tsx`; isolamento por usuário + testes)
 - [ ] **Capacitor (Fase 2.B)** — postergado
 
 ## 7. Pendências

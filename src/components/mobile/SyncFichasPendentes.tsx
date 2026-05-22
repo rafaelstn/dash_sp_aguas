@@ -7,6 +7,7 @@ import {
   listarPendentes,
   registrarFalhaEnvio,
   removerEnvio,
+  selecionarPendentesDoUsuario,
   type ItemFilaEnvio,
 } from '@/lib/fila-envios';
 import { descartarRascunho } from '@/lib/rascunho-ficha';
@@ -50,8 +51,7 @@ export function SyncFichasPendentes({ usuarioId }: SyncFichasPendentesProps) {
 
   const meusPendentes = useCallback(async (): Promise<ItemFilaEnvio[]> => {
     if (!usuarioId) return [];
-    const todos = await listarPendentes();
-    return todos.filter((item) => item.chaveRascunho.usuarioId === usuarioId);
+    return selecionarPendentesDoUsuario(await listarPendentes(), usuarioId);
   }, [usuarioId]);
 
   const recomputarTotal = useCallback(async () => {
