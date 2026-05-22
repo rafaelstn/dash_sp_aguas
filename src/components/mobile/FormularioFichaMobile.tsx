@@ -26,6 +26,7 @@ import {
 } from '@/lib/rascunho-ficha';
 import { gerarUuidV4 } from '@/lib/uuid-cliente';
 import { arquivoParaDataUrl, comprimirImagemParaDataUrl } from '@/lib/imagem';
+import { enfileirarEnvio } from '@/lib/fila-envios';
 
 const TAMANHO_MAX_FOTO_BYTES = 5 * 1024 * 1024;
 const ALVO_COMPRESSAO_BYTES = 2 * 1024 * 1024;
@@ -51,6 +52,7 @@ type EstadoSubmissao =
   | { kind: 'idle' }
   | { kind: 'enviando' }
   | { kind: 'sucesso'; id: string }
+  | { kind: 'enfileirada' }
   | { kind: 'erro'; mensagem: string };
 
 interface ErrosCampos {
@@ -459,6 +461,37 @@ export function FormularioFichaMobile({
         setSubmissao({ kind: 'erro', mensagem: mensagemErroTriagem(err) });
       } else {
         const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        if (offline) {
+          try {
+            // Enfileira para envio automático quando a conexão voltar
+            // (drenado por `SyncFichasPendentes`). O `id` = idempotencyKey
+            // evita item duplicado se a ficha for reenfileirada.
+            await enfileirarEnvio({
+              id: rascunho.idempotencyKey,
+              corpo,
+              idempotencyKey: rascunho.idempotencyKey,
+              chaveRascunho: {
+                usuarioId,
+                prefixo,
+                codigo: schema.codigo,
+                fichaOrigemId: fichaOrigemId ?? null,
+              },
+              criadoEm: new Date().toISOString(),
+              tentativas: 0,
+              ultimoErro: null,
+            });
+            // Mantém o rascunho como backup até o sync confirmar o envio.
+            salvarRascunho(rascunho);
+            setSubmissao({ kind: 'enfileirada' });
+            setTimeout(() => {
+              router.push('/app/minhas-fichas');
+              router.refresh();
+            }, 1200);
+            return;
+          } catch {
+            // IndexedDB indisponível: cai no fluxo antigo (rascunho salvo).
+          }
+        }
         setSubmissao({
           kind: 'erro',
           mensagem: offline
@@ -833,6 +866,12 @@ export function FormularioFichaMobile({
         {submissao.kind === 'sucesso' ? (
           <p className="rounded border border-green-400 bg-green-50 p-2 text-sm text-green-900">
             Ficha enviada. Redirecionando para Minhas fichas…
+          </p>
+        ) : null}
+        {submissao.kind === 'enfileirada' ? (
+          <p className="rounded border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900">
+            Sem conexão. A ficha foi salva no aparelho e será enviada
+            automaticamente assim que houver internet.
           </p>
         ) : null}
         {submissao.kind === 'erro' ? (
