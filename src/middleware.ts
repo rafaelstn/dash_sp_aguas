@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { bypassAuthAtivo } from '@/infrastructure/auth/dev-bypass';
+import { validarReturnToInterno } from '@/infrastructure/auth/return-to';
 
 /**
  * Gera o cabeçalho Content-Security-Policy desta requisição usando um nonce
@@ -187,16 +188,23 @@ export async function middleware(request: NextRequest) {
     return redir;
   }
 
-  // Usuário autenticado tentando acessar /login ou /cadastrar -> manda pra home.
+  // Usuário autenticado tentando acessar /login ou /cadastrar.
+  // Respeita `?returnTo=<path>` se for um path interno seguro (ex.: técnico
+  // que volta do /auth/sair preserva o destino /app); caso contrário cai na
+  // raiz. Sem isso, quem entra em /login?returnTo=/app já logado ia parar no
+  // dashboard web em vez de voltar pro app.
   if (
     user &&
     (request.nextUrl.pathname === '/login' ||
       request.nextUrl.pathname === '/cadastrar')
   ) {
-    const homeUrl = request.nextUrl.clone();
-    homeUrl.pathname = '/';
-    homeUrl.search = '';
-    const redir = NextResponse.redirect(homeUrl);
+    const destino = validarReturnToInterno(
+      request.nextUrl.searchParams.get('returnTo'),
+    );
+    const alvo = request.nextUrl.clone();
+    alvo.pathname = destino ?? '/';
+    alvo.search = '';
+    const redir = NextResponse.redirect(alvo);
     aplicarNoCacheAutenticado(redir);
     return redir;
   }

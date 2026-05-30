@@ -58,7 +58,7 @@ export default async function NovaFichaPage({
   const usuario = await obterUsuarioAtual();
   if (!usuario) {
     // Middleware deveria ter pego antes; defensivo.
-    redirect('/app/login');
+    redirect(`/login?returnTo=/app/postos/${encodeURIComponent(prefixo)}/fichas/nova/${codigoNumero}`);
   }
 
   const tecnicoNomeSugerido =

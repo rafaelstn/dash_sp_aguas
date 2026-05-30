@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { CardTipoFicha } from '@/components/mobile/CardTipoFicha';
 import { HeaderMobile } from '@/components/mobile/HeaderMobile';
@@ -28,7 +29,13 @@ const DESCRICOES_TIPO_FICHA: Record<number, string> = {
 
 export default async function MobileHomePage() {
   const usuario = await obterUsuarioAtual();
-  const nome = usuario?.nome ?? usuario?.email?.split('@')[0] ?? 'técnico';
+  // Guard defensivo: o middleware deveria bloquear antes, mas se cair aqui
+  // sem sessão, redireciona pro login do app (returnTo=/app) em vez de
+  // renderizar a home como "anônimo" e quebrar componentes filhos.
+  if (!usuario) {
+    redirect('/login?returnTo=/app');
+  }
+  const nome = usuario.nome ?? usuario.email?.split('@')[0] ?? 'técnico';
 
   return (
     <>
@@ -37,7 +44,7 @@ export default async function MobileHomePage() {
         subtitulo={`Sessão de ${nome}`}
         acaoDireita={
           <a
-            href="/auth/sair"
+            href="/auth/sair?returnTo=/app"
             className="min-h-[44px] rounded px-2 py-2 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
           >
             Sair

@@ -153,8 +153,7 @@ const serwist = new Serwist({
       matcher: ({ url, request }) =>
         url.pathname.startsWith('/app/') &&
         request.mode === 'navigate' &&
-        // Excluir paths de auth dentro de /app (defensivo)
-        !url.pathname.startsWith('/app/login') &&
+        // App não tem rota de auth própria; login é em /login com returnTo.
         !url.pathname.startsWith('/app/auth'),
       handler: new StaleWhileRevalidate({
         cacheName: CACHE_NAMES.paginas,

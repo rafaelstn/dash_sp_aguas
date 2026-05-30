@@ -42,7 +42,7 @@ export default async function PerfilPage() {
         </section>
 
         <a
-          href="/auth/sair"
+          href="/auth/sair?returnTo=/app"
           className="block min-h-[48px] rounded-gov-card border border-app-border bg-app-surface p-3 text-center text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
         >
           Encerrar sessão

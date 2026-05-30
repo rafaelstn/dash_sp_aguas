@@ -63,7 +63,7 @@ export default async function PostosPage({
 
   const usuario = await obterUsuarioAtual();
   if (!usuario) {
-    redirect('/app/login');
+    redirect('/login?returnTo=/app/postos');
   }
 
   // Favoritos e recentes alimentam as abas. Degrada para vazio se o repo

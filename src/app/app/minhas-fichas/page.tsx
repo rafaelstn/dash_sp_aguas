@@ -43,7 +43,7 @@ const ROTULO_ESTADO: Record<EstadoTriagem, string> = {
 export default async function MinhasFichasPage() {
   const usuario = await obterUsuarioAtual();
   if (!usuario) {
-    redirect('/app/login');
+    redirect('/login?returnTo=/app/minhas-fichas');
   }
 
   let itens: FichaTriagem[] = [];

@@ -30,7 +30,9 @@ export default async function ReenviarFichaPage({
 
   const usuario = await obterUsuarioAtual();
   if (!usuario) {
-    redirect('/app/login');
+    redirect(
+      `/login?returnTo=/app/postos/${encodeURIComponent(prefixo)}/fichas/${encodeURIComponent(id)}/reenviar`,
+    );
   }
 
   const ficha = await triagemRepository.obterPorId(id);
