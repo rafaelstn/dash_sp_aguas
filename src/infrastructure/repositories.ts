@@ -29,6 +29,8 @@ import { facetasRepository as facetasMock } from './mock/facetas-repository.mock
 import { fichasVisitaRepository as fichasVisitaMock } from './mock/fichas-visita-repository.mock';
 import { triagemRepository as triagemMock } from './mock/triagem-repository.mock';
 import { papeisRepository as papeisMock } from './mock/papeis-repository.mock';
+import { anaRevisaoRepository as anaRevisaoMock } from './mock/ana-revisao-repository.mock';
+import { painelRepository as painelMock } from './mock/painel-repository.mock';
 
 /**
  * Ponto único de escolha entre repositórios PG (reais) e mock (demo).
@@ -53,103 +55,10 @@ export const fichasVisitaRepository = demo ? fichasVisitaMock : fichasVisitaPg;
 export const triagemRepository = demo ? triagemMock : triagemPg;
 export const papeisRepository = demo ? papeisMock : papeisPg;
 
-// Modo demo não tem mock dedicado para ana-revisao (módulo recém-criado).
-// Em demo, devolve um stub que sempre informa "sem lote" para não quebrar UI.
-import type { AnaRevisaoRepository } from '@/application/ports/ana-revisao-repository';
-const anaRevisaoStubDemo: AnaRevisaoRepository = {
-  async loteAtual() {
-    return null;
-  },
-  async resumoPainel(loteId) {
-    return {
-      loteId,
-      loteNome: '',
-      prazoResposta: null,
-      totalEstacoes: 0,
-      totalPendencias: 0,
-      operando: 0,
-      desativadas: 0,
-      semMatch: 0,
-      statusPendente: 0,
-      statusEmRevisao: 0,
-      statusRevisada: 0,
-      statusDescartada: 0,
-      statusPromovida: 0,
-      divergenciaOk: 0,
-      divergenciaMargem: 0,
-      divergenciaDivergente: 0,
-      divergenciaSemCoord: 0,
-    };
-  },
-  async listar() {
-    return { itens: [], total: 0 };
-  },
-  async obterPorCodigo() {
-    return null;
-  },
-  async aplicarRevisao() {
-    throw new Error('Modo demo: revisão ANA indisponível sem banco.');
-  },
-  async aplicarBulk() {
-    return { aplicadas: 0, falhadas: 0 };
-  },
-  async obterSugestaoMatch() {
-    return null;
-  },
-  async contarPorCenario() {
-    return 0;
-  },
-  async detalheSugestaoMatch() {
-    return null;
-  },
-  async aceitarMatch() {
-    throw new Error('Modo demo: aceitar match ANA indisponível sem banco.');
-  },
-};
-export const anaRevisaoRepository = demo ? anaRevisaoStubDemo : anaRevisaoPg;
-
-// Painel é só agregação read-only. Em modo demo, devolve um stub vazio
-// que mantém a tela renderizável sem banco.
-import type { PainelRepository } from './db/painel-repository.pg';
-const painelStubDemo: PainelRepository = {
-  async resumoPendencias() {
-    return {
-      totalPostos: 0,
-      postosComArquivos: 0,
-      postosSemArquivos: 0,
-      postosComCoordenadas: 0,
-      postosSemCoordenadas: 0,
-      postosComTelemetria: 0,
-      desconformidadesPostos: 0,
-      arquivosOrfaos: 0,
-    };
-  },
-  async distribuicaoPorTipo() {
-    return [];
-  },
-  async rankingUGRHI() {
-    return [];
-  },
-  async classesDesconformidade() {
-    return [];
-  },
-  async statusOperacional() {
-    return { ativos: 0, desativados: 0, indeterminados: 0, total: 0 };
-  },
-  async rankingMantenedores() {
-    return [];
-  },
-  async atividadeRecente() {
-    return {
-      ultimaIndexacao: null,
-      statusUltimaIndexacao: null,
-      totalLotesIndexacao: 0,
-      arquivosIndexadosTotal: 0,
-      acessosHoje: 0,
-      acessos7Dias: 0,
-    };
-  },
-};
-export const painelRepository = demo ? painelStubDemo : painelPg;
+// ana-revisao e painel seguem o mesmo padrão dos demais: mock dedicado em
+// mock/*.mock.ts. O mock de ana-revisao é in-memory (sem lote/estação em
+// demo, devolve estado vazio); o de painel devolve agregação zerada.
+export const anaRevisaoRepository = demo ? anaRevisaoMock : anaRevisaoPg;
+export const painelRepository = demo ? painelMock : painelPg;
 
 export const modoDemoAtivo = demo;

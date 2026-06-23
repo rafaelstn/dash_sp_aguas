@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ItemSidenav } from './ItemSidenav';
+import { MenuUsuario } from './MenuUsuario';
 import type { ItemNav } from './nav-itens';
 import type { UsuarioAutenticado } from '@/infrastructure/auth/current-user';
 
@@ -41,33 +42,25 @@ export function Sidenav({ itens, usuario }: Props) {
         </ul>
       </nav>
 
-      <div className="border-t border-app-border-subtle px-3 py-2.5 text-xs text-app-fg-muted">
+      <div className="border-t border-app-border-subtle px-2 py-2.5 text-xs text-app-fg-muted">
         {usuario ? (
-          <>
-            {usuario.nome ? (
-              <p
-                className="truncate font-medium text-app-fg"
-                title={usuario.nome}
-              >
-                {usuario.nome}
-              </p>
-            ) : null}
-            <p className="truncate" title={usuario.email}>
-              {usuario.email}
-            </p>
-            <a
-              href="/auth/sair"
-              className="mono rounded-sm text-2xs text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
-            >
-              sair
-            </a>
-          </>
+          <MenuUsuario
+            nome={usuario.nome}
+            email={usuario.email}
+            variante="sidenav"
+          />
         ) : (
-          <div className="flex flex-col gap-0.5">
-            <Link href="/login" className="text-gov-azul hover:underline">
+          <div className="flex flex-col gap-0.5 px-1">
+            <Link
+              href="/login"
+              className="rounded-sm text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            >
               Entrar
             </Link>
-            <Link href="/cadastrar" className="text-gov-azul hover:underline">
+            <Link
+              href="/cadastrar"
+              className="rounded-sm text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            >
               Cadastrar
             </Link>
           </div>

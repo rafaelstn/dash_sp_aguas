@@ -1,76 +1,27 @@
 import 'server-only';
 import { FalhaRepositorio } from '@/domain/errors';
+import type {
+  AtividadeRecente,
+  ClasseDesconformidade,
+  DistribuicaoTipo,
+  PainelRepository,
+  RankingMantenedor,
+  RankingUGRHI,
+  ResumoPendencias,
+  StatusOperacional,
+  TendenciaKPI,
+} from '@/application/ports/painel-repository';
 import { sql } from './client';
 
-/**
- * Agregações para o painel (/painel). Consultas somente-leitura, sem domain
- * logic — por isso fora da pasta de ports. Todas as queries são cacheadas
- * em memória por 60 segundos (panel é visualizado; não precisa de live).
- */
-
-export interface ResumoPendencias {
-  totalPostos: number;
-  postosComArquivos: number;
-  postosSemArquivos: number;
-  postosComCoordenadas: number;
-  postosSemCoordenadas: number;
-  postosComTelemetria: number;
-  desconformidadesPostos: number;
-  arquivosOrfaos: number;
-}
-
-export interface DistribuicaoTipo {
-  tipo: string;
-  total: number;
-}
-
-export interface RankingUGRHI {
-  numero: string;
-  nome: string;
-  total: number;
-  desconformes: number;
-  taxa: number;
-}
-
-export interface ClasseDesconformidade {
-  tipo: 'prefixo' | 'prefixo_ana';
-  classe: string;
-  total: number;
-}
-
-export interface AtividadeRecente {
-  ultimaIndexacao: Date | null;
-  statusUltimaIndexacao: string | null;
-  totalLotesIndexacao: number;
-  arquivosIndexadosTotal: number;
-  acessosHoje: number;
-  acessos7Dias: number;
-}
+/** Quantos pontos mensais a série do sparkline traz (inclui o mês corrente). */
+const MESES_SERIE = 6;
 
 /**
- * Distribuição operacional dos postos (heurística de recência sobre
- * `operacao_fim_ano` — ver knowledge-base 2026-04-28).
- *   ativo      = NULL OR ano >= ano_corrente - 1
- *   desativado = ano > 0 AND ano < ano_corrente - 1
- *   indeterminado = ano = 0 (sentinela "sem dado")
+ * Adapter PostgreSQL do PainelRepository (contrato em
+ * `@/application/ports/painel-repository`). Consultas somente-leitura,
+ * cacheadas em memória por 60 segundos (painel é visualizado; não precisa
+ * de live).
  */
-export interface StatusOperacional {
-  ativos: number;
-  desativados: number;
-  indeterminados: number;
-  total: number;
-}
-
-/**
- * Mantenedor — combinação de `mantenedor` + `btl` (mesma lógica das
- * facetas de busca). Total conta postos distintos pra evitar dobrar
- * quando os dois campos têm o mesmo valor no mesmo registro.
- */
-export interface RankingMantenedor {
-  nome: string;
-  total: number;
-  ativos: number;
-}
 
 const TTL_MS = 60_000;
 interface CacheEntry<T> { em: number; dados: T }
@@ -85,14 +36,74 @@ async function memoize<T>(chave: string, fn: () => Promise<T>): Promise<T> {
   return dados;
 }
 
-export interface PainelRepository {
-  resumoPendencias(): Promise<ResumoPendencias>;
-  distribuicaoPorTipo(): Promise<DistribuicaoTipo[]>;
-  rankingUGRHI(): Promise<RankingUGRHI[]>;
-  classesDesconformidade(): Promise<ClasseDesconformidade[]>;
-  statusOperacional(): Promise<StatusOperacional>;
-  rankingMantenedores(limite?: number): Promise<RankingMantenedor[]>;
-  atividadeRecente(): Promise<AtividadeRecente>;
+/**
+ * Tendências dos KPIs com base temporal. Uma única query (sem N+1): um
+ * `generate_series` produz os marcos de fim de mês dos últimos `MESES_SERIE`
+ * meses, e para cada marco contamos cumulativamente.
+ *
+ *   - total de postos        → COUNT(postos) com created_at <= fim do mês
+ *   - distintos com arquivo   → COUNT(DISTINCT prefixo) com indexado_em <= fim
+ *   - arquivos órfãos         → COUNT(arquivos_orfaos) com indexado_em <= fim
+ *
+ * `postosSemArquivos(m) = totalPostos(m) - distintosComArquivo(m)`.
+ *
+ * O ponto de comparação (`valorAnterior`) é o penúltimo marco, ou seja o
+ * fechamento do mês anterior ("vs. mês anterior"). Quando a base é toda
+ * importada de uma vez (caso da carga DAEE), a série fica plana; isso é dado
+ * real, não maquiagem — o CardKPI lida com delta estável e sparkline chato.
+ *
+ * KPIs sem dimensão temporal (desconformidades = view derivada; "sem
+ * coordenadas" = coordenada não tem data própria de preenchimento) NÃO entram
+ * aqui de propósito.
+ */
+async function serieTendencias(): Promise<ResumoPendencias['tendencias']> {
+  const rows = await sql<
+    { total_postos: string; com_arquivo: string; orfaos: string }[]
+  >`
+    WITH marcos AS (
+      -- Fim (exclusivo) de cada mês: início do mês seguinte ao marco.
+      SELECT (date_trunc('month', CURRENT_DATE)
+                - (offset_meses || ' months')::interval
+                + interval '1 month') AS fim
+        FROM generate_series(${MESES_SERIE - 1}, 0, -1) AS offset_meses
+    )
+    SELECT
+      (SELECT COUNT(*) FROM postos
+        WHERE created_at < m.fim)::text AS total_postos,
+      (SELECT COUNT(DISTINCT prefixo) FROM arquivos_indexados
+        WHERE indexado_em < m.fim)::text AS com_arquivo,
+      (SELECT COUNT(*) FROM arquivos_orfaos
+        WHERE indexado_em < m.fim)::text AS orfaos
+      FROM marcos m
+     ORDER BY m.fim ASC
+  `;
+
+  const totalPostos = rows.map((r) => Number(r.total_postos));
+  const semArquivos = rows.map(
+    (r) => Number(r.total_postos) - Number(r.com_arquivo),
+  );
+  const orfaos = rows.map((r) => Number(r.orfaos));
+
+  return {
+    totalPostos: montarTendencia(totalPostos),
+    postosSemArquivos: montarTendencia(semArquivos),
+    arquivosOrfaos: montarTendencia(orfaos),
+  };
+}
+
+/**
+ * Monta a tendência a partir da série cumulativa. `valorAnterior` é o
+ * penúltimo ponto (fechamento do mês anterior). Retorna `undefined` quando
+ * não há histórico suficiente (menos de 2 pontos) ou quando todos os pontos
+ * são zero (sem dado nenhum → não mostra sparkline nem delta enganoso).
+ */
+export function montarTendencia(serie: number[]): TendenciaKPI | undefined {
+  if (serie.length < 2) return undefined;
+  if (serie.every((v) => v === 0)) return undefined;
+  return {
+    serie,
+    valorAnterior: serie[serie.length - 2] ?? 0,
+  };
 }
 
 export const painelRepository: PainelRepository = {
@@ -122,6 +133,7 @@ export const painelRepository: PainelRepository = {
         const totalPostos = Number(r.total);
         const postosComArquivos = Number(r.com_arquivos);
         const postosComCoordenadas = Number(r.com_coord);
+        const tendencias = await serieTendencias();
         return {
           totalPostos,
           postosComArquivos,
@@ -131,6 +143,7 @@ export const painelRepository: PainelRepository = {
           postosComTelemetria: Number(r.com_telem),
           desconformidadesPostos: Number(r.desconformes),
           arquivosOrfaos: Number(r.orfaos),
+          tendencias,
         };
       } catch (e) {
         throw new FalhaRepositorio('painel.resumoPendencias', e);

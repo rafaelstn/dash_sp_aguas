@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export interface BotoesAcaoFichaProps {
   prefixo: string;
@@ -10,38 +11,34 @@ export interface BotoesAcaoFichaProps {
 }
 
 /**
- * Botões "Editar" e "Apagar" da ficha. Apagar dispara `confirm()` nativo
- * + DELETE na API. Editar leva pra rota de edição (mesmo form usado em
- * criação, só com `fichaExistente` populando os campos).
+ * Botões "Editar" e "Apagar" da ficha. Apagar abre um ConfirmDialog
+ * (modal próprio, sem `window.confirm()` nativo) e dispara DELETE na API.
+ * Editar leva pra rota de edição (mesmo form usado em criação, só com
+ * `fichaExistente` populando os campos).
  */
 export function BotoesAcaoFicha({ prefixo, fichaId }: BotoesAcaoFichaProps) {
   const router = useRouter();
   const [apagando, setApagando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   async function apagar() {
-    if (
-      !window.confirm(
-        'Apagar esta ficha permanentemente? Esta ação não pode ser desfeita.',
-      )
-    ) {
-      return;
-    }
     setErro(null);
     setApagando(true);
     try {
       const resp = await fetch(`/api/fichas/${fichaId}`, { method: 'DELETE' });
       if (!resp.ok && resp.status !== 204) {
         const body = await resp.json().catch(() => ({}));
-        setErro(body.erro ?? `Falha ${resp.status} ao apagar.`);
         setApagando(false);
-        return;
+        throw new Error(body.erro ?? `Falha ${resp.status} ao apagar a ficha.`);
       }
+      setConfirmando(false);
       router.push(`/postos/${encodeURIComponent(prefixo)}`);
       router.refresh();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Erro de rede.');
       setApagando(false);
+      // Propaga para o ConfirmDialog exibir o erro e manter o modal aberto.
+      throw e instanceof Error ? e : new Error('Erro de rede.');
     }
   }
 
@@ -66,7 +63,7 @@ export function BotoesAcaoFicha({ prefixo, fichaId }: BotoesAcaoFichaProps) {
         </Link>
         <button
           type="button"
-          onClick={apagar}
+          onClick={() => setConfirmando(true)}
           disabled={apagando}
           className="rounded border border-gov-perigo/60 bg-white px-3 py-1.5 text-xs font-medium text-gov-perigo hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-perigo disabled:opacity-60"
         >
@@ -78,6 +75,21 @@ export function BotoesAcaoFicha({ prefixo, fichaId }: BotoesAcaoFichaProps) {
           {erro}
         </p>
       )}
+
+      <ConfirmDialog
+        aberto={confirmando}
+        titulo="Apagar ficha"
+        variante="perigo"
+        rotuloConfirmar="Apagar ficha"
+        descricao={
+          <p>
+            Esta ação apaga a ficha permanentemente e não pode ser desfeita.
+            Deseja continuar?
+          </p>
+        }
+        aoConfirmar={apagar}
+        aoCancelar={() => setConfirmando(false)}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface Props {
   codigoAna: string;
@@ -29,16 +30,10 @@ export function BlocoMatchSugerido({
 }: Props) {
   const router = useRouter();
   const [enviando, setEnviando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   async function aceitar() {
-    if (
-      !confirm(
-        `Vincular estação ANA ${codigoAna} ao posto ${postoPrefixo} (${postoNome ?? ''})? Isto preenche postos.prefixo_ana e marca a estação como revisada.`,
-      )
-    ) {
-      return;
-    }
     setEnviando(true);
     setErro(null);
     try {
@@ -51,12 +46,17 @@ export function BlocoMatchSugerido({
           mensagem?: string;
           erro?: string;
         };
-        throw new Error(b.mensagem ?? b.erro ?? `HTTP ${resp.status}`);
+        setEnviando(false);
+        throw new Error(
+          b.mensagem ?? b.erro ?? `Falha ao aplicar o vínculo (HTTP ${resp.status}).`,
+        );
       }
+      setConfirmando(false);
       router.refresh();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha.');
       setEnviando(false);
+      // Propaga para o ConfirmDialog exibir o erro e manter o modal aberto.
+      throw e instanceof Error ? e : new Error('Falha ao aplicar o vínculo.');
     }
   }
 
@@ -81,7 +81,7 @@ export function BlocoMatchSugerido({
         >
           {postoPrefixo}
         </Link>{' '}
-        — {postoNome ?? '(sem nome)'}
+        · {postoNome ?? '(sem nome)'}
         {postoMunicipio ? (
           <span className="text-app-fg-muted"> · {postoMunicipio}</span>
         ) : null}
@@ -97,7 +97,7 @@ export function BlocoMatchSugerido({
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={aceitar}
+          onClick={() => setConfirmando(true)}
           disabled={enviando}
           className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
         >
@@ -105,11 +105,28 @@ export function BlocoMatchSugerido({
         </button>
         <Link
           href={`/postos/${encodeURIComponent(postoPrefixo)}/editar`}
-          className="rounded border border-gov-azul bg-white px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-app-surface-2"
+          className="rounded border border-gov-azul bg-white px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
         >
           Abrir posto sugerido
         </Link>
       </div>
+
+      <ConfirmDialog
+        aberto={confirmando}
+        titulo="Aceitar match sugerido"
+        rotuloConfirmar="Aceitar e vincular"
+        descricao={
+          <p>
+            Vincular a estação ANA{' '}
+            <strong className="mono">{codigoAna}</strong> ao posto{' '}
+            <strong className="mono">{postoPrefixo}</strong>
+            {postoNome ? ` (${postoNome})` : ''}. Isto preenche o código ANA do
+            posto e marca a estação como revisada. Deseja continuar?
+          </p>
+        }
+        aoConfirmar={aceitar}
+        aoCancelar={() => setConfirmando(false)}
+      />
     </section>
   );
 }

@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { ArrowRight, type LucideIcon } from 'lucide-react';
+import { ArrowRight, TrendingUp, TrendingDown, Minus, type LucideIcon } from 'lucide-react';
+import { calcularDelta, rotuloDelta } from '@/lib/delta';
+import { Sparkline } from './Sparkline';
 
 export type SeveridadeKPI = 'critica' | 'alta' | 'media' | 'info' | 'sucesso';
 
@@ -22,6 +24,24 @@ export interface CardKPIProps {
   icone?: LucideIcon;
   /** Formata valor numérico com pt-BR. */
   formatarValor?: boolean;
+  /**
+   * Valor do mesmo indicador no período anterior. Quando informado (e o
+   * valor atual for numérico), o card mostra o delta (seta + percentual)
+   * com rótulo textual para acessibilidade.
+   */
+  valorAnterior?: number;
+  /** Rótulo curto do período de comparação (ex: "vs. mês anterior"). */
+  rotuloPeriodo?: string;
+  /**
+   * Série histórica para o sparkline (mais antigo → mais recente). Render
+   * só acontece com 2+ pontos. Opcional: sem série, nenhum gráfico aparece.
+   */
+  serie?: readonly number[];
+  /**
+   * Direção "boa" do indicador. Para "postos ativos", subir é bom (verde);
+   * para "postos sem arquivo", subir é ruim (vermelho). Padrão: 'maior'.
+   */
+  sentidoPositivo?: 'maior' | 'menor';
 }
 
 const estilos: Record<SeveridadeKPI, { borda: string; icone: string; fundoIcone: string }> = {
@@ -61,12 +81,21 @@ export function CardKPI({
   severidade = 'info',
   icone: Icone,
   formatarValor = true,
+  valorAnterior,
+  rotuloPeriodo = 'vs. período anterior',
+  serie,
+  sentidoPositivo = 'maior',
 }: CardKPIProps) {
   const est = estilos[severidade];
   const valorFormatado =
     typeof valor === 'number' && formatarValor
       ? valor.toLocaleString('pt-BR')
       : valor;
+
+  const delta =
+    typeof valor === 'number' && typeof valorAnterior === 'number'
+      ? calcularDelta(valor, valorAnterior)
+      : null;
 
   const conteudo = (
     <div
@@ -96,8 +125,14 @@ export function CardKPI({
           {contexto ? (
             <p className="text-xs text-app-fg-muted">{contexto}</p>
           ) : null}
+          {delta ? <DeltaBadge delta={delta} rotuloPeriodo={rotuloPeriodo} sentidoPositivo={sentidoPositivo} /> : null}
         </div>
       </div>
+      {serie && serie.length >= 2 ? (
+        <div className="mt-3">
+          <Sparkline serie={serie} cor={est.icone} />
+        </div>
+      ) : null}
       {href ? (
         <p
           className={[
@@ -124,4 +159,58 @@ export function CardKPI({
     );
   }
   return conteudo;
+}
+
+function DeltaBadge({
+  delta,
+  rotuloPeriodo,
+  sentidoPositivo,
+}: {
+  delta: ReturnType<typeof calcularDelta>;
+  rotuloPeriodo: string;
+  sentidoPositivo: 'maior' | 'menor';
+}) {
+  // "Bom" depende do indicador: subir pode ser positivo (postos ativos) ou
+  // negativo (postos sem arquivo). Daí a cor; o texto sempre acompanha.
+  const ehBom =
+    delta.direcao === 'estavel'
+      ? null
+      : sentidoPositivo === 'maior'
+        ? delta.direcao === 'subiu'
+        : delta.direcao === 'caiu';
+
+  const cor =
+    ehBom === null
+      ? 'text-app-fg-muted'
+      : ehBom
+        ? 'text-gov-sucesso'
+        : 'text-gov-perigo';
+
+  const Seta =
+    delta.direcao === 'subiu'
+      ? TrendingUp
+      : delta.direcao === 'caiu'
+        ? TrendingDown
+        : Minus;
+
+  const percentualVisivel =
+    delta.percentual === null
+      ? delta.absoluto.toLocaleString('pt-BR', { signDisplay: 'always' })
+      : `${delta.percentual.toLocaleString('pt-BR', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+          signDisplay: 'always',
+        })}%`;
+
+  return (
+    <p className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${cor}`}>
+      <Seta className="h-3.5 w-3.5" aria-hidden="true" />
+      {/* Texto explícito da direção, não só cor (WCAG 1.4.1). */}
+      <span className="sr-only">{rotuloDelta(delta)}, </span>
+      <span className="tabular" aria-hidden="true">
+        {percentualVisivel}
+      </span>
+      <span className="font-normal text-app-fg-subtle">{rotuloPeriodo}</span>
+    </p>
+  );
 }

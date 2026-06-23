@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { Sidenav } from '@/components/layout/Sidenav';
 import { MenuMobile } from '@/components/layout/MenuMobile';
+import { MenuUsuario } from '@/components/layout/MenuUsuario';
 import { obterItensNav } from '@/components/layout/nav-itens';
 
 /**
@@ -49,25 +50,11 @@ export default async function DashboardLayout({
 
             <div className="ml-auto flex items-center gap-3">
               {usuario ? (
-                <>
-                  <span
-                    className="hidden max-w-[220px] truncate text-xs text-app-fg-muted md:inline"
-                    aria-label="Usuário autenticado"
-                    title={usuario.email}
-                  >
-                    {usuario.nome ?? usuario.email}
-                  </span>
-                  <a
-                    href="/auth/sair"
-                    className="rounded px-2 py-1 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
-                  >
-                    Sair
-                  </a>
-                </>
+                <MenuUsuario nome={usuario.nome} email={usuario.email} />
               ) : (
                 <a
                   href="/login"
-                  className="rounded px-2 py-1 text-xs font-medium text-gov-azul hover:bg-app-surface-2"
+                  className="rounded px-2 py-1 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
                 >
                   Entrar
                 </a>

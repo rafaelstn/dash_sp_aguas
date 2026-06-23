@@ -8,7 +8,7 @@ import { HistoricoFichas } from '@/components/features/fichas/HistoricoFichas';
 import { MapaPosto } from '@/components/features/posto/MapaPosto';
 import { HistoricoFotosPosto } from '@/components/features/posto/HistoricoFotosPosto';
 import { Alerta } from '@/components/ui/Alerta';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton, SkeletonGrupo } from '@/components/ui/Skeleton';
 import { BadgeIndexacao } from '@/components/features/posto/BadgeIndexacao';
 import { StatusIndexacaoArquivos } from '@/components/features/arquivos/StatusIndexacaoArquivos';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
@@ -24,6 +24,7 @@ import { IndexacaoPendente, PostoNaoEncontrado } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { favoritosRepository, papeisRepository } from '@/infrastructure/repositories';
 import { BotaoFavoritar } from '@/components/features/favoritos/BotaoFavoritar';
+import { BotaoExportarRelatorio } from '@/components/features/posto/BotaoExportarRelatorio';
 
 export const dynamic = 'force-dynamic';
 
@@ -281,16 +282,20 @@ export default async function PaginaPosto({ params }: PageProps) {
                 .join(' · ')}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <BotaoFavoritar
               prefixo={posto.prefixo}
               favoritadoInicial={favoritadoInicial}
               autenticado={Boolean(usuario)}
             />
+            <BotaoExportarRelatorio
+              prefixo={posto.prefixo}
+              ultimaVarreduraGlobal={null}
+            />
             {ehAprovador ? (
               <Link
                 href={`/postos/${encodeURIComponent(posto.prefixo)}/editar`}
-                className="rounded border border-gov-azul bg-white px-3 py-1.5 text-xs font-medium text-gov-azul hover:bg-app-surface-2"
+                className="rounded border border-gov-azul bg-white px-3 py-1.5 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
               >
                 Editar
               </Link>
@@ -313,7 +318,16 @@ export default async function PaginaPosto({ params }: PageProps) {
               nomeEstacao={posto.nomeEstacao}
               prefixo={posto.prefixo}
             />
-            <Suspense fallback={<Skeleton className="mt-4 h-48 w-full rounded-gov-card" />}>
+            <Suspense
+              fallback={
+                <SkeletonGrupo
+                  rotulo="Carregando histórico de fotos"
+                  className="mt-4"
+                >
+                  <Skeleton variante="card" className="h-48" />
+                </SkeletonGrupo>
+              }
+            >
               <HistoricoFotosPosto prefixo={posto.prefixo} />
             </Suspense>
           </aside>
@@ -328,16 +342,14 @@ export default async function PaginaPosto({ params }: PageProps) {
         >
           <Suspense
             fallback={
-              <div
-                role="status"
-                aria-live="polite"
-                aria-label="Carregando histórico de visitas"
+              <SkeletonGrupo
+                rotulo="Carregando histórico de visitas"
                 className="space-y-2"
               >
                 <Skeleton className="h-6 w-1/2" />
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-5/6" />
-              </div>
+              </SkeletonGrupo>
             }
           >
             <BlocoFichas prefixo={posto.prefixo} />
@@ -354,17 +366,15 @@ export default async function PaginaPosto({ params }: PageProps) {
         >
           <Suspense
             fallback={
-              <div
-                role="status"
-                aria-live="polite"
-                aria-label="Carregando acervo do posto"
+              <SkeletonGrupo
+                rotulo="Carregando acervo do posto"
                 className="space-y-2"
               >
                 <Skeleton className="h-6 w-2/3" />
                 <Skeleton className="h-3 w-1/2" />
                 <Skeleton className="h-8 w-full" />
                 <Skeleton className="h-8 w-5/6" />
-              </div>
+              </SkeletonGrupo>
             }
           >
             <BlocoArquivos prefixo={posto.prefixo} posto={posto} />

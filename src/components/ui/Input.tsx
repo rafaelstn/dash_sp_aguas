@@ -17,11 +17,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={inputId} className="font-medium text-gov-texto">
+      <label htmlFor={inputId} className="font-medium text-app-fg">
         {rotulo}
       </label>
       {descricao && (
-        <span id={descId} className="text-sm text-gov-muted">
+        <span id={descId} className="text-sm text-app-fg-muted">
           {descricao}
         </span>
       )}
@@ -30,7 +30,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         id={inputId}
         aria-describedby={[descId, errId].filter(Boolean).join(' ') || undefined}
         aria-invalid={erro ? true : undefined}
-        className={`px-3 py-2 border border-gov-borda rounded bg-white text-gov-texto placeholder:text-gov-muted ${className}`}
+        className={`px-3 py-2 border rounded bg-app-surface text-app-fg placeholder:text-app-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-app-surface ${
+          erro
+            ? 'border-gov-perigo focus-visible:ring-gov-perigo'
+            : 'border-app-border focus-visible:ring-gov-azul'
+        } ${className}`}
         {...rest}
       />
       {erro && (

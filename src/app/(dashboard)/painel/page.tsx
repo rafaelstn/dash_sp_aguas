@@ -22,6 +22,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { CardKPI } from '@/components/features/painel/CardKPI';
 import { BarraProgresso } from '@/components/features/painel/BarraProgresso';
 import { Alerta } from '@/components/ui/Alerta';
+import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
@@ -55,6 +56,118 @@ interface ProximaAcao {
   rotulo: string;
   href: string;
 }
+
+type LinhaMantenedor = Awaited<
+  ReturnType<typeof painelRepository.rankingMantenedores>
+>[number];
+type LinhaUgrhi = Awaited<
+  ReturnType<typeof painelRepository.rankingUGRHI>
+>[number];
+
+const colunasMantenedores: readonly ColunaTabela<LinhaMantenedor>[] = [
+  {
+    chave: 'nome',
+    cabecalho: 'Mantenedor / batalhão',
+    interativa: true,
+    render: (m) => (
+      <Link
+        href={`/?mantenedor=${encodeURIComponent(m.nome)}`}
+        className="inline-flex items-center gap-2 rounded-sm text-app-fg hover:text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+        aria-label={`Filtrar postos do mantenedor ${m.nome}`}
+      >
+        <Building2
+          className="h-3.5 w-3.5 shrink-0 text-app-fg-muted"
+          aria-hidden="true"
+        />
+        <span className="text-sm">{m.nome}</span>
+      </Link>
+    ),
+  },
+  {
+    chave: 'total',
+    cabecalho: 'Total',
+    alinhar: 'right',
+    classeCelula: 'tabular mono text-app-fg',
+    render: (m) => m.total.toLocaleString('pt-BR'),
+  },
+  {
+    chave: 'ativos',
+    cabecalho: 'Ativos',
+    alinhar: 'right',
+    classeCelula: 'tabular mono text-gov-sucesso',
+    render: (m) => m.ativos.toLocaleString('pt-BR'),
+  },
+  {
+    chave: 'cobertura',
+    cabecalho: 'Cobertura ativa',
+    largura: '11rem',
+    render: (m) => (
+      <div className="flex items-center gap-2">
+        <BarraProgresso
+          valor={m.ativos}
+          total={m.total}
+          cor="bg-gov-sucesso"
+          tamanho="sm"
+        />
+        <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
+          {m.total === 0 ? '—' : `${((m.ativos / m.total) * 100).toFixed(0)}%`}
+        </span>
+      </div>
+    ),
+  },
+];
+
+const colunasUgrhi: readonly ColunaTabela<LinhaUgrhi>[] = [
+  {
+    chave: 'ugrhi',
+    cabecalho: 'UGRHI',
+    interativa: true,
+    render: (u) => (
+      <Link
+        href={`/?ugrhi=${encodeURIComponent(u.numero)}`}
+        className="block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+        aria-label={`Filtrar postos da UGRHI ${u.numero} ${u.nome}`}
+      >
+        <span className="mono text-2xs text-app-fg-subtle">#{u.numero}</span>{' '}
+        <span className="text-sm text-app-fg">{u.nome}</span>
+        <span className="ml-2 text-2xs text-app-fg-muted tabular">
+          ({u.total} postos)
+        </span>
+      </Link>
+    ),
+  },
+  {
+    chave: 'desconformes',
+    cabecalho: 'Desconformes',
+    alinhar: 'right',
+    classeCelula: 'tabular mono text-app-fg',
+    render: (u) => u.desconformes,
+  },
+  {
+    chave: 'taxa',
+    cabecalho: 'Taxa',
+    largura: '11rem',
+    render: (u) => (
+      <div className="flex items-center gap-2">
+        <BarraProgresso
+          valor={u.desconformes}
+          total={u.total}
+          cor={
+            u.taxa >= 0.3
+              ? 'bg-gov-perigo'
+              : u.taxa >= 0.2
+                ? 'bg-gov-alerta'
+                : 'bg-gov-azul'
+          }
+          tamanho="sm"
+        />
+        <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
+          {(u.taxa * 100).toFixed(1)}%
+        </span>
+      </div>
+    ),
+  },
+];
 
 export default async function PaginaPainel() {
   let resumo: Awaited<ReturnType<typeof painelRepository.resumoPendencias>> | null = null;
@@ -187,6 +300,10 @@ export default async function PaginaPainel() {
             severidade="critica"
             icone={FolderX}
             rotuloAcao="Rodar worker"
+            valorAnterior={resumo.tendencias.postosSemArquivos?.valorAnterior}
+            serie={resumo.tendencias.postosSemArquivos?.serie}
+            sentidoPositivo="menor"
+            rotuloPeriodo="vs. mês anterior"
           />
           <CardKPI
             titulo="Cadastro irregular"
@@ -205,6 +322,10 @@ export default async function PaginaPainel() {
             icone={FileWarning}
             href="/desconformidades/arquivos-malformados"
             rotuloAcao="Classificar"
+            valorAnterior={resumo.tendencias.arquivosOrfaos?.valorAnterior}
+            serie={resumo.tendencias.arquivosOrfaos?.serie}
+            sentidoPositivo="menor"
+            rotuloPeriodo="vs. mês anterior"
           />
           <CardKPI
             titulo="Sem coordenadas"
@@ -231,6 +352,10 @@ export default async function PaginaPainel() {
             contexto="cadastrados no sistema"
             severidade="info"
             icone={Database}
+            valorAnterior={resumo.tendencias.totalPostos?.valorAnterior}
+            serie={resumo.tendencias.totalPostos?.serie}
+            sentidoPositivo="maior"
+            rotuloPeriodo="vs. mês anterior"
           />
           <CardKPI
             titulo="Cobertura geográfica"
@@ -333,62 +458,13 @@ export default async function PaginaPainel() {
         >
           Mantenedores e batalhões
         </h2>
-        <div className="overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface">
-          <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">
-              Top mantenedores e batalhões por número de postos sob gestão
-            </caption>
-            <thead>
-              <tr className="bg-app-surface-2">
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  Mantenedor / batalhão
-                </th>
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-right text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  Total
-                </th>
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-right text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  Ativos
-                </th>
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  Cobertura ativa
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {mantenedores.map((m) => (
-                <tr
-                  key={m.nome}
-                  className="border-b border-app-border-subtle last:border-0 hover:bg-app-surface-2"
-                >
-                  <td className="px-3 py-1.5">
-                    <Link
-                      href={`/?mantenedor=${encodeURIComponent(m.nome)}`}
-                      className="inline-flex items-center gap-2 text-app-fg hover:text-gov-azul hover:underline"
-                      aria-label={`Filtrar postos do mantenedor ${m.nome}`}
-                    >
-                      <Building2 className="h-3.5 w-3.5 shrink-0 text-app-fg-muted" aria-hidden="true" />
-                      <span className="text-sm">{m.nome}</span>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular mono text-sm text-app-fg">
-                    {m.total.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular mono text-sm text-gov-sucesso">
-                    {m.ativos.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <BarraProgresso valor={m.ativos} total={m.total} cor="bg-gov-sucesso" tamanho="sm" />
-                      <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
-                        {m.total === 0 ? '—' : `${((m.ativos / m.total) * 100).toFixed(0)}%`}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Tabela
+          legenda="Top mantenedores e batalhões por número de postos sob gestão, com total, ativos e cobertura ativa."
+          colunas={colunasMantenedores}
+          itens={mantenedores}
+          densidade="compact"
+          chaveItem={(m) => m.nome}
+        />
       </section>
 
       {/* UGRHIs */}
@@ -399,55 +475,13 @@ export default async function PaginaPainel() {
         >
           UGRHIs com maior % de cadastro irregular
         </h2>
-        <div className="overflow-x-auto rounded-gov-card border border-app-border-subtle bg-app-surface">
-          <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">Top 10 UGRHIs com maior taxa de postos desconformes</caption>
-            <thead>
-              <tr className="bg-app-surface-2">
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  UGRHI
-                </th>
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  Desconformes
-                </th>
-                <th scope="col" className="border-b border-app-border-subtle px-3 py-1.5 text-left text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-                  Taxa
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {ugrhiPiores.map((u) => (
-                <tr key={u.numero} className="border-b border-app-border-subtle last:border-0 hover:bg-app-surface-2">
-                  <td className="px-3 py-1.5">
-                    <Link
-                      href={`/?ugrhi=${encodeURIComponent(u.numero)}`}
-                      className="block"
-                      aria-label={`Filtrar postos da UGRHI ${u.numero} ${u.nome}`}
-                    >
-                      <span className="mono text-2xs text-app-fg-subtle">#{u.numero}</span>{' '}
-                      <span className="text-sm text-app-fg">{u.nome}</span>
-                      <span className="ml-2 text-2xs text-app-fg-muted tabular">({u.total} postos)</span>
-                    </Link>
-                  </td>
-                  <td className="px-3 py-1.5 tabular mono text-sm text-app-fg">{u.desconformes}</td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <BarraProgresso
-                        valor={u.desconformes}
-                        total={u.total}
-                        cor={u.taxa >= 0.3 ? 'bg-gov-perigo' : u.taxa >= 0.2 ? 'bg-gov-alerta' : 'bg-gov-azul'}
-                        tamanho="sm"
-                      />
-                      <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
-                        {(u.taxa * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Tabela
+          legenda="Top 10 UGRHIs com maior taxa de postos desconformes, com contagem de desconformes e taxa percentual."
+          colunas={colunasUgrhi}
+          itens={ugrhiPiores}
+          densidade="compact"
+          chaveItem={(u) => String(u.numero)}
+        />
       </section>
 
       {/* CLASSES DE INCONSISTÊNCIA */}
