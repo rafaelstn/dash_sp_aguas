@@ -31,6 +31,9 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DialogNomeDiagrama } from '../DialogNomeDiagrama';
 import { ToolbarEditor } from './ToolbarEditor';
+import { MenuExportar } from './MenuExportar';
+import { useExportarDiagrama } from './useExportarDiagrama';
+import { importarJson } from './exportar-diagrama';
 import { IndicadorSalvamento } from './IndicadorSalvamento';
 import { LegendaStatus } from './LegendaStatus';
 import { DialogEditarElemento } from './DialogEditarElemento';
@@ -86,6 +89,10 @@ function EditorInterno({ diagrama }: Props) {
   const router = useRouter();
   const { screenToFlowPosition } = useReactFlow();
   const instanciaRef = useRef<ReactFlowInstance<NodeDiagrama> | null>(null);
+  // Container do React Flow, alvo da captura de imagem (PNG/SVG/PDF).
+  const canvasRef = useRef<HTMLDivElement>(null);
+  // Input file oculto para o fluxo de importação de JSON.
+  const inputArquivoRef = useRef<HTMLInputElement>(null);
 
   const [nomeDiagrama, setNomeDiagrama] = useState(diagrama.nome);
   const [nodes, setNodes] = useState<NodeDiagrama[]>(() =>
@@ -96,6 +103,12 @@ function EditorInterno({ diagrama }: Props) {
   const [aExcluir, setAExcluir] = useState<NodeDiagrama | null>(null);
   const [emEdicao, setEmEdicao] = useState<ElementoDiagrama | null>(null);
   const [renomeando, setRenomeando] = useState(false);
+  // Elementos pendentes de importação, aguardando confirmação de troca.
+  const [importPendente, setImportPendente] = useState<ElementoDiagrama[] | null>(
+    null,
+  );
+  // Erro de importação (JSON inválido ou fora do formato), exibido em alerta.
+  const [erroImport, setErroImport] = useState<string | null>(null);
 
   // Histórico (undo/redo) sobre o array de elementos. O presente é sempre o
   // último estado confirmado; reflete-se em `versaoHistorico` para re-render.
@@ -122,6 +135,63 @@ function EditorInterno({ diagrama }: Props) {
     },
     [agendar],
   );
+
+  // Exportação client-side (PNG/SVG/PDF/JSON). Lê os elementos atuais via
+  // getter para sempre exportar a edição mais recente sem recriar o hook.
+  const {
+    exportar,
+    formatoEmAndamento,
+    erro: erroExport,
+    limparErro: limparErroExport,
+  } = useExportarDiagrama({
+    diagrama: {
+      nome: nomeDiagrama,
+      bacia: diagrama.bacia,
+      descricao: diagrama.descricao,
+    },
+    elementos: () => nodesParaElementos(nodes),
+    instancia: () => instanciaRef.current,
+    alvo: () => canvasRef.current,
+  });
+
+  /** Abre o seletor de arquivo para importar um diagrama em JSON. */
+  const abrirImportacao = useCallback(() => {
+    setErroImport(null);
+    inputArquivoRef.current?.click();
+  }, []);
+
+  /** Lê e valida o arquivo escolhido; em sucesso, pede confirmação da troca. */
+  const aoEscolherArquivo = useCallback(
+    async (evento: React.ChangeEvent<HTMLInputElement>) => {
+      const arquivo = evento.target.files?.[0];
+      // Limpa o valor para permitir reimportar o mesmo arquivo depois.
+      evento.target.value = '';
+      if (!arquivo) return;
+      try {
+        const texto = await arquivo.text();
+        const resultado = importarJson(texto);
+        if (!resultado.ok) {
+          setErroImport(resultado.erro);
+          return;
+        }
+        setErroImport(null);
+        setImportPendente(resultado.elementos);
+      } catch {
+        setErroImport(
+          'Não foi possível ler o arquivo selecionado. Tente novamente.',
+        );
+      }
+    },
+    [],
+  );
+
+  /** Confirma a importação: substitui os elementos e dispara o auto-save. */
+  const confirmarImportacao = useCallback(() => {
+    if (!importPendente) return;
+    aplicarElementos(importPendente);
+    setSelecionadoId(null);
+    setImportPendente(null);
+  }, [importPendente, aplicarElementos]);
 
   /** Restaura um estado vindo do histórico (undo/redo): nodes + auto-save. */
   const restaurar = useCallback(
@@ -418,13 +488,49 @@ function EditorInterno({ diagrama }: Props) {
           />
         </div>
 
-        <div className="flex shrink-0 items-center sm:ml-auto">
+        <div className="flex shrink-0 items-center gap-1 sm:ml-auto">
+          <MenuExportar
+            aoExportar={(formato) => void exportar(formato)}
+            aoImportar={abrirImportacao}
+            formatoEmAndamento={formatoEmAndamento}
+          />
           <IndicadorSalvamento estado={estadoSalvamento} />
         </div>
       </div>
 
+      {/* Input oculto do fluxo de importação de JSON. */}
+      <input
+        ref={inputArquivoRef}
+        type="file"
+        accept="application/json,.json"
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={aoEscolherArquivo}
+      />
+
+      {/* Falha de exportação ou de importação (formato/leitura). */}
+      {erroExport || erroImport ? (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 border-b border-gov-perigo/30 bg-red-50 px-3 py-2 text-sm text-gov-perigo"
+        >
+          <span>{erroExport ?? erroImport}</span>
+          <button
+            type="button"
+            onClick={() => {
+              limparErroExport();
+              setErroImport(null);
+            }}
+            className="shrink-0 rounded px-2 py-0.5 text-xs font-medium underline hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-perigo"
+          >
+            Dispensar
+          </button>
+        </div>
+      ) : null}
+
       {/* Canvas */}
-      <div className="relative flex-1 bg-app-surface-2">
+      <div ref={canvasRef} className="relative flex-1 bg-app-surface-2">
         <ReactFlow<NodeDiagrama>
           nodes={nodesRender}
           edges={[]}
@@ -511,6 +617,26 @@ function EditorInterno({ diagrama }: Props) {
           setAExcluir(null);
         }}
         aoCancelar={() => setAExcluir(null)}
+      />
+
+      <ConfirmDialog
+        aberto={importPendente !== null}
+        titulo="Importar diagrama"
+        rotuloConfirmar="Substituir conteúdo"
+        descricao={
+          <span>
+            Importar este arquivo vai <strong>substituir todo o conteúdo</strong>{' '}
+            do diagrama atual por{' '}
+            {importPendente
+              ? `${importPendente.length} ${
+                  importPendente.length === 1 ? 'elemento' : 'elementos'
+                }`
+              : 'o conteúdo do arquivo'}
+            . Esta ação pode ser desfeita com Ctrl+Z.
+          </span>
+        }
+        aoConfirmar={confirmarImportacao}
+        aoCancelar={() => setImportPendente(null)}
       />
 
       <DialogEditarElemento
