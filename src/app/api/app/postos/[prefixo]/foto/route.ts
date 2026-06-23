@@ -23,9 +23,16 @@ export const dynamic = 'force-dynamic';
  * Auth: qualquer usuário autenticado.
  */
 
+// Teto de chars: 5 MB binário viram ~6,67 MB em base64; com folga pro prefixo
+// do data URL ficamos em 7 MB. Barra ANTES de o regex varrer um base64 gigante
+// e antes de materializar/decodificar o conteúdo (o cap real de 5 MB em bytes
+// continua no use-case, depois do decode).
+const MAX_CHARS_DATA_URL = 7 * 1024 * 1024;
+
 const corpoSchema = z.object({
   fotoDataUrl: z
     .string()
+    .max(MAX_CHARS_DATA_URL, 'foto excede o tamanho máximo')
     .regex(/^data:image\/(jpeg|jpg|png|webp);base64,/, 'data URL de imagem inválido'),
 });
 

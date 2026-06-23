@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   postosRepository,
   papeisRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { PrefixoDuplicado } from '@/domain/errors';
+import { logger } from '@/infrastructure/logging/logger';
 import {
   POLITICAS,
   aplicarHeadersRateLimit,
@@ -115,15 +118,25 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ posto }, { status: 201, headers });
   } catch (e) {
-    const mensagem = e instanceof Error ? e.message : 'Falha ao criar posto.';
-    if (mensagem.includes('ja existe')) {
+    if (e instanceof PrefixoDuplicado) {
       return NextResponse.json(
-        { erro: 'prefixo_duplicado', mensagem },
+        { erro: 'prefixo_duplicado', mensagem: 'Já existe um posto com esse prefixo.' },
         { status: 409, headers },
       );
     }
+    const correlationId = randomUUID();
+    logger.error(
+      'erro_inesperado',
+      {
+        correlationId,
+        rota: 'POST /api/postos',
+        prefixo: parsed.data.prefixo,
+        erro: String(e),
+      },
+      'Falha ao criar posto',
+    );
     return NextResponse.json(
-      { erro: 'falha_criacao', mensagem },
+      { erro: 'falha_criacao', mensagem: 'Falha ao criar posto.', correlationId },
       { status: 500, headers },
     );
   }

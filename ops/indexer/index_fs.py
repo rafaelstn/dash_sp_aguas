@@ -212,6 +212,14 @@ def executar(
                 conn.commit()
 
             contador_chunk = 0
+            # Incrementos do chunk ainda não commitado. Em rollback, revertemos
+            # do sumario pra não reportar mais do que de fato foi gravado.
+            delta_chunk: dict[str, int] = {}
+            houve_rollback = False
+
+            def _inc(chave: str) -> None:
+                sumario[chave] += 1
+                delta_chunk[chave] = delta_chunk.get(chave, 0) + 1
 
             for arquivo in _varrer(raiz):
                 sumario["total"] += 1
@@ -234,7 +242,7 @@ def executar(
                             if resultado["origem_mapeamento"] == "PLANILHA_XLSX"
                             else "indexado_modelo_a"
                         )
-                        sumario[chave] += 1
+                        _inc(chave)
                         if len(amostras[chave]) < 10:
                             amostras[chave].append(str(arquivo))
                         opcional_txt = resultado.get("parte_opcional") or ""
@@ -269,7 +277,7 @@ def executar(
                             "PENDENCIA_CLIENTE": "orfao_pendencia_cliente",
                             "FICHA_GERAL": "orfao_ficha_geral",
                         }[categoria]
-                        sumario[chave] += 1
+                        _inc(chave)
                         if len(amostras[chave]) < 10:
                             amostras[chave].append(str(arquivo))
 
@@ -315,6 +323,8 @@ def executar(
                                 ),
                             )
                             conn.commit()
+                            # Chunk persistido: os incrementos viram confirmados.
+                            delta_chunk.clear()
                             contador_chunk = 0
                             log.info(
                                 "chunk_commitado",
@@ -331,10 +341,30 @@ def executar(
                         conn.rollback()
                     except psycopg.Error:
                         pass
+                    # Nada do chunk foi gravado: reverte os incrementos pra não
+                    # reportar mais arquivos do que persistiu. Marca parcial.
+                    for k, v in delta_chunk.items():
+                        sumario[k] -= v
+                    delta_chunk.clear()
+                    houve_rollback = True
                     contador_chunk = 0
 
             if not dry_run:
-                conn.commit()
+                # Fecha o último chunk parcial ainda pendente. Se falhar, os
+                # registros não gravados saem da contagem (status vira parcial).
+                try:
+                    conn.commit()
+                    delta_chunk.clear()
+                except psycopg.Error as e:
+                    erros.append({"caminho": "commit_final", "erro": f"psycopg: {e}"})
+                    try:
+                        conn.rollback()
+                    except psycopg.Error:
+                        pass
+                    for k, v in delta_chunk.items():
+                        sumario[k] -= v
+                    delta_chunk.clear()
+                    houve_rollback = True
 
                 prefixo_raiz = str(raiz)
                 cur.execute(
@@ -360,11 +390,14 @@ def executar(
                     sumario["indexado_modelo_a"] + sumario["indexado_modelo_b"]
                 )
 
+                # Se algum chunk deu rollback, a varredura não persistiu tudo:
+                # status 'parcial', nunca 'ok'.
+                status_final = "parcial" if houve_rollback else "ok"
                 cur.execute(
                     "UPDATE indexacao_log SET finalizado_em = NOW(), "
                     "arquivos_encontrados = %s, arquivos_indexados_qtd = %s, "
                     "arquivos_orfaos_qtd = %s, arquivos_removidos_qtd = %s, "
-                    "erros_amostra = %s::jsonb, status = 'ok' "
+                    "erros_amostra = %s::jsonb, status = %s "
                     "WHERE lote_indexacao = %s",
                     (
                         sumario["total"],
@@ -372,6 +405,7 @@ def executar(
                         total_orfaos,
                         removidos_indexados + removidos_orfaos,
                         json.dumps(erros[:20], ensure_ascii=False),
+                        status_final,
                         lote,
                     ),
                 )

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
 import { fichasVisitaRepository } from '@/infrastructure/repositories';
 import {
   apagarFichaVisita,
@@ -44,17 +45,19 @@ export async function GET(
   }
 }
 
-interface CorpoEdicao {
-  dataVisita?: string;
-  horaInicio?: string | null;
-  horaFim?: string | null;
-  tecnicoNome?: string;
-  latitudeCapturada?: number | null;
-  longitudeCapturada?: number | null;
-  observacoes?: string | null;
-  dados?: Record<string, unknown>;
-  status?: 'rascunho' | 'enviada' | 'aprovada';
-}
+const corpoEdicaoSchema = z.object({
+  dataVisita: z.string().min(1).optional(),
+  horaInicio: z.string().nullable().optional(),
+  horaFim: z.string().nullable().optional(),
+  tecnicoNome: z.string().max(200).optional(),
+  latitudeCapturada: z.number().min(-90).max(90).nullable().optional(),
+  longitudeCapturada: z.number().min(-180).max(180).nullable().optional(),
+  observacoes: z.string().max(5000).nullable().optional(),
+  dados: z.record(z.string(), z.unknown()).optional(),
+  status: z.enum(['rascunho', 'enviada', 'aprovada']).optional(),
+});
+
+type CorpoEdicao = z.infer<typeof corpoEdicaoSchema>;
 
 /**
  * PATCH /api/fichas/[id], atualização parcial. Requer autenticação e que
@@ -80,15 +83,30 @@ export async function PATCH(
   const permissao = await permitirDonoOuAprovador(auth, fichaExistente.tecnicoId);
   if (permissao !== true) return permissao;
 
-  let corpo: CorpoEdicao;
+  let bruto: unknown;
   try {
-    corpo = (await request.json()) as CorpoEdicao;
+    bruto = await request.json();
   } catch {
     return NextResponse.json(
       { erro: 'corpo_invalido', mensagem: 'JSON inválido.' },
       { status: 400 },
     );
   }
+
+  const parsed = corpoEdicaoSchema.safeParse(bruto);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        erro: 'dados_invalidos',
+        mensagem: 'Corpo da requisição inválido.',
+        motivos: parsed.error.issues.map(
+          (i) => `${i.path.join('.')}: ${i.message}`,
+        ),
+      },
+      { status: 422 },
+    );
+  }
+  const corpo: CorpoEdicao = parsed.data;
 
   try {
     const atualizada = await atualizarFichaVisita(fichasVisitaRepository, id, {

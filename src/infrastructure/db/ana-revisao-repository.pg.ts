@@ -7,7 +7,7 @@ import type {
   MatchTipo,
   StatusRevisao,
 } from '@/domain/ana-revisao';
-import { FalhaRepositorio } from '@/domain/errors';
+import { FalhaRepositorio, PostoNaoEncontrado, PostoRemovido } from '@/domain/errors';
 import { patternDeCenario } from '@/domain/ana-cenarios';
 import { sql } from './client';
 
@@ -785,9 +785,61 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
     }
   },
 
-  async aceitarMatch(estacaoId, postoIdSugerido, prefixoSugerido, ator) {
+  async aceitarMatch(params, ator) {
+    const {
+      estacaoId,
+      postoIdSugerido,
+      prefixoSugerido,
+      codigoAna,
+      referenciaExternaId = null,
+      observacaoPosto = null,
+      origemEvento = 'aceitar_match_ana',
+    } = params;
     try {
       await sql.begin(async (tx) => {
+        // ── Escrita 1: postos.prefixo_ana (com lock e audit) ──
+        const antes = await tx<
+          { id: string; prefixo_ana: string | null; deleted_at: Date | null }[]
+        >`
+          SELECT id, prefixo_ana, deleted_at
+            FROM postos
+           WHERE prefixo = ${prefixoSugerido}
+             FOR UPDATE
+        `;
+        const posto = antes[0];
+        if (!posto) {
+          throw new PostoNaoEncontrado(prefixoSugerido);
+        }
+        if (posto.deleted_at !== null) {
+          throw new PostoRemovido(prefixoSugerido);
+        }
+
+        await tx`
+          UPDATE postos
+             SET prefixo_ana = ${codigoAna},
+                 updated_at = NOW()
+           WHERE id = ${posto.id}
+        `;
+
+        await tx`
+          INSERT INTO postos_evento
+            (posto_id, evento, ator_id, valores_antes, valores_depois,
+             origem_evento, referencia_externa_id, observacao, ip, user_agent)
+          VALUES (
+            ${posto.id},
+            'atualizado',
+            ${ator.usuarioId},
+            ${JSON.stringify({ prefixoAna: posto.prefixo_ana })}::jsonb,
+            ${JSON.stringify({ prefixoAna: codigoAna })}::jsonb,
+            ${origemEvento},
+            ${referenciaExternaId}::uuid,
+            ${observacaoPosto},
+            ${ator.ip}::inet,
+            ${ator.userAgent}
+          )
+        `;
+
+        // ── Escrita 2: ana_revisao_estacao vinculada ao posto (audit) ──
         await tx`
           UPDATE ana_revisao_estacao
              SET posto_id = ${postoIdSugerido}::uuid,
@@ -817,6 +869,9 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
         `;
       });
     } catch (e) {
+      if (e instanceof PostoNaoEncontrado || e instanceof PostoRemovido) {
+        throw e;
+      }
       throw new FalhaRepositorio('anaRevisao.aceitarMatch', e);
     }
   },

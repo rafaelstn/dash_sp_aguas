@@ -259,7 +259,7 @@ def _insert_log_posto(
                 encontrados,
                 indexados,
                 orfaos,
-                "ok" if status == "ok" else "erro",
+                status if status in ("ok", "parcial") else "erro",
                 prefixo,
             ),
         )
@@ -382,6 +382,11 @@ def indexar_posto(
         orfaos = 0
         mtime_mais_recente: datetime | None = None
         erros: list[dict] = []
+        # Marca se algum flush deu rollback. Como o commit é único no fim,
+        # um rollback no meio desfaz o que já foi gravado nesta transação;
+        # nesse caso recontamos do banco e marcamos a execução como 'parcial'
+        # (nunca 'ok'), pra não reportar mais arquivos do que persistiu.
+        houve_rollback = False
 
         batch_indexados: list[tuple] = []
         batch_orfaos: list[tuple] = []
@@ -450,6 +455,10 @@ def indexar_posto(
                             conn.rollback()
                         except psycopg.Error:
                             pass
+                        # Batch não gravado: descarta e sinaliza parcial.
+                        batch_indexados.clear()
+                        batch_orfaos.clear()
+                        houve_rollback = True
 
             try:
                 _flush(cur)
@@ -459,6 +468,9 @@ def indexar_posto(
                     conn.rollback()
                 except psycopg.Error:
                     pass
+                batch_indexados.clear()
+                batch_orfaos.clear()
+                houve_rollback = True
 
             # 7) Remove arquivos órfãos de lotes anteriores dessa pasta
             #    (arquivo foi deletado no HD, some do banco).
@@ -473,12 +485,34 @@ def indexar_posto(
                 (str(lote), f"{caminho}%"),
             )
 
+            # Se houve rollback de flush, os contadores em memória podem estar
+            # acima do que de fato sobreviveu (sem savepoint, um rollback
+            # desfaz tudo da transação corrente). Reconta do banco a verdade
+            # antes do commit final.
+            if houve_rollback:
+                cur.execute(
+                    "SELECT COUNT(*) FROM arquivos_indexados "
+                    "WHERE lote_indexacao = %s AND caminho_absoluto LIKE %s",
+                    (str(lote), f"{caminho}%"),
+                )
+                indexados = int(cur.fetchone()[0])
+                cur.execute(
+                    "SELECT COUNT(*) FROM arquivos_orfaos "
+                    "WHERE lote_indexacao = %s AND caminho_absoluto LIKE %s",
+                    (str(lote), f"{caminho}%"),
+                )
+                orfaos = int(cur.fetchone()[0])
+
         # 8) Cache + log
-        status_final = "ok" if erro_scan is None else erro_scan
+        # status_cache usa o enum rico de posto_indexacao_cache (não tem
+        # 'parcial'); status_log diferencia execução incompleta no indexacao_log.
+        status_cache = "ok" if erro_scan is None else erro_scan
+        status_log = "parcial" if houve_rollback else status_cache
+        status_final = status_log
         _upsert_cache(
             conn,
             prefixo=prefixo,
-            status=status_final,
+            status=status_cache,
             arquivos_indexados=indexados,
             arquivos_orfaos=orfaos,
             mtime_hd=mtime_mais_recente,
@@ -486,7 +520,7 @@ def indexar_posto(
         )
         _insert_log_posto(
             conn, lote=lote, prefixo=prefixo, raiz=caminho,
-            status=status_final, encontrados=len(arquivos),
+            status=status_log, encontrados=len(arquivos),
             indexados=indexados, orfaos=orfaos,
             duracao_s=time.monotonic() - inicio,
         )

@@ -3,9 +3,9 @@ import { randomUUID } from 'node:crypto';
 import {
   anaRevisaoRepository,
   papeisRepository,
-  postosRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { PostoNaoEncontrado, PostoRemovido } from '@/domain/errors';
 import { logger } from '@/infrastructure/logging/logger';
 import {
   POLITICAS,
@@ -68,21 +68,20 @@ export async function POST(
   };
 
   try {
-    await postosRepository.atualizar(
-      sugestao.prefixoSugerido,
-      { prefixoAna: codigo },
-      {
-        ...ator,
-        origemEvento: 'aceitar_match_ana',
-        observacao: `Aceito match: estação ANA ${codigo} vinculada a este posto.`,
-        referenciaExternaId: sugestao.estacaoId,
-      },
-    );
-
+    // Atomicidade: as duas escritas (postos.prefixo_ana e a estação ANA)
+    // acontecem na mesma transação dentro do repositório. Se a segunda
+    // falhasse antes, o posto ficava com prefixo_ana setado e a estação
+    // pendente (estado inconsistente sem compensação).
     await anaRevisaoRepository.aceitarMatch(
-      sugestao.estacaoId,
-      sugestao.matchSugeridoPostoId,
-      sugestao.prefixoSugerido,
+      {
+        estacaoId: sugestao.estacaoId,
+        postoIdSugerido: sugestao.matchSugeridoPostoId,
+        prefixoSugerido: sugestao.prefixoSugerido,
+        codigoAna: codigo,
+        referenciaExternaId: sugestao.estacaoId,
+        observacaoPosto: `Aceito match: estação ANA ${codigo} vinculada a este posto.`,
+        origemEvento: 'aceitar_match_ana',
+      },
       ator,
     );
 
@@ -91,6 +90,18 @@ export async function POST(
       { headers },
     );
   } catch (e) {
+    if (e instanceof PostoNaoEncontrado) {
+      return NextResponse.json(
+        { erro: 'posto_nao_encontrado' },
+        { status: 404, headers },
+      );
+    }
+    if (e instanceof PostoRemovido) {
+      return NextResponse.json(
+        { erro: 'posto_removido' },
+        { status: 409, headers },
+      );
+    }
     const correlationId = randomUUID();
     logger.error(
       'erro_inesperado',

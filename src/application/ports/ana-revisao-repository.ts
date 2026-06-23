@@ -96,14 +96,30 @@ export interface AnaRevisaoRepository {
   } | null>;
 
   /**
-   * Vincula a estação ao posto sugerido e marca como revisada. Atualiza
-   * `posto_id`, `match_tipo='manual'`, `status='revisada'`, e grava
-   * evento no audit trail (`ana_revisao_evento`). Atômica.
+   * Aceita o match sugerido numa única transação atômica, escrevendo nas
+   * DUAS tabelas envolvidas (postos e ana_revisao_estacao) sob o mesmo
+   * `sql.begin`. Antes ficava em transações separadas: se a 2ª falhasse, o
+   * posto ficava com `prefixo_ana` setado e a estação ANA pendente (estado
+   * inconsistente, sem compensação).
+   *
+   * Efeitos:
+   *   - postos.prefixo_ana = `codigoAna` (+ evento em postos_evento)
+   *   - ana_revisao_estacao.posto_id = `postoIdSugerido`,
+   *     match_tipo='manual', status='revisada' (+ evento em ana_revisao_evento)
+   *
+   * Lança PostoNaoEncontrado / PostoRemovido se o posto sugerido sumiu ou
+   * foi removido entre a sugestão e o aceite.
    */
   aceitarMatch(
-    estacaoId: string,
-    postoIdSugerido: string,
-    prefixoSugerido: string,
+    params: {
+      estacaoId: string;
+      postoIdSugerido: string;
+      prefixoSugerido: string;
+      codigoAna: string;
+      referenciaExternaId?: string | null;
+      observacaoPosto?: string | null;
+      origemEvento?: string;
+    },
     ator: ContextoAtor,
   ): Promise<void>;
 }
