@@ -1,29 +1,126 @@
-# Ambiente local opcional — PostgreSQL para desenvolvimento desconectado do Supabase.
-# Use quando quiser testar migrations/importer/indexer sem depender de rede.
+# =============================================================================
+# SP Águas - DMO — orquestração conteinerizada (alvo: hospedagem PRODESP).
+# =============================================================================
+# Sobe o stack completo num PostgreSQL próprio, sem depender do Supabase managed
+# para os DADOS. A camada de identidade (auth) ainda é o ponto de transição:
+# hoje usa Supabase Auth (cloud); no PRODESP será substituída — o shim
+# db/auth-compat.sql é o ponto único a trocar. Ver ADR-0015.
 #
-# Subir:   docker compose up -d
-# Derrubar: docker compose down -v   (remove volumes — perde dados)
+# Uso:
+#   cp .env.docker.example .env.docker   # e preencher os segredos
+#   docker compose up -d                 # db -> migrate -> app
+#   docker compose --profile ops run --rm importer   # carga do CSV (sob demanda)
+#   docker compose --profile ops run --rm indexer --dry-run
 #
-# Depois de subir, apontar .env.local para:
-#   DATABASE_URL=postgresql://spaguas:spaguas@localhost:5432/spaguas_dev
+# Segredos vêm de .env.docker (NÃO versionado). Nada de credencial neste arquivo.
+
+name: spaguas-dmo
+
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: spaguas-pg
+  # ---------------------------------------------------------------------------
+  # Banco — PostgreSQL + PostGIS (PostGIS já é usado: ADR-0013, geo/divergência).
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: spaguas-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: spaguas_dev
-      POSTGRES_USER: spaguas
-      POSTGRES_PASSWORD: spaguas
+      POSTGRES_DB: ${POSTGRES_DB:-spaguas}
+      POSTGRES_USER: ${POSTGRES_USER:-spaguas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.docker}
     ports:
-      - "5432:5432"
+      # Exposto só em localhost por padrão (DBA/psql). Em produção PRODESP,
+      # remover o publish e deixar o banco acessível apenas na rede interna.
+      - "127.0.0.1:5432:5432"
     volumes:
-      - spaguas_pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spaguas -d spaguas_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spaguas} -d ${POSTGRES_DB:-spaguas}"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  # ---------------------------------------------------------------------------
+  # Migrate — aplica shim de compat + migrations e encerra (one-shot).
+  # O app só sobe depois deste terminar com sucesso.
+  # ---------------------------------------------------------------------------
+  migrate:
+    image: postgres:16-alpine
+    container_name: spaguas-migrate
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spaguas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-spaguas}
+    volumes:
+      - ./db:/db:ro
+      - ./supabase/migrations:/migrations:ro
+    entrypoint: ["sh", "/db/migrate.sh"]
+
+  # ---------------------------------------------------------------------------
+  # App — dashboard Next.js standalone.
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* são embutidos no bundle em build. Rebuildar se mudarem.
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    image: spaguas/dashboard:local
+    container_name: spaguas-app
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      # Conexão direta ao Postgres do compose (sem pooler Supabase).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-spaguas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-spaguas}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_ALLOWED_EMAIL_DOMAINS: ${AUTH_ALLOWED_EMAIL_DOMAINS:-sp.gov.br,daee.sp.gov.br}
+      CRON_SECRET: ${CRON_SECRET:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+  # ---------------------------------------------------------------------------
+  # Workers batch (profile "ops") — não sobem no `up` padrão. Rodar sob demanda.
+  # ---------------------------------------------------------------------------
+  importer:
+    build:
+      context: ./ops/importer
+      dockerfile: Dockerfile
+    image: spaguas/importer:local
+    profiles: ["ops"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL_IMPORTER: postgresql://${POSTGRES_USER:-spaguas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-spaguas}
+      IMPORTER_CSV_PATH: /data/postos.csv
+    volumes:
+      # CSV oficial entra por mount (host → container), nunca embutido na imagem.
+      - ${IMPORTER_CSV_PATH:-./data}:/data:ro
+
+  indexer:
+    build:
+      context: ./ops/indexer
+      dockerfile: Dockerfile
+    image: spaguas/indexer:local
+    profiles: ["ops"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL_INDEXER: postgresql://${POSTGRES_USER:-spaguas}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-spaguas}
+      INDEXER_ROOT_PATH: /repositorio
+    volumes:
+      # Raiz varrida (compartilhamento de rede no PRODESP). Read-only: o worker
+      # nunca escreve no HD de origem.
+      - ${INDEXER_ROOT_PATH:-./data}:/repositorio:ro
+
 volumes:
-  spaguas_pg_data:
+  pg_data:

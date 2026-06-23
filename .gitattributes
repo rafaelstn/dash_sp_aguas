@@ -1,0 +1,18 @@
+# Normalização de fim de linha. Arquivos que executam dentro de containers Linux
+# DEVEM ser LF — CRLF (autocrlf no Windows) quebra shebang e parsing no contêiner.
+
+# Default: deixa o git normalizar texto, mas sem forçar CRLF na árvore de trabalho.
+* text=auto
+
+# Sempre LF (executados em Linux / lidos por ferramentas POSIX)
+*.sh        text eol=lf
+*.bash      text eol=lf
+Dockerfile  text eol=lf
+*.Dockerfile text eol=lf
+*.sql       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.mjs       text eol=lf
+
+# Scripts específicos do Windows permanecem CRLF
+*.ps1       text eol=crlf

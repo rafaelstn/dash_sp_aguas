@@ -1,0 +1,43 @@
+# Contexto de build enxuto — fora o que não vai pra imagem.
+# Regra de ouro gov: nada de segredo entra na imagem (.env* fica de fora).
+
+# Dependências e artefatos de build (reconstruídos no Dockerfile)
+node_modules
+.next
+dist
+out
+coverage
+*.tsbuildinfo
+
+# Segredos e ambiente — NUNCA na imagem
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Plataforma mobile (não vai pro container do dashboard)
+android
+android-www
+*.apk
+*.keystore
+
+# Ambientes Python dos workers (cada worker tem o próprio Dockerfile)
+ops/**/.venv
+ops/**/__pycache__
+**/*.pyc
+
+# Git, CI e ferramentas
+.git
+.github
+.claude
+.run
+.vscode
+
+# Docs, scripts de dev e dados locais
+docs
+data
+supabase/.branches
+supabase/.temp
+*.log
+npm-debug.log*
+README.md

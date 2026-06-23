@@ -1,6 +1,14 @@
 {
   "permissions": {
+    "defaultMode": "auto",
     "allow": [
+      "Edit",
+      "Write",
+      "Read",
+      "Grep",
+      "Glob",
+      "Task",
+      "Agent",
       "Bash(ls *)",
       "Bash(cd *)",
       "Bash(pwd)",

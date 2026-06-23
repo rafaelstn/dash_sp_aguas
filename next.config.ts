@@ -56,6 +56,12 @@ const withSerwist = withSerwistInit({
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Build conteinerizado (Docker/PRODESP). `output: 'standalone'` empacota
+  // server.js + node_modules tracados num diretório isolado (.next/standalone),
+  // base da imagem on-prem. Condicionado a DOCKER_BUILD pra não alterar em nada
+  // o build atual na Vercel (que ignora standalone e usa o próprio adapter).
+  // Detalhes: ADR-0015 (conteinerização dual-target Vercel → PRODESP).
+  ...(process.env.DOCKER_BUILD === '1' ? { output: 'standalone' as const } : {}),
   // Esconde o indicator flutuante do Next.js em dev (canto inferior esquerdo).
   devIndicators: false,
   // O cliente postgres.js roda apenas no servidor; evita bundling acidental no navegador.

@@ -18,7 +18,7 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 | Camada | Tecnologia |
 |--------|-----------|
 | Frontend / BFF | Next.js 15 (App Router) + TypeScript + Tailwind |
-| Banco | PostgreSQL (Supabase no MVP, migração para provedor em território nacional prevista) |
+| Banco | PostgreSQL + PostGIS (Supabase no MVP; migração para hospedagem PRODESP / território nacional prevista — ver ADR-0015) |
 | Cliente de banco | `postgres.js` (ver ADR-0002) |
 | Importador CSV | Python 3.12 + `psycopg[binary]` |
 | Worker de indexação | Python 3.12 + `psycopg[binary]` + `unidecode` |
@@ -50,10 +50,13 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 │   ├── importer/                # Script de importação do CSV
 │   └── indexer/                 # Worker de indexação do HD de rede
 ├── supabase/migrations/         # Schema SQL versionado
+├── db/                          # auth-compat.sql (shim Supabase) + migrate.sh
 ├── scripts/                     # db-migrate, dev (bash)
 ├── start.ps1                    # Subir dashboard oculto (Windows)
 ├── stop.ps1                     # Encerrar dashboard (Windows)
-├── docker-compose.yml           # PG local opcional
+├── Dockerfile                   # Imagem do app (Next standalone)
+├── docker-compose.yml           # Stack conteinerizada (db + migrate + app + workers)
+├── .env.docker.example          # Template de ambiente do compose
 └── .github/workflows/ci.yml     # Smoke test (lint/typecheck/py_compile)
 ```
 
@@ -144,6 +147,49 @@ python ops/indexer/index_fs.py --root "\\\\servidor\\postos"
 
 ---
 
+## Execução conteinerizada (Docker — alvo PRODESP)
+
+O stack completo roda em containers, num PostgreSQL próprio (sem depender do
+Supabase managed para os **dados**). É a base da entrega on-prem na hospedagem
+PRODESP. A camada de **identidade** (auth) é o ponto de transição: hoje usa
+Supabase Auth; no PRODESP será substituída — o shim `db/auth-compat.sql` é o
+ponto único a trocar. Detalhes e plano de migração em
+[`docs/adr/0015-conteinerizacao-prodesp.md`](./docs/adr/0015-conteinerizacao-prodesp.md).
+
+> O setup atual da Vercel/Supabase continua funcionando sem alterações — a
+> conteinerização é aditiva (o `output: standalone` só é ativado quando
+> `DOCKER_BUILD=1`).
+
+```bash
+# 1. Preparar ambiente (segredos — não versionar)
+cp .env.docker.example .env.docker
+# editar .env.docker: definir POSTGRES_PASSWORD (obrigatório) e demais valores
+
+# 2. Subir o stack (db -> migrate -> app), com .env.docker carregado
+docker compose --env-file .env.docker up -d --build
+# dashboard em http://localhost:3000  (healthcheck: /api/health)
+
+# 3. Workers batch (sob demanda — profile "ops")
+docker compose --env-file .env.docker --profile ops run --rm importer        # carga do CSV
+docker compose --env-file .env.docker --profile ops run --rm indexer --dry-run
+```
+
+Serviços do compose:
+
+| Serviço | Imagem / build | Papel |
+|---------|----------------|-------|
+| `db` | `postgis/postgis:16-3.4-alpine` | PostgreSQL + PostGIS (PostGIS já é usado — ADR-0013) |
+| `migrate` | `postgres:16-alpine` | aplica `auth-compat.sql` + migrations e encerra (one-shot) |
+| `app` | `Dockerfile` (Next standalone, non-root) | dashboard |
+| `importer` | `ops/importer/Dockerfile` | carga do CSV (profile `ops`) |
+| `indexer` | `ops/indexer/Dockerfile` | sweep do HD de rede (profile `ops`, mount read-only) |
+
+> **Observabilidade institucional (Grafana/Elasticsearch):** previstos como
+> perfil opcional futuro, não incluídos no compose ativo para não subir serviço
+> ocioso. Adicionar quando houver consumo real (métricas/busca).
+
+---
+
 ## Scripts npm
 
 | Script | Descrição |
@@ -173,4 +219,17 @@ python ops/indexer/index_fs.py --root "\\\\servidor\\postos"
 - [`docs/adr/0001-stack-inicial.md`](./docs/adr/0001-stack-inicial.md) — stack e portabilidade de banco
 - [`docs/adr/0002-db-client-postgres-js.md`](./docs/adr/0002-db-client-postgres-js.md) — cliente de banco sem ORM
 - [`docs/adr/0003-modulo-desconformidade.md`](./docs/adr/0003-modulo-desconformidade.md) — detecção sem correção automática
+- [`docs/adr/0015-conteinerizacao-prodesp.md`](./docs/adr/0015-conteinerizacao-prodesp.md) — conteinerização e migração para PRODESP
 - [`data/README.md`](./data/README.md) — origem e atualização dos dados brutos
+
+---
+
+## Governança e licença
+
+Projeto alinhado às diretrizes da SP Águas (LGPD — Lei 13.709/2018, Decreto nº
+10.046/2019, IN SGD/ME nº 1/2019) e a padrões abertos (REST, JSON, GeoJSON, CSV).
+
+- [`LICENSE`](./LICENSE) — Apache License 2.0
+- [`SECURITY.md`](./SECURITY.md) — reporte de vulnerabilidades (divulgação coordenada)
+- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — código de conduta
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — guia de contribuição
