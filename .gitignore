@@ -86,3 +86,6 @@ data/inventario-ana/
 
 # Output do Playwright MCP (screenshots/logs de inspecao, runtime)
 .playwright-mcp/
+
+# Scratch do subagent-driven-development (ledger de progresso, runtime)
+.superpowers/
