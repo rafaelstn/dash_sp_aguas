@@ -3,8 +3,10 @@ import 'server-only';
 import { format } from 'date-fns';
 import type {
   EstacaoSibh,
+  LeituraSibh,
   MedicaoSibh,
   SibhGateway,
+  TipoEstacaoSibh,
 } from '@/application/ports/sibh-gateway';
 
 /**
@@ -28,6 +30,34 @@ const SIBH_BASE_URL = 'https://apps.spaguas.sp.gov.br/sibh/api/v2';
 const TTL_ESTACOES_MS = 60 * 60 * 1000; // 1 hora
 const TIMEOUT_MS = 15_000;
 
+// Cache curto da leitura "ao vivo" por prefixo. O dado do SIBH atualiza a cada
+// ~10-30 min; um diagrama aberto tem vários nós e pode ser revisto várias
+// vezes seguidas. 2 min equilibra frescor com não martelar a API.
+const TTL_LEITURA_MS = 2 * 60 * 1000;
+
+// Janela varrida para achar a leitura mais recente. Estações ativas reportam
+// de hora em hora; 3 dias cobre fins de semana e atrasos de transmissão sem
+// puxar histórico desnecessário.
+const JANELA_LEITURA_DIAS = 3;
+
+/**
+ * Mapeia o `station_type_id` cru do SIBH para o tipo de domínio.
+ */
+function mapearTipo(stationTypeId: string | number | null | undefined): TipoEstacaoSibh {
+  switch (String(stationTypeId ?? '')) {
+    case '1':
+      return 'fluviometrico';
+    case '2':
+      return 'pluviometrico';
+    case '3':
+      return 'piezometrico';
+    case '5':
+      return 'qualidade';
+    default:
+      return 'desconhecido';
+  }
+}
+
 /**
  * Erro de domínio do adapter: o SIBH está indisponível ou respondeu fora do
  * contrato esperado. Mensagem segura para exibir; `cause` guarda o detalhe.
@@ -48,15 +78,23 @@ interface EstacaoBruta {
   station_name?: string;
   name?: string;
   id?: string | number;
+  station_type_id?: string | number;
 }
 
 /**
  * Shape cru de uma medição como vem do endpoint `/measurements`.
+ *
+ * `value`      -> chuva acumulada em mm (pluviométrico) ou valor cru do logger
+ *                 (fluviométrico, sem unidade física direta).
+ * `read_value` -> leitura física convertida; em fluviométrico é a cota/nível
+ *                 em metros. `null` em pluviométrico.
  */
 interface MedicaoBruta {
   prefix?: string;
   station_name?: string;
   value?: number;
+  read_value?: number | null;
+  station_type_id?: string | number;
   date?: string;
   measurement_gap?: number;
 }
@@ -64,6 +102,10 @@ interface MedicaoBruta {
 let estacoesCache: EstacaoSibh[] | null = null;
 let estacoesCacheTs = 0;
 let estacoesEmVoo: Promise<EstacaoSibh[]> | null = null;
+
+// Cache curto de leitura ao vivo por prefixo (TTL_LEITURA_MS). Guarda também
+// `null` (prefixo sem leitura recente) pra não repetir a consulta a cada nó.
+const leituraCache = new Map<string, { ts: number; valor: LeituraSibh | null }>();
 
 /**
  * Faz um GET no SIBH com timeout e erro normalizado. Retorna o JSON parseado.
@@ -142,6 +184,7 @@ async function carregarEstacoes(): Promise<EstacaoSibh[]> {
           prefixo,
           nome: (bruta.station_name ?? bruta.name ?? prefixo).trim(),
           id,
+          tipo: mapearTipo(bruta.station_type_id),
         });
       }
 
@@ -217,7 +260,87 @@ export const sibhClient: SibhGateway = {
     }
     return medicoes;
   },
+
+  async valorAtualPorPrefixo(prefixo: string): Promise<LeituraSibh | null> {
+    const alvo = prefixo.trim();
+    if (!alvo) return null;
+
+    const cacheado = leituraCache.get(alvo);
+    if (cacheado && Date.now() - cacheado.ts < TTL_LEITURA_MS) {
+      return cacheado.valor;
+    }
+
+    const estacoes = await carregarEstacoes();
+    const estacao = estacoes.find((e) => e.prefixo === alvo);
+    if (!estacao) {
+      leituraCache.set(alvo, { ts: Date.now(), valor: null });
+      return null;
+    }
+
+    const ate = new Date();
+    const desde = new Date(ate.getTime() - JANELA_LEITURA_DIAS * 24 * 60 * 60 * 1000);
+    const url =
+      `${SIBH_BASE_URL}/measurements` +
+      `?start_date=${format(desde, 'yyyy-MM-dd')}&end_date=${format(ate, 'yyyy-MM-dd')}` +
+      `&station_prefix_ids[]=${encodeURIComponent(estacao.id)}`;
+
+    const payload = await getJson(url);
+    const brutas = extrairMedicoesBrutas(payload);
+
+    let maisRecente: MedicaoBruta | null = null;
+    for (const bruta of brutas) {
+      if (bruta.prefix?.trim() !== alvo) continue;
+      const momento = bruta.date?.trim();
+      if (!momento) continue;
+      // `date` vem como 'YYYY/MM/DD HH:mm', cuja ordenação lexicográfica
+      // coincide com a cronológica — comparar string é suficiente e evita
+      // parse de timezone.
+      if (!maisRecente || momento > (maisRecente.date?.trim() ?? '')) {
+        maisRecente = bruta;
+      }
+    }
+
+    const leitura = maisRecente
+      ? normalizarLeitura(maisRecente, estacao)
+      : null;
+    leituraCache.set(alvo, { ts: Date.now(), valor: leitura });
+    return leitura;
+  },
 };
+
+/**
+ * Monta a `LeituraSibh` a partir da medição bruta mais recente e da estação.
+ *
+ * O `value` cru vira `valorMm` apenas em estação pluviométrica (lá o número é
+ * mm de chuva). O `read_value` vira `valorNivel` em estação fluviométrica (a
+ * cota em metros). Para outros tipos, ambos podem ficar nulos quando não há
+ * leitura física interpretável.
+ */
+function normalizarLeitura(
+  bruta: MedicaoBruta,
+  estacao: EstacaoSibh,
+): LeituraSibh {
+  const tipo = estacao.tipo;
+  const value =
+    typeof bruta.value === 'number' && Number.isFinite(bruta.value)
+      ? bruta.value
+      : null;
+  const readValue =
+    typeof bruta.read_value === 'number' && Number.isFinite(bruta.read_value)
+      ? bruta.read_value
+      : null;
+
+  return {
+    prefixo: estacao.prefixo,
+    nome: (bruta.station_name?.trim() || estacao.nome),
+    tipoEstacao: tipo,
+    valorMm: tipo === 'pluviometrico' ? value : null,
+    valorNivel: tipo === 'fluviometrico' ? readValue : null,
+    momento: (bruta.date ?? '').trim(),
+    gapMinutos:
+      typeof bruta.measurement_gap === 'number' ? bruta.measurement_gap : 0,
+  };
+}
 
 /**
  * Limpa o cache de estações. Uso restrito a testes; não chamar em produção.
@@ -226,4 +349,5 @@ export function _resetSibhCache(): void {
   estacoesCache = null;
   estacoesCacheTs = 0;
   estacoesEmVoo = null;
+  leituraCache.clear();
 }
