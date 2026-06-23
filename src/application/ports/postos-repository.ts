@@ -61,6 +61,18 @@ export interface ResultadoPesquisa {
 }
 
 /**
+ * Item enxuto para autocomplete de postos (ex.: vincular um posto do diagrama
+ * a um posto do catálogo). Só os campos necessários para identificar e exibir
+ * na lista de sugestões, sem o peso dos 37 campos do `Posto` nem COUNT total.
+ */
+export interface PostoSugestao {
+  prefixo: string;
+  nome: string | null;
+  tipoPosto: string | null;
+  prefixoAna: string | null;
+}
+
+/**
  * Campos editáveis de um posto. NÃO inclui `id`, `prefixo`, `createdAt`,
  * `updatedAt`, `deletedAt`, `origem` (são imutáveis pela UI ou gerenciados
  * pelo próprio repo).
@@ -143,6 +155,13 @@ export interface ContextoAtorPosto {
 export interface PostosRepository {
   buscarPorPrefixo(prefixo: string): Promise<Posto | null>;
   pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa>;
+
+  /**
+   * Autocomplete: lista enxuta de postos (prefixo, nome, tipo, prefixo ANA)
+   * cujo prefixo, nome ou prefixo ANA casa com o termo. Ordena por prefixo e
+   * limita a `limite` linhas. Ignora postos soft-deleted.
+   */
+  autocompletar(termo: string, limite: number): Promise<PostoSugestao[]>;
 
   /**
    * Atualiza campos de um posto. Audita em `postos_evento`. Falha se

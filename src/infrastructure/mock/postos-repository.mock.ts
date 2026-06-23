@@ -2,6 +2,7 @@ import 'server-only';
 
 import type {
   ParametrosPesquisa,
+  PostoSugestao,
   PostosRepository,
   ResultadoPesquisa,
 } from '@/application/ports/postos-repository';
@@ -64,6 +65,30 @@ export const postosRepository: PostosRepository = {
     // Modo demo nao tem audit trail real; retorna lista vazia em vez de
     // jogar erro, pra nao quebrar a tela de edicao.
     return [];
+  },
+
+  async autocompletar(termo: string, limite: number): Promise<PostoSugestao[]> {
+    const t = termo.trim();
+    if (t.length < 2) return [];
+    const tNorm = normalizar(t);
+    const prefixoNorm = t.toUpperCase();
+    const sugestoes = POSTOS_FIXTURES.filter((p) => {
+      const casaPrefixo = p.prefixo.toUpperCase().startsWith(prefixoNorm);
+      const casaAna =
+        typeof p.prefixoAna === 'string' &&
+        p.prefixoAna.toUpperCase().startsWith(prefixoNorm);
+      const casaNome =
+        typeof p.nomeEstacao === 'string' &&
+        normalizar(p.nomeEstacao).includes(tNorm);
+      return casaPrefixo || casaAna || casaNome;
+    });
+    sugestoes.sort(ordenarPorPrefixo);
+    return sugestoes.slice(0, limite).map((p) => ({
+      prefixo: p.prefixo,
+      nome: p.nomeEstacao,
+      tipoPosto: p.tipoPosto,
+      prefixoAna: p.prefixoAna,
+    }));
   },
 
   async pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa> {

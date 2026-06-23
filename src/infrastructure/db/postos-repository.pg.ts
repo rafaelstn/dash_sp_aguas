@@ -4,6 +4,7 @@ import type {
   ContextoAtorPosto,
   DadosCriacaoPosto,
   ParametrosPesquisa,
+  PostoSugestao,
   PostosRepository,
   ResultadoPesquisa,
 } from '@/application/ports/postos-repository';
@@ -305,6 +306,46 @@ export const postosRepository: PostosRepository = {
       };
     } catch (e) {
       throw new FalhaRepositorio('pesquisar', e);
+    }
+  },
+
+  async autocompletar(termo: string, limite: number): Promise<PostoSugestao[]> {
+    const t = termo.trim();
+    if (t.length < 2) return [];
+
+    // Prefixo ILIKE casa começo do código (caso típico de digitação de prefixo);
+    // nome e prefixo ANA usam contains com unaccent para tolerar acento.
+    const prefixoPadrao = t.toUpperCase() + '%';
+    const containsPadrao = '%' + t + '%';
+
+    try {
+      const linhas = await sql<
+        Array<{
+          prefixo: string;
+          nome_estacao: string | null;
+          tipo_posto: string | null;
+          prefixo_ana: string | null;
+        }>
+      >`
+        SELECT prefixo, nome_estacao, tipo_posto, prefixo_ana
+          FROM postos
+         WHERE deleted_at IS NULL
+           AND (
+             prefixo ILIKE ${prefixoPadrao}
+             OR prefixo_ana ILIKE ${prefixoPadrao}
+             OR f_unaccent(lower(nome_estacao)) LIKE f_unaccent(lower(${containsPadrao}))
+           )
+         ORDER BY prefixo
+         LIMIT ${limite}
+      `;
+      return linhas.map((l) => ({
+        prefixo: l.prefixo,
+        nome: l.nome_estacao,
+        tipoPosto: l.tipo_posto,
+        prefixoAna: l.prefixo_ana,
+      }));
+    } catch (e) {
+      throw new FalhaRepositorio('autocompletar', e);
     }
   },
 
