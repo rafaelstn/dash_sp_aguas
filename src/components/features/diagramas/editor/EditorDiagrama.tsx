@@ -445,7 +445,7 @@ function EditorInterno({ diagrama }: Props) {
   const podeRefazer = historicoPodeRefazer(historicoRef.current);
 
   return (
-    <div className="flex h-[calc(100vh-var(--row-h-normal)-1rem)] min-h-[32rem] flex-col overflow-hidden rounded-gov-card border border-app-border-subtle">
+    <div className="-mx-4 -my-6 flex h-[calc(100dvh-3rem)] min-h-[28rem] flex-col overflow-hidden">
       {/* Faixa azul: voltar + nome + toolbar + indicador de save */}
       <div className="flex flex-col gap-2 bg-gov-azul px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
         <div className="flex min-w-0 items-center gap-2">

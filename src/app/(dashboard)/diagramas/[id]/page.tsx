@@ -35,11 +35,7 @@ export default async function EditorDiagramaPage({ params }: PageProps) {
     if (!diagrama) {
       notFound();
     }
-    return (
-      <div className="p-3 sm:p-4">
-        <EditorDiagrama diagrama={diagrama} />
-      </div>
-    );
+    return <EditorDiagrama diagrama={diagrama} />;
   } catch (erro) {
     const codigo = randomUUID().slice(0, 8);
     console.error('[diagramas.editor] Falha ao carregar diagrama', {
