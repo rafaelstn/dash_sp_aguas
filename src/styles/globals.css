@@ -46,6 +46,33 @@
     --status-hidro-emergencia: 0 70% 35%;      /* vermelho #991B1B */
     --status-hidro-extravasamento: 300 45% 30%;/* vinho  — #6F2C6F */
 
+    /* ── Fidelidade SIBH/DAEE (editor de diagramas unifilares) ──────────
+       Cores extraídas do site oficial cth.daee.sp.gov.br/sibh (computed
+       styles reais), pra o editor ficar idêntico ao SIBH. Texto dos cards
+       usa --fg-default (#111827, 16:1 sobre os fundos pastel = AA/AAA).
+       Os pares borda/fundo de status batem com os do SIBH. */
+    --sibh-rio: 201 100% 70%;                  /* faixa do rio #66c9ff */
+    --sibh-rio-rotulo: 0 0% 100%;              /* rótulo branco sobre a faixa */
+    --sibh-reservatorio: 208 98% 43%;          /* círculo do reservatório #0275d8 */
+    --sibh-tendencia: 344 91% 64%;             /* seta/“=” de tendência #f74f78 */
+    --sibh-unidade-nivel: 162 80% 44%;         /* badge “m” verde água #16c995 */
+    --sibh-chuva: 219 85% 69%;                 /* “mm”, “Chuva” e borda da chuva #6a9bf4 */
+    /* Cards de nível por status (fundo + borda), espelhando o SIBH */
+    --sibh-card-normal-fundo: 0 0% 100%;       /* branco */
+    --sibh-card-normal-borda: 216 12% 84%;     /* cinza fino #D1D5DB */
+    --sibh-card-atencao-fundo: 53 100% 86%;    /* amarelo claro #fff8ba */
+    --sibh-card-atencao-borda: 52 99% 37%;     /* #bda501 */
+    --sibh-card-alerta-fundo: 38 100% 78%;     /* laranja claro #ffdb91 */
+    --sibh-card-alerta-borda: 39 100% 50%;     /* #ffa500 */
+    --sibh-card-emergencia-fundo: 9 100% 87%;  /* vermelho claro #ffc4bd */
+    --sibh-card-emergencia-borda: 0 100% 45%;  /* #e60000 */
+    --sibh-card-extravasamento-fundo: 0 100% 90%; /* #ffcccc */
+    --sibh-card-extravasamento-borda: 0 100% 40%; /* #cc0000 */
+    /* Legenda “Lista de Status” (quadradinhos do SIBH) */
+    --sibh-legenda-atencao: 60 100% 50%;       /* amarelo #ffff00 */
+    --sibh-legenda-alerta: 39 100% 50%;        /* laranja #ffa500 */
+    --sibh-legenda-extravasamento: 0 100% 50%; /* vermelho #ff0000 */
+
     /* Focus ring */
     --ring: var(--gov-azul);
 
