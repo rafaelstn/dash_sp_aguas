@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { DirecaoSeta, ElementoDiagrama } from '@/domain/diagramas/tipos';
+import type {
+  DirecaoSeta,
+  ElementoDiagrama,
+  LimiaresNivel,
+} from '@/domain/diagramas/tipos';
+import { validarOrdemLimiares } from '@/domain/diagramas/limiares';
 
 interface Props {
   /** Elemento em edição; null fecha o diálogo. */
@@ -10,12 +15,33 @@ interface Props {
   aoCancelar: () => void;
 }
 
+/** Os 4 limiares como texto de formulário, na ordem de criticidade. */
+const CAMPOS_LIMIAR: ReadonlyArray<{ chave: keyof LimiaresNivel; rotulo: string }> = [
+  { chave: 'atencao', rotulo: 'Atenção' },
+  { chave: 'alerta', rotulo: 'Alerta' },
+  { chave: 'emergencia', rotulo: 'Emergência' },
+  { chave: 'extravasamento', rotulo: 'Extravasamento' },
+];
+
+type LimiaresTexto = Record<keyof LimiaresNivel, string>;
+
+const LIMIARES_VAZIO: LimiaresTexto = {
+  atencao: '',
+  alerta: '',
+  emergencia: '',
+  extravasamento: '',
+};
+
 /**
- * Edição rápida de um elemento (Fase A2): nome, código, valor, rótulo e direção
- * conforme o tipo. A edição completa de limiares vem na A3; aqui cobrimos o
- * básico para o usuário identificar cada elemento. Segue o padrão <dialog>
- * nativo do projeto (focus-trap via showModal, a11y por label/aria), sem
- * window.prompt. Aberto por duplo clique no elemento.
+ * Edição completa de um elemento (Fase A3): nome, código, valor, unidade e os
+ * 4 limiares (nível); valor (chuva); nome (reservatório); rótulo e direção da
+ * seta (rio). A ordem dos limiares (atenção <= alerta <= emergência <=
+ * extravasamento) é validada ao vivo; ao violar, o diálogo avisa e bloqueia o
+ * salvar. Ao salvar o nível, o status recalcula no node (`calcularStatus`).
+ *
+ * Segue o padrão <dialog> nativo do projeto (focus-trap via showModal, Esc
+ * fecha, a11y por label/aria), sem window.prompt. Aberto por duplo clique ou
+ * pela tecla Enter sobre o node focado, e pelo botão "Editar" da toolbar.
  *
  * O parsing de número aceita vírgula decimal (pt-BR); vazio vira null.
  */
@@ -31,6 +57,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
   const [unidade, setUnidade] = useState('');
   const [rotulo, setRotulo] = useState('');
   const [direcao, setDirecao] = useState<DirecaoSeta>('direta');
+  const [limiares, setLimiares] = useState<LimiaresTexto>(LIMIARES_VAZIO);
 
   // Carrega os campos a cada novo elemento aberto.
   useEffect(() => {
@@ -39,7 +66,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     setCodigo('codigo' in elemento ? elemento.codigo : '');
     setValor(
       'valor' in elemento && elemento.valor !== null
-        ? String(elemento.valor).replace('.', ',')
+        ? numeroParaTexto(elemento.valor)
         : '',
     );
     setUnidade(
@@ -47,6 +74,16 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     );
     setRotulo(elemento.tipo === 'linha' ? (elemento.label ?? '') : '');
     setDirecao(elemento.tipo === 'linha' ? elemento.direcaoSeta : 'direta');
+    setLimiares(
+      elemento.tipo === 'nivel'
+        ? {
+            atencao: limiarParaTexto(elemento.limiares.atencao),
+            alerta: limiarParaTexto(elemento.limiares.alerta),
+            emergencia: limiarParaTexto(elemento.limiares.emergencia),
+            extravasamento: limiarParaTexto(elemento.limiares.extravasamento),
+          }
+        : LIMIARES_VAZIO,
+    );
   }, [elemento]);
 
   useEffect(() => {
@@ -75,15 +112,28 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     }
   }, [elemento]);
 
-  function parseValor(texto: string): number | null {
-    const limpo = texto.trim().replace(/\./g, '').replace(',', '.');
-    if (limpo === '') return null;
-    const n = Number(limpo);
-    return Number.isFinite(n) ? n : null;
-  }
+  // Limiares parseados e validação de ordem, recalculados a cada digitação.
+  const limiaresNumericos = useMemo<LimiaresNivel>(
+    () => ({
+      atencao: parseValor(limiares.atencao),
+      alerta: parseValor(limiares.alerta),
+      emergencia: parseValor(limiares.emergencia),
+      extravasamento: parseValor(limiares.extravasamento),
+    }),
+    [limiares],
+  );
+
+  const validacaoLimiares = useMemo(
+    () => validarOrdemLimiares(limiaresNumericos),
+    [limiaresNumericos],
+  );
+
+  const tipo = elemento?.tipo;
+  const podeSalvar = tipo !== 'nivel' || validacaoLimiares.valido;
 
   function salvar() {
     if (!elemento) return;
+    if (!podeSalvar) return;
     let atualizado: ElementoDiagrama;
     switch (elemento.tipo) {
       case 'reservatorio':
@@ -96,6 +146,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           codigo: codigo.trim() || 'PN-000',
           valor: parseValor(valor),
           unidade: unidade.trim() || null,
+          limiares: limiaresNumericos,
         };
         break;
       case 'chuva':
@@ -118,7 +169,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
   }
 
   const tituloId = `${baseId}-titulo`;
-  const tipo = elemento?.tipo;
+  const erroLimiaresId = `${baseId}-erro-limiares`;
   const temCodigo = tipo === 'nivel' || tipo === 'chuva';
   const temValor = tipo === 'nivel' || tipo === 'chuva';
   const temNome = tipo !== 'linha';
@@ -146,7 +197,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           e.preventDefault();
           salvar();
         }}
-        className="flex w-[min(90vw,28rem)] flex-col"
+        className="flex max-h-[85vh] w-[min(90vw,28rem)] flex-col"
       >
         <header className="border-b border-app-border-subtle px-5 py-3">
           <h2 id={tituloId} className="text-lg font-semibold">
@@ -154,7 +205,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           </h2>
         </header>
 
-        <div className="space-y-3 px-5 py-4">
+        <div className="space-y-3 overflow-y-auto px-5 py-4">
           {temNome ? (
             <div className="space-y-1">
               <label htmlFor={`${baseId}-nome`} className={classeLabel}>
@@ -227,6 +278,57 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
             </div>
           ) : null}
 
+          {tipo === 'nivel' ? (
+            <fieldset className="space-y-2 rounded border border-app-border-subtle p-3">
+              <legend className="px-1 text-sm font-medium text-app-fg">
+                Limiares de status
+              </legend>
+              <p className="text-xs text-app-fg-subtle">
+                Pisos crescentes que definem o status do posto. Deixe em branco
+                os que não se aplicam.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {CAMPOS_LIMIAR.map(({ chave, rotulo: rotuloLimiar }) => (
+                  <div key={chave} className="space-y-1">
+                    <label
+                      htmlFor={`${baseId}-limiar-${chave}`}
+                      className="block text-xs font-medium text-app-fg-muted"
+                    >
+                      {rotuloLimiar}
+                    </label>
+                    <input
+                      id={`${baseId}-limiar-${chave}`}
+                      type="text"
+                      inputMode="decimal"
+                      value={limiares[chave]}
+                      onChange={(e) =>
+                        setLimiares((atual) => ({
+                          ...atual,
+                          [chave]: e.target.value,
+                        }))
+                      }
+                      placeholder="—"
+                      aria-invalid={!validacaoLimiares.valido}
+                      aria-describedby={
+                        validacaoLimiares.valido ? undefined : erroLimiaresId
+                      }
+                      className={classeCampo}
+                    />
+                  </div>
+                ))}
+              </div>
+              {!validacaoLimiares.valido ? (
+                <p
+                  id={erroLimiaresId}
+                  role="alert"
+                  className="rounded border-l-4 border-gov-perigo bg-red-50 p-2 text-xs text-gov-perigo"
+                >
+                  {validacaoLimiares.mensagem}
+                </p>
+              ) : null}
+            </fieldset>
+          ) : null}
+
           {tipo === 'linha' ? (
             <>
               <div className="space-y-1">
@@ -261,12 +363,6 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
               </div>
             </>
           ) : null}
-
-          {tipo === 'nivel' ? (
-            <p className="text-xs text-app-fg-subtle">
-              Limiares de alerta e tendência serão configurados na próxima etapa.
-            </p>
-          ) : null}
         </div>
 
         <footer className="flex flex-col-reverse gap-2 border-t border-app-border-subtle bg-app-surface-2 px-5 py-3 sm:flex-row sm:justify-end">
@@ -279,7 +375,8 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           </button>
           <button
             type="submit"
-            className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            disabled={!podeSalvar}
+            className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
             Salvar
           </button>
@@ -287,4 +384,22 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
       </form>
     </dialog>
   );
+}
+
+/** Número do domínio para texto de campo (vírgula decimal pt-BR). */
+function numeroParaTexto(n: number): string {
+  return String(n).replace('.', ',');
+}
+
+/** Limiar (number|null|undefined) para texto de campo. */
+function limiarParaTexto(n: number | null | undefined): string {
+  return n === null || n === undefined ? '' : numeroParaTexto(n);
+}
+
+/** Texto de campo (pt-BR) para número; vazio/ inválido vira null. */
+function parseValor(texto: string): number | null {
+  const limpo = texto.trim().replace(/\./g, '').replace(',', '.');
+  if (limpo === '') return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
 }
