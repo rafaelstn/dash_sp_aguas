@@ -64,6 +64,8 @@ docs/relatorios/
 # Snapshots gerados por scripts de manutenção (limpar_fim_operacao_ativos.py, etc.)
 # Contêm dados de produção — manter sempre fora do git.
 data/backup_*.csv
+# Dumps logicos do banco (scripts/backup_banco.py) — dado de producao, nunca no git
+data/backups/
 
 .vercel
 
@@ -78,3 +80,9 @@ data/backup_*.csv
 # capacitor.config.ts e o webDir (android-www). APK e artefatos em /dist.
 /dist/
 /android/
+
+# Planilhas oficiais ANA (dado de governo, fora do git)
+data/inventario-ana/
+
+# Output do Playwright MCP (screenshots/logs de inspecao, runtime)
+.playwright-mcp/
