@@ -98,10 +98,10 @@ export function ToolbarEditor({
         aria-label={item.rotulo}
         title={item.dica}
         className={[
-          'inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150',
           'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
           ativo
-            ? 'bg-white text-gov-azul'
+            ? 'bg-white text-gov-azul shadow-sm ring-1 ring-black/5'
             : 'text-white hover:bg-white/15',
         ].join(' ')}
       >
@@ -115,11 +115,14 @@ export function ToolbarEditor({
     <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Ferramentas do editor">
       {botao(SELECIONAR)}
 
-      <span className="mx-1 hidden h-5 w-px bg-white/30 sm:inline-block" aria-hidden="true" />
+      <span className="mx-1 hidden h-5 w-px bg-white/25 sm:inline-block" aria-hidden="true" />
 
-      {ADICIONAR.map(botao)}
+      {/* Grupo "adicionar": leve recuo de fundo para chunking visual. */}
+      <div className="flex flex-wrap items-center gap-1 rounded-md bg-white/5 p-0.5">
+        {ADICIONAR.map(botao)}
+      </div>
 
-      <span className="mx-1 hidden h-5 w-px bg-white/30 sm:inline-block" aria-hidden="true" />
+      <span className="mx-1 hidden h-5 w-px bg-white/25 sm:inline-block" aria-hidden="true" />
 
       <button
         type="button"

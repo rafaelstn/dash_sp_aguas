@@ -5,6 +5,7 @@ import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
@@ -529,8 +530,8 @@ function EditorInterno({ diagrama }: Props) {
         </div>
       ) : null}
 
-      {/* Canvas */}
-      <div ref={canvasRef} className="relative flex-1 bg-app-surface-2">
+      {/* Canvas (fundo blueprint: leitura de prancha técnica SIBH) */}
+      <div ref={canvasRef} className="relative flex-1 bg-app">
         <ReactFlow<NodeDiagrama>
           nodes={nodesRender}
           edges={[]}
@@ -556,7 +557,23 @@ function EditorInterno({ diagrama }: Props) {
           className="[&_.react-flow__pane]:cursor-crosshair data-[ferramenta=selecionar]:[&_.react-flow__pane]:cursor-default"
           data-ferramenta={ferramenta}
         >
-          <Background color="hsl(var(--border-default))" gap={20} />
+          {/* Grade blueprint em duas camadas: pontos finos densos + cruzes
+              espaçadas mais marcadas. Move com o viewport (sensação de prancha
+              técnica do SIBH). */}
+          <Background
+            id="grade-fina"
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            color="hsl(var(--border-default) / 0.55)"
+          />
+          <Background
+            id="grade-mestra"
+            variant={BackgroundVariant.Cross}
+            gap={96}
+            size={6}
+            color="hsl(var(--gov-azul) / 0.18)"
+          />
           <Controls
             aria-label="Controles de zoom do diagrama"
             showInteractive={false}

@@ -28,28 +28,36 @@ function NodeChuvaBase({ data, selected }: NodeProps<TipoNodeChuva>) {
     <div
       role="group"
       aria-label={descricao}
-      className="w-[104px] rounded-md border bg-white p-2 shadow-gov-card transition-shadow"
+      className="w-[116px] rounded-lg border bg-white shadow-gov-card transition-shadow duration-200 hover:shadow-gov-card-hover"
       style={{
         borderColor: 'hsl(var(--border-default))',
-        boxShadow: selected ? `0 0 0 2px hsl(var(--gov-azul))` : undefined,
+        boxShadow: selected
+          ? `0 0 0 2px hsl(var(--gov-azul)), 0 1px 3px rgba(17,24,39,0.10)`
+          : undefined,
       }}
     >
-      <div className="mb-1 flex items-center justify-center gap-1">
-        <CloudRain className="h-3.5 w-3.5 text-gov-azul" aria-hidden="true" />
-        <span className="truncate font-mono text-2xs text-app-fg-muted">
-          {elemento.codigo}
-        </span>
-      </div>
+      <div className="p-2.5">
+        <div className="mb-1.5 flex items-center justify-center gap-1.5">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[hsl(var(--gov-azul-claro))]">
+            <CloudRain className="h-3 w-3 text-gov-azul" aria-hidden="true" />
+          </span>
+          <span className="truncate font-mono text-2xs tracking-tight text-app-fg-muted">
+            {elemento.codigo}
+          </span>
+        </div>
 
-      <div className="flex items-baseline justify-center gap-1">
-        <span className="tabular-nums text-lg font-semibold leading-none text-app-fg">
-          {valorTexto}
-        </span>
-        <span className="text-2xs font-medium text-app-fg-muted">mm</span>
-      </div>
+        <div className="flex items-baseline justify-center gap-1">
+          <span className="tabular-nums text-xl font-semibold leading-none tracking-tight text-app-fg">
+            {valorTexto}
+          </span>
+          <span className="text-2xs font-medium text-app-fg-muted">mm</span>
+        </div>
 
-      <div className="mt-1.5 border-t border-app-border-subtle pt-1 text-center">
-        <span className="block text-2xs text-app-fg-muted">Chuva</span>
+        <div className="mt-2 border-t border-app-border-subtle pt-1.5 text-center">
+          <span className="block text-2xs font-medium text-app-fg-muted">
+            Chuva
+          </span>
+        </div>
       </div>
     </div>
   );

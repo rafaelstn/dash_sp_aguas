@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import type { NodeProps } from '@xyflow/react';
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { Minus, TriangleAlert } from 'lucide-react';
 import {
   STATUS_COLORS,
   STATUS_LABELS,
@@ -14,10 +14,12 @@ import type { NodeNivel as TipoNodeNivel } from '../tipos-editor';
  * Posto de nível (padrão SIBH): caixa branca com código no topo, valor em
  * destaque, seta de tendência, unidade e badge circular de status pintado com
  * a cor do domínio (`calcularStatus` + `STATUS_COLORS`). Min/max aparecem
- * quando há limiares. Em atenção+ ganha leve realce na borda.
+ * quando há limiares. Em atenção+ ganha realce na borda e uma faixa de status
+ * no rodapé; em alerta+ o realce pulsa de leve para chamar o olho.
  *
  * A11y: o badge tem `title` + texto oculto com o nome do status (leitor de
  * tela não depende de cor). O node inteiro é focável e descreve o posto.
+ * O pulso respeita prefers-reduced-motion (vira opacidade estática).
  */
 function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
   const { elemento } = data;
@@ -42,6 +44,10 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
   const temFaixa = min !== null || max !== null;
 
   const realce = status !== 'normal';
+  const critico =
+    status === 'alerta' ||
+    status === 'emergencia' ||
+    status === 'extravasamento';
 
   const descricao =
     `Posto de nível ${elemento.nome}, código ${elemento.codigo}. ` +
@@ -52,62 +58,99 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
     <div
       role="group"
       aria-label={descricao}
-      className="w-[136px] rounded-md border bg-white p-2 shadow-gov-card transition-shadow"
+      className="group relative w-[148px] rounded-lg border bg-white shadow-gov-card transition-shadow duration-200 hover:shadow-gov-card-hover"
       style={{
         borderColor: realce ? cor : 'hsl(var(--border-default))',
-        boxShadow: selected ? `0 0 0 2px hsl(var(--gov-azul))` : undefined,
+        boxShadow: selected
+          ? `0 0 0 2px hsl(var(--gov-azul)), 0 1px 3px rgba(17,24,39,0.10)`
+          : undefined,
       }}
     >
-      {/* Cabeçalho: código + badge de status */}
-      <div className="mb-1 flex items-center justify-between gap-1">
-        <span className="truncate font-mono text-2xs text-app-fg-muted">
-          {elemento.codigo}
-        </span>
+      {/* Faixa de status no topo da caixa (fina, só quando há alarme) */}
+      {realce ? (
         <span
-          className="inline-flex h-3 w-3 shrink-0 rounded-full"
+          className={[
+            'absolute inset-x-0 top-0 h-1 rounded-t-lg',
+            critico ? 'posto-pulso' : '',
+          ].join(' ')}
           style={{ backgroundColor: cor }}
-          title={rotuloStatus}
           aria-hidden="true"
         />
-        <span className="sr-only">Status: {rotuloStatus}</span>
-      </div>
-
-      {/* Valor + tendência + unidade */}
-      <div className="flex items-baseline justify-center gap-1">
-        <TendenciaIcone />
-        <span className="tabular-nums text-lg font-semibold leading-none text-app-fg">
-          {valorTexto}
-        </span>
-        {unidade ? (
-          <span className="text-2xs font-medium text-app-fg-muted">
-            {unidade}
-          </span>
-        ) : null}
-      </div>
-
-      {/* Min/Max quando há limiares */}
-      {temFaixa ? (
-        <div className="mt-1.5 flex items-center justify-between text-2xs text-app-fg-subtle">
-          <span className="inline-flex items-center gap-0.5">
-            <ArrowDown className="h-3 w-3" aria-hidden="true" />
-            <span className="tabular-nums">
-              {min !== null ? min.toLocaleString('pt-BR') : '—'}
-            </span>
-          </span>
-          <span className="inline-flex items-center gap-0.5">
-            <ArrowUp className="h-3 w-3" aria-hidden="true" />
-            <span className="tabular-nums">
-              {max !== null ? max.toLocaleString('pt-BR') : '—'}
-            </span>
-          </span>
-        </div>
       ) : null}
 
-      {/* Nome */}
-      <div className="mt-1.5 border-t border-app-border-subtle pt-1 text-center">
-        <span className="block truncate text-2xs text-app-fg-muted">
-          {elemento.nome}
-        </span>
+      <div className="p-2.5">
+        {/* Cabeçalho: código + badge de status */}
+        <div className="mb-1.5 flex items-center justify-between gap-1.5">
+          <span className="truncate font-mono text-2xs tracking-tight text-app-fg-muted">
+            {elemento.codigo}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1">
+            {critico ? (
+              <TriangleAlert
+                className="h-3 w-3"
+                style={{ color: cor }}
+                aria-hidden="true"
+              />
+            ) : null}
+            <span
+              className="inline-flex h-3 w-3 rounded-full ring-2 ring-white"
+              style={{ backgroundColor: cor }}
+              title={rotuloStatus}
+              aria-hidden="true"
+            />
+          </span>
+          <span className="sr-only">Status: {rotuloStatus}</span>
+        </div>
+
+        {/* Valor + tendência + unidade */}
+        <div className="flex items-baseline justify-center gap-1">
+          <TendenciaIcone />
+          <span className="tabular-nums text-xl font-semibold leading-none tracking-tight text-app-fg">
+            {valorTexto}
+          </span>
+          {unidade ? (
+            <span className="text-2xs font-medium text-app-fg-muted">
+              {unidade}
+            </span>
+          ) : null}
+        </div>
+
+        {/* Min/Max quando há limiares (triângulos baixo/cima, padrão SIBH) */}
+        {temFaixa ? (
+          <div className="mt-2 flex items-center justify-between rounded bg-app-surface-2 px-1.5 py-1 text-2xs text-app-fg-subtle">
+            <span className="inline-flex items-center gap-1">
+              <Triangulo direcao="baixo" />
+              <span className="tabular-nums">
+                {min !== null ? min.toLocaleString('pt-BR') : '—'}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Triangulo direcao="cima" />
+              <span className="tabular-nums">
+                {max !== null ? max.toLocaleString('pt-BR') : '—'}
+              </span>
+            </span>
+          </div>
+        ) : null}
+
+        {/* Nome */}
+        <div className="mt-2 border-t border-app-border-subtle pt-1.5 text-center">
+          <span className="block truncate text-2xs font-medium text-app-fg-muted">
+            {elemento.nome}
+          </span>
+        </div>
+
+        {/* Etiqueta textual de status em alarme (não depende de cor) */}
+        {realce ? (
+          <div className="mt-1 text-center">
+            <span
+              className="inline-block rounded-full px-2 py-px text-2xs font-semibold uppercase tracking-wide text-white"
+              style={{ backgroundColor: cor }}
+            >
+              {rotuloStatus}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -120,6 +163,22 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
  */
 function TendenciaIcone() {
   return <Minus className="h-3.5 w-3.5 text-app-fg-subtle" aria-hidden="true" />;
+}
+
+/** Triângulo cheio (baixo = mínimo, cima = máximo) no padrão da legenda SIBH. */
+function Triangulo({ direcao }: { direcao: 'cima' | 'baixo' }) {
+  const pontos = direcao === 'cima' ? '5,1.5 9,8 1,8' : '1,2 9,2 5,8.5';
+  return (
+    <svg
+      width={10}
+      height={10}
+      viewBox="0 0 10 10"
+      className="shrink-0"
+      aria-hidden="true"
+    >
+      <polygon points={pontos} fill="currentColor" />
+    </svg>
+  );
 }
 
 export const NodeNivel = memo(NodeNivelBase);
