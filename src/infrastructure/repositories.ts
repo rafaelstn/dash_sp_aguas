@@ -16,6 +16,7 @@ import { triagemRepository as triagemPg } from './db/triagem-repository.pg';
 import { papeisRepository as papeisPg } from './db/papeis-repository.pg';
 import { anaRevisaoRepository as anaRevisaoPg } from './db/ana-revisao-repository.pg';
 import { painelRepository as painelPg } from './db/painel-repository.pg';
+import { diagramasRepository as diagramasPg } from './db/diagramas-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
 import { postosRepository as postosMock } from './mock/postos-repository.mock';
@@ -31,6 +32,7 @@ import { triagemRepository as triagemMock } from './mock/triagem-repository.mock
 import { papeisRepository as papeisMock } from './mock/papeis-repository.mock';
 import { anaRevisaoRepository as anaRevisaoMock } from './mock/ana-revisao-repository.mock';
 import { painelRepository as painelMock } from './mock/painel-repository.mock';
+import { diagramasRepository as diagramasMock } from './mock/diagramas-repository.mock';
 
 /**
  * Ponto único de escolha entre repositórios PG (reais) e mock (demo).
@@ -60,5 +62,6 @@ export const papeisRepository = demo ? papeisMock : papeisPg;
 // demo, devolve estado vazio); o de painel devolve agregação zerada.
 export const anaRevisaoRepository = demo ? anaRevisaoMock : anaRevisaoPg;
 export const painelRepository = demo ? painelMock : painelPg;
+export const diagramasRepository = demo ? diagramasMock : diagramasPg;
 
 export const modoDemoAtivo = demo;

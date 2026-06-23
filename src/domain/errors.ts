@@ -33,6 +33,16 @@ export class PrefixoDuplicado extends Error {
   }
 }
 
+/**
+ * Diagrama unifilar inexistente (ou já excluído). Tradução padrão: HTTP 404.
+ */
+export class DiagramaNaoEncontrado extends Error {
+  constructor(public readonly id: string) {
+    super(`Diagrama não encontrado: ${id}`);
+    this.name = 'DiagramaNaoEncontrado';
+  }
+}
+
 export class TermoBuscaInvalido extends Error {
   constructor(motivo: string) {
     super(`Termo de busca inválido: ${motivo}`);
