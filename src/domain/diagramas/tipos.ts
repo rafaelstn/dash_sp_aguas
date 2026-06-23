@@ -103,11 +103,11 @@ export type ElementoDiagrama =
  * mapeamento num único ponto pra custom nodes e legenda não divergirem.
  */
 export const STATUS_COLORS: Record<StatusNivel, string> = {
-  normal: 'var(--gov-status-normal)',
-  atencao: 'var(--gov-status-atencao)',
-  alerta: 'var(--gov-status-alerta)',
-  emergencia: 'var(--gov-status-emergencia)',
-  extravasamento: 'var(--gov-status-extravasamento)',
+  normal: 'hsl(var(--status-hidro-normal))',
+  atencao: 'hsl(var(--status-hidro-atencao))',
+  alerta: 'hsl(var(--status-hidro-alerta))',
+  emergencia: 'hsl(var(--status-hidro-emergencia))',
+  extravasamento: 'hsl(var(--status-hidro-extravasamento))',
 };
 
 /** Rótulo legível de cada status, para legenda e leitor de tela. */
