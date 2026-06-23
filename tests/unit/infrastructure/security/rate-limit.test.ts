@@ -104,24 +104,44 @@ describe('rate-limit/consumirRateLimit', () => {
 });
 
 describe('rate-limit/extrairIp', () => {
-  it('prefere x-forwarded-for sobre x-real-ip', () => {
+  it('prefere x-vercel-forwarded-for (borda confiável) sobre x-real-ip e x-forwarded-for', () => {
+    const req = new Request('http://x', {
+      headers: {
+        'x-vercel-forwarded-for': '9.9.9.9',
+        'x-forwarded-for': '1.2.3.4, 5.6.7.8',
+        'x-real-ip': '10.0.0.1',
+      },
+    });
+    expect(extrairIp(req)).toBe('9.9.9.9');
+  });
+
+  it('prefere x-real-ip sobre x-forwarded-for quando x-vercel-forwarded-for ausente', () => {
     const req = new Request('http://x', {
       headers: {
         'x-forwarded-for': '1.2.3.4, 5.6.7.8',
         'x-real-ip': '10.0.0.1',
       },
     });
-    expect(extrairIp(req)).toBe('1.2.3.4');
-  });
-
-  it('cai em x-real-ip se x-forwarded-for ausente', () => {
-    const req = new Request('http://x', {
-      headers: { 'x-real-ip': '10.0.0.1' },
-    });
     expect(extrairIp(req)).toBe('10.0.0.1');
   });
 
-  it('fallback "unknown" quando ambos ausentes', () => {
+  it('ignora valores forjados no início do x-forwarded-for: usa o ÚLTIMO da cadeia', () => {
+    // Atacante prefixa "6.6.6.6" pra rotacionar a chave; pegamos o último,
+    // que é o mais próximo do proxy confiável.
+    const req = new Request('http://x', {
+      headers: { 'x-forwarded-for': '6.6.6.6, 1.2.3.4, 5.6.7.8' },
+    });
+    expect(extrairIp(req)).toBe('5.6.7.8');
+  });
+
+  it('cai em x-forwarded-for (best-effort) se headers da borda ausentes', () => {
+    const req = new Request('http://x', {
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+    });
+    expect(extrairIp(req)).toBe('1.2.3.4');
+  });
+
+  it('fallback "unknown" quando todos ausentes', () => {
     const req = new Request('http://x');
     expect(extrairIp(req)).toBe('unknown');
   });
@@ -130,7 +150,7 @@ describe('rate-limit/extrairIp', () => {
     const req = new Request('http://x', {
       headers: { 'x-forwarded-for': '  1.2.3.4  ,  5.6.7.8  ' },
     });
-    expect(extrairIp(req)).toBe('1.2.3.4');
+    expect(extrairIp(req)).toBe('5.6.7.8');
   });
 });
 

@@ -58,6 +58,20 @@ export function getEnv(): Env {
     );
   }
 
+  // Wildcard de domínios (`*`) é o modo demo/avaliação da allowlist: libera
+  // self-signup para qualquer domínio. Em produção isso é self-signup aberto —
+  // bloqueio fail-fast no boot para nunca subir produção governamental assim.
+  const dominiosAllowlist = data.AUTH_ALLOWED_EMAIL_DOMAINS.split(',').map((d) =>
+    d.trim(),
+  );
+  if (data.NODE_ENV === 'production' && dominiosAllowlist.includes('*')) {
+    throw new Error(
+      "AUTH_ALLOWED_EMAIL_DOMAINS não pode conter '*' em produção: o wildcard " +
+        'libera self-signup para qualquer domínio (modo demo). Defina a lista de ' +
+        'domínios institucionais reais (ex.: sp.gov.br,daee.sp.gov.br).',
+    );
+  }
+
   cached = { ...data, isDemoMode, isAuthEnabled };
   return cached;
 }

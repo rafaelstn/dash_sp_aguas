@@ -118,14 +118,38 @@ export function consumirRateLimit(
 }
 
 /**
- * Helpers para extrair identificadores comuns. IP segue ordem de
- * preferência: x-forwarded-for > x-real-ip > 'unknown'.
+ * Extrai o IP do cliente de forma defensiva para chave de rate limit.
+ *
+ * Ameaça (A04/A07): `x-forwarded-for` é controlado pelo cliente. A borda da
+ * Vercel anexa o IP real ao FINAL da cadeia, mas o cliente pode prefixar
+ * valores arbitrários no início. Pegar o primeiro elemento do `x-forwarded-for`
+ * deixa um atacante rotacionar o header e furar o limite por-IP.
+ *
+ * Por isso a ordem de confiança prioriza headers que a borda da Vercel
+ * sobrescreve e o cliente NÃO consegue forjar:
+ *   1. `x-vercel-forwarded-for` — injetado pela borda Vercel, não forjável.
+ *   2. `x-real-ip` — também populado pela borda (espelha o IP da conexão).
+ *   3. `x-forwarded-for` — best-effort. Forjável; só usado como último recurso
+ *      (deploy fora da Vercel / dev local). Pegamos o ÚLTIMO valor da cadeia,
+ *      que é o mais próximo do proxy confiável e mais difícil de envenenar do
+ *      que o primeiro. Ainda assim não é garantia: tratar como degradado.
+ *
+ * Limite por-usuário (chave = userId) permanece a defesa primária; o IP é
+ * camada secundária para tráfego pré-autenticação.
  */
 export function extrairIp(req: Request): string {
-  const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0]!.trim();
+  const vercel = req.headers.get('x-vercel-forwarded-for');
+  if (vercel) return vercel.split(',')[0]!.trim();
+
   const xri = req.headers.get('x-real-ip');
   if (xri) return xri.trim();
+
+  // best-effort: header forjável. Último valor da cadeia é o menos pior.
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const partes = xff.split(',').map((p) => p.trim()).filter(Boolean);
+    if (partes.length > 0) return partes[partes.length - 1]!;
+  }
   return 'unknown';
 }
 
