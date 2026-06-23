@@ -96,13 +96,18 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
   const a = pontos[meioIdx] ?? primeiro;
   const b = pontos[meioIdx + 1] ?? a;
   const meio = pontoMedio(a, b);
+  // Rótulo acompanha a inclinação do trecho (vertical nos afluentes, como
+  // "RIO PINHEIROS"; horizontal no Tietê), igual ao SIBH. Mantém o texto
+  // sempre legível (nunca de cabeça pra baixo): normaliza pra [-90, 90].
+  const rotuloAngulo = anguloRotulo(a, b);
 
-  // Camadas da faixa (padrão SIBH refinado): margem clara, corpo azul e brilho
-  // central, lidas como um leito d'água com volume em vez de um traço chapado.
-  const corMargem = 'hsl(var(--gov-azul) / 0.18)';
-  const corCorpo = 'hsl(var(--gov-azul) / 0.62)';
-  const corBrilho = 'hsl(var(--gov-azul-claro) / 0.85)';
-  const corTraco = 'hsl(var(--gov-azul))';
+  // Faixa do rio no padrão SIBH: azul-céu claro (#66c9ff), uma faixa cheia e
+  // grossa, não um traço chapado escuro. `corRio` é o corpo da faixa; `corRealce`
+  // serve pra seleção, alças e seta; `corBrilho` é a correnteza animada (clara).
+  const corRio = 'hsl(var(--sibh-rio))';
+  const corRealce = 'hsl(var(--sibh-rio))';
+  const corBrilho = 'hsl(0 0% 100% / 0.85)';
+  const corTraco = 'hsl(var(--sibh-rio))';
 
   // Sinal do fluxo: 'reversa' inverte o sentido da correnteza animada para
   // bater com a seta de direção. 'nenhuma' não anima (água parada).
@@ -111,7 +116,6 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
 
   const editavel = selected && acoes !== undefined;
   const rotulo = elemento.label?.trim();
-  const larguraRotulo = rotulo ? rotulo.length * 6.4 + 14 : 0;
 
   return (
     <svg
@@ -138,35 +142,25 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
         }}
       />
 
-      {/* Realce de seleção */}
+      {/* Realce de seleção: halo claro em volta da faixa */}
       {selected ? (
         <path
           d={pathData}
           fill="none"
-          stroke={corTraco}
-          strokeOpacity={0.22}
-          strokeWidth={24}
+          stroke={corRealce}
+          strokeOpacity={0.3}
+          strokeWidth={30}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       ) : null}
 
-      {/* Margem clara do leito (dá volume à faixa) */}
+      {/* Faixa do rio (padrão SIBH): azul-céu claro, grossa (~22px) */}
       <path
         d={pathData}
         fill="none"
-        stroke={corMargem}
-        strokeWidth={17}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      {/* Corpo azul do rio */}
-      <path
-        d={pathData}
-        fill="none"
-        stroke={corCorpo}
-        strokeWidth={13}
+        stroke={corRio}
+        strokeWidth={22}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -197,31 +191,27 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
         />
       ) : null}
 
-      {/* Rótulo do rio: pílula clara para legibilidade sobre o canvas. */}
+      {/* Rótulo do rio (padrão SIBH): texto branco em negrito direto sobre a
+          faixa azul, alinhado ao ângulo do trecho. Uma fina sombra escura
+          garante legibilidade do branco mesmo se a faixa for fina. */}
       {rotulo ? (
-        <g transform={`translate(${meio.x}, ${meio.y - 15})`} className="select-none">
-          <rect
-            x={-larguraRotulo / 2}
-            y={-9}
-            width={larguraRotulo}
-            height={16}
-            rx={8}
-            fill="hsl(var(--bg-surface))"
-            stroke="hsl(var(--gov-azul) / 0.30)"
-            strokeWidth={1}
-          />
-          <text
-            x={0}
-            y={3}
-            fill={corTraco}
-            fontSize={10.5}
-            fontWeight={600}
-            letterSpacing={0.2}
-            textAnchor="middle"
-          >
-            {rotulo}
-          </text>
-        </g>
+        <text
+          transform={`translate(${meio.x}, ${meio.y}) rotate(${rotuloAngulo})`}
+          x={0}
+          y={3.5}
+          fill="hsl(var(--sibh-rio-rotulo))"
+          fontSize={11}
+          fontWeight={700}
+          letterSpacing={0.6}
+          textAnchor="middle"
+          className="select-none"
+          style={{ paintOrder: 'stroke' }}
+          stroke="hsl(var(--sibh-rio) / 0.55)"
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+        >
+          {rotulo}
+        </text>
       ) : null}
 
       {/* Alças de edição dos vértices (só com o rio selecionado) */}
@@ -293,6 +283,18 @@ function calcularSeta(
 /** Ponto médio do traçado (para posicionar o rótulo). */
 function pontoMedio(a: Posicao, b: Posicao): Posicao {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+/**
+ * Ângulo (graus) do rótulo, acompanhando o trecho mas mantido sempre legível:
+ * normalizado para o intervalo [-90, 90] (nunca de cabeça pra baixo). Trechos
+ * verticais (afluentes) viram texto na vertical, como no SIBH.
+ */
+function anguloRotulo(a: Posicao, b: Posicao): number {
+  let g = angulo(a, b);
+  if (g > 90) g -= 180;
+  else if (g < -90) g += 180;
+  return g;
 }
 
 /**
