@@ -1,11 +1,32 @@
 'use client';
 
-import { ListChecks } from 'lucide-react';
-import {
-  STATUS_COLORS,
-  STATUS_LABELS,
-  type StatusNivel,
-} from '@/domain/diagramas/tipos';
+import { STATUS_LABELS, type StatusNivel } from '@/domain/diagramas/tipos';
+
+/**
+ * Cor do quadradinho de cada status na legenda, fiel ao SIBH: Normal é só
+ * contorno (quadrado branco com borda), os demais são preenchidos em amarelo,
+ * laranja e vermelho. Emergência segue a escala (vermelho mais forte) pra não
+ * sumir do domínio de 5 níveis. Hex vindos da legenda real do site.
+ */
+const SWATCH: Record<StatusNivel, { fundo: string; borda: string }> = {
+  normal: { fundo: 'transparent', borda: 'hsl(var(--border-strong))' },
+  atencao: {
+    fundo: 'hsl(var(--sibh-legenda-atencao))',
+    borda: 'hsl(var(--sibh-legenda-atencao))',
+  },
+  alerta: {
+    fundo: 'hsl(var(--sibh-legenda-alerta))',
+    borda: 'hsl(var(--sibh-legenda-alerta))',
+  },
+  emergencia: {
+    fundo: 'hsl(var(--sibh-legenda-extravasamento))',
+    borda: 'hsl(var(--sibh-legenda-extravasamento))',
+  },
+  extravasamento: {
+    fundo: 'hsl(var(--sibh-legenda-extravasamento))',
+    borda: 'hsl(var(--sibh-legenda-extravasamento))',
+  },
+};
 
 const ORDEM: StatusNivel[] = [
   'normal',
@@ -16,30 +37,28 @@ const ORDEM: StatusNivel[] = [
 ];
 
 /**
- * Quadro "Lista de Status" no canto do canvas (padrão SIBH). Cabeçalho com
- * ícone e os 5 status com a cor do domínio. O texto ao lado garante leitura
- * sem depender de cor (WCAG 1.4.1). É uma lista semântica para o leitor de
- * tela. O painel é translúcido com leve desfoque para assentar sobre a grade
- * blueprint sem competir com os elementos do diagrama.
+ * Quadro "Lista de Status" no canto do canvas, fiel ao SIBH/DAEE. Título e os
+ * status com quadradinhos coloridos (Normal só contorno, Atenção amarelo,
+ * Alerta laranja, Extravasamento vermelho). O texto ao lado garante leitura sem
+ * depender de cor (WCAG 1.4.1) e o conjunto é uma lista semântica para o leitor
+ * de tela.
  */
 export function LegendaStatus() {
   return (
     <aside
       aria-label="Lista de status"
-      className="pointer-events-none absolute bottom-4 left-4 w-44 overflow-hidden rounded-lg border border-app-border-subtle bg-white/90 shadow-gov-card backdrop-blur-sm"
+      className="pointer-events-none absolute bottom-4 left-4 rounded-md border border-app-border-subtle bg-white/95 px-3 py-2.5 shadow-gov-card backdrop-blur-sm"
     >
-      <div className="flex items-center gap-1.5 border-b border-app-border-subtle bg-app-surface-2/80 px-3 py-1.5">
-        <ListChecks className="h-3.5 w-3.5 text-gov-azul" aria-hidden="true" />
-        <p className="text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-          Lista de status
-        </p>
-      </div>
-      <ul className="space-y-1 px-3 py-2.5">
+      <p className="mb-1.5 text-xs font-semibold text-app-fg">Lista de Status</p>
+      <ul className="space-y-1">
         {ORDEM.map((status) => (
           <li key={status} className="flex items-center gap-2">
             <span
-              className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/5"
-              style={{ backgroundColor: STATUS_COLORS[status] }}
+              className="h-3 w-3 shrink-0 rounded-[1px] border"
+              style={{
+                backgroundColor: SWATCH[status].fundo,
+                borderColor: SWATCH[status].borda,
+              }}
               aria-hidden="true"
             />
             <span className="text-2xs text-app-fg">

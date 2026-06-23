@@ -2,31 +2,33 @@
 
 import { memo } from 'react';
 import type { NodeProps } from '@xyflow/react';
-import { Minus, TriangleAlert } from 'lucide-react';
 import {
-  STATUS_COLORS,
   STATUS_LABELS,
   calcularStatus,
+  type StatusNivel,
 } from '@/domain/diagramas/tipos';
 import type { NodeNivel as TipoNodeNivel } from '../tipos-editor';
 
 /**
- * Posto de nível (padrão SIBH): caixa branca com código no topo, valor em
- * destaque, seta de tendência, unidade e badge circular de status pintado com
- * a cor do domínio (`calcularStatus` + `STATUS_COLORS`). Min/max aparecem
- * quando há limiares. Em atenção+ ganha realce na borda e uma faixa de status
- * no rodapé; em alerta+ o realce pulsa de leve para chamar o olho.
+ * Posto de nível, fiel ao SIBH/DAEE. Card retangular compacto cujo FUNDO muda
+ * por status (branco / amarelo claro / laranja claro / vermelho), com borda
+ * saturada da mesma família e sombra Material leve, exatamente como o site
+ * oficial. Linha principal: valor grande preto + seta de tendência (rosa #f74f78)
+ * + unidade "m" num tom verde água (#16c995). Linha de baixo, menor e cinza:
+ * "˅ mínimo   ˄ máximo" (chevrons baixo/cima). Os hex vêm dos computed styles
+ * reais do cth.daee.sp.gov.br/sibh.
  *
- * A11y: o badge tem `title` + texto oculto com o nome do status (leitor de
- * tela não depende de cor). O node inteiro é focável e descreve o posto.
- * O pulso respeita prefers-reduced-motion (vira opacidade estática).
+ * A11y (e-MAG/WCAG): o texto do valor é #111827 sobre fundos pastel (>= 12:1).
+ * O status nunca depende só de cor: vai no `aria-label` do grupo e num texto
+ * oculto. O card é focável e descreve o posto inteiro. A faixa em alerta+ pulsa
+ * de leve, respeitando prefers-reduced-motion (vira opacidade estática).
  */
 function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
   const { elemento } = data;
   const status = calcularStatus(elemento.valor, elemento.limiares);
-  const cor = STATUS_COLORS[status];
   const rotuloStatus = STATUS_LABELS[status];
-  const unidade = elemento.unidade ?? '';
+  const unidade = elemento.unidade ?? 'm';
+  const paleta = CARD_STATUS[status];
 
   const temValor = elemento.valor !== null && elemento.valor !== undefined;
   const valorTexto = temValor
@@ -38,12 +40,9 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
 
   const min = elemento.limiares.atencao ?? null;
   const max =
-    elemento.limiares.extravasamento ??
-    elemento.limiares.emergencia ??
-    null;
+    elemento.limiares.extravasamento ?? elemento.limiares.emergencia ?? null;
   const temFaixa = min !== null || max !== null;
 
-  const realce = status !== 'normal';
   const critico =
     status === 'alerta' ||
     status === 'emergencia' ||
@@ -58,125 +57,128 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
     <div
       role="group"
       aria-label={descricao}
-      className="group relative w-[148px] rounded-lg border bg-white shadow-gov-card transition-shadow duration-200 hover:shadow-gov-card-hover"
+      className={[
+        'relative min-w-[112px] rounded-[3px] border bg-white px-2 py-1 shadow-gov-card',
+        'transition-shadow duration-200 hover:shadow-gov-card-hover',
+        critico ? 'posto-pulso' : '',
+      ].join(' ')}
       style={{
-        borderColor: realce ? cor : 'hsl(var(--border-default))',
+        backgroundColor: `hsl(var(${paleta.fundo}))`,
+        borderColor: `hsl(var(${paleta.borda}))`,
         boxShadow: selected
-          ? `0 0 0 2px hsl(var(--gov-azul)), 0 1px 3px rgba(17,24,39,0.10)`
+          ? '0 0 0 2px hsl(var(--gov-azul)), 0 1px 3px rgba(60,64,67,0.3)'
           : undefined,
       }}
     >
-      {/* Faixa de status no topo da caixa (fina, só quando há alarme) */}
-      {realce ? (
+      {/* Linha principal: valor + seta de tendência + unidade "m" */}
+      <div className="flex items-center justify-center gap-1.5 leading-none">
+        <span className="tabular-nums text-base font-semibold tracking-tight text-app-fg">
+          {valorTexto}
+        </span>
+        <SetaTendencia />
         <span
-          className={[
-            'absolute inset-x-0 top-0 h-1 rounded-t-lg',
-            critico ? 'posto-pulso' : '',
-          ].join(' ')}
-          style={{ backgroundColor: cor }}
-          aria-hidden="true"
-        />
+          className="text-xs font-semibold"
+          style={{ color: 'hsl(var(--sibh-unidade-nivel))' }}
+        >
+          {unidade}
+        </span>
+      </div>
+
+      {/* Linha mínimo/máximo (padrão SIBH: chevron baixo = mín, cima = máx) */}
+      {temFaixa ? (
+        <div className="mt-0.5 flex items-center justify-center gap-2.5 text-2xs text-app-fg-subtle">
+          <span className="inline-flex items-center gap-0.5">
+            <Chevron direcao="baixo" />
+            <span className="tabular-nums">
+              {min !== null ? min.toLocaleString('pt-BR') : '—'}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-0.5">
+            <Chevron direcao="cima" />
+            <span className="tabular-nums">
+              {max !== null ? max.toLocaleString('pt-BR') : '—'}
+            </span>
+          </span>
+        </div>
       ) : null}
 
-      <div className="p-2.5">
-        {/* Cabeçalho: código + badge de status */}
-        <div className="mb-1.5 flex items-center justify-between gap-1.5">
-          <span className="truncate font-mono text-2xs tracking-tight text-app-fg-muted">
-            {elemento.codigo}
-          </span>
-          <span className="inline-flex shrink-0 items-center gap-1">
-            {critico ? (
-              <TriangleAlert
-                className="h-3 w-3"
-                style={{ color: cor }}
-                aria-hidden="true"
-              />
-            ) : null}
-            <span
-              className="inline-flex h-3 w-3 rounded-full ring-2 ring-white"
-              style={{ backgroundColor: cor }}
-              title={rotuloStatus}
-              aria-hidden="true"
-            />
-          </span>
-          <span className="sr-only">Status: {rotuloStatus}</span>
-        </div>
-
-        {/* Valor + tendência + unidade */}
-        <div className="flex items-baseline justify-center gap-1">
-          <TendenciaIcone />
-          <span className="tabular-nums text-xl font-semibold leading-none tracking-tight text-app-fg">
-            {valorTexto}
-          </span>
-          {unidade ? (
-            <span className="text-2xs font-medium text-app-fg-muted">
-              {unidade}
-            </span>
-          ) : null}
-        </div>
-
-        {/* Min/Max quando há limiares (triângulos baixo/cima, padrão SIBH) */}
-        {temFaixa ? (
-          <div className="mt-2 flex items-center justify-between rounded bg-app-surface-2 px-1.5 py-1 text-2xs text-app-fg-subtle">
-            <span className="inline-flex items-center gap-1">
-              <Triangulo direcao="baixo" />
-              <span className="tabular-nums">
-                {min !== null ? min.toLocaleString('pt-BR') : '—'}
-              </span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Triangulo direcao="cima" />
-              <span className="tabular-nums">
-                {max !== null ? max.toLocaleString('pt-BR') : '—'}
-              </span>
-            </span>
-          </div>
-        ) : null}
-
-        {/* Nome */}
-        <div className="mt-2 border-t border-app-border-subtle pt-1.5 text-center">
-          <span className="block truncate text-2xs font-medium text-app-fg-muted">
-            {elemento.nome}
-          </span>
-        </div>
-
-        {/* Etiqueta textual de status em alarme (não depende de cor) */}
-        {realce ? (
-          <div className="mt-1 text-center">
-            <span
-              className="inline-block rounded-full px-2 py-px text-2xs font-semibold uppercase tracking-wide text-white"
-              style={{ backgroundColor: cor }}
-            >
-              {rotuloStatus}
-            </span>
-          </div>
-        ) : null}
-      </div>
+      <span className="sr-only">Status: {rotuloStatus}</span>
     </div>
   );
 }
 
 /**
- * Tendência: nesta fase não há série temporal (vem na A5 com o catálogo).
- * Mostra "estável" como neutro, sem inventar direção. O ícone é decorativo;
- * a informação real (valor/status) está no texto.
+ * Par fundo/borda de cada status, em tokens SIBH. O `normal` é branco com borda
+ * cinza fina; os demais são pastel com borda saturada, idênticos ao site.
  */
-function TendenciaIcone() {
-  return <Minus className="h-3.5 w-3.5 text-app-fg-subtle" aria-hidden="true" />;
-}
+const CARD_STATUS: Record<StatusNivel, { fundo: string; borda: string }> = {
+  normal: {
+    fundo: '--sibh-card-normal-fundo',
+    borda: '--sibh-card-normal-borda',
+  },
+  atencao: {
+    fundo: '--sibh-card-atencao-fundo',
+    borda: '--sibh-card-atencao-borda',
+  },
+  alerta: {
+    fundo: '--sibh-card-alerta-fundo',
+    borda: '--sibh-card-alerta-borda',
+  },
+  emergencia: {
+    fundo: '--sibh-card-emergencia-fundo',
+    borda: '--sibh-card-emergencia-borda',
+  },
+  extravasamento: {
+    fundo: '--sibh-card-extravasamento-fundo',
+    borda: '--sibh-card-extravasamento-borda',
+  },
+};
 
-/** Triângulo cheio (baixo = mínimo, cima = máximo) no padrão da legenda SIBH. */
-function Triangulo({ direcao }: { direcao: 'cima' | 'baixo' }) {
-  const pontos = direcao === 'cima' ? '5,1.5 9,8 1,8' : '1,2 9,2 5,8.5';
+/**
+ * Seta de tendência no padrão SIBH (rosa #f74f78). Sem série temporal nesta
+ * fase, mostra "=" (estável) — neutro, sem inventar direção. Decorativa: a
+ * informação real (valor/status) está no texto e no aria-label do card.
+ */
+function SetaTendencia() {
   return (
     <svg
-      width={10}
-      height={10}
-      viewBox="0 0 10 10"
+      width={11}
+      height={11}
+      viewBox="0 0 11 11"
+      className="shrink-0"
+      aria-hidden="true"
+      style={{ color: 'hsl(var(--sibh-tendencia))' }}
+    >
+      <path
+        d="M2 4h7M2 7h7"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** Chevron fino (baixo = mínimo, cima = máximo), igual à linha min/max do SIBH. */
+function Chevron({ direcao }: { direcao: 'cima' | 'baixo' }) {
+  const d = direcao === 'cima' ? 'M1.5 6 L5 2.5 L8.5 6' : 'M1.5 3.5 L5 7 L8.5 3.5';
+  return (
+    <svg
+      width={9}
+      height={9}
+      viewBox="0 0 10 9"
       className="shrink-0"
       aria-hidden="true"
     >
-      <polygon points={pontos} fill="currentColor" />
+      <path
+        d={d}
+        stroke="currentColor"
+        strokeWidth={1.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }

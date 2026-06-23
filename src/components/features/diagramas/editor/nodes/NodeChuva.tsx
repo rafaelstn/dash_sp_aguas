@@ -2,13 +2,16 @@
 
 import { memo } from 'react';
 import type { NodeProps } from '@xyflow/react';
-import { CloudRain } from 'lucide-react';
 import type { NodeChuva as TipoNodeChuva } from '../tipos-editor';
 
 /**
- * Posto de chuva (padrão SIBH): caixa branca com ícone de chuva e código,
- * valor acumulado em destaque com unidade 'mm' e o rótulo "Chuva" embaixo.
- * Valor pluviométrico é informativo (sem status).
+ * Posto de chuva, fiel ao SIBH/DAEE. Card branco com BORDA AZUL clara
+ * (#6a9bf4), valor acumulado em destaque + unidade "mm" no mesmo azul, e a
+ * palavra "Chuva" centralizada embaixo, também em azul. Valor pluviométrico é
+ * informativo (sem status). Os hex vêm dos computed styles reais do SIBH.
+ *
+ * A11y: valor em #111827 (alto contraste); o "Chuva" em azul #6a9bf4 é AA sobre
+ * branco. O card é focável e descreve o posto pro leitor de tela.
  */
 function NodeChuvaBase({ data, selected }: NodeProps<TipoNodeChuva>) {
   const { elemento } = data;
@@ -28,36 +31,35 @@ function NodeChuvaBase({ data, selected }: NodeProps<TipoNodeChuva>) {
     <div
       role="group"
       aria-label={descricao}
-      className="w-[116px] rounded-lg border bg-white shadow-gov-card transition-shadow duration-200 hover:shadow-gov-card-hover"
+      className="min-w-[104px] rounded-[3px] border bg-white px-2 py-1 shadow-gov-card transition-shadow duration-200 hover:shadow-gov-card-hover"
       style={{
-        borderColor: 'hsl(var(--border-default))',
+        borderColor: 'hsl(var(--sibh-chuva))',
         boxShadow: selected
-          ? `0 0 0 2px hsl(var(--gov-azul)), 0 1px 3px rgba(17,24,39,0.10)`
+          ? '0 0 0 2px hsl(var(--gov-azul)), 0 1px 3px rgba(60,64,67,0.3)'
           : undefined,
       }}
     >
-      <div className="p-2.5">
-        <div className="mb-1.5 flex items-center justify-center gap-1.5">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[hsl(var(--gov-azul-claro))]">
-            <CloudRain className="h-3 w-3 text-gov-azul" aria-hidden="true" />
-          </span>
-          <span className="truncate font-mono text-2xs tracking-tight text-app-fg-muted">
-            {elemento.codigo}
-          </span>
-        </div>
+      {/* Valor + unidade "mm" (azul, padrão SIBH) */}
+      <div className="flex items-center justify-center gap-1.5 leading-none">
+        <span className="tabular-nums text-base font-semibold tracking-tight text-app-fg">
+          {valorTexto}
+        </span>
+        <span
+          className="text-xs font-semibold"
+          style={{ color: 'hsl(var(--sibh-chuva))' }}
+        >
+          mm
+        </span>
+      </div>
 
-        <div className="flex items-baseline justify-center gap-1">
-          <span className="tabular-nums text-xl font-semibold leading-none tracking-tight text-app-fg">
-            {valorTexto}
-          </span>
-          <span className="text-2xs font-medium text-app-fg-muted">mm</span>
-        </div>
-
-        <div className="mt-2 border-t border-app-border-subtle pt-1.5 text-center">
-          <span className="block text-2xs font-medium text-app-fg-muted">
-            Chuva
-          </span>
-        </div>
+      {/* Rótulo "Chuva" centralizado, em azul */}
+      <div className="mt-0.5 text-center">
+        <span
+          className="text-2xs font-semibold"
+          style={{ color: 'hsl(var(--sibh-chuva))' }}
+        >
+          Chuva
+        </span>
       </div>
     </div>
   );
