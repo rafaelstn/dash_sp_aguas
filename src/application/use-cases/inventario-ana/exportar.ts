@@ -2,6 +2,26 @@ import 'server-only';
 import ExcelJS from 'exceljs';
 import { sql } from '@/infrastructure/db/client';
 import { FalhaRepositorio } from '@/domain/errors';
+import schemaColunasAna from '../../../../data/colunas-ana.json';
+
+/**
+ * Schema único das colunas ANA, compartilhado com o patcher Python
+ * (scripts/aplicar_resposta_na_planilha_sharepoint.py). Editar
+ * data/colunas-ana.json muda os dois lados. Aqui usamos `colExcel`, `chave`
+ * e o flag `diff` para montar o mapa de diferenças sem repetir os índices.
+ */
+interface ColunaAnaSchema {
+  colExcel: number;
+  chave: string;
+  label: string;
+  tipo: 'texto' | 'numero' | 'data';
+  aliasPy: string;
+  fonteFallback: string[];
+  diff: boolean;
+}
+const COLUNAS_DIFF: ColunaAnaSchema[] = (
+  schemaColunasAna.colunas as ColunaAnaSchema[]
+).filter((c) => c.diff);
 
 /**
  * Exportador do inventário ANA.
@@ -356,37 +376,40 @@ export async function exportarInventarioAna(
       const row = ws.addRow(values);
 
       // Pinta amarelo onde o valor final difere do snapshot ANA
-      // (indica: SPÁguas corrigiu este campo)
-      const diffs: Array<{ colIdx: number; novo: unknown; antigo: unknown }> = [
-        { colIdx: 3, novo: finalNome, antigo: linha.ana_nome },
-        { colIdx: 4, novo: finalCodigoAdicional, antigo: linha.ana_codigo_adicional },
-        { colIdx: 5, novo: finalLat, antigo: linha.ana_latitude },
-        { colIdx: 6, novo: finalLng, antigo: linha.ana_longitude },
-        { colIdx: 9, novo: finalAltitude, antigo: linha.ana_altitude },
-        { colIdx: 10, novo: finalArea, antigo: linha.ana_area_drenagem_km2 },
-        { colIdx: 12, novo: finalBacia, antigo: linha.ana_bacia_nome },
-        { colIdx: 14, novo: finalSubBacia, antigo: linha.ana_subbacia_nome },
-        { colIdx: 19, novo: finalMunicipioCodigo, antigo: linha.ana_municipio_codigo },
-        { colIdx: 20, novo: finalMunicipio, antigo: linha.ana_municipio_nome },
-        { colIdx: 24, novo: finalTipo, antigo: linha.ana_estacao_tipo },
-        { colIdx: 25, novo: finalEscIni, antigo: dataISO(linha.ana_escala_inicio) },
-        { colIdx: 26, novo: finalEscFim, antigo: dataISO(linha.ana_escala_fim) },
-        { colIdx: 27, novo: finalDLIni, antigo: dataISO(linha.ana_descarga_liquida_inicio) },
-        { colIdx: 28, novo: finalDLFim, antigo: dataISO(linha.ana_descarga_liquida_fim) },
-        { colIdx: 29, novo: finalSedIni, antigo: dataISO(linha.ana_sedimentos_inicio) },
-        { colIdx: 30, novo: finalSedFim, antigo: dataISO(linha.ana_sedimentos_fim) },
-        { colIdx: 31, novo: finalQualIni, antigo: dataISO(linha.ana_qualidade_inicio) },
-        { colIdx: 32, novo: finalQualFim, antigo: dataISO(linha.ana_qualidade_fim) },
-        { colIdx: 33, novo: finalPluIni, antigo: dataISO(linha.ana_pluviometro_inicio) },
-        { colIdx: 34, novo: finalPluFim, antigo: dataISO(linha.ana_pluviometro_fim) },
-        { colIdx: 35, novo: finalTelIni, antigo: dataISO(linha.ana_telemetria_inicio) },
-        { colIdx: 36, novo: finalTelFim, antigo: dataISO(linha.ana_telemetria_fim) },
-      ];
+      // (indica: SPÁguas corrigiu este campo). As colunas e seus índices
+      // Excel vêm do schema compartilhado; aqui só ligamos cada `chave` ao
+      // par (valor final, snapshot ANA) calculado acima.
+      const valoresPorChave: Record<string, { novo: unknown; antigo: unknown }> = {
+        nome: { novo: finalNome, antigo: linha.ana_nome },
+        codigoAdicional: { novo: finalCodigoAdicional, antigo: linha.ana_codigo_adicional },
+        latitude: { novo: finalLat, antigo: linha.ana_latitude },
+        longitude: { novo: finalLng, antigo: linha.ana_longitude },
+        altitude: { novo: finalAltitude, antigo: linha.ana_altitude },
+        areaDrenagem: { novo: finalArea, antigo: linha.ana_area_drenagem_km2 },
+        baciaNome: { novo: finalBacia, antigo: linha.ana_bacia_nome },
+        subbaciaNome: { novo: finalSubBacia, antigo: linha.ana_subbacia_nome },
+        municipioCodigo: { novo: finalMunicipioCodigo, antigo: linha.ana_municipio_codigo },
+        municipioNome: { novo: finalMunicipio, antigo: linha.ana_municipio_nome },
+        estacaoTipo: { novo: finalTipo, antigo: linha.ana_estacao_tipo },
+        escalaInicio: { novo: finalEscIni, antigo: dataISO(linha.ana_escala_inicio) },
+        escalaFim: { novo: finalEscFim, antigo: dataISO(linha.ana_escala_fim) },
+        descargaInicio: { novo: finalDLIni, antigo: dataISO(linha.ana_descarga_liquida_inicio) },
+        descargaFim: { novo: finalDLFim, antigo: dataISO(linha.ana_descarga_liquida_fim) },
+        sedimentosInicio: { novo: finalSedIni, antigo: dataISO(linha.ana_sedimentos_inicio) },
+        sedimentosFim: { novo: finalSedFim, antigo: dataISO(linha.ana_sedimentos_fim) },
+        qualidadeInicio: { novo: finalQualIni, antigo: dataISO(linha.ana_qualidade_inicio) },
+        qualidadeFim: { novo: finalQualFim, antigo: dataISO(linha.ana_qualidade_fim) },
+        pluviometroInicio: { novo: finalPluIni, antigo: dataISO(linha.ana_pluviometro_inicio) },
+        pluviometroFim: { novo: finalPluFim, antigo: dataISO(linha.ana_pluviometro_fim) },
+        telemetriaInicio: { novo: finalTelIni, antigo: dataISO(linha.ana_telemetria_inicio) },
+        telemetriaFim: { novo: finalTelFim, antigo: dataISO(linha.ana_telemetria_fim) },
+      };
 
       let temDiff = false;
-      for (const d of diffs) {
-        if (diferentes(d.novo, d.antigo)) {
-          row.getCell(d.colIdx).fill = PREENCHIMENTO_AMARELO;
+      for (const coluna of COLUNAS_DIFF) {
+        const par = valoresPorChave[coluna.chave];
+        if (par && diferentes(par.novo, par.antigo)) {
+          row.getCell(coluna.colExcel).fill = PREENCHIMENTO_AMARELO;
           temDiff = true;
         }
       }

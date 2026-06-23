@@ -28,7 +28,9 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import unicodedata
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -42,42 +44,48 @@ ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env.local")
 DB_URL = os.environ["DATABASE_URL"]
 
-AMARELO = PatternFill(fill_type="solid", fgColor="FFFFFF00")
+# Schema das colunas vem do arquivo unico compartilhado com o export TS
+# (data/colunas-ana.json). Editar la muda os dois lados.
+SCHEMA = json.loads((ROOT / "data" / "colunas-ana.json").read_text(encoding="utf-8"))
 
-# Mapeamento coluna (1-based) -> (campo no SELECT, tipo)
-# valor None significa "nao tocar" (campo da planilha que SP nao corrige).
-# A query da funcao buscar_estado() abaixo define a ordem das colunas.
+AMARELO = PatternFill(fill_type="solid", fgColor=SCHEMA["corDiffArgb"])
+
 TIPO_TEXTO = "texto"
 TIPO_NUMERO = "numero"
 TIPO_DATA = "data"
 TIPO_BOOL = "bool"
 
+# Mapeamento coluna (1-based) -> (alias no SELECT, tipo, label), derivado do
+# schema compartilhado. A query de buscar_estado() devolve um alias por chave.
 COLUNAS = [
-    # (col_excel, alias_query, tipo, label)
-    (3,  "nome_efetivo",              TIPO_TEXTO, "Nome"),
-    (4,  "codigo_adicional_efetivo",  TIPO_TEXTO, "Código Adicional"),
-    (5,  "latitude_efetiva",          TIPO_NUMERO, "Latitude"),
-    (6,  "longitude_efetiva",         TIPO_NUMERO, "Longitude"),
-    (9,  "altitude_efetiva",          TIPO_NUMERO, "Altitude"),
-    (10, "area_efetiva",              TIPO_NUMERO, "Área de Drenagem"),
-    (12, "bacia_nome_efetiva",        TIPO_TEXTO, "Bacia"),
-    (14, "subbacia_nome_efetiva",     TIPO_TEXTO, "SubBacia"),
-    (19, "municipio_codigo_efetivo", TIPO_TEXTO, "MunicipioCodigo"),
-    (20, "municipio_nome_efetivo",   TIPO_TEXTO, "Município"),
-    (24, "estacao_tipo_efetiva",     TIPO_TEXTO, "Tipo"),
-    (25, "escala_inicio_efetiva",    TIPO_DATA,  "Escala-Início"),
-    (26, "escala_fim_efetiva",       TIPO_DATA,  "Escala-Fim"),
-    (27, "descarga_inicio_efetiva",  TIPO_DATA,  "Descarga-Início"),
-    (28, "descarga_fim_efetiva",     TIPO_DATA,  "Descarga-Fim"),
-    (29, "sedimentos_inicio_efetiva", TIPO_DATA, "Sedimentos-Início"),
-    (30, "sedimentos_fim_efetiva",   TIPO_DATA,  "Sedimentos-Fim"),
-    (31, "qualidade_inicio_efetiva", TIPO_DATA,  "Qualidade-Início"),
-    (32, "qualidade_fim_efetiva",    TIPO_DATA,  "Qualidade-Fim"),
-    (33, "pluviometro_inicio_efetiva", TIPO_DATA,"Pluviômetro-Início"),
-    (34, "pluviometro_fim_efetiva",  TIPO_DATA,  "Pluviômetro-Fim"),
-    (35, "telemetria_inicio_efetiva", TIPO_DATA, "Telemetria-Início"),
-    (36, "telemetria_fim_efetiva",   TIPO_DATA,  "Telemetria-Fim"),
+    (c["colExcel"], c["aliasPy"], c["tipo"], c["label"])
+    for c in SCHEMA["colunas"]
 ]
+
+LABEL_STATUS = SCHEMA["colunasControle"]["status"]["label"]
+LABEL_JUSTIFICATIVA = SCHEMA["colunasControle"]["justificativa"]["label"]
+
+
+def chave_nome_municipio(nome: str) -> str:
+    """Normaliza nome de municipio para lookup case e acento insensitivo:
+    minusculas + remove diacriticos. Mesma regra do export TS
+    (chaveNomeMunicipio em exportar.ts)."""
+    base = unicodedata.normalize("NFD", nome.lower())
+    sem_acento = "".join(c for c in base if unicodedata.category(c) != "Mn")
+    return sem_acento.strip()
+
+
+def carregar_mapa_ibge(cur) -> dict[str, str]:
+    """nome (normalizado) -> codigo_ibge, a partir de ibge_municipios_sp.
+
+    Sem este lookup, o XLSX pode sair com nome de um municipio e codigo IBGE
+    de outro (Q08 da auditoria 2026-05-18). Espelha exportar.ts.
+    """
+    cur.execute("SELECT codigo_ibge, nome FROM ibge_municipios_sp")
+    mapa: dict[str, str] = {}
+    for codigo_ibge, nome in cur.fetchall():
+        mapa[chave_nome_municipio(str(nome))] = str(codigo_ibge)
+    return mapa
 
 
 def buscar_estado() -> dict[str, dict]:
@@ -100,8 +108,14 @@ def buscar_estado() -> dict[str, dict]:
       COALESCE(p.area_km2::text, e.area_drenagem_km2::text)           AS area_efetiva,
       COALESCE(p.bacia_hidrografica, e.bacia_nome)                    AS bacia_nome_efetiva,
       COALESCE(p.sub_ugrhi_nome, e.subbacia_nome)                     AS subbacia_nome_efetiva,
+      -- codigo do municipio: fallback resposta_* > ANA. Quando o nome
+      -- efetivo vem de `postos`, o codigo IBGE eh resolvido no Python pelo
+      -- nome (ver pos-processamento), espelhando exportar.ts (Q08).
       COALESCE(e.resposta_municipio_codigo, e.municipio_codigo)       AS municipio_codigo_efetivo,
       COALESCE(p.municipio, e.resposta_municipio_nome, e.municipio_nome) AS municipio_nome_efetivo,
+      -- brutos usados so para decidir a regra do codigo do municipio
+      p.municipio                                                     AS _p_municipio,
+      e.municipio_nome                                                AS _ana_municipio_nome,
       COALESCE(p.tipo_posto, e.estacao_tipo)                          AS estacao_tipo_efetiva,
       COALESCE(p.ana_escala_inicio, e.escala_inicio)                  AS escala_inicio_efetiva,
       COALESCE(p.ana_escala_fim, e.escala_fim)                        AS escala_fim_efetiva,
@@ -124,10 +138,20 @@ def buscar_estado() -> dict[str, dict]:
 
     estado: dict[str, dict] = {}
     with psycopg.connect(DB_URL, prepare_threshold=None) as conn, conn.cursor() as cur:
+        mapa_ibge = carregar_mapa_ibge(cur)
         cur.execute(sql_query)
         cols = [d[0] for d in cur.description]
         for row in cur.fetchall():
             r = dict(zip(cols, row))
+            # Q08: quando o nome efetivo veio de `postos` e difere do nome ANA,
+            # o codigo do municipio precisa vir do IBGE pelo nome efetivo,
+            # senao o XLSX sai com "Atibaia, cod de outro municipio".
+            p_municipio = r.pop("_p_municipio", None)
+            ana_municipio_nome = r.pop("_ana_municipio_nome", None)
+            if p_municipio and p_municipio != ana_municipio_nome:
+                r["municipio_codigo_efetivo"] = mapa_ibge.get(
+                    chave_nome_municipio(str(p_municipio))
+                )
             estado[str(r["codigo_ana"]).strip()] = r
     return estado
 
@@ -222,10 +246,10 @@ def main() -> int:
     print("3/4 Adicionando colunas de controle ao cabecalho...")
     col_status_idx = ws.max_column + 1
     col_just_idx = ws.max_column + 2
-    ws.cell(1, col_status_idx, "STATUS_REVISAO_SPAGUAS")
-    ws.cell(1, col_just_idx, "JUSTIFICATIVA_SPAGUAS")
-    print(f"  Coluna {col_status_idx}: STATUS_REVISAO_SPAGUAS")
-    print(f"  Coluna {col_just_idx}: JUSTIFICATIVA_SPAGUAS")
+    ws.cell(1, col_status_idx, LABEL_STATUS)
+    ws.cell(1, col_just_idx, LABEL_JUSTIFICATIVA)
+    print(f"  Coluna {col_status_idx}: {LABEL_STATUS}")
+    print(f"  Coluna {col_just_idx}: {LABEL_JUSTIFICATIVA}")
     print()
 
     print("4/4 Percorrendo linhas SP, aplicando correcoes...")

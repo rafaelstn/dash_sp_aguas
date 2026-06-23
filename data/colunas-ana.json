@@ -1,0 +1,33 @@
+{
+  "_doc": "Schema unico das colunas do inventario ANA (Meta I.6 PROGESTAO). Fonte de verdade compartilhada entre o export TS (src/application/use-cases/inventario-ana/exportar.ts, gera XLSX do zero com exceljs) e o patcher Python (scripts/aplicar_resposta_na_planilha_sharepoint.py, edita a planilha do SharePoint in-place com openpyxl). Cada lado faz a MONTAGEM do seu jeito, mas a ordem das colunas, os indices Excel, os labels e a regra de fallback vivem so aqui. Cor de diff: AMARELO (FFFFFF00). Editar este arquivo muda os dois lados.",
+  "corDiffArgb": "FFFFFF00",
+  "colunasControle": {
+    "status": { "label": "STATUS_REVISAO_SPAGUAS" },
+    "justificativa": { "label": "JUSTIFICATIVA_SPAGUAS" }
+  },
+  "colunas": [
+    { "colExcel": 3, "chave": "nome", "label": "Estação - Nome", "tipo": "texto", "aliasPy": "nome_efetivo", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 4, "chave": "codigoAdicional", "label": "Estação - Código Adicional", "tipo": "texto", "aliasPy": "codigo_adicional_efetivo", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 5, "chave": "latitude", "label": "Latitude_Dec", "tipo": "numero", "aliasPy": "latitude_efetiva", "fonteFallback": ["posto", "resposta", "ana"], "diff": true },
+    { "colExcel": 6, "chave": "longitude", "label": "Longitude_Dec", "tipo": "numero", "aliasPy": "longitude_efetiva", "fonteFallback": ["posto", "resposta", "ana"], "diff": true },
+    { "colExcel": 9, "chave": "altitude", "label": "Altitude", "tipo": "numero", "aliasPy": "altitude_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 10, "chave": "areaDrenagem", "label": "Estação - Área de Drenagem (km²)", "tipo": "numero", "aliasPy": "area_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 12, "chave": "baciaNome", "label": "Bacia - Nome", "tipo": "texto", "aliasPy": "bacia_nome_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 14, "chave": "subbaciaNome", "label": "SubBacia - Nome", "tipo": "texto", "aliasPy": "subbacia_nome_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 19, "chave": "municipioCodigo", "label": "MunicipioCodigo", "tipo": "texto", "aliasPy": "municipio_codigo_efetivo", "fonteFallback": ["posto", "resposta", "ana"], "diff": true },
+    { "colExcel": 20, "chave": "municipioNome", "label": "Município - Nome", "tipo": "texto", "aliasPy": "municipio_nome_efetivo", "fonteFallback": ["posto", "resposta", "ana"], "diff": true },
+    { "colExcel": 24, "chave": "estacaoTipo", "label": "Estação - Tipo", "tipo": "texto", "aliasPy": "estacao_tipo_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 25, "chave": "escalaInicio", "label": "Escala - Início", "tipo": "data", "aliasPy": "escala_inicio_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 26, "chave": "escalaFim", "label": "Escala - Fim", "tipo": "data", "aliasPy": "escala_fim_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 27, "chave": "descargaInicio", "label": "Descarga Líquida - Início", "tipo": "data", "aliasPy": "descarga_inicio_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 28, "chave": "descargaFim", "label": "Descarga Líquida - Fim", "tipo": "data", "aliasPy": "descarga_fim_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 29, "chave": "sedimentosInicio", "label": "Sedimentos - Início", "tipo": "data", "aliasPy": "sedimentos_inicio_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 30, "chave": "sedimentosFim", "label": "Sedimentos - Fim", "tipo": "data", "aliasPy": "sedimentos_fim_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 31, "chave": "qualidadeInicio", "label": "Qualidade de Água - Início", "tipo": "data", "aliasPy": "qualidade_inicio_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 32, "chave": "qualidadeFim", "label": "Qualidade de Água - Fim", "tipo": "data", "aliasPy": "qualidade_fim_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 33, "chave": "pluviometroInicio", "label": "Pluviômetro - Início", "tipo": "data", "aliasPy": "pluviometro_inicio_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 34, "chave": "pluviometroFim", "label": "Pluviômetro - Fim", "tipo": "data", "aliasPy": "pluviometro_fim_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 35, "chave": "telemetriaInicio", "label": "Telemetria - Início", "tipo": "data", "aliasPy": "telemetria_inicio_efetiva", "fonteFallback": ["posto", "ana"], "diff": true },
+    { "colExcel": 36, "chave": "telemetriaFim", "label": "Telemetria - Fim", "tipo": "data", "aliasPy": "telemetria_fim_efetiva", "fonteFallback": ["posto", "ana"], "diff": true }
+  ]
+}
