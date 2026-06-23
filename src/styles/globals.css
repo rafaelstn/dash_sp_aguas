@@ -152,4 +152,70 @@
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
   }
+
+  /* ───────────────────────────────────────────────────────────────
+     Editor de diagramas unifilares (padrão SIBH/DAEE)
+     ─────────────────────────────────────────────────────────────── */
+
+  /* Correnteza do rio: traços claros que deslizam ao longo da faixa azul.
+     O deslocamento do tracejado cria a sensação de água correndo. A direção
+     do fluxo é dada pela variável --fluxo-sinal (1 = sentido dos pontos,
+     -1 = inverso), aplicada no NodeLinha. */
+  .rio-correnteza {
+    stroke-dasharray: 2 22;
+    stroke-dashoffset: 0;
+    animation: rio-fluxo 1.4s linear infinite;
+    animation-direction: var(--fluxo-direcao, normal);
+  }
+
+  @keyframes rio-fluxo {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+
+  /* Pulso lento do realce em postos em alerta+, chamando o olho sem piscar. */
+  .posto-pulso {
+    animation: posto-pulso 2.6s ease-in-out infinite;
+  }
+
+  @keyframes posto-pulso {
+    0%,
+    100% {
+      opacity: 0.9;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  /* Ondulação suave no reservatório (icone de ondas sobe/desce de leve). */
+  .reservatorio-onda {
+    animation: reservatorio-onda 4s ease-in-out infinite;
+  }
+
+  @keyframes reservatorio-onda {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-1.5px);
+    }
+  }
+
+  /* Acessibilidade: sob prefers-reduced-motion, congela toda animação do
+     editor e esconde a camada de correnteza (sem traço em movimento). O reset
+     global já zera a duração; aqui garantimos estado estático e limpo. */
+  @media (prefers-reduced-motion: reduce) {
+    .rio-correnteza {
+      display: none;
+    }
+    .posto-pulso {
+      opacity: 0.7;
+    }
+    .reservatorio-onda {
+      transform: none;
+    }
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useReactFlow, type NodeProps } from '@xyflow/react';
 import type { ElementoLinha, Posicao } from '@/domain/diagramas/tipos';
 import type { NodeLinha as TipoNodeLinha } from '../tipos-editor';
@@ -96,10 +96,22 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
   const a = pontos[meioIdx] ?? primeiro;
   const b = pontos[meioIdx + 1] ?? a;
   const meio = pontoMedio(a, b);
-  const corFaixa = 'hsl(var(--gov-azul) / 0.55)';
+
+  // Camadas da faixa (padrão SIBH refinado): margem clara, corpo azul e brilho
+  // central, lidas como um leito d'água com volume em vez de um traço chapado.
+  const corMargem = 'hsl(var(--gov-azul) / 0.18)';
+  const corCorpo = 'hsl(var(--gov-azul) / 0.62)';
+  const corBrilho = 'hsl(var(--gov-azul-claro) / 0.85)';
   const corTraco = 'hsl(var(--gov-azul))';
 
+  // Sinal do fluxo: 'reversa' inverte o sentido da correnteza animada para
+  // bater com a seta de direção. 'nenhuma' não anima (água parada).
+  const temFluxo = elemento.direcaoSeta !== 'nenhuma';
+  const direcaoFluxo = elemento.direcaoSeta === 'reversa' ? 'reverse' : 'normal';
+
   const editavel = selected && acoes !== undefined;
+  const rotulo = elemento.label?.trim();
+  const larguraRotulo = rotulo ? rotulo.length * 6.4 + 14 : 0;
 
   return (
     <svg
@@ -114,7 +126,7 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
         d={pathData}
         fill="none"
         stroke="transparent"
-        strokeWidth={22}
+        strokeWidth={24}
         strokeLinecap="round"
         className="pointer-events-auto cursor-pointer"
         onDoubleClick={(e) => {
@@ -132,45 +144,84 @@ function NodeLinhaBase({ id, data, selected }: NodeProps<TipoNodeLinha>) {
           d={pathData}
           fill="none"
           stroke={corTraco}
-          strokeOpacity={0.25}
-          strokeWidth={22}
+          strokeOpacity={0.22}
+          strokeWidth={24}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       ) : null}
 
-      {/* Faixa do rio */}
+      {/* Margem clara do leito (dá volume à faixa) */}
       <path
         d={pathData}
         fill="none"
-        stroke={corFaixa}
-        strokeWidth={14}
+        stroke={corMargem}
+        strokeWidth={17}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
 
+      {/* Corpo azul do rio */}
+      <path
+        d={pathData}
+        fill="none"
+        stroke={corCorpo}
+        strokeWidth={13}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Correnteza animada: traços claros deslizando no sentido do fluxo.
+          A classe CSS respeita prefers-reduced-motion (some quando reduzido). */}
+      {temFluxo ? (
+        <path
+          className="rio-correnteza"
+          style={
+            { '--fluxo-direcao': direcaoFluxo } as React.CSSProperties
+          }
+          d={pathData}
+          fill="none"
+          stroke={corBrilho}
+          strokeWidth={5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+
       {/* Seta de direção do fluxo */}
-      {elemento.direcaoSeta !== 'nenhuma' ? (
+      {temFluxo ? (
         <polygon
-          points="0,-7 14,0 0,7"
+          points="0,-6 13,0 0,6"
           fill={corTraco}
           transform={`translate(${pontoSeta.x}, ${pontoSeta.y}) rotate(${anguloSeta})`}
         />
       ) : null}
 
-      {/* Rótulo do rio */}
-      {elemento.label ? (
-        <text
-          x={meio.x}
-          y={meio.y - 12}
-          fill={corTraco}
-          fontSize={11}
-          fontWeight={600}
-          textAnchor="middle"
-          className="select-none"
-        >
-          {elemento.label}
-        </text>
+      {/* Rótulo do rio: pílula clara para legibilidade sobre o canvas. */}
+      {rotulo ? (
+        <g transform={`translate(${meio.x}, ${meio.y - 15})`} className="select-none">
+          <rect
+            x={-larguraRotulo / 2}
+            y={-9}
+            width={larguraRotulo}
+            height={16}
+            rx={8}
+            fill="hsl(var(--bg-surface))"
+            stroke="hsl(var(--gov-azul) / 0.30)"
+            strokeWidth={1}
+          />
+          <text
+            x={0}
+            y={3}
+            fill={corTraco}
+            fontSize={10.5}
+            fontWeight={600}
+            letterSpacing={0.2}
+            textAnchor="middle"
+          >
+            {rotulo}
+          </text>
+        </g>
       ) : null}
 
       {/* Alças de edição dos vértices (só com o rio selecionado) */}
