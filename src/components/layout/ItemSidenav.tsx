@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   LayoutDashboard,
   Inbox,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -24,6 +25,7 @@ const ICONES = {
   star: Star,
   alert: AlertTriangle,
   inbox: Inbox,
+  workflow: Workflow,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconeKey = keyof typeof ICONES;
