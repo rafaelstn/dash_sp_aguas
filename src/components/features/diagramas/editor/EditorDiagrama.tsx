@@ -447,14 +447,17 @@ function EditorInterno({ diagrama }: Props) {
 
   return (
     <div className="-mx-4 -my-6 flex h-[calc(100dvh-3rem)] min-h-[28rem] flex-col overflow-hidden">
-      {/* Faixa azul: voltar + nome + toolbar + indicador de save */}
-      <div className="flex flex-col gap-2 bg-gov-azul px-3 py-2 sm:flex-row sm:items-center sm:gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+      {/* Faixa azul: identidade (voltar + nome) | toolbar | exportar + save.
+          Blocos separados por divisória e com respiro (gap-4) pra não ficar
+          encavalado. No mobile empilha; no desktop a toolbar fica no centro e
+          o bloco de exportar/save vai pra direita. */}
+      <div className="flex flex-col gap-3 bg-gov-azul px-4 py-2.5 lg:flex-row lg:items-center lg:gap-4">
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
           <Link
             href="/diagramas"
             aria-label="Voltar para a lista de diagramas"
             title="Voltar para a lista"
-            className="inline-flex shrink-0 items-center rounded p-1 text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="inline-flex shrink-0 items-center rounded-md p-1.5 text-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Link>
@@ -466,13 +469,18 @@ function EditorInterno({ diagrama }: Props) {
             onClick={() => setRenomeando(true)}
             aria-label="Renomear diagrama"
             title="Renomear diagrama"
-            className="inline-flex shrink-0 items-center rounded p-1 text-white/90 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="inline-flex shrink-0 items-center rounded-md p-1.5 text-white/90 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="sm:flex-1">
+        <span
+          className="hidden h-7 w-px shrink-0 bg-white/25 lg:inline-block"
+          aria-hidden="true"
+        />
+
+        <div className="min-w-0 lg:flex-1">
           <ToolbarEditor
             ferramenta={ferramenta}
             aoTrocarFerramenta={setFerramenta}
@@ -489,7 +497,12 @@ function EditorInterno({ diagrama }: Props) {
           />
         </div>
 
-        <div className="flex shrink-0 items-center gap-1 sm:ml-auto">
+        <span
+          className="hidden h-7 w-px shrink-0 bg-white/25 lg:inline-block"
+          aria-hidden="true"
+        />
+
+        <div className="flex shrink-0 items-center gap-2 lg:ml-auto">
           <MenuExportar
             aoExportar={(formato) => void exportar(formato)}
             aoImportar={abrirImportacao}
