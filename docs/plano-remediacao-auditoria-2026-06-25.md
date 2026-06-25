@@ -90,8 +90,31 @@ não mudar o formato observável. Uniformizar exige decidir um shape único de e
 
 | ID | Item | Origem | Arquivo | Sev | Esforço | Estado |
 |----|------|--------|---------|-----|---------|--------|
-| PERF-1 | Índice GIN trigram nas colunas `observacao_1..5` (filtro de cenário ANA faz 5 ILIKE `%...%` sem índice) | Desempenho #1 | `src/infrastructure/db/ana-revisao-repository.pg.ts:411`; migration nova | ALTO | M | Pendente (migration) |
-| PERF-2 | Materializar a classificação de desconformes (coluna gerada ou MATERIALIZED VIEW) em vez de 7 regex por linha em cada COUNT | Desempenho #2 | `supabase/migrations/0012_v_postos_desconformes.sql`; `painel-repository.pg.ts` | ALTO | M | Pendente (migration) |
+| PERF-1 | Índice GIN trigram nas colunas `observacao_1..5` (filtro de cenário ANA faz 5 ILIKE `%...%` sem índice) | Desempenho #1 | `src/infrastructure/db/ana-revisao-repository.pg.ts:411`; migration nova | ALTO | M | **Em reavaliação** (ver §6.1) |
+| PERF-2 | Materializar a classificação de desconformes (coluna gerada ou MATERIALIZED VIEW) em vez de 7 regex por linha em cada COUNT | Desempenho #2 | `supabase/migrations/0012_v_postos_desconformes.sql`; `painel-repository.pg.ts` | ALTO | M | **Em reavaliação** (ver §6.1) |
+
+### 6.1 Reavaliação de PERF-1 e PERF-2 (26/06/2026)
+
+Ao ler o schema real antes de escrever as migrations, os dois itens ALTO se
+mostraram de ganho marginal sob os volumes reais. Decisão: **não aplicar agora**;
+só seguir adiante mediante `EXPLAIN ANALYZE` sob dados de produção que comprove o gargalo.
+
+- **PERF-1**: a query de cenário ANA (`ana-revisao-repository.pg.ts:411`) sempre
+  filtra por `e.lote_id`, e a migration 0029 já cria `idx_ana_revisao_estacao_lote_status`
+  e um índice parcial por lote com observação. Um lote tem ~2.371 estações (ciclo
+  2026). Após o filtro por lote, os 5 `ILIKE` rodam sobre poucos milhares de linhas
+  em tempo sub-ms. Índice GIN trigram (`pg_trgm`) compensa em `ILIKE '%x%'` sobre
+  tabela grande **sem** pré-filtro; aqui custaria 5 índices GIN (manutenção a cada
+  import) por ganho desprezível.
+- **PERF-2**: a própria migration 0012 já registra a decisão de **não** materializar
+  ("volume de 2.484 linhas não justifica; lógica de classificação pode mudar"). Além
+  disso o `resumoPendencias` que consome a view é memoizado. Materializar agora
+  reintroduziria complexidade (backfill, manutenção da regra em dois lugares) contra
+  uma decisão técnica documentada e correta para o volume atual.
+
+Conclusão: PERF-1 e PERF-2 foram superestimados pela auditoria (que assumiu tabelas
+grandes). Mantê-los como itens "sob medição": reabrir só se o inventário ANA crescer
+uma ordem de grandeza ou se uma medição real apontar o COUNT/ILIKE como gargalo.
 | PERF-3 | Lazy-load de jsPDF (`await import('jspdf')` no handler de export) | Desempenho #3 | `src/components/features/diagramas/editor/useExportarDiagrama.ts` | MÉDIO | P | Feito |
 | PERF-4 | Lazy-load do `EditorDiagrama` (xyflow) via `next/dynamic({ ssr: false })` (wrapper client `EditorDiagramaLazy`) | Desempenho #5 | `src/components/features/diagramas/editor/EditorDiagramaLazy.tsx` | MÉDIO | P | Feito |
 | PERF-5 | Consolidar os COUNT de `postos` do `resumoPendencias` num único scan via `COUNT(...) FILTER (...)` | Desempenho #4 | `src/infrastructure/db/painel-repository.pg.ts` | MÉDIO | P | Feito |
