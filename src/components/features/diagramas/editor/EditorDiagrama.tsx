@@ -50,15 +50,7 @@ import {
   criarNivel,
   criarReservatorio,
 } from './fabrica';
-import {
-  criarHistorico,
-  desfazer as desfazerHistorico,
-  empilhar,
-  podeDesfazer as historicoPodeDesfazer,
-  podeRefazer as historicoPodeRefazer,
-  refazer as refazerHistorico,
-  type Historico,
-} from './historico';
+import { useHistoricoDiagrama } from './useHistoricoDiagrama';
 import type { AcoesLinha, Ferramenta, NodeDiagrama } from './tipos-editor';
 
 interface Props {
@@ -111,14 +103,25 @@ function EditorInterno({ diagrama }: Props) {
   // Erro de importação (JSON inválido ou fora do formato), exibido em alerta.
   const [erroImport, setErroImport] = useState<string | null>(null);
 
-  // Histórico (undo/redo) sobre o array de elementos. O presente é sempre o
-  // último estado confirmado; reflete-se em `versaoHistorico` para re-render.
-  const historicoRef = useRef<Historico<ElementoDiagrama[]>>(
-    criarHistorico(diagrama.elementos),
-  );
-  const [versaoHistorico, setVersaoHistorico] = useState(0);
-
   const { estado: estadoSalvamento, agendar } = useAutoSave(diagrama.id);
+
+  // Histórico (undo/redo) sobre o array de elementos (hook useHistoricoDiagrama).
+  // Em desfazer/refazer, `restaurarHistorico` re-renderiza os nodes e dispara
+  // o auto-save com o estado restaurado.
+  const restaurarHistorico = useCallback(
+    (elementos: ElementoDiagrama[]) => {
+      setNodes(elementosParaNodes(elementos));
+      agendar(elementos);
+    },
+    [agendar, setNodes],
+  );
+  const {
+    registrar: registrarHistorico,
+    desfazer,
+    refazer,
+    podeDesfazer,
+    podeRefazer,
+  } = useHistoricoDiagrama(diagrama.elementos, restaurarHistorico);
 
   /**
    * Aplica um novo array de elementos: re-renderiza nodes, dispara auto-save e,
@@ -130,11 +133,10 @@ function EditorInterno({ diagrama }: Props) {
       setNodes(elementosParaNodes(proximos));
       agendar(proximos);
       if (registrar) {
-        historicoRef.current = empilhar(historicoRef.current, proximos);
-        setVersaoHistorico((v) => v + 1);
+        registrarHistorico(proximos);
       }
     },
-    [agendar],
+    [agendar, setNodes, registrarHistorico],
   );
 
   // Exportação client-side (PNG/SVG/PDF/JSON). Lê os elementos atuais via
@@ -194,28 +196,6 @@ function EditorInterno({ diagrama }: Props) {
     setImportPendente(null);
   }, [importPendente, aplicarElementos]);
 
-  /** Restaura um estado vindo do histórico (undo/redo): nodes + auto-save. */
-  const restaurar = useCallback(
-    (elementos: ElementoDiagrama[]) => {
-      setNodes(elementosParaNodes(elementos));
-      agendar(elementos);
-      setVersaoHistorico((v) => v + 1);
-    },
-    [agendar],
-  );
-
-  const desfazer = useCallback(() => {
-    if (!historicoPodeDesfazer(historicoRef.current)) return;
-    historicoRef.current = desfazerHistorico(historicoRef.current);
-    restaurar(historicoRef.current.presente);
-  }, [restaurar]);
-
-  const refazer = useCallback(() => {
-    if (!historicoPodeRefazer(historicoRef.current)) return;
-    historicoRef.current = refazerHistorico(historicoRef.current);
-    restaurar(historicoRef.current.presente);
-  }, [restaurar]);
-
   const aoMudarNodes = useCallback(
     (mudancas: NodeChange<NodeDiagrama>[]) => {
       setNodes((atuais) => {
@@ -230,13 +210,12 @@ function EditorInterno({ diagrama }: Props) {
         if (confirmar) {
           const elementos = nodesParaElementos(proximos);
           agendar(elementos);
-          historicoRef.current = empilhar(historicoRef.current, elementos);
-          setVersaoHistorico((v) => v + 1);
+          registrarHistorico(elementos);
         }
         return proximos;
       });
     },
-    [agendar],
+    [agendar, registrarHistorico],
   );
 
   /** Clique no canvas: adiciona o elemento da ferramenta ativa na posição. */
@@ -325,8 +304,7 @@ function EditorInterno({ diagrama }: Props) {
           if (persistir) {
             const elementos = nodesParaElementos(proximos);
             agendar(elementos);
-            historicoRef.current = empilhar(historicoRef.current, elementos);
-            setVersaoHistorico((v) => v + 1);
+            registrarHistorico(elementos);
           }
           return proximos;
         });
@@ -343,8 +321,7 @@ function EditorInterno({ diagrama }: Props) {
           );
           const elementos = nodesParaElementos(proximos);
           agendar(elementos);
-          historicoRef.current = empilhar(historicoRef.current, elementos);
-          setVersaoHistorico((v) => v + 1);
+          registrarHistorico(elementos);
           return proximos;
         });
       },
@@ -360,13 +337,12 @@ function EditorInterno({ diagrama }: Props) {
           );
           const elementos = nodesParaElementos(proximos);
           agendar(elementos);
-          historicoRef.current = empilhar(historicoRef.current, elementos);
-          setVersaoHistorico((v) => v + 1);
+          registrarHistorico(elementos);
           return proximos;
         });
       },
     }),
-    [agendar],
+    [agendar, registrarHistorico],
   );
 
   // Injeta as ações de edição do rio no data dos nodes-linha selecionados.
@@ -440,10 +416,6 @@ function EditorInterno({ diagrama }: Props) {
   }
 
   const vazio = nodes.length === 0;
-  // versaoHistorico força o recálculo dos flags após cada undo/redo/empilhar.
-  void versaoHistorico;
-  const podeDesfazer = historicoPodeDesfazer(historicoRef.current);
-  const podeRefazer = historicoPodeRefazer(historicoRef.current);
 
   return (
     <div className="-mx-4 -my-6 flex h-[calc(100dvh-3rem)] min-h-[28rem] flex-col overflow-hidden">
