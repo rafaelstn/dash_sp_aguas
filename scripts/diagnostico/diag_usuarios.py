@@ -3,7 +3,7 @@ Diagnostico ad-hoc: lista usuarios e papeis no banco.
 Saida formato tabela pra triagem manual antes de promover aprovador.
 
 Rodar:
-    ops/indexer/.venv/Scripts/python.exe scripts/diag_usuarios.py
+    ops/indexer/.venv/Scripts/python.exe scripts/diagnostico/diag_usuarios.py
 """
 
 import re

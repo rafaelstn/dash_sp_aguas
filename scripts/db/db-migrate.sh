@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Aplica as migrations SQL contra $DATABASE_URL (ou a string passada como argumento).
-# Uso: scripts/db-migrate.sh [connection_string]
+# Uso: scripts/db/db-migrate.sh [connection_string]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." &> /dev/null && pwd)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../.." &> /dev/null && pwd)"
 MIGRATIONS_DIR="$PROJECT_ROOT/supabase/migrations"
 
 CONN="${1:-${DATABASE_URL:-}}"

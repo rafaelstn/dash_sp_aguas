@@ -1,5 +1,5 @@
 {
-  "_doc": "Schema unico das colunas do inventario ANA (Meta I.6 PROGESTAO). Fonte de verdade compartilhada entre o export TS (src/application/use-cases/inventario-ana/exportar.ts, gera XLSX do zero com exceljs) e o patcher Python (scripts/aplicar_resposta_na_planilha_sharepoint.py, edita a planilha do SharePoint in-place com openpyxl). Cada lado faz a MONTAGEM do seu jeito, mas a ordem das colunas, os indices Excel, os labels e a regra de fallback vivem so aqui. Cor de diff: AMARELO (FFFFFF00). Editar este arquivo muda os dois lados.",
+  "_doc": "Schema unico das colunas do inventario ANA (Meta I.6 PROGESTAO). Fonte de verdade compartilhada entre o export TS (src/application/use-cases/inventario-ana/exportar.ts, gera XLSX do zero com exceljs) e o patcher Python (scripts/manutencao/aplicar_resposta_na_planilha_sharepoint.py, edita a planilha do SharePoint in-place com openpyxl). Cada lado faz a MONTAGEM do seu jeito, mas a ordem das colunas, os indices Excel, os labels e a regra de fallback vivem so aqui. Cor de diff: AMARELO (FFFFFF00). Editar este arquivo muda os dois lados.",
   "corDiffArgb": "FFFFFF00",
   "colunasControle": {
     "status": { "label": "STATUS_REVISAO_SPAGUAS" },

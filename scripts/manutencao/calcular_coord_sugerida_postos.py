@@ -9,7 +9,7 @@ postos.lat_sugerida_ibge / lng_sugerida_ibge.
 Idempotente: filtra sugerida_calculada_em IS NULL.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/calcular_coord_sugerida_postos.py
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/calcular_coord_sugerida_postos.py
 """
 
 from __future__ import annotations

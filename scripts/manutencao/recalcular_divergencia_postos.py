@@ -7,7 +7,7 @@ para contornar statement_timeout do Supabase. Idempotente: posto ja
 analisado nao re-roda.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/recalcular_divergencia_postos.py
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/recalcular_divergencia_postos.py
 """
 
 from __future__ import annotations

@@ -29,7 +29,7 @@ Justificativa: o ambiente de homologação ainda não tem usuários reais, MFA a
 
 Introduzir variável de ambiente `MFA_OPCIONAL_HOMOLOGACAO=true` que, quando presente e igual a `true`, desliga as 3 camadas:
 
-- Camada 1 (trigger SQL): o script `scripts/promover_aprovador.py` desabilita o trigger durante a transação e reabilita após (não modifica o trigger no esquema).
+- Camada 1 (trigger SQL): o script `scripts/seed/promover_aprovador.py` desabilita o trigger durante a transação e reabilita após (não modifica o trigger no esquema).
 - Camada 2 (use cases): `papeis.temMFAVerificado` deixa de ser chamado quando `mfaObrigatorio() === false`.
 - Camada 3 (rotas): `exigirSessaoAal2` retorna sem fazer nada quando `mfaObrigatorio() === false`, com log estruturado `seg.mfa.bypass_homologacao` para auditoria.
 

@@ -20,7 +20,7 @@ Exit codes:
   2 — falha real (migrations/importer quebraram, ou sem sentinel + falha).
 
 Uso:
-  python scripts/setup_db.py [--force]
+  python scripts/db/setup_db.py [--force]
     --force  ignora sentinel e reverifica do zero.
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = ROOT / ".env.local"
 MIGRATIONS_SCRIPT = ROOT / "scripts" / "apply_migrations.py"
 IMPORTER_SCRIPT = ROOT / "ops" / "importer" / "import_csv.py"
@@ -207,7 +207,7 @@ def main() -> int:
         if usar and not force:
             log(
                 "[setup] Sentinel recente disponível — continuando apesar da falha. "
-                "Se o dashboard não responder, rode: python scripts/setup_db.py --force"
+                "Se o dashboard não responder, rode: python scripts/db/setup_db.py --force"
             )
             return 0
         return 2

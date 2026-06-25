@@ -63,7 +63,7 @@ Leia **nesta ordem** antes de agir:
 2. **Copiar `.env.example` para `.env.local`** e preencher **apenas** as variáveis de DB.
 
 3. **Aplicar as 15 migrations** ao Supabase. Duas opções:
-   - `bash scripts/db-migrate.sh` (se o bash do Git estiver instalado)
+   - `bash scripts/db/db-migrate.sh` (se o bash do Git estiver instalado)
    - Ou via Supabase SQL Editor (copiar e colar cada migration na ordem)
    - Ou com `psql`: `for f in supabase/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done`
    - Validar que as 8 tabelas (`postos`, `arquivos_indexados`, `arquivos_orfaos`, `acesso_ficha`, `import_log`, `indexacao_log`, `tipos_documento`, `tipos_dado`, `revisoes_desconformidade`) + a view `v_postos_desconformes` foram criadas.

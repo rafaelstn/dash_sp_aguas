@@ -11,7 +11,7 @@ acontece em sprints subsequentes.
 | Service Worker | gerado a partir de `src/app/sw.ts` em build de produção, servido como `/sw.js` |
 | Layout dedicado | `src/app/app/layout.tsx` (sem sidenav, com bottom nav) |
 | Rotas | home, busca de posto, shell de formulário, minhas-fichas, perfil |
-| Ícones | placeholder gerados por `scripts/gerar-icones-placeholder.mjs` |
+| Ícones | placeholder gerados por `scripts/build/gerar-icones-placeholder.mjs` |
 
 ADR de referência: `docs/adr/0007-app-mobile-pwa-capacitor.md`.
 Spec: `docs/spec-modulo-mobile.md`.
@@ -45,7 +45,7 @@ public/manifest.json                // manifest da PWA
 public/icons/icon-{192,512}.png     // ícones placeholder (descartáveis)
 public/icons/icon-maskable-512.png  // maskable safe-zone
 public/apple-touch-icon.png         // 180x180 iOS
-scripts/gerar-icones-placeholder.mjs  // gerador dos ícones
+scripts/build/gerar-icones-placeholder.mjs  // gerador dos ícones
 ```
 
 ---

@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 /**
  * Conversão HTML -> PDF via navegador headless (Chrome/Edge) em modo
  * `--headless --print-to-pdf`. É o mesmo motor que o pipeline manual do CLI
- * (scripts/gerar-pdf-relatorio.mjs) pressupõe, agora encapsulado pra a rota.
+ * (scripts/build/gerar-pdf-relatorio.mjs) pressupõe, agora encapsulado pra a rota.
  *
  * O ambiente alvo (PRODESP/on-prem) tem navegador instalado; em serverless
  * puro não haveria binário e a chamada lança `RenderizadorPdfIndisponivel`,

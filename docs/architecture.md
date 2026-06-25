@@ -325,7 +325,7 @@ Para cada estação ANA, o backend resolve os campos efetivos (`municipio_efetiv
 2. **resposta_*** (ADR-0014): se é estação órfã (sem posto), lê dos campos `resposta_*` da própria `ana_revisao_estacao`.
 3. **Snapshot ANA**: fallback final, mostra o dado original que veio na planilha.
 
-Lógica implementada idêntica em TS (`src/application/use-cases/inventario-ana/exportar.ts`) e Python (`scripts/aplicar_resposta_na_planilha_sharepoint.py`).
+Lógica implementada idêntica em TS (`src/application/use-cases/inventario-ana/exportar.ts`) e Python (`scripts/manutencao/aplicar_resposta_na_planilha_sharepoint.py`).
 
 ### Componentes
 

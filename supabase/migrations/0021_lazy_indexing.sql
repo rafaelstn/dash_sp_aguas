@@ -8,7 +8,7 @@
 -- Duas tabelas novas:
 --
 --   postos_caminhos — resolve prefixo -> pasta raiz no HD. Alimentado por
---   scripts/seed_postos_caminhos.py que faz busca fuzzy no HD pra achar a
+--   scripts/seed/seed_postos_caminhos.py que faz busca fuzzy no HD pra achar a
 --   pasta de cada um dos 2.483 postos. `ativo=false` quando a pasta não
 --   foi localizada (posto novo, pasta renomeada, etc.).
 --
@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_postos_caminhos_ativo
   ON postos_caminhos (ativo) WHERE ativo = true;
 
 COMMENT ON TABLE postos_caminhos IS
-  'Mapeia prefixo -> pasta raiz no HD (lazy indexing, ADR-0006). Alimentado por scripts/seed_postos_caminhos.py.';
+  'Mapeia prefixo -> pasta raiz no HD (lazy indexing, ADR-0006). Alimentado por scripts/seed/seed_postos_caminhos.py.';
 
 DROP TRIGGER IF EXISTS trg_postos_caminhos_updated_at ON postos_caminhos;
 CREATE TRIGGER trg_postos_caminhos_updated_at

@@ -17,7 +17,7 @@ Idempotente. Zero invencao de dado: so popula campos de sugestao;
 Marcio aceita ou rejeita na UI.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/detectar_match_e_duplicatas.py
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/detectar_match_e_duplicatas.py
 """
 
 from __future__ import annotations

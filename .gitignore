@@ -64,7 +64,7 @@ docs/relatorios/
 # Snapshots gerados por scripts de manutenção (limpar_fim_operacao_ativos.py, etc.)
 # Contêm dados de produção — manter sempre fora do git.
 data/backup_*.csv
-# Dumps logicos do banco (scripts/backup_banco.py) — dado de producao, nunca no git
+# Dumps logicos do banco (scripts/backup/backup_banco.py) — dado de producao, nunca no git
 data/backups/
 
 .vercel

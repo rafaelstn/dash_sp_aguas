@@ -7,8 +7,8 @@ Em transacao: faz UPDATE e commita; rollback automatico se algo falhar.
 Backup: salva CSV com snapshot dos registros afetados antes do UPDATE.
 
 Rodar:
-    ops/indexer/.venv/Scripts/python.exe scripts/limpar_fim_operacao_ativos.py
-    ops/indexer/.venv/Scripts/python.exe scripts/limpar_fim_operacao_ativos.py --dry-run
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/limpar_fim_operacao_ativos.py
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/limpar_fim_operacao_ativos.py --dry-run
 """
 
 import csv

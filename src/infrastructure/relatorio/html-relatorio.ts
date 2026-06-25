@@ -6,7 +6,7 @@ import { marked } from 'marked';
 
 /**
  * Converte o markdown do relatório em um HTML print-ready (A4, identidade
- * visual do Governo de SP). Mesma lógica do CLI scripts/gerar-pdf-relatorio.mjs;
+ * visual do Governo de SP). Mesma lógica do CLI scripts/build/gerar-pdf-relatorio.mjs;
  * o CSS é mantido em paridade com aquele script (a duplicação é deliberada:
  * o .mjs é ESM puro fora do build do Next e não importa este módulo TS).
  *

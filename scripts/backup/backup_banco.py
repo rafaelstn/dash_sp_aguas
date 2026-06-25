@@ -1,12 +1,12 @@
 """Backup logico do banco (dump dos dados do schema public) sem depender de
 pg_dump/Docker. Cada tabela vira um CSV gzipado em data/backups/<timestamp>/.
 
-Restauracao: aplicar as migrations (scripts/apply_migrations.py) num banco limpo
+Restauracao: aplicar as migrations (scripts/db/apply_migrations.py) num banco limpo
 e depois COPY FROM de cada CSV (ver restore_banco.py, ou COPY manual). O schema
 vem das migrations versionadas no git; este backup guarda apenas os DADOS.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/backup_banco.py
+    ops/indexer/.venv/Scripts/python.exe scripts/backup/backup_banco.py
     (agendavel no Task Scheduler do Windows para rodar diario)
 
 Le DATABASE_URL do .env.local. Idempotente: cria uma pasta nova por execucao.
@@ -22,7 +22,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RETENCAO = 14  # mantem os 14 backups mais recentes
 
 

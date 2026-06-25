@@ -1,4 +1,4 @@
-// scripts/gerar-icones-placeholder.mjs
+// scripts/build/gerar-icones-placeholder.mjs
 //
 // Gera PNGs placeholder de cor sólida (gov-azul) com letras "SPÁ" centralizadas,
 // para o manifest do PWA. Estes ícones são DESCARTÁVEIS — Fernanda substitui
@@ -7,7 +7,7 @@
 // Sem dependências externas: usa zlib do Node + escrita binária do PNG.
 // Renderiza tipografia via fonte bitmap embutida (chars 'S', 'P', 'Á').
 //
-// Uso: node scripts/gerar-icones-placeholder.mjs
+// Uso: node scripts/build/gerar-icones-placeholder.mjs
 //
 // Gera:
 //   public/icons/icon-192.png         (192x192, full bleed, purpose=any)
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, '..');
+const ROOT = resolve(__dirname, '..', '..');
 
 // gov-azul hsl(226, 71%, 40%) = #1E40AF
 const COR_FUNDO = [0x1e, 0x40, 0xaf];

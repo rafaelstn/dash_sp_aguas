@@ -15,7 +15,7 @@ Auditoria completa em postos_evento e ana_revisao_evento.
 Idempotente: re-execucao nao duplica.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/aplicar_decisoes_seguras.py [--dry-run]
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/aplicar_decisoes_seguras.py [--dry-run]
 """
 
 from __future__ import annotations

@@ -18,7 +18,7 @@
 -- tratamos como "margem de erro de cadastro"; igual ou acima, exibe alerta
 -- vermelho e sugere correção do município declarado para o real.
 --
--- O shapefile é populado por `scripts/importar_ibge_municipios.py` que lê
+-- O shapefile é populado por `scripts/seed/importar_ibge_municipios.py` que lê
 -- BR_Municipios_2024.shp filtrado por UF=SP. Geometria em SRID 4674
 -- (SIRGAS 2000, padrão IBGE).
 -- =============================================================================

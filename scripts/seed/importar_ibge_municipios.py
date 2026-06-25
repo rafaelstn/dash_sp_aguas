@@ -16,7 +16,7 @@ Tambem complementa nome do municipio chamando
 Idempotente: usa INSERT ... ON CONFLICT no codigo_ibge.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/importar_ibge_municipios.py
+    ops/indexer/.venv/Scripts/python.exe scripts/seed/importar_ibge_municipios.py
 """
 
 import gzip

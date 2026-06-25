@@ -123,7 +123,7 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
       <Alerta tipo="aviso" titulo="Sem inventário carregado">
         Nenhum lote do PROGESTÃO foi importado ainda. Carregue a planilha de
         dúvidas da ANA via{' '}
-        <code className="mono">scripts/importar_inventario_ana.py</code>.
+        <code className="mono">scripts/seed/importar_inventario_ana.py</code>.
       </Alerta>
     );
   }

@@ -9,7 +9,7 @@ Verifica:
      que SO a Adayana visualizou (sinal de gravacao com id errado).
 
 Rodar:
-    ops/indexer/.venv/Scripts/python.exe scripts/diag_acesso_ficha_cross_user.py
+    ops/indexer/.venv/Scripts/python.exe scripts/diagnostico/diag_acesso_ficha_cross_user.py
 """
 
 import re

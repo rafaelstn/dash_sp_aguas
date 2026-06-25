@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "pwa:icons": "node scripts/gerar-icones-placeholder.mjs",
+    "pwa:icons": "node scripts/build/gerar-icones-placeholder.mjs",
     "pwa:build": "next build",
     "pwa:audit": "npx --yes lighthouse http://localhost:3000/app --only-categories=pwa,accessibility,performance,best-practices --chrome-flags=--headless --output=html --output-path=./docs/relatorios/lighthouse-pwa.html"
   },

@@ -1,8 +1,8 @@
 """Aplica as migrations SQL em ordem no DATABASE_URL (usado pelo start.ps1).
 
 Uso (a partir da raiz do projeto, com venv do indexer ativado):
-  python scripts/apply_migrations.py [--only 0019]
-  python scripts/apply_migrations.py --since 0016
+  python scripts/db/apply_migrations.py [--only 0019]
+  python scripts/db/apply_migrations.py --since 0016
 
 Lê DATABASE_URL do .env.local. Idempotente: cada migration já usa IF NOT EXISTS
 e blocos DO $$ pra suportar reexecução. Se uma migration pesada falhar por
@@ -19,7 +19,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS_DIR = ROOT / "supabase" / "migrations"
 ENV_PATH = ROOT / ".env.local"
 

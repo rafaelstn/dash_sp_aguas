@@ -6,7 +6,7 @@ nem coluna `mfa_obrigatorio`. Login fica em email + senha apenas, controle
 de acesso por flag `aprovador` na tabela `usuarios_papeis`.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/promover_aprovador.py <email>
+    ops/indexer/.venv/Scripts/python.exe scripts/seed/promover_aprovador.py <email>
 """
 
 import re

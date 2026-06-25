@@ -11,8 +11,8 @@ Sufixos tolerados: qualquer coisa após o prefixo (ex.: "1D-008 paralisado",
 
 Uso:
 
-    python scripts/seed_postos_caminhos.py --root "Y:\\000 Documentos de Campo"
-    python scripts/seed_postos_caminhos.py --root ... --dry-run
+    python scripts/seed/seed_postos_caminhos.py --root "Y:\\000 Documentos de Campo"
+    python scripts/seed/seed_postos_caminhos.py --root ... --dry-run
 
 Idempotente: ON CONFLICT (prefixo) DO UPDATE. Rode à vontade.
 

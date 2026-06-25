@@ -7,7 +7,7 @@ de Observador × 1) em datas espalhadas pra demonstrar a cronologia rica
 no histórico do posto.
 
 Rodar:
-    ops/indexer/.venv/Scripts/python.exe scripts/seed_fichas_demo.py
+    ops/indexer/.venv/Scripts/python.exe scripts/seed/seed_fichas_demo.py
 """
 
 import json

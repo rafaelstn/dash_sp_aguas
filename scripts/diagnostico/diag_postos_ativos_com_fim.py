@@ -3,7 +3,7 @@ Diagnostico ad-hoc: lista postos com status_pcd ATIVO que possuem operacao_fim_a
 Inconsistencia: se PCD esta ativo nao deveria haver ano de fim de operacao.
 
 Rodar:
-    ops/indexer/.venv/Scripts/python.exe scripts/diag_postos_ativos_com_fim.py
+    ops/indexer/.venv/Scripts/python.exe scripts/diagnostico/diag_postos_ativos_com_fim.py
 """
 
 import re

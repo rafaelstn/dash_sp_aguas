@@ -23,7 +23,7 @@ As migrations 0031 (`postos_fonte_unica`), 0032 (`drop_correcoes_concorrentes_an
 A fonte única da verdade para qualquer correção de estação ANA passa a ser o cadastro de `postos` (e, quando o posto não existe, os campos `resposta_*` em `ana_revisao_estacao` adicionados pela migration 0039).
 
 - Coluna `correcoes` JSONB removida (migration 0032, com migração de payload para o histórico de eventos antes do DROP).
-- Backend lê com fallback de 3 níveis: `postos` (se houver match), depois `resposta_*` (resposta órfã para estações sem posto), depois snapshot da ANA. Lógica idêntica em TypeScript (`src/application/use-cases/inventario-ana/exportar.ts`) e Python (`scripts/aplicar_resposta_na_planilha_sharepoint.py`).
+- Backend lê com fallback de 3 níveis: `postos` (se houver match), depois `resposta_*` (resposta órfã para estações sem posto), depois snapshot da ANA. Lógica idêntica em TypeScript (`src/application/use-cases/inventario-ana/exportar.ts`) e Python (`scripts/manutencao/aplicar_resposta_na_planilha_sharepoint.py`).
 - A revisão deixa de aceitar `aceitar_sugestao_municipio` em bulk; o aprovador faz a correção via `/postos/[prefixo]/editar`, garantindo audit trail completo em `postos_evento`.
 
 ## 3. Consequências

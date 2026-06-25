@@ -16,7 +16,7 @@
 - Acessibilidade e-MAG / WCAG 2.1 AA obrigatória (governo). Foco visível, teclado, contraste, aria.
 - Texto visível em PT-BR com acentuação correta. NUNCA usar traço/dash (em-dash/en-dash) como conector. NUNCA `window.confirm/alert/prompt` (usar `ConfirmDialog` do projeto).
 - Banco único: o projeto Supabase `wvjlnkvxnmxaeezmxwpn` (São Paulo/sa-east-1), já reconstruído.
-- Backup diário já ativo; toda migration nova precisa ser aplicada no banco (não só commitada) via `scripts/apply_migrations.py`.
+- Backup diário já ativo; toda migration nova precisa ser aplicada no banco (não só commitada) via `scripts/db/apply_migrations.py`.
 
 ---
 
@@ -61,7 +61,7 @@ Pré-requisito dos dois módulos. Sem UI nova relevante; entrega a base de dados
   - `leituras_pluviometricas (id bigserial pk, estacao_id uuid not null references estacoes_pluviometricas(id) on delete cascade, momento timestamptz not null, manual_mm double precision default 0, automatico_mm double precision default 0, criado_em timestamptz default now())` + índices em `(estacao_id)` e `(momento)`.
   - RLS deny-by-default + policies de leitura, alinhadas ao padrão da migration `0040` (não copiar as policies "authenticated write" abertas do protótipo; o app escreve via role de serviço, RLS é defesa em profundidade).
 - [ ] Escrever as migrations idempotentes (`IF NOT EXISTS`, `DO $$`).
-- [ ] Aplicar com `ops/indexer/.venv/Scripts/python.exe scripts/apply_migrations.py --since 0045`.
+- [ ] Aplicar com `ops/indexer/.venv/Scripts/python.exe scripts/db/apply_migrations.py --since 0045`.
 - [ ] Validar tabelas criadas (consulta de contagem). Commit.
 
 ### Task 0.3: Adapter de integração SIBH (infra) + API routes

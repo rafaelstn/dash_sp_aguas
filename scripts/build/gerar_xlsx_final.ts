@@ -2,7 +2,7 @@
  * Gera o XLSX final de resposta para a ANA sem subir o servidor.
  *
  * Uso (com tsx):
- *   npx tsx scripts/gerar_xlsx_final.ts
+ *   npx tsx scripts/build/gerar_xlsx_final.ts
  *
  * Escreve em docs/relatorios/SP_AGUAS_Inventario_<data>.xlsx
  */
@@ -21,8 +21,8 @@ for (const line of envText.split(/\r?\n/)) {
   }
 }
 
-import { exportarInventarioAna } from '../src/application/use-cases/inventario-ana/exportar';
-import { sql } from '../src/infrastructure/db/client';
+import { exportarInventarioAna } from '../../src/application/use-cases/inventario-ana/exportar';
+import { sql } from '../../src/infrastructure/db/client';
 
 async function main() {
   const lote = await sql<Array<{ id: string; nome: string }>>`

@@ -33,7 +33,7 @@ Idempotente: re-rodar com o mesmo arquivo (mesmo hash) substitui as estacoes do 
 Transacional: tudo num unico commit; qualquer erro faz rollback.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/importar_inventario_ana.py \\
+    ops/indexer/.venv/Scripts/python.exe scripts/seed/importar_inventario_ana.py \\
         "data/inventario-ana/progestao3_meta_i6_resposta_spaguas.xlsx" \\
         --nome "PROGESTAO 3 Meta I.6 - Resposta SPAguas" \\
         --prazo 2026-07-20

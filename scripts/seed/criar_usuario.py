@@ -5,7 +5,7 @@ Login fica em email + senha apenas (ADR-0010, MFA removido). Controle de acesso
 por flag `aprovador` em `usuarios_papeis`, que e o papel maximo do sistema.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/criar_usuario.py <email> [--aprovador] [--nome "Nome Completo"]
+    ops/indexer/.venv/Scripts/python.exe scripts/seed/criar_usuario.py <email> [--aprovador] [--nome "Nome Completo"]
 
 Senha eh solicitada via prompt (getpass) para nao aparecer em historico
 de shell, em `ps aux` ou em logs. Em ambiente automatizado (CI/CD),

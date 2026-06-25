@@ -28,7 +28,7 @@ Migration 0039 (`ana_resposta_orfas`) adiciona colunas `resposta_*` (municipio, 
 
 A regra é implementada de forma idêntica em:
 - TypeScript: `src/application/use-cases/inventario-ana/exportar.ts:96-109`.
-- Python: `scripts/aplicar_resposta_na_planilha_sharepoint.py:88-122`.
+- Python: `scripts/manutencao/aplicar_resposta_na_planilha_sharepoint.py:88-122`.
 
 Listagem (`anaRevisaoRepository.listar`) usa os mesmos campos efetivos para sinalizar status na UI.
 

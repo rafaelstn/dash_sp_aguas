@@ -20,7 +20,7 @@ Saída: <pasta-da-origem>/<basename-da-origem>_RESPOSTA_SPAGUAS.xlsx
 Idempotente: re-execução sobrescreve a saída usando o estado atual do banco.
 
 Uso:
-  ops/indexer/.venv/Scripts/python.exe scripts/aplicar_resposta_na_planilha_sharepoint.py \\
+  ops/indexer/.venv/Scripts/python.exe scripts/manutencao/aplicar_resposta_na_planilha_sharepoint.py \\
       --origem "C:/Users/win1064/Downloads/PROGESTÃO_3...xlsx"
   (opcional) --saida "C:/Users/win1064/Downloads/saida.xlsx"
   (opcional) --dry-run  (não salva, só relata estatísticas)
@@ -40,7 +40,7 @@ from dotenv import load_dotenv
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env.local")
 DB_URL = os.environ["DATABASE_URL"]
 

@@ -6,7 +6,7 @@ import schemaColunasAna from '../../../../data/colunas-ana.json';
 
 /**
  * Schema único das colunas ANA, compartilhado com o patcher Python
- * (scripts/aplicar_resposta_na_planilha_sharepoint.py). Editar
+ * (scripts/manutencao/aplicar_resposta_na_planilha_sharepoint.py). Editar
  * data/colunas-ana.json muda os dois lados. Aqui usamos `colExcel`, `chave`
  * e o flag `diff` para montar o mapa de diferenças sem repetir os índices.
  */

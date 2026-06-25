@@ -106,7 +106,7 @@ cp .env.example .env.local
 ### 3. Aplicar migrations
 
 ```bash
-bash scripts/db-migrate.sh
+bash scripts/db/db-migrate.sh
 ```
 
 ### 4. Importar a planilha mestra (uma vez)
@@ -230,6 +230,6 @@ Projeto alinhado às diretrizes da SP Águas (LGPD — Lei 13.709/2018, Decreto 
 10.046/2019, IN SGD/ME nº 1/2019) e a padrões abertos (REST, JSON, GeoJSON, CSV).
 
 - [`LICENSE`](./LICENSE) — Apache License 2.0
-- [`SECURITY.md`](./SECURITY.md) — reporte de vulnerabilidades (divulgação coordenada)
-- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — código de conduta
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — guia de contribuição
+- [`SECURITY.md`](./.github/SECURITY.md) — reporte de vulnerabilidades (divulgação coordenada)
+- [`CODE_OF_CONDUCT.md`](./.github/CODE_OF_CONDUCT.md) — código de conduta
+- [`CONTRIBUTING.md`](./.github/CONTRIBUTING.md) — guia de contribuição

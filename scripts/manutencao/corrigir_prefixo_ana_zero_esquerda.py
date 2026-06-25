@@ -13,7 +13,7 @@ Audit em postos_evento com origem_evento='corrigir_prefixo_ana_zero'.
 Idempotente: re-execução não acha mais nada para corrigir.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/corrigir_prefixo_ana_zero_esquerda.py [--dry-run]
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/corrigir_prefixo_ana_zero_esquerda.py [--dry-run]
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env.local")
 DB_URL = os.environ["DATABASE_URL"]
 

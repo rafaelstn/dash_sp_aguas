@@ -16,7 +16,7 @@ Pipeline:
 Idempotente: postos ja com divergencia 'ok' nao sao tocados.
 
 Uso:
-    ops/indexer/.venv/Scripts/python.exe scripts/arrumar_coordenadas_divergentes.py [--dry-run]
+    ops/indexer/.venv/Scripts/python.exe scripts/manutencao/arrumar_coordenadas_divergentes.py [--dry-run]
 """
 
 from __future__ import annotations
