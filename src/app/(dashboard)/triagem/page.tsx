@@ -23,6 +23,7 @@ import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { BadgeEstado } from '@/components/features/triagem/BadgeEstado';
 import { AtalhosListaTriagem } from '@/components/features/triagem/AtalhosListaTriagem';
 import { tempoRelativo } from '@/lib/triagem-api';
+import { logger } from '@/infrastructure/logging/logger';
 import type { FichaTriagem } from '@/domain/triagem';
 
 export const dynamic = 'force-dynamic';
@@ -218,7 +219,11 @@ async function Lista({ filtros }: { filtros: FiltrosResolvidos }) {
         </Alerta>
       );
     }
-    console.error('[triagem/lista] falha ao listar', e);
+    logger.error(
+      'triagem.listar.falha',
+      { motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao listar a fila de triagem',
+    );
     return (
       <Alerta tipo="erro" titulo="Falha ao carregar a fila de triagem">
         Não foi possível concluir a operação. Tente novamente em instantes. Se

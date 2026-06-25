@@ -19,6 +19,7 @@ import {
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { TermoBuscaInvalido } from '@/domain/errors';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,7 +87,11 @@ async function Resultados(props: {
       try {
         prefixosFavoritos = await favoritosRepository.prefixosFavoritos(usuario.id);
       } catch (e) {
-        console.error('[home] Falha em chamada opcional — degrada graciosa', e);
+        logger.warn(
+          'home.favoritos.prefixos.falha',
+          { motivo: e instanceof Error ? e.message : String(e) },
+          'Falha em chamada opcional, degrada graciosa',
+        );
       }
     }
 
@@ -270,7 +275,11 @@ export default async function Home({ searchParams }: PageProps) {
   try {
     facetas = await listarFacetas(facetasRepository);
   } catch (e) {
-    console.error('[home] Falha ao listar facetas — usando fallback vazio', e);
+    logger.warn(
+      'home.facetas.falha',
+      { motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao listar facetas, usando fallback vazio',
+    );
     facetas = {
       ugrhis: [],
       municipios: [],
@@ -289,7 +298,11 @@ export default async function Home({ searchParams }: PageProps) {
       try {
         totalFavoritos = await favoritosRepository.contar(usuario.id);
       } catch (e) {
-        console.error('[home] Falha em chamada opcional — degrada graciosa', e);
+        logger.warn(
+          'home.favoritos.contar.falha',
+          { motivo: e instanceof Error ? e.message : String(e) },
+          'Falha em chamada opcional, degrada graciosa',
+        );
       }
       try {
         postosRecentes = await listarPostosRecentes(
@@ -299,14 +312,22 @@ export default async function Home({ searchParams }: PageProps) {
           10,
         );
       } catch (e) {
-        console.error('[home] Falha ao listar postos recentes — recentes some', e);
+        logger.warn(
+          'home.recentes.falha',
+          { motivo: e instanceof Error ? e.message : String(e) },
+          'Falha ao listar postos recentes, recentes some',
+        );
       }
       try {
         prefixosFavoritosSet = await favoritosRepository.prefixosFavoritos(
           usuario.id,
         );
       } catch (e) {
-        console.error('[home] Falha ao listar prefixos favoritos — estrelas vazias', e);
+        logger.warn(
+          'home.favoritos.prefixos.falha',
+          { motivo: e instanceof Error ? e.message : String(e) },
+          'Falha ao listar prefixos favoritos, estrelas vazias',
+        );
       }
     }
     try {

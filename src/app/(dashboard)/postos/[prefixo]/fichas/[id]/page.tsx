@@ -5,6 +5,7 @@ import { obterFichaVisita } from '@/application/use-cases/fichas-visita';
 import { obterSchema } from '@/domain/fichas/schemas';
 import { TIPOS_DOCUMENTO } from '@/domain/tipo-documento';
 import { DetalheFicha } from '@/components/features/fichas/DetalheFicha';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,11 @@ export default async function DetalheFichaPage({ params }: PageProps) {
   try {
     ficha = await obterFichaVisita(fichasVisitaRepository, id);
   } catch (e) {
-    console.error('[fichas/[id]] Falha ao carregar ficha', { id, prefixo, e });
+    logger.error(
+      'fichas.carregar.falha',
+      { id, prefixo, motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao carregar ficha',
+    );
     throw e; // Repassa pro error.tsx mostrar UI amigável.
   }
 

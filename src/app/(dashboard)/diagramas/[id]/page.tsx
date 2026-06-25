@@ -5,6 +5,7 @@ import { EditorDiagrama } from '@/components/features/diagramas/editor/EditorDia
 import { diagramasRepository } from '@/infrastructure/repositories';
 import { obterDiagrama } from '@/application/use-cases/diagramas';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,12 +39,16 @@ export default async function EditorDiagramaPage({ params }: PageProps) {
     return <EditorDiagrama diagrama={diagrama} />;
   } catch (erro) {
     const codigo = randomUUID().slice(0, 8);
-    console.error('[diagramas.editor] Falha ao carregar diagrama', {
-      codigo,
-      id,
-      usuarioId: usuario.id,
-      erro,
-    });
+    logger.error(
+      'diagramas.carregar.falha',
+      {
+        codigo,
+        id,
+        usuarioId: usuario.id,
+        motivo: erro instanceof Error ? erro.message : String(erro),
+      },
+      'Falha ao carregar diagrama',
+    );
     return (
       <div className="p-6">
         <Alerta

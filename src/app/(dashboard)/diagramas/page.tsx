@@ -5,6 +5,7 @@ import { ListaDiagramas } from '@/components/features/diagramas/ListaDiagramas';
 import { diagramasRepository } from '@/infrastructure/repositories';
 import { listarDiagramas } from '@/application/use-cases/diagramas';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,11 +24,15 @@ export default async function PaginaDiagramas() {
     return <ListaDiagramas diagramasIniciais={diagramas} />;
   } catch (erro) {
     const codigo = randomUUID().slice(0, 8);
-    console.error('[diagramas.page] Falha ao listar diagramas', {
-      codigo,
-      usuarioId: usuario.id,
-      erro,
-    });
+    logger.error(
+      'diagramas.listar.falha',
+      {
+        codigo,
+        usuarioId: usuario.id,
+        motivo: erro instanceof Error ? erro.message : String(erro),
+      },
+      'Falha ao listar diagramas',
+    );
     return (
       <Alerta
         tipo="erro"

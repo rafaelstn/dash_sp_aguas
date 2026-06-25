@@ -11,6 +11,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { SCHEMAS_FICHA } from '@/domain/fichas/schemas';
 import { CODIGOS_TIPO_DOCUMENTO } from '@/domain/tipo-documento';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
+import { logger } from '@/infrastructure/logging/logger';
 
 /**
  * Registra o acesso ao detalhe ('visualizou_ficha') para alimentar a aba
@@ -35,7 +36,11 @@ async function registrarAcessoRecente(prefixo: string): Promise<void> {
       usuarioId: usuario?.id ?? null,
     });
   } catch (erro) {
-    console.error('[posto] Falha ao registrar acesso recente', erro);
+    logger.warn(
+      'posto.acesso-recente.falha',
+      { prefixo, motivo: erro instanceof Error ? erro.message : String(erro) },
+      'Falha ao registrar acesso recente',
+    );
   }
 }
 

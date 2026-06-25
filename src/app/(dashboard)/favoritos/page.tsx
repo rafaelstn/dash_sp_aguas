@@ -9,6 +9,7 @@ import {
 } from '@/infrastructure/repositories';
 import { listarFavoritos } from '@/application/use-cases/listar-favoritos';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,13 +77,17 @@ export default async function PaginaFavoritos() {
   } catch (erro) {
     // Log estruturado server-side para diagnóstico. UUID interno (pseudônimo
     // LGPD) + código curto de correlação que o técnico pode citar no suporte.
-    // Não serializar a `causa` para o cliente — pode conter detalhe de infra.
+    // Só a mensagem do erro vai pro log; o objeto cru pode conter detalhe de infra.
     const codigo = randomUUID().slice(0, 8);
-    console.error('[favoritos.page] Falha ao listar favoritos', {
-      codigo,
-      usuarioId: usuario.id,
-      erro,
-    });
+    logger.error(
+      'favoritos.listar.falha',
+      {
+        codigo,
+        usuarioId: usuario.id,
+        motivo: erro instanceof Error ? erro.message : String(erro),
+      },
+      'Falha ao listar favoritos',
+    );
     return (
       <Alerta
         tipo="erro"

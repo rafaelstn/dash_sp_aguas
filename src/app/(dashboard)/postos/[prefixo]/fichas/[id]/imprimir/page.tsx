@@ -10,6 +10,7 @@ import { obterFichaVisita } from '@/application/use-cases/fichas-visita';
 import { obterSchema } from '@/domain/fichas/schemas';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { TemplateImpressao } from '@/components/features/fichas/TemplateImpressao';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,11 @@ export default async function ImprimirFichaPage({
   try {
     ficha = await obterFichaVisita(fichasVisitaRepository, id);
   } catch (e) {
-    console.error('[fichas/imprimir] Falha ao obter ficha', { id, prefixo, e });
+    logger.error(
+      'fichas.imprimir.ficha.falha',
+      { id, prefixo, motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao obter ficha',
+    );
     throw e;
   }
   if (!ficha || ficha.prefixo !== prefixo) notFound();
@@ -65,7 +70,11 @@ export default async function ImprimirFichaPage({
       usuarioId: usuario?.id ?? null,
     });
   } catch (e) {
-    console.error('[fichas/imprimir] Falha ao obter posto', { prefixo, e });
+    logger.error(
+      'fichas.imprimir.posto.falha',
+      { prefixo, motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao obter posto',
+    );
     throw e;
   }
 

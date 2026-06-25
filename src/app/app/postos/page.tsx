@@ -17,6 +17,7 @@ import {
   BuscaPostosMobile,
   type PostoLista,
 } from './BuscaPostosMobile';
+import { logger } from '@/infrastructure/logging/logger';
 
 /**
  * Reduz o objeto Posto (37+ campos) ao mínimo que o card mobile precisa.
@@ -78,7 +79,11 @@ export default async function PostosPage({
     );
     favoritos = itens.map((i) => paraItemLista(i.posto));
   } catch (erro) {
-    console.error('[postos] Falha ao listar favoritos do usuário', erro);
+    logger.warn(
+      'postos.favoritos.falha',
+      { usuarioId: usuario.id, motivo: erro instanceof Error ? erro.message : String(erro) },
+      'Falha ao listar favoritos do usuário',
+    );
   }
   try {
     const itens = await listarPostosRecentes(
@@ -88,7 +93,11 @@ export default async function PostosPage({
     );
     recentes = itens.map((i) => paraItemLista(i.posto));
   } catch (erro) {
-    console.error('[postos] Falha ao listar postos recentes do usuário', erro);
+    logger.warn(
+      'postos.recentes.falha',
+      { usuarioId: usuario.id, motivo: erro instanceof Error ? erro.message : String(erro) },
+      'Falha ao listar postos recentes do usuário',
+    );
   }
 
   return (

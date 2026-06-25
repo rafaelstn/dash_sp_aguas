@@ -19,6 +19,7 @@ import {
   painelRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { logger } from '@/infrastructure/logging/logger';
 import { CardKPI } from '@/components/features/painel/CardKPI';
 import { BarraProgresso } from '@/components/features/painel/BarraProgresso';
 import { Alerta } from '@/components/ui/Alerta';
@@ -190,7 +191,11 @@ export default async function PaginaPainel() {
         painelRepository.rankingMantenedores(15),
       ]);
   } catch (e) {
-    console.error('[painel] Falha ao carregar agregações', e);
+    logger.error(
+      'painel.agregacoes.falha',
+      { motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao carregar agregações',
+    );
     falha = true;
   }
 

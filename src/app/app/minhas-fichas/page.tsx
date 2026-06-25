@@ -7,6 +7,7 @@ import { TIPOS_DOCUMENTO } from '@/domain/tipo-documento';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
 import type { EstadoTriagem, FichaTriagem } from '@/domain/triagem';
 import { tempoRelativo } from '@/lib/triagem-api';
+import { logger } from '@/infrastructure/logging/logger';
 
 /**
  * Lista de submissões do técnico autenticado (US-MOB-006).
@@ -57,7 +58,11 @@ export default async function MinhasFichasPage() {
     itens = resp.itens;
   } catch (e) {
     falhouCarga = true;
-    console.error('[minhas-fichas] Falha ao carregar triagem do tecnico', e);
+    logger.error(
+      'minhas-fichas.carregar.falha',
+      { usuarioId: usuario.id, motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao carregar triagem do técnico',
+    );
   }
 
   const agrupado = agruparPorEstado(itens);

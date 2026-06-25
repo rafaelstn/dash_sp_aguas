@@ -25,6 +25,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { favoritosRepository, papeisRepository } from '@/infrastructure/repositories';
 import { BotaoFavoritar } from '@/components/features/favoritos/BotaoFavoritar';
 import { BotaoExportarRelatorio } from '@/components/features/posto/BotaoExportarRelatorio';
+import { logger } from '@/infrastructure/logging/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,10 +43,11 @@ async function BlocoFichas({ prefixo }: { prefixo: string }) {
     const fichas = await listarFichasDoPosto(fichasVisitaRepository, prefixo);
     return <HistoricoFichas prefixo={prefixo} fichas={fichas} />;
   } catch (e) {
-    console.error('[posto.page] Falha ao listar fichas digitais', {
-      prefixo,
-      erro: e,
-    });
+    logger.error(
+      'fichas.listar.falha',
+      { prefixo, motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao listar fichas digitais',
+    );
     return (
       <Alerta tipo="erro" titulo="Falha ao carregar histórico de visitas">
         Tente recarregar a página em instantes.
