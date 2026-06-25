@@ -601,12 +601,13 @@ export const triagemRepository: TriagemRepository = {
     }
   },
 
-  async listarEventos(triagemId) {
+  async listarEventos(triagemId, limite = 50) {
     try {
       const linhas = await sql<LinhaEvento[]>`
         SELECT ${COLUNAS_EVENTO} FROM triagem_eventos
          WHERE triagem_id = ${triagemId}::uuid
          ORDER BY ocorreu_em DESC
+         LIMIT ${limite}
       `;
       return linhas.map(mapearEvento);
     } catch (e) {

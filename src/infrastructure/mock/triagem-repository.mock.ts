@@ -307,11 +307,12 @@ export const triagemRepository: TriagemRepository = {
     return { liberados };
   },
 
-  async listarEventos(triagemId) {
+  async listarEventos(triagemId, limite = 50) {
     return eventos
       .filter((e) => e.triagemId === triagemId)
       .map(clonar)
-      .sort((a, b) => b.ocorreuEm.getTime() - a.ocorreuEm.getTime());
+      .sort((a, b) => b.ocorreuEm.getTime() - a.ocorreuEm.getTime())
+      .slice(0, limite);
   },
 
   async registrarEvento(entrada) {

@@ -121,12 +121,23 @@ export const painelRepository: PainelRepository = {
           }[]
         >`
           SELECT
-            (SELECT COUNT(*) FROM postos)::text AS total,
+            p.total,
+            p.com_coord,
+            p.com_telem,
             (SELECT COUNT(DISTINCT prefixo) FROM arquivos_indexados)::text AS com_arquivos,
-            (SELECT COUNT(*) FROM postos WHERE latitude IS NOT NULL AND longitude IS NOT NULL)::text AS com_coord,
-            (SELECT COUNT(*) FROM postos WHERE telemetrico IS NOT NULL AND telemetrico <> '')::text AS com_telem,
             (SELECT COUNT(DISTINCT prefixo) FROM v_postos_desconformes)::text AS desconformes,
             (SELECT COUNT(*) FROM arquivos_orfaos)::text AS orfaos
+          FROM (
+            SELECT
+              COUNT(*)::text AS total,
+              COUNT(*) FILTER (
+                WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+              )::text AS com_coord,
+              COUNT(*) FILTER (
+                WHERE telemetrico IS NOT NULL AND telemetrico <> ''
+              )::text AS com_telem
+            FROM postos
+          ) p
         `;
         const r = rows[0];
         if (!r) throw new Error('Resumo de pendências sem linhas');

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { notFound, redirect } from 'next/navigation';
 import { Alerta } from '@/components/ui/Alerta';
-import { EditorDiagrama } from '@/components/features/diagramas/editor/EditorDiagrama';
+import { EditorDiagramaLazy } from '@/components/features/diagramas/editor/EditorDiagramaLazy';
 import { diagramasRepository } from '@/infrastructure/repositories';
 import { obterDiagrama } from '@/application/use-cases/diagramas';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
@@ -36,7 +36,7 @@ export default async function EditorDiagramaPage({ params }: PageProps) {
     if (!diagrama) {
       notFound();
     }
-    return <EditorDiagrama diagrama={diagrama} />;
+    return <EditorDiagramaLazy diagrama={diagrama} />;
   } catch (erro) {
     const codigo = randomUUID().slice(0, 8);
     logger.error(

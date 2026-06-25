@@ -84,14 +84,18 @@ não mudar o formato observável. Uniformizar exige decidir um shape único de e
 
 ## 6. Fase 3 — Desempenho e escalabilidade
 
-| ID | Item | Origem | Arquivo | Sev | Esforço |
-|----|------|--------|---------|-----|---------|
-| PERF-1 | Índice GIN trigram nas colunas `observacao_1..5` (filtro de cenário ANA faz 5 ILIKE `%...%` sem índice) | Desempenho #1 | `src/infrastructure/db/ana-revisao-repository.pg.ts:411`; migration nova | ALTO | M |
-| PERF-2 | Materializar a classificação de desconformes (coluna gerada ou MATERIALIZED VIEW) em vez de 7 regex por linha em cada COUNT | Desempenho #2 | `supabase/migrations/0012_v_postos_desconformes.sql`; `painel-repository.pg.ts` | ALTO | M |
-| PERF-3 | Lazy-load de jsPDF (`await import('jspdf')` no handler de export) | Desempenho #3 | `src/components/features/diagramas/editor/useExportarDiagrama.ts:5` | MÉDIO | P |
-| PERF-4 | Lazy-load do `EditorDiagrama` (xyflow) via `next/dynamic({ ssr: false })` | Desempenho #5 | `src/components/features/diagramas/editor/EditorDiagrama.tsx` | MÉDIO | P |
-| PERF-5 | Consolidar os ~6 COUNT de `postos` do `resumoPendencias` num único `COUNT(...) FILTER (...)` | Desempenho #4 | `src/infrastructure/db/painel-repository.pg.ts:123` | MÉDIO | P |
-| PERF-6 | LIMIT + paginação em `listarEventos` (triagem) | Desempenho #6 | `src/infrastructure/db/triagem-repository.pg.ts:604` | BAIXO | P |
+> **Lote de polimento (PERF-3 a PERF-6) CONCLUÍDO em 25/06/2026.** São itens de
+> baixo risco que não tocam o banco. Validação: typecheck, lint e 307 testes verdes.
+> Pendentes: PERF-1 e PERF-2 (ambos exigem migration; tratados como decisão técnica).
+
+| ID | Item | Origem | Arquivo | Sev | Esforço | Estado |
+|----|------|--------|---------|-----|---------|--------|
+| PERF-1 | Índice GIN trigram nas colunas `observacao_1..5` (filtro de cenário ANA faz 5 ILIKE `%...%` sem índice) | Desempenho #1 | `src/infrastructure/db/ana-revisao-repository.pg.ts:411`; migration nova | ALTO | M | Pendente (migration) |
+| PERF-2 | Materializar a classificação de desconformes (coluna gerada ou MATERIALIZED VIEW) em vez de 7 regex por linha em cada COUNT | Desempenho #2 | `supabase/migrations/0012_v_postos_desconformes.sql`; `painel-repository.pg.ts` | ALTO | M | Pendente (migration) |
+| PERF-3 | Lazy-load de jsPDF (`await import('jspdf')` no handler de export) | Desempenho #3 | `src/components/features/diagramas/editor/useExportarDiagrama.ts` | MÉDIO | P | Feito |
+| PERF-4 | Lazy-load do `EditorDiagrama` (xyflow) via `next/dynamic({ ssr: false })` (wrapper client `EditorDiagramaLazy`) | Desempenho #5 | `src/components/features/diagramas/editor/EditorDiagramaLazy.tsx` | MÉDIO | P | Feito |
+| PERF-5 | Consolidar os COUNT de `postos` do `resumoPendencias` num único scan via `COUNT(...) FILTER (...)` | Desempenho #4 | `src/infrastructure/db/painel-repository.pg.ts` | MÉDIO | P | Feito |
+| PERF-6 | LIMIT + paginação em `listarEventos` (triagem), padrão `limite` já usado em postos | Desempenho #6 | `src/infrastructure/db/triagem-repository.pg.ts` | BAIXO | P | Feito |
 
 ## 7. Fase 4 — Manutenibilidade (handoff PRODESP)
 

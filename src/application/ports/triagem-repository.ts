@@ -128,8 +128,12 @@ export interface TriagemRepository {
    */
   liberarLocksExpirados(): Promise<{ liberados: string[] }>;
 
-  /** Lista eventos de uma ficha (audit trail). */
-  listarEventos(triagemId: string): Promise<EventoTriagem[]>;
+  /**
+   * Lista eventos de uma ficha (audit trail), do mais recente ao mais antigo.
+   * `limite` limita o número de linhas (padrão 50) para a trilha não crescer
+   * sem teto numa ficha com muitas transições.
+   */
+  listarEventos(triagemId: string, limite?: number): Promise<EventoTriagem[]>;
 
   /** Insere evento avulso (uso interno do use case quando a operação principal já está numa tx). */
   registrarEvento(entrada: EntradaEventoTriagem): Promise<EventoTriagem>;

@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { toPng, toSvg } from 'html-to-image';
-import { jsPDF } from 'jspdf';
 import type { ReactFlowInstance } from '@xyflow/react';
 import type { ElementoDiagrama } from '@/domain/diagramas/tipos';
 import type { Diagrama } from '@/domain/diagramas/diagrama';
@@ -140,6 +139,9 @@ export function useExportarDiagrama({
     const { largura: larguraPagina, altura: alturaPagina } =
       paginaA4(orientacao);
 
+    // jsPDF é pesado (~350 KB) e só usado aqui: carrega sob demanda para sair
+    // do bundle inicial do editor.
+    const { jsPDF } = await import('jspdf');
     const pdf = new jsPDF({
       orientation: orientacao === 'paisagem' ? 'landscape' : 'portrait',
       unit: 'mm',
