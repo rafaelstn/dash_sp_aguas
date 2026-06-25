@@ -44,14 +44,22 @@ logging não uniformes entre rotas, e poucos pontos de acoplamento indevido.
 Itens que devem estar resolvidos ou formalmente documentados antes da entrega à
 SP Águas/PRODESP. Combinam segurança, LGPD e exigências da rule de governo.
 
-| ID | Item | Origem | Arquivo | Sev | Esforço |
-|----|------|--------|---------|-----|---------|
-| SEG-1 | Autorização em PATCH/DELETE de diagramas (BFLA): checar dono/aprovador ou registrar decisão de recurso compartilhado | AppSec #1 | `src/app/api/diagramas/[id]/route.ts:64,121` | MÉDIO | P |
-| SEG-2 | Validar magic bytes da foto de capa antes do upload (hoje só valida prefixo do data URL) | AppSec #2 | `src/app/api/app/postos/[prefixo]/foto/route.ts:32`; `src/application/use-cases/foto-posto.ts` | MÉDIO | P |
-| LGPD-1 | Cifrar o backup de produção (dump CSV gzip em claro) e restringir ACL de `data/backups/` | LGPD #2 | `scripts/backup/backup_banco.py:51` | MÉDIO | M |
-| LGPD-2 | Formalizar canal e SLA de atendimento aos direitos do titular (art. 18): contato do DPO, prazo, procedimento manual no MVP | LGPD #3 | `docs/seguranca/` + entrega | MÉDIO | M |
-| LGPD-3 | Tornar bloqueante de deploy a verificação de allowlist sem wildcard (`AUTH_ALLOWED_EMAIL_DOMAINS=*`) | LGPD #5 / AppSec | `src/infrastructure/auth/allowlist.ts:36` | BAIXO | P |
-| ARCH-1 | Logging estruturado obrigatório: trocar `console.error` por `logger` nas páginas server (audit trail é exigência do Decreto 10.046) | Arquitetura #5.2 | 13 ocorrências (`src/app/(dashboard)/page.tsx`, `diagramas/page.tsx`, `app/minhas-fichas/page.tsx`) | MÉDIO | M |
+> **Status: CONCLUÍDA em 25/06/2026** (branch `chore/organizar-repo-gov`).
+> Validação: typecheck, lint e 307 testes verdes.
+
+| ID | Item | Estado | Commit |
+|----|------|--------|--------|
+| SEG-2 | Validar magic bytes da foto de capa antes do upload | Feito (+ testes) | `cc6bdf1` |
+| SEG-1 | Autorização dono-ou-aprovador em PATCH/DELETE de diagramas (decisão do Rafael: dono ou aprovador) | Feito | `64d6901` |
+| ARCH-1 | Logging estruturado: `console.error` → `logger` em 14 páginas/rotas server (18 chamadas) | Feito | `360b2e9` |
+| LGPD-1 | Cifrar backup de produção (Fernet) + ACL + runbook | Feito (cifra validada) | `4a92541` |
+| LGPD-2 | Procedimento de direitos do titular (art. 18), com placeholders do DPO | Feito (doc) | `26714a1` |
+| LGPD-3 | Bloqueio de wildcard de allowlist em produção | Já existia (`env.ts:67` + 4 testes) — verificado, sem mudança | — |
+
+Pendência de ativação para o Rafael/SP Águas (não bloqueia o código, mas o
+go-live): gerar e configurar `BACKUP_ENCRYPTION_KEY`, preencher os campos
+**[PREENCHER]** do documento de direitos do titular (DPO, canais, SLAs) e
+restringir a ACL de `data/backups/` no servidor.
 
 ## 5. Fase 2 — Robustez de API e contrato de erro
 
