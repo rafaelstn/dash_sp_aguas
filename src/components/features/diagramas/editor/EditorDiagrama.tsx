@@ -103,7 +103,11 @@ function EditorInterno({ diagrama }: Props) {
   // Erro de importação (JSON inválido ou fora do formato), exibido em alerta.
   const [erroImport, setErroImport] = useState<string | null>(null);
 
-  const { estado: estadoSalvamento, agendar } = useAutoSave(diagrama.id);
+  const {
+    estado: estadoSalvamento,
+    agendar,
+    tentarNovamente: tentarSalvarNovamente,
+  } = useAutoSave(diagrama.id);
 
   // Histórico (undo/redo) sobre o array de elementos (hook useHistoricoDiagrama).
   // Em desfazer/refazer, `restaurarHistorico` re-renderiza os nodes e dispara
@@ -480,7 +484,10 @@ function EditorInterno({ diagrama }: Props) {
             aoImportar={abrirImportacao}
             formatoEmAndamento={formatoEmAndamento}
           />
-          <IndicadorSalvamento estado={estadoSalvamento} />
+          <IndicadorSalvamento
+            estado={estadoSalvamento}
+            aoTentarNovamente={tentarSalvarNovamente}
+          />
         </div>
       </div>
 

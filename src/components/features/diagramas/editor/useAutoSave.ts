@@ -20,15 +20,19 @@ export function useAutoSave(
 ): {
   estado: EstadoSalvamento;
   agendar: (elementos: ElementoDiagrama[]) => void;
+  tentarNovamente: () => void;
 } {
   const [estado, setEstado] = useState<EstadoSalvamento>('ocioso');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enviando = useRef(false);
   const pendente = useRef<ElementoDiagrama[] | null>(null);
+  // Última versão que entrou em envio; usada para o retry manual após erro.
+  const ultimoEnviado = useRef<ElementoDiagrama[] | null>(null);
 
   const enviar = useCallback(
     async (elementos: ElementoDiagrama[]) => {
       enviando.current = true;
+      ultimoEnviado.current = elementos;
       setEstado('salvando');
       try {
         const resp = await fetch(`/api/diagramas/${diagramaId}`, {
@@ -69,11 +73,18 @@ export function useAutoSave(
     [enviar, debounceMs],
   );
 
+  /** Retry manual após erro: reenvia a última versão que falhou. */
+  const tentarNovamente = useCallback(() => {
+    if (enviando.current) return;
+    const alvo = pendente.current ?? ultimoEnviado.current;
+    if (alvo) void enviar(alvo);
+  }, [enviar]);
+
   useEffect(() => {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
 
-  return { estado, agendar };
+  return { estado, agendar, tentarNovamente };
 }
