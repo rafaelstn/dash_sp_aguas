@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { diagramasRepository } from '@/infrastructure/repositories';
-import { exigirUsuario } from '@/app/api/_helpers/auth';
+import { exigirUsuario, permitirDonoOuAprovador } from '@/app/api/_helpers/auth';
 import {
   excluirDiagrama,
   obterDiagrama,
@@ -90,6 +90,17 @@ export async function PATCH(
     );
   }
 
+  // Autorização (SEG-1): só o autor do diagrama ou um aprovador pode alterar.
+  const diagrama = await obterDiagrama(diagramasRepository, id);
+  if (!diagrama) {
+    return NextResponse.json(
+      { erro: 'nao_encontrado', mensagem: 'Diagrama não encontrado.' },
+      { status: 404 },
+    );
+  }
+  const permissao = await permitirDonoOuAprovador(auth, diagrama.criadoPor);
+  if (permissao instanceof NextResponse) return permissao;
+
   try {
     if ('nome' in parsed.data) {
       await renomearDiagrama(diagramasRepository, id, parsed.data.nome);
@@ -129,6 +140,17 @@ export async function DELETE(
   if (!idSchema.safeParse(id).success) {
     return NextResponse.json({ erro: 'id_invalido' }, { status: 400 });
   }
+
+  // Autorização (SEG-1): só o autor do diagrama ou um aprovador pode excluir.
+  const diagrama = await obterDiagrama(diagramasRepository, id);
+  if (!diagrama) {
+    return NextResponse.json(
+      { erro: 'nao_encontrado', mensagem: 'Diagrama não encontrado.' },
+      { status: 404 },
+    );
+  }
+  const permissao = await permitirDonoOuAprovador(auth, diagrama.criadoPor);
+  if (permissao instanceof NextResponse) return permissao;
 
   try {
     await excluirDiagrama(diagramasRepository, id);

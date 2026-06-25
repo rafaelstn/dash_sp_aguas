@@ -59,7 +59,7 @@ export async function permitirDonoOuAprovador(
   const aprovador = await papeisRepository.ehAprovador(usuario.id);
   if (aprovador) return true;
   return NextResponse.json(
-    { erro: 'sem_permissao', mensagem: 'Apenas o autor da ficha ou um aprovador pode realizar esta operação.' },
+    { erro: 'sem_permissao', mensagem: 'Apenas o autor do registro ou um aprovador pode realizar esta operação.' },
     { status: 403 },
   );
 }
