@@ -1,12 +1,19 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { criarClienteSupabaseServer } from '@/infrastructure/auth/supabase-server';
 import {
   emailEstaAutorizado,
   mensagemErroAllowlist,
 } from '@/infrastructure/auth/allowlist';
 import { validarReturnToInterno } from '@/infrastructure/auth/return-to';
+import {
+  POLITICAS,
+  consumirRateLimit,
+  extrairIpDeHeaders,
+} from '@/infrastructure/security/rate-limit';
+import { logger } from '@/infrastructure/logging/logger';
 
 export interface ResultadoLogin {
   ok: boolean;
@@ -40,6 +47,25 @@ export async function entrarComSenha(
   }
   if (senha.length === 0) {
     return { ok: false, mensagem: 'Informe a senha.' };
+  }
+
+  // Defesa em profundidade contra brute-force (SEG-3): rate limit aplicacional
+  // por IP e por email, somado ao limite nativo do Supabase. Falha fechada com
+  // mensagem genérica (não revela qual limite estourou nem se a conta existe).
+  const ip = extrairIpDeHeaders(await headers());
+  const emailNormalizado = email.toLowerCase();
+  const rlIp = consumirRateLimit(POLITICAS.loginIp, ip);
+  const rlEmail = consumirRateLimit(POLITICAS.loginEmail, emailNormalizado);
+  if (!rlIp.permitido || !rlEmail.permitido) {
+    logger.security(
+      'seg.login.rate_limited',
+      { ip, porIp: !rlIp.permitido, porEmail: !rlEmail.permitido },
+      'Tentativa de login bloqueada por rate limit',
+    );
+    return {
+      ok: false,
+      mensagem: 'Muitas tentativas de acesso. Aguarde um instante e tente novamente.',
+    };
   }
 
   const supabase = await criarClienteSupabaseServer();

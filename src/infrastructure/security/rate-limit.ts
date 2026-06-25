@@ -138,14 +138,23 @@ export function consumirRateLimit(
  * camada secundária para tráfego pré-autenticação.
  */
 export function extrairIp(req: Request): string {
-  const vercel = req.headers.get('x-vercel-forwarded-for');
+  return extrairIpDeHeaders(req.headers);
+}
+
+/**
+ * Mesma lógica de `extrairIp`, mas a partir de um conjunto de headers avulso.
+ * Útil em Server Actions, onde não há objeto `Request` — usa-se o `headers()`
+ * de `next/headers` (ReadonlyHeaders também expõe `.get()`).
+ */
+export function extrairIpDeHeaders(h: { get(name: string): string | null }): string {
+  const vercel = h.get('x-vercel-forwarded-for');
   if (vercel) return vercel.split(',')[0]!.trim();
 
-  const xri = req.headers.get('x-real-ip');
+  const xri = h.get('x-real-ip');
   if (xri) return xri.trim();
 
   // best-effort: header forjável. Último valor da cadeia é o menos pior.
-  const xff = req.headers.get('x-forwarded-for');
+  const xff = h.get('x-forwarded-for');
   if (xff) {
     const partes = xff.split(',').map((p) => p.trim()).filter(Boolean);
     if (partes.length > 0) return partes[partes.length - 1]!;
@@ -199,6 +208,25 @@ export const POLITICAS = {
   decisaoInventarioAna: {
     politica: 'decisao-inventario-ana',
     limite: 60,
+    janelaSegundos: 60,
+  },
+  /**
+   * Login por email — defesa em profundidade contra brute-force de senha,
+   * somada ao rate limit nativo do Supabase Auth. Conservador: um usuário
+   * legítimo que erra a senha algumas vezes não é bloqueado.
+   */
+  loginEmail: {
+    politica: 'login-email',
+    limite: 10,
+    janelaSegundos: 60,
+  },
+  /**
+   * Login por IP — teto mais alto porque um órgão atrás de NAT compartilha IP
+   * entre vários usuários legítimos; serve para conter flood de uma origem.
+   */
+  loginIp: {
+    politica: 'login-ip',
+    limite: 30,
     janelaSegundos: 60,
   },
 } satisfies Record<string, ConfiguracaoRateLimit>;
