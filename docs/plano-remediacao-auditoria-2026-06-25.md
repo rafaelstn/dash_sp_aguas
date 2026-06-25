@@ -66,13 +66,21 @@ restringir a ACL de `data/backups/` no servidor.
 Raiz única apontada por AppSec e Arquitetura: metade das rotas mapeia erro de
 domínio para HTTP, metade devolve 500 genérico.
 
-| ID | Item | Origem | Arquivo | Sev | Esforço |
-|----|------|--------|---------|-----|---------|
-| ARCH-2 | Promover `respostaDeErro()` para `src/app/api/_helpers/erros.ts` e aplicar nas 36 rotas (mapeia `DadosInvalidos`/`NaoEncontrado` para 400/404/403 + correlation ID) | Arquitetura #2.1, #5.1 | `src/app/api/triagem/_helpers.ts` → global | ALTO | M |
-| ARCH-3 | Consolidar as duas pastas `_helpers` em `src/app/api/_helpers/` | Arquitetura #2.2 | `src/app/api/` | BAIXO | P |
-| ARCH-4 | Criar `error.tsx` e `loading.tsx` no ramo `/app` (PWA do agente em campo) | Arquitetura #5.3 | `src/app/app/` | MÉDIO | P |
-| SEG-3 | Rate limit aplicacional no login (por IP e email), defesa em profundidade além do Supabase | AppSec #4 | `src/app/login/actions.ts:48` | BAIXO | P |
-| SEG-4 | GET de ficha individual: confirmar com Produto se leitura é compartilhada por design; se não, espelhar `permitirDonoOuAprovador` | AppSec #3 | `src/app/api/fichas/[id]/route.ts:17` | BAIXO | P |
+> **Status: CONCLUÍDA em 25/06/2026.** Validação: typecheck, lint e 307 testes verdes.
+
+| ID | Item | Estado |
+|----|------|--------|
+| ARCH-2 | Helper `respostaDeErro` global em `_helpers/erros.ts` aplicado nas rotas (16 rotas / 21 catches migrados + `fichas/[id]`); erro de domínio → status correto | Feito |
+| ARCH-3 | Pasta `_helpers` consolidada; `triagem/_helpers.ts` removido | Feito |
+| ARCH-4 | `error.tsx` + `loading.tsx` mobile no `/app` | Feito |
+| SEG-3 | Rate limit no login (10/min email, 30/min IP) + log SIEM | Feito |
+| SEG-4 | Decisão: leitura de ficha é compartilhada por design institucional (documentada no código) | Feito |
+
+Decisão de contrato pendente (não bloqueante): 4 rotas (`postos/facetas`, `postos/search`,
+`postos/[prefixo]/arquivos`, `postos/[prefixo]` GET/POST) usam um DTO de erro **aninhado**
+(`{ erro: { codigo, mensagem } }`) em vez do shape plano do helper. Não foram migradas para
+não mudar o formato observável. Uniformizar exige decidir um shape único de erro da API
+(migrar essas 4 ou criar variante do helper) — tratar como item próprio.
 
 ## 6. Fase 3 — Desempenho e escalabilidade
 
