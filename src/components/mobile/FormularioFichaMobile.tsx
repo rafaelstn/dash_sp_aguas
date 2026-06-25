@@ -1,21 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
-  construirSchemaZodEstrito,
   secaoVisivel,
   type CampoFicha,
   type SchemaFicha,
 } from '@/domain/fichas/schemas';
-import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
+import type { ErrosCampos } from '@/domain/fichas/validacao-ficha';
 import { CampoFichaMobile } from './CampoFichaMobile';
-import {
-  ErroTriagemAPI,
-  mensagemErroTriagem,
-  submeterFichaApp,
-  type CorpoSubmissaoApp,
-} from '@/lib/triagem-api';
+import { useGpsFicha } from './hooks/useGpsFicha';
+import { useSubmissaoFicha } from './hooks/useSubmissaoFicha';
 import {
   carregarRascunho,
   descartarRascunho,
@@ -26,8 +20,6 @@ import {
 } from '@/lib/rascunho-ficha';
 import { gerarUuidV4 } from '@/lib/uuid-cliente';
 import { arquivoParaDataUrl, comprimirImagemParaDataUrl } from '@/lib/imagem';
-import { enfileirarEnvio } from '@/lib/fila-envios';
-import { parseNumeroPtBR } from '@/lib/numero-pt-br';
 
 const TAMANHO_MAX_FOTO_BYTES = 5 * 1024 * 1024;
 const ALVO_COMPRESSAO_BYTES = 2 * 1024 * 1024;
@@ -47,17 +39,6 @@ interface FormularioFichaMobileProps {
   dadosIniciais?: Record<string, unknown>;
   /** Pré-preenchimento de cabeçalho (re-envio). */
   cabecalhoInicial?: Partial<CabecalhoRascunho>;
-}
-
-type EstadoSubmissao =
-  | { kind: 'idle' }
-  | { kind: 'enviando' }
-  | { kind: 'sucesso'; id: string }
-  | { kind: 'enfileirada' }
-  | { kind: 'erro'; mensagem: string };
-
-interface ErrosCampos {
-  [chave: string]: string;
 }
 
 /**
@@ -87,7 +68,6 @@ export function FormularioFichaMobile({
   dadosIniciais,
   cabecalhoInicial,
 }: FormularioFichaMobileProps) {
-  const router = useRouter();
   const formId = useId();
 
   const [rascunho, setRascunho] = useState<RascunhoFicha>(() =>
@@ -104,10 +84,6 @@ export function FormularioFichaMobile({
   );
   const [restaurouRascunho, setRestaurouRascunho] = useState(false);
   const [erros, setErros] = useState<ErrosCampos>({});
-  const [submissao, setSubmissao] = useState<EstadoSubmissao>({ kind: 'idle' });
-  const [mostrarConsentimentoGps, setMostrarConsentimentoGps] = useState(false);
-  const [capturandoGps, setCapturandoGps] = useState(false);
-  const [erroGps, setErroGps] = useState<string | null>(null);
   const [erroFoto, setErroFoto] = useState<string | null>(null);
   const inputFotoRef = useRef<HTMLInputElement>(null);
   const refs = useRef<Record<string, HTMLElement | null>>({});
@@ -196,74 +172,35 @@ export function FormularioFichaMobile({
     setErros({});
   }
 
-  // ─── GPS ──────────────────────────────────────────────────────────────
-
-  function pedirConsentimentoGps() {
-    setErroGps(null);
-    if (rascunho.cabecalho.consentiuGps) {
-      capturarGps();
-      return;
-    }
-    setMostrarConsentimentoGps(true);
-  }
-
-  function negarConsentimentoGps() {
-    setMostrarConsentimentoGps(false);
-  }
-
-  function aceitarConsentimentoGps() {
-    setRascunho((r) => ({
-      ...r,
-      cabecalho: { ...r.cabecalho, consentiuGps: true },
-    }));
-    setMostrarConsentimentoGps(false);
-    capturarGps();
-  }
-
-  function capturarGps() {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setErroGps('Captura de localização indisponível neste dispositivo.');
-      return;
-    }
-    setCapturandoGps(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCapturandoGps(false);
-        setRascunho((r) => ({
-          ...r,
-          cabecalho: {
-            ...r.cabecalho,
-            latitudeCapturada: pos.coords.latitude,
-            longitudeCapturada: pos.coords.longitude,
-            precisaoGpsM: pos.coords.accuracy,
-          },
-        }));
-      },
-      (err) => {
-        setCapturandoGps(false);
-        const mapa: Record<number, string> = {
-          1: 'Permissão de localização negada pelo dispositivo.',
-          2: 'Localização indisponível no momento.',
-          3: 'Tempo de espera esgotado ao obter localização.',
-        };
-        setErroGps(mapa[err.code] ?? 'Falha ao capturar localização.');
-      },
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
-    );
-  }
-
-  function limparGps() {
-    setRascunho((r) => ({
-      ...r,
-      cabecalho: {
-        ...r.cabecalho,
-        latitudeCapturada: null,
-        longitudeCapturada: null,
-        precisaoGpsM: null,
-      },
-    }));
-    setErroGps(null);
-  }
+  // ─── GPS (hook useGpsFicha) ───────────────────────────────────────────
+  const gps = useGpsFicha({
+    jaConsentiu: rascunho.cabecalho.consentiuGps,
+    aoConsentir: () =>
+      setRascunho((r) => ({
+        ...r,
+        cabecalho: { ...r.cabecalho, consentiuGps: true },
+      })),
+    aoCapturar: (latitude, longitude, precisaoM) =>
+      setRascunho((r) => ({
+        ...r,
+        cabecalho: {
+          ...r.cabecalho,
+          latitudeCapturada: latitude,
+          longitudeCapturada: longitude,
+          precisaoGpsM: precisaoM,
+        },
+      })),
+    aoLimpar: () =>
+      setRascunho((r) => ({
+        ...r,
+        cabecalho: {
+          ...r.cabecalho,
+          latitudeCapturada: null,
+          longitudeCapturada: null,
+          precisaoGpsM: null,
+        },
+      })),
+  });
 
   // ─── Foto ────────────────────────────────────────────────────────────
 
@@ -313,195 +250,16 @@ export function FormularioFichaMobile({
     }
   }
 
-  function validarCabecalho(): ErrosCampos {
-    const erros: ErrosCampos = {};
-    if (!rascunho.cabecalho.tecnicoNome.trim()) {
-      erros['__tecnicoNome'] = 'Informe seu nome (mínimo 1 caractere).';
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rascunho.cabecalho.dataVisita)) {
-      erros['__dataVisita'] = 'Data deve estar no formato AAAA-MM-DD.';
-    }
-    return erros;
-  }
-
-  function normalizarDadosParaValidacao(): Record<string, unknown> {
-    // Converte strings de campos `numero` e `select`/`texto` vazias em
-    // valores que o Zod entenda. Para campos opcionais vazios, manda null
-    // pra que o `.nullable().optional()` aceite.
-    const normalizados: Record<string, unknown> = {};
-    for (const campo of camposVisiveis) {
-      const bruto = rascunho.dados[campo.chave];
-      if (campo.tipo === 'tabela') {
-        const linhas = Array.isArray(bruto) ? (bruto as Array<Record<string, unknown>>) : [];
-        normalizados[campo.chave] = linhas.map((linha) => {
-          const obj: Record<string, unknown> = {};
-          for (const col of campo.colunas ?? []) {
-            const cru = linha?.[col.chave];
-            if (col.tipo === 'numero') {
-              if (cru === '' || cru === null || cru === undefined) {
-                obj[col.chave] = null;
-                continue;
-              }
-              const n = parseNumeroPtBR(typeof cru === 'string' ? cru : String(cru));
-              obj[col.chave] = Number.isNaN(n) ? cru : n;
-              continue;
-            }
-            obj[col.chave] = cru === '' || cru === undefined ? null : cru;
-          }
-          return obj;
-        });
-        continue;
-      }
-      if (campo.tipo === 'numero') {
-        if (bruto === '' || bruto === null || bruto === undefined) {
-          normalizados[campo.chave] = campo.obrigatorio ? undefined : null;
-          continue;
-        }
-        const n = parseNumeroPtBR(typeof bruto === 'string' ? bruto : String(bruto));
-        normalizados[campo.chave] = Number.isNaN(n) ? bruto : n;
-        continue;
-      }
-      if (campo.tipo === 'checkbox') {
-        normalizados[campo.chave] = Boolean(bruto);
-        continue;
-      }
-      if (bruto === '' || bruto === undefined) {
-        normalizados[campo.chave] = campo.obrigatorio ? undefined : null;
-        continue;
-      }
-      normalizados[campo.chave] = bruto;
-    }
-    return normalizados;
-  }
-
-  async function submeter(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (submissao.kind === 'enviando') return;
-
-    const errosCabecalho = validarCabecalho();
-
-    const zod = construirSchemaZodEstrito(schema.codigo as CodigoTipoDocumento);
-    const candidato = normalizarDadosParaValidacao();
-    const parseado = zod.safeParse(candidato);
-
-    const errosCampos: ErrosCampos = {};
-    if (!parseado.success) {
-      for (const issue of parseado.error.issues) {
-        const chave = String(issue.path[0] ?? '');
-        if (!chave) continue;
-        if (!errosCampos[chave]) {
-          errosCampos[chave] = mensagemZodPtBR(issue.code, issue.message);
-        }
-      }
-    }
-
-    const todos = { ...errosCabecalho, ...errosCampos };
-    if (Object.keys(todos).length > 0) {
-      setErros(todos);
-      focarPrimeiroErro(todos);
-      return;
-    }
-
-    setErros({});
-    setSubmissao({ kind: 'enviando' });
-
-    const corpo: CorpoSubmissaoApp = {
-      prefixo,
-      codTipoDocumento: schema.codigo,
-      dataVisita: rascunho.cabecalho.dataVisita,
-      horaInicio: rascunho.cabecalho.horaInicio || null,
-      horaFim: rascunho.cabecalho.horaFim || null,
-      tecnicoNome: rascunho.cabecalho.tecnicoNome.trim(),
-      latitudeCapturada: rascunho.cabecalho.latitudeCapturada,
-      longitudeCapturada: rascunho.cabecalho.longitudeCapturada,
-      precisaoGpsM: rascunho.cabecalho.precisaoGpsM,
-      observacoes: rascunho.cabecalho.observacoes,
-      dados: parseado.success ? (parseado.data as Record<string, unknown>) : candidato,
-      fichaOrigemId: rascunho.fichaOrigemId,
-    };
-
-    try {
-      const resp = await submeterFichaApp(corpo, rascunho.idempotencyKey);
-      // Sucesso: descarta rascunho local e redireciona.
-      descartarRascunho({
-        usuarioId,
-        prefixo,
-        codigo: schema.codigo,
-        fichaOrigemId: fichaOrigemId ?? null,
-      });
-      setSubmissao({ kind: 'sucesso', id: resp.id });
-      // Pequeno delay pra usuário ver feedback de sucesso.
-      setTimeout(() => {
-        router.push('/app/minhas-fichas');
-        router.refresh();
-      }, 800);
-    } catch (err) {
-      if (err instanceof ErroTriagemAPI) {
-        // Se backend devolveu validação detalhada, mapeia em campos.
-        if (err.slug === 'body_invalido' || err.slug === 'dados_invalidos') {
-          const motivos = (err.extra as { motivos?: string[] })?.motivos ?? [];
-          const novos: ErrosCampos = {};
-          for (const m of motivos) {
-            // formato esperado: "campo.chave: mensagem" (Lucas usa `path.join`).
-            const [path, ...resto] = m.split(':');
-            if (!path) continue;
-            const chave = path.includes('.') ? path.split('.').pop()! : path.trim();
-            const mensagem = resto.join(':').trim() || 'Valor inválido.';
-            novos[chave] = mensagem;
-          }
-          if (Object.keys(novos).length > 0) {
-            setErros(novos);
-            focarPrimeiroErro(novos);
-            setSubmissao({
-              kind: 'erro',
-              mensagem: 'Corrija os campos destacados e envie novamente.',
-            });
-            return;
-          }
-        }
-        setSubmissao({ kind: 'erro', mensagem: mensagemErroTriagem(err) });
-      } else {
-        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-        if (offline) {
-          try {
-            // Enfileira para envio automático quando a conexão voltar
-            // (drenado por `SyncFichasPendentes`). O `id` = idempotencyKey
-            // evita item duplicado se a ficha for reenfileirada.
-            await enfileirarEnvio({
-              id: rascunho.idempotencyKey,
-              corpo,
-              idempotencyKey: rascunho.idempotencyKey,
-              chaveRascunho: {
-                usuarioId,
-                prefixo,
-                codigo: schema.codigo,
-                fichaOrigemId: fichaOrigemId ?? null,
-              },
-              criadoEm: new Date().toISOString(),
-              tentativas: 0,
-              ultimoErro: null,
-            });
-            // Mantém o rascunho como backup até o sync confirmar o envio.
-            salvarRascunho(rascunho);
-            setSubmissao({ kind: 'enfileirada' });
-            setTimeout(() => {
-              router.push('/app/minhas-fichas');
-              router.refresh();
-            }, 1200);
-            return;
-          } catch {
-            // IndexedDB indisponível: cai no fluxo antigo (rascunho salvo).
-          }
-        }
-        setSubmissao({
-          kind: 'erro',
-          mensagem: offline
-            ? 'Sem conexão. O rascunho foi salvo. Tente enviar novamente quando estiver online.'
-            : 'Falha ao enviar. Tente novamente em instantes.',
-        });
-      }
-    }
-  }
+  const { submissao, setSubmissao, submeter } = useSubmissaoFicha({
+    schema,
+    prefixo,
+    usuarioId,
+    fichaOrigemId,
+    rascunho,
+    camposVisiveis,
+    setErros,
+    focarPrimeiroErro,
+  });
 
   function salvarRascunhoManual() {
     salvarRascunho(rascunho);
@@ -678,15 +436,15 @@ export function FormularioFichaMobile({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={pedirConsentimentoGps}
+                onClick={gps.pedirConsentimento}
                 className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
-                disabled={capturandoGps}
+                disabled={gps.capturando}
               >
-                {capturandoGps ? 'Capturando…' : 'Atualizar'}
+                {gps.capturando ? 'Capturando…' : 'Atualizar'}
               </button>
               <button
                 type="button"
-                onClick={limparGps}
+                onClick={gps.limpar}
                 className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
               >
                 Remover
@@ -700,22 +458,22 @@ export function FormularioFichaMobile({
             </p>
             <button
               type="button"
-              onClick={pedirConsentimentoGps}
-              disabled={capturandoGps}
+              onClick={gps.pedirConsentimento}
+              disabled={gps.capturando}
               className="mt-2 min-h-[44px] rounded bg-gov-azul px-4 text-sm font-semibold text-white hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              {capturandoGps ? 'Capturando…' : 'Capturar localização'}
+              {gps.capturando ? 'Capturando…' : 'Capturar localização'}
             </button>
           </div>
         )}
 
-        {erroGps ? (
+        {gps.erro ? (
           <p role="alert" className="mt-2 text-xs font-medium text-red-700">
-            {erroGps}
+            {gps.erro}
           </p>
         ) : null}
 
-        {mostrarConsentimentoGps ? (
+        {gps.mostrarConsentimento ? (
           <div
             role="dialog"
             aria-labelledby={`${formId}-gps-titulo`}
@@ -733,14 +491,14 @@ export function FormularioFichaMobile({
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
-                onClick={aceitarConsentimentoGps}
+                onClick={gps.aceitarConsentimento}
                 className="min-h-[44px] flex-1 rounded bg-gov-azul px-3 text-sm font-semibold text-white hover:bg-gov-azul-escuro focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
               >
                 Permitir
               </button>
               <button
                 type="button"
-                onClick={negarConsentimentoGps}
+                onClick={gps.negarConsentimento}
                 className="min-h-[44px] rounded border border-app-border px-3 text-sm font-medium text-app-fg transition-colors hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul active:bg-app-surface-3"
               >
                 Agora não
@@ -951,23 +709,5 @@ function SpinnerInline() {
       <path d="M21 12a9 9 0 0 1-9 9" strokeLinecap="round" />
     </svg>
   );
-}
-
-function mensagemZodPtBR(codigo: string, original: string): string {
-  switch (codigo) {
-    case 'invalid_type':
-      return 'Tipo inválido para este campo.';
-    case 'too_small':
-      return 'Valor abaixo do mínimo permitido.';
-    case 'too_big':
-      return 'Valor acima do máximo permitido.';
-    case 'invalid_enum_value':
-      return 'Selecione uma opção válida.';
-    case 'invalid_string':
-      // Regex de formato (coordenada, mês/ano) carrega mensagem pt-BR própria.
-      return original || 'Texto inválido.';
-    default:
-      return original || 'Valor inválido.';
-  }
 }
 
