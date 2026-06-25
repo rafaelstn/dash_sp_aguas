@@ -44,12 +44,26 @@ No MVP, o atendimento é manual, conduzido pelo encarregado mediante solicitaç�
 | Informação sobre compartilhamento | Resposta formal do encarregado | **[PREENCHER]** |
 | Revogação de consentimento | Não aplicável (base legal é execução de política pública, não consentimento) | — |
 
-## 5. Retenção e expurgo
+## 5. Retenção e expurgo (LGPD-4 — implementado)
 
-A trilha de auditoria (`acesso_ficha`, `triagem_eventos`) é append-only por
-exigência de governo. Definir prazo de expurgo/anonimização do IP e user-agent
-(item LGPD-4 do plano de remediação): **[PREENCHER: prazo, ex. anonimizar IP após
-12 meses, mantendo `usuario_id` + `prefixo` + `ocorreu_em`]**.
+A trilha de auditoria (`acesso_ficha`, `triagem_eventos`, `ana_revisao_evento`,
+`postos_evento`) é append-only por exigência de governo: o EVENTO (quem, quando,
+o quê) é imutável e preservado. Sobre os metadados de rede, que são dado pessoal
+indireto (art. 6º III/V e art. 16 da LGPD):
+
+- **Prazo de retenção de IP e user-agent: 180 dias (6 meses).** Após esse prazo,
+  `ip` e `user_agent` são anonimizados (definidos como `NULL`), mantendo
+  `usuario_id`/`ator_id` + `prefixo`/referência + `ocorreu_em` e o tipo de evento.
+- Mecanismo: função SQL `anonimizar_trilha_auditoria(dias_retencao)`
+  (migration `0048_anonimizar_trilha_lgpd.sql`), idempotente e `SECURITY DEFINER`
+  (a anonimização de PII é a exceção controlada à imutabilidade, restrita às
+  colunas `ip`/`user_agent`).
+- Execução: job mensal `scripts/manutencao/anonimizar_trilha_lgpd.py`
+  (`--dias` ajusta o prazo, `--dry-run` apenas conta). Recomenda-se agendar via
+  cron mensal no ambiente de produção.
+
+Pendência de ativação (Rafael/SP Águas): agendar o job mensal no servidor e
+confirmar o prazo de 180 dias com o encarregado (DPO) do órgão.
 
 ## 6. Roadmap
 
