@@ -33,8 +33,8 @@ export default async function DashboardLayout({
               <Image
                 src="/logo-spaguas.png"
                 alt=""
-                width={32}
-                height={32}
+                width={203}
+                height={128}
                 priority
                 className="h-8 w-auto"
               />

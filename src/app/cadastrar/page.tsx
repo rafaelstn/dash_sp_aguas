@@ -20,8 +20,8 @@ export default function PaginaCadastro() {
           <Image
             src="/logo-spaguas.png"
             alt=""
-            width={40}
-            height={40}
+            width={203}
+            height={128}
             priority
             className="h-10 w-auto"
           />
