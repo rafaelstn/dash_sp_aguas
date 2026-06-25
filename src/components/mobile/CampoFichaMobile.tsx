@@ -389,7 +389,7 @@ function TabelaCampoMobile({
   }
 
   const celulaClass =
-    'mt-0.5 block w-full min-h-[40px] rounded border border-app-border bg-app-surface ' +
+    'mt-0.5 block w-full min-h-[40px] rounded border border-app-border-input bg-app-surface ' +
     'px-2 text-sm text-app-fg focus:border-gov-azul focus-visible:outline-none ' +
     'focus-visible:ring-2 focus-visible:ring-gov-azul';
 
@@ -403,7 +403,7 @@ function TabelaCampoMobile({
         linhas.map((linha, idx) => (
           <fieldset
             key={idx}
-            className="rounded border border-app-border bg-app-surface-2 p-3"
+            className="rounded border border-app-border-input bg-app-surface-2 p-3"
           >
             <legend className="px-1 text-xs font-semibold text-app-fg">
               {rotuloLinha} {idx + 1}

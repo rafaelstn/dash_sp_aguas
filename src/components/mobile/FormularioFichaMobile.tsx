@@ -395,7 +395,7 @@ export function FormularioFichaMobile({
                 type="time"
                 value={rascunho.cabecalho.horaInicio ?? ''}
                 onChange={(e) => setCabecalho('horaInicio', e.target.value || null)}
-                className="mt-1 block w-full min-h-[44px] rounded border border-app-border bg-app-surface px-3 text-md text-app-fg focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="mt-1 block w-full min-h-[44px] rounded border border-app-border-input bg-app-surface px-3 text-md text-app-fg focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
               />
             </div>
             <div>
@@ -407,7 +407,7 @@ export function FormularioFichaMobile({
                 type="time"
                 value={rascunho.cabecalho.horaFim ?? ''}
                 onChange={(e) => setCabecalho('horaFim', e.target.value || null)}
-                className="mt-1 block w-full min-h-[44px] rounded border border-app-border bg-app-surface px-3 text-md text-app-fg focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                className="mt-1 block w-full min-h-[44px] rounded border border-app-border-input bg-app-surface px-3 text-md text-app-fg focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
               />
             </div>
           </div>
@@ -617,7 +617,7 @@ export function FormularioFichaMobile({
             setCabecalho('observacoes', e.target.value ? e.target.value : null)
           }
           placeholder="Anotações livres sobre a visita."
-          className="block w-full rounded border border-app-border bg-app-surface px-3 py-2 text-md text-app-fg placeholder:text-app-fg-muted focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+          className="block w-full rounded border border-app-border-input bg-app-surface px-3 py-2 text-md text-app-fg placeholder:text-app-fg-muted focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
         />
         <p className="mt-1 text-2xs text-app-fg-muted">
           {rascunho.cabecalho.observacoes?.length ?? 0} / 2000 caracteres
@@ -666,7 +666,7 @@ export function FormularioFichaMobile({
         <button
           type="button"
           onClick={salvarRascunhoManual}
-          className="min-h-[44px] flex-1 rounded border border-app-border bg-app-surface px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
+          className="min-h-[44px] flex-1 rounded border border-app-border-input bg-app-surface px-3 text-sm font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2"
         >
           Salvar rascunho
         </button>

@@ -25,6 +25,9 @@
     --border-subtle: 220 13% 91%;    /* #E5E7EB */
     --border-default: 216 12% 84%;   /* #D1D5DB */
     --border-strong: 218 11% 65%;    /* #9CA3AF */
+    /* Borda de controle de formulário (input/select/textarea). Escurecida para
+       atingir >= 3:1 com o fundo (WCAG 1.4.11, componentes de interface). */
+    --border-input: 220 9% 54%;      /* ~#868C95 — 3.7:1 sobre branco */
 
     /* Marca */
     --gov-azul: 226 71% 40%;         /* #1E40AF — 8.6:1 */

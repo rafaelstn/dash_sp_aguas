@@ -148,25 +148,32 @@ const colunasUgrhi: readonly ColunaTabela<LinhaUgrhi>[] = [
     chave: 'taxa',
     cabecalho: 'Taxa',
     largura: '11rem',
-    render: (u) => (
-      <div className="flex items-center gap-2">
-        <BarraProgresso
-          valor={u.desconformes}
-          total={u.total}
-          cor={
-            u.taxa >= 0.3
-              ? 'bg-gov-perigo'
-              : u.taxa >= 0.2
-                ? 'bg-gov-alerta'
-                : 'bg-gov-azul'
-          }
-          tamanho="sm"
-        />
-        <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
-          {(u.taxa * 100).toFixed(1)}%
-        </span>
-      </div>
-    ),
+    render: (u) => {
+      // Severidade da taxa de desconformidade. NÃO depender só da cor da barra
+      // (WCAG 1.4.1): a classificação entra no rótulo acessível e o percentual
+      // visível ao lado é o indicador não-cor da magnitude.
+      const severidade =
+        u.taxa >= 0.3
+          ? { cor: 'bg-gov-perigo', texto: 'alta' }
+          : u.taxa >= 0.2
+            ? { cor: 'bg-gov-alerta', texto: 'em atenção' }
+            : { cor: 'bg-gov-azul', texto: 'normal' };
+      const pct = (u.taxa * 100).toFixed(1);
+      return (
+        <div className="flex items-center gap-2">
+          <BarraProgresso
+            valor={u.desconformes}
+            total={u.total}
+            cor={severidade.cor}
+            tamanho="sm"
+            rotulo={`Taxa de desconformidade ${severidade.texto}: ${pct}%`}
+          />
+          <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
+            {pct}%
+          </span>
+        </div>
+      );
+    },
   },
 ];
 

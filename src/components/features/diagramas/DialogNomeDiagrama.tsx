@@ -129,7 +129,7 @@ export function DialogNomeDiagrama({
             disabled={processando}
             aria-invalid={erro ? true : undefined}
             aria-describedby={erro ? erroId : undefined}
-            className="w-full rounded border border-app-border-subtle bg-app-surface px-3 py-1.5 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            className="w-full rounded border border-app-border-input bg-app-surface px-3 py-1.5 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
             placeholder="Ex.: Rede Alto Tietê"
           />
 

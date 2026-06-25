@@ -33,7 +33,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         className={`px-3 py-2 border rounded bg-app-surface text-app-fg placeholder:text-app-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-app-surface ${
           erro
             ? 'border-gov-perigo focus-visible:ring-gov-perigo'
-            : 'border-app-border focus-visible:ring-gov-azul'
+            : 'border-app-border-input focus-visible:ring-gov-azul'
         } ${className}`}
         {...rest}
       />

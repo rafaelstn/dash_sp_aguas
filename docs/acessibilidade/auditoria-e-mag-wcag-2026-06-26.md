@@ -56,8 +56,8 @@ Legenda de estado: **Corrigido** (nesta rodada, 26/06), **Pendente** (priorizado
 | B-3 | `<dialog>` de confirmação e menu mobile sem `aria-modal` explícito | 4.1.2 | BAIXO | **Corrigido** |
 | A-2 | Campo "Técnico" obrigatório sem `aria-required` (inconsistência com o filho) | 3.3.2 | BAIXO | **Corrigido** |
 | B-5 | `EstadoVazio` com `<h2>` fixo (risco de salto de nível se usado sem `<h1>` ancestral) | 1.3.1 / 2.4.6 | BAIXO | **Corrigido** (prop `nivelTitulo`) |
-| CONTRASTE-02 | Borda de `<input>` em repouso (`app-border` #D1D5DB) = 1.47:1, abaixo de 3:1 para componente | 1.4.11 | MÉDIO | **Pendente** (ver §6) |
-| COR-02 | `BarraProgresso` de taxa de desconformidade: classificação de severidade comunicada só pela cor da barra | 1.4.1 | MÉDIO | **Pendente** (ver §6) |
+| CONTRASTE-02 | Borda de `<input>` em repouso (`app-border` #D1D5DB) = 1.47:1, abaixo de 3:1 para componente | 1.4.11 | MÉDIO | **Corrigido** (token `--border-input`) |
+| COR-02 | `BarraProgresso` de taxa de desconformidade: classificação de severidade comunicada só pela cor da barra | 1.4.1 | MÉDIO | **Corrigido** (severidade no rótulo) |
 | A-13 | Edição de vértice do traçado de rio (`NodeLinha`) operável só por ponteiro, sem teclado | 2.1.1 / 4.1.2 | MÉDIO | **Limitação conhecida** (ver §7) |
 | A-12 | Canvas do editor de diagrama é read-only para tecnologia assistiva (já há lista textual alternativa) | 1.1.1 | MÉDIO | **Limitação conhecida** (ver §7) |
 | COR-03 | Legenda do editor: "Emergência" e "Extravasamento" com o mesmo swatch vermelho (texto sempre presente) | 1.4.1 | BAIXO | **Limitação conhecida** (fidelidade SIBH) |
@@ -83,16 +83,18 @@ Legenda de estado: **Corrigido** (nesta rodada, 26/06), **Pendente** (priorizado
 
 Validação: `typecheck`, `lint` (0 warnings) e 307 testes verdes.
 
-## 6. Pendências priorizadas (próxima rodada)
+## 6. Pendências priorizadas — RESOLVIDAS (26/06/2026)
 
-- **CONTRASTE-02 (1.4.11)**: a borda de campo em repouso precisa de ≥ 3:1. Decisão
-  recomendada: criar token dedicado `--border-input` (~`#6B7280`, ≥ 3:1) e aplicá-lo
-  aos `<input>`/`<select>`/`<textarea>` (base `Input` + campos mobile + diálogos),
-  sem escurecer as bordas decorativas de card. Adiar a aplicação por ser mudança de
-  identidade visual que vale alinhar (a paleta de bordas é derivada da marca).
-- **COR-02 (1.4.1)**: adicionar rótulo textual de severidade (ex.: tag "Alta" /
-  "Atenção" ou `sr-only`) à `BarraProgresso` da taxa, replicando o padrão que o
-  `CardKPI` já acerta com `ROTULOS_SEVERIDADE`.
+- **CONTRASTE-02 (1.4.11)** — Corrigido: criado token `--border-input`
+  (`220 9% 54%` ≈ #868C95, ~3.7:1 sobre branco) e aplicado aos campos
+  (`Input` base, formulário mobile, `CampoFichaMobile`, busca mobile, diálogos do
+  editor), sem escurecer as bordas decorativas de card.
+- **COR-02 (1.4.1)** — Corrigido: a severidade da taxa (alta/atenção/normal) entra
+  no rótulo acessível da `BarraProgresso` (`aria-label`), e o percentual visível ao
+  lado é o indicador não-cor da magnitude. A classificação deixou de existir só na cor.
+
+Resta para conformidade formal apenas o **teste com tecnologia assistiva real
+(NVDA + teclado)** nos fluxos de modal/dropdown/formulário (auditoria foi estática).
 
 ## 7. Limitações conhecidas (decisão registrada)
 

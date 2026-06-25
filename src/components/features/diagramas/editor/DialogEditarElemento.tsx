@@ -179,7 +179,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
   const temNome = tipo !== 'linha';
 
   const classeCampo =
-    'w-full rounded border border-app-border-subtle bg-app-surface px-3 py-1.5 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul';
+    'w-full rounded border border-app-border-input bg-app-surface px-3 py-1.5 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul';
   const classeLabel = 'block text-sm font-medium text-app-fg';
 
   return (

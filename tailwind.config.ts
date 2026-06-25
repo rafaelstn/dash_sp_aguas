@@ -37,6 +37,7 @@ const config: Config = {
           border: 'hsl(var(--border-default))',
           'border-subtle': 'hsl(var(--border-subtle))',
           'border-strong': 'hsl(var(--border-strong))',
+          'border-input': 'hsl(var(--border-input))',
         },
       },
       spacing: {

@@ -283,7 +283,7 @@ export function BuscaPostosMobile({
             value={termo}
             onChange={(e) => setTermo(e.target.value)}
             placeholder="Exemplo: 4D-001 ou Itu"
-            className="mt-1 block w-full min-h-[44px] rounded border border-app-border bg-app-surface px-3 text-md text-app-fg placeholder:text-app-fg-muted focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+            className="mt-1 block w-full min-h-[44px] rounded border border-app-border-input bg-app-surface px-3 text-md text-app-fg placeholder:text-app-fg-muted focus:border-gov-azul focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
             aria-describedby={`${inputId}-ajuda`}
           />
           <p id={`${inputId}-ajuda`} className="mt-1 text-2xs text-app-fg-muted">

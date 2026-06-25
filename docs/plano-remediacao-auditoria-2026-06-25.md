@@ -124,6 +124,11 @@ uma ordem de grandeza ou se uma medição real apontar o COUNT/ILIKE como gargal
 
 Reduz o custo de manutenção por equipe terceira on-prem.
 
+> **Status: CONCLUÍDA em 26/06/2026.** ARCH-5/6/7/8/9/10 e LGPD-4 implementados
+> (typecheck/lint/323 testes verdes). SEG-5 escalado ao Rafael (custo recorrente):
+> plano de migração em `docs/seguranca/rate-limit-camada-2-upstash.md`. LGPD-4 cria
+> migration `0048` + job; aplicação no banco e agendamento do cron ficam para ativação.
+
 | ID | Item | Origem | Arquivo | Sev | Esforço |
 |----|------|--------|---------|-----|---------|
 | ARCH-5 | Criar port `InventarioAnaExportRepository` e injetar (use-case de export importa `sql` concreto, fura o DIP e não tem mock) | Arquitetura #1.1 | `src/application/use-cases/inventario-ana/exportar.ts:3` | ALTO | M |
@@ -138,6 +143,11 @@ Reduz o custo de manutenção por equipe terceira on-prem.
 ## 8. Fase 5 — Fundação para upgrades futuros
 
 Não corrige defeito; prepara o terreno para crescer com qualidade.
+
+> **Status: CONCLUÍDA em 26/06/2026.** BASE-1 (`docs/arquitetura/template-rota-api.md`),
+> BASE-2 (ADR-0017 e ADR-0018), BASE-3 (teste de paridade `colunas-ana.json`),
+> BASE-4 (`docs/arquitetura/convencoes-componentes.md`), BASE-5
+> (`docs/runbooks/checklist-release.md`).
 
 | ID | Item | Razão |
 |----|------|-------|
