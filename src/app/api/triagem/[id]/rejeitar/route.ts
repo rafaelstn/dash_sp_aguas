@@ -12,7 +12,7 @@ import {
   consumirRateLimit,
   extrairIp,
 } from '@/infrastructure/security/rate-limit';
-import { respostaDeErro } from '../../_helpers';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
