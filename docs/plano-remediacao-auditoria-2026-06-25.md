@@ -150,12 +150,20 @@ Não corrige defeito; prepara o terreno para crescer com qualidade.
 ## 9. Gap de auditoria a cobrir
 
 A acessibilidade (e-MAG / WCAG 2.1 AA) é exigência legal para órgão público e
-NÃO foi coberta por esta rodada de auditoria (foco em segurança, LGPD, desempenho
-e arquitetura). Recomenda-se uma auditoria dedicada antes do go-live.
+NÃO foi coberta pela rodada inicial de auditoria (foco em segurança, LGPD,
+desempenho e arquitetura).
 
-| ID | Item | Esforço |
-|----|------|---------|
-| ACES-1 | Auditoria e-MAG/WCAG 2.1 AA: navegação por teclado, leitor de tela, contraste, foco visível, labels de formulário, especialmente no PWA mobile | M a G |
+> **Auditoria dedicada CONCLUÍDA em 26/06/2026.** Relatório completo em
+> `docs/acessibilidade/auditoria-e-mag-wcag-2026-06-26.md`. Veredito: 0 CRÍTICO,
+> 2 ALTO, 5 MÉDIO, 4 BAIXO. Os 2 ALTOS (contraste de `--fg-subtle` e links inline
+> sem sublinhado) e a maioria dos MÉDIOS/BAIXOS foram **corrigidos** nesta rodada
+> (typecheck/lint/307 testes verdes). Pendentes priorizados: CONTRASTE-02 (borda
+> de input < 3:1, 1.4.11) e COR-02 (severidade só por cor). Faltam: teste com
+> leitor de tela real (NVDA) + teclado antes de declarar conformidade formal.
+
+| ID | Item | Esforço | Estado |
+|----|------|---------|--------|
+| ACES-1 | Auditoria e-MAG/WCAG 2.1 AA: navegação por teclado, leitor de tela, contraste, foco visível, labels de formulário, especialmente no PWA mobile | M a G | Auditado + ALTOS corrigidos; 2 MÉDIOS e teste com AT pendentes |
 
 ## 10. Sequência recomendada
 

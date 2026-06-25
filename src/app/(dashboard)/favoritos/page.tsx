@@ -46,7 +46,10 @@ export default async function PaginaFavoritos() {
             <p className="font-medium text-app-fg">Nenhum posto favoritado ainda.</p>
             <p className="mt-1 text-xs text-app-fg-muted">
               Comece pela{' '}
-              <Link href="/" className="text-gov-azul hover:underline">
+              <Link
+                href="/"
+                className="text-gov-azul underline underline-offset-2"
+              >
                 busca de postos
               </Link>
               .

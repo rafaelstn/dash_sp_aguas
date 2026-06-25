@@ -427,7 +427,7 @@ function TabelaCampoMobile({
 
   const celulaClass =
     'mt-0.5 block w-full min-h-[40px] rounded border border-app-border bg-app-surface ' +
-    'px-2 text-sm text-app-fg focus:border-gov-azul focus:outline-none ' +
+    'px-2 text-sm text-app-fg focus:border-gov-azul focus-visible:outline-none ' +
     'focus-visible:ring-2 focus-visible:ring-gov-azul';
 
   return (

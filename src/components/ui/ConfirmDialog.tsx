@@ -122,6 +122,7 @@ export function ConfirmDialog({
       onClose={() => {
         if (aberto) aoCancelar();
       }}
+      aria-modal="true"
       aria-labelledby={tituloId}
       aria-describedby={descId}
       className="m-0 max-w-md rounded-gov-card border border-app-border-subtle bg-app-surface p-0 text-app-fg shadow-gov-card-hover backdrop:bg-black/40 sm:m-auto"

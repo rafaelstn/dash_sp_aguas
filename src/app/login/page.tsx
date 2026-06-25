@@ -54,7 +54,10 @@ export default async function PaginaLogin({
         <FormularioLogin returnTo={returnTo} />
         <p className="mt-6 text-sm text-gov-muted">
           Ainda não tem conta?{' '}
-          <Link href="/cadastrar" className="text-gov-azul hover:underline">
+          <Link
+            href="/cadastrar"
+            className="text-gov-azul underline underline-offset-2"
+          >
             Criar conta
           </Link>
         </p>

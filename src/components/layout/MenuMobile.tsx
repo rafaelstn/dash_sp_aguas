@@ -57,6 +57,7 @@ export function MenuMobile({ itens }: Props) {
       <dialog
         id="menu-mobile-dialog"
         ref={ref}
+        aria-modal="true"
         aria-labelledby="menu-mobile-titulo"
         onClose={() => setAberto(false)}
         onClick={(e) => {

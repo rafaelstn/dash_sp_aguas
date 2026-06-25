@@ -40,6 +40,7 @@ export function MenuUsuario({
 }: MenuUsuarioProps) {
   const [aberto, setAberto] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
   const primeiroItemRef = useRef<HTMLAnchorElement>(null);
   const menuId = useId();
   const rotulo = nome ?? email;
@@ -51,7 +52,12 @@ export function MenuUsuario({
       if (!containerRef.current?.contains(e.target as Node)) setAberto(false);
     }
     function aoTeclar(e: KeyboardEvent) {
-      if (e.key === 'Escape') setAberto(false);
+      if (e.key === 'Escape') {
+        setAberto(false);
+        // Devolve o foco ao gatilho (o popover não é um menu ARIA com
+        // navegação por setas; é um conjunto de links acessível por Tab).
+        botaoRef.current?.focus();
+      }
     }
     document.addEventListener('mousedown', aoClicarFora);
     document.addEventListener('keydown', aoTeclar);
@@ -66,9 +72,10 @@ export function MenuUsuario({
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={botaoRef}
         type="button"
         onClick={() => setAberto((v) => !v)}
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={aberto}
         aria-controls={menuId}
         className="flex items-center gap-2 rounded-full p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-2 focus-visible:ring-offset-app-surface"
@@ -99,7 +106,6 @@ export function MenuUsuario({
       {aberto ? (
         <div
           id={menuId}
-          role="menu"
           aria-label="Menu do usuário"
           className={[
             'absolute z-40 mt-2 w-56 overflow-hidden rounded-gov-card border border-app-border-subtle bg-app-surface shadow-gov-card-hover',
@@ -116,7 +122,6 @@ export function MenuUsuario({
           </div>
           <Link
             ref={primeiroItemRef}
-            role="menuitem"
             href="/perfil"
             onClick={() => setAberto(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-app-fg hover:bg-app-surface-2 focus-visible:bg-app-surface-2 focus-visible:outline-none"
@@ -125,7 +130,6 @@ export function MenuUsuario({
             Perfil
           </Link>
           <a
-            role="menuitem"
             href={hrefSair}
             className="flex items-center gap-2 border-t border-app-border-subtle px-3 py-2 text-sm text-gov-perigo hover:bg-red-50 focus-visible:bg-red-50 focus-visible:outline-none"
           >

@@ -577,6 +577,7 @@ export function FormularioFichaMobile({
               type="text"
               autoComplete="name"
               required
+              aria-required="true"
               value={rascunho.cabecalho.tecnicoNome}
               onChange={(e) => setCabecalho('tecnicoNome', e.target.value)}
               aria-invalid={erros['__tecnicoNome'] ? true : undefined}
@@ -603,15 +604,23 @@ export function FormularioFichaMobile({
               }}
               type="date"
               required
+              aria-required="true"
               value={rascunho.cabecalho.dataVisita}
               onChange={(e) => setCabecalho('dataVisita', e.target.value)}
               aria-invalid={erros['__dataVisita'] ? true : undefined}
-              className={`mt-1 block w-full min-h-[44px] rounded border bg-app-surface px-3 text-md text-app-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul ${
+              aria-describedby={
+                erros['__dataVisita'] ? `${formId}-dataVisita-erro` : undefined
+              }
+              className={`mt-1 block w-full min-h-[44px] rounded border bg-app-surface px-3 text-md text-app-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul ${
                 erros['__dataVisita'] ? 'border-red-500' : 'border-app-border focus:border-gov-azul'
               }`}
             />
             {erros['__dataVisita'] ? (
-              <p role="alert" className="mt-1 text-xs font-medium text-red-700">
+              <p
+                id={`${formId}-dataVisita-erro`}
+                role="alert"
+                className="mt-1 text-xs font-medium text-red-700"
+              >
                 {erros['__dataVisita']}
               </p>
             ) : null}

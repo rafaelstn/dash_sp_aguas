@@ -10,9 +10,22 @@ export interface EstadoVazioProps {
    * estado vazio com identidade visual sem recorrer a ilustração genérica.
    */
   icone?: LucideIcon;
+  /**
+   * Nível do título (1 a 3). Default 2: assume um `<h1>` ancestral na página.
+   * Use 1 quando o estado vazio for o conteúdo único de uma rota sem outro
+   * heading, para não criar salto de nível (WCAG 1.3.1 / 2.4.6).
+   */
+  nivelTitulo?: 1 | 2 | 3;
 }
 
-export function EstadoVazio({ titulo, descricao, acao, icone: Icone }: EstadoVazioProps) {
+export function EstadoVazio({
+  titulo,
+  descricao,
+  acao,
+  icone: Icone,
+  nivelTitulo = 2,
+}: EstadoVazioProps) {
+  const Titulo = `h${nivelTitulo}` as const;
   return (
     <div
       role="status"
@@ -26,7 +39,7 @@ export function EstadoVazio({ titulo, descricao, acao, icone: Icone }: EstadoVaz
           <Icone className="h-5 w-5" strokeWidth={2} />
         </span>
       ) : null}
-      <h2 className="text-lg font-semibold text-app-fg">{titulo}</h2>
+      <Titulo className="text-lg font-semibold text-app-fg">{titulo}</Titulo>
       {descricao && <p className="mt-2 max-w-md text-app-fg-muted">{descricao}</p>}
       {acao && <div className="mt-4">{acao}</div>}
     </div>

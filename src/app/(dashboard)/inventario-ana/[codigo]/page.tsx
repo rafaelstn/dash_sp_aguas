@@ -103,7 +103,7 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
             ) : null}
             {estacao.postoPrefixo ? (
               <>
-                {' '}· Match em <Link href={`/postos/${encodeURIComponent(estacao.postoPrefixo)}`} className="mono text-gov-azul hover:underline">{estacao.postoPrefixo}</Link>
+                {' '}· Match em <Link href={`/postos/${encodeURIComponent(estacao.postoPrefixo)}`} className="mono text-gov-azul underline underline-offset-2">{estacao.postoPrefixo}</Link>
               </>
             ) : (
               <>

@@ -19,7 +19,7 @@
     /* Textos */
     --fg-default: 221 39% 11%;       /* #111827 — 16.9:1 */
     --fg-muted: 220 9% 36%;          /* #4B5563 — 7.5:1 */
-    --fg-subtle: 220 9% 46%;         /* #6B7280 — 4.7:1 (só >= 14px) */
+    --fg-subtle: 220 9% 41%;         /* #5F6572 — 5.8:1 branco / 4.7:1 sobre zebra (AA texto pequeno) */
 
     /* Bordas */
     --border-subtle: 220 13% 91%;    /* #E5E7EB */

@@ -47,7 +47,10 @@ export default function PaginaCadastro() {
         <FormularioCadastro />
         <p className="mt-6 text-sm text-gov-muted">
           Já tem conta?{' '}
-          <Link href="/login" className="text-gov-azul hover:underline">
+          <Link
+            href="/login"
+            className="text-gov-azul underline underline-offset-2"
+          >
             Entrar
           </Link>
         </p>
