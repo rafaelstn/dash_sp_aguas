@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { postosFotosRepository, postosRepository } from '@/infrastructure/repositories';
+import {
+  fotoStorageGateway,
+  postosFotosRepository,
+  postosRepository,
+} from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import {
   obterCapaPosto,
@@ -46,7 +50,11 @@ export async function GET(
   }
   const { prefixo } = await params;
   try {
-    const capa = await obterCapaPosto(postosFotosRepository, decodeURIComponent(prefixo));
+    const capa = await obterCapaPosto(
+      postosFotosRepository,
+      fotoStorageGateway,
+      decodeURIComponent(prefixo),
+    );
     return NextResponse.json(capa);
   } catch {
     return NextResponse.json(
@@ -111,7 +119,7 @@ export async function POST(
   }
 
   try {
-    const foto = await registrarFotoCapa(postosFotosRepository, {
+    const foto = await registrarFotoCapa(postosFotosRepository, fotoStorageGateway, {
       prefixo: prefixoDecodificado,
       fotoDataUrl: parseado.data.fotoDataUrl,
       tiradaPor: usuario.id,

@@ -1,5 +1,8 @@
 import { listarFotosPosto } from '@/application/use-cases/foto-posto';
-import { postosFotosRepository } from '@/infrastructure/repositories';
+import {
+  fotoStorageGateway,
+  postosFotosRepository,
+} from '@/infrastructure/repositories';
 
 /**
  * Registro fotográfico do posto ao longo dos anos (abaixo do mapa, no painel
@@ -11,7 +14,11 @@ import { postosFotosRepository } from '@/infrastructure/repositories';
 export async function HistoricoFotosPosto({ prefixo }: { prefixo: string }) {
   let fotos;
   try {
-    fotos = await listarFotosPosto(postosFotosRepository, prefixo);
+    fotos = await listarFotosPosto(
+      postosFotosRepository,
+      fotoStorageGateway,
+      prefixo,
+    );
   } catch {
     return null;
   }

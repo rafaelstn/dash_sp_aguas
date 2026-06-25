@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// O storage é infra concreta (não injetada); mockamos para isolar a validação
-// de conteúdo do use-case sem tocar no Supabase Storage.
-vi.mock('@/infrastructure/storage/foto-posto-storage', () => ({
-  montarCaminhoFoto: () => 'postos/X/2026.jpg',
-  subirFotoPosto: vi.fn(async () => undefined),
-  urlAssinadaFotoPosto: vi.fn(async () => 'https://signed.example/x'),
-}));
-
 import { registrarFotoCapa } from '@/application/use-cases/foto-posto';
-import { subirFotoPosto } from '@/infrastructure/storage/foto-posto-storage';
 import { DadosInvalidos } from '@/domain/errors';
 import type { PostosFotosRepository } from '@/application/ports/postos-fotos-repository';
+import type { FotoStorageGateway } from '@/application/ports/foto-storage-gateway';
+
+// O storage agora é injetado (port FotoStorageGateway): usamos um stub para
+// isolar a validação de conteúdo do use-case sem tocar no Supabase Storage.
+const subir = vi.fn(async (caminho: string) => caminho);
+const storageFake: FotoStorageGateway = {
+  montarCaminho: () => 'postos/X/2026.jpg',
+  subir,
+  urlAssinada: vi.fn(async () => 'https://signed.example/x'),
+};
 
 const repoFake = {
   registrar: vi.fn(async (entrada) => ({
@@ -35,23 +36,23 @@ describe('registrarFotoCapa — validação de conteúdo (SEG-2)', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('aceita imagem cujo conteúdo bate com o tipo declarado', async () => {
-    await expect(registrarFotoCapa(repoFake, entrada(dataUrl('png', PNG)))).resolves.toMatchObject({
-      prefixo: 'X',
-    });
-    expect(subirFotoPosto).toHaveBeenCalledOnce();
+    await expect(
+      registrarFotoCapa(repoFake, storageFake, entrada(dataUrl('png', PNG))),
+    ).resolves.toMatchObject({ prefixo: 'X' });
+    expect(subir).toHaveBeenCalledOnce();
   });
 
   it('rejeita arquivo forjado: prefixo png mas conteúdo jpeg', async () => {
-    await expect(registrarFotoCapa(repoFake, entrada(dataUrl('png', JPEG)))).rejects.toBeInstanceOf(
-      DadosInvalidos,
-    );
-    expect(subirFotoPosto).not.toHaveBeenCalled();
+    await expect(
+      registrarFotoCapa(repoFake, storageFake, entrada(dataUrl('png', JPEG))),
+    ).rejects.toBeInstanceOf(DadosInvalidos);
+    expect(subir).not.toHaveBeenCalled();
   });
 
   it('rejeita conteúdo que não é imagem reconhecida', async () => {
-    await expect(registrarFotoCapa(repoFake, entrada(dataUrl('jpeg', LIXO)))).rejects.toBeInstanceOf(
-      DadosInvalidos,
-    );
-    expect(subirFotoPosto).not.toHaveBeenCalled();
+    await expect(
+      registrarFotoCapa(repoFake, storageFake, entrada(dataUrl('jpeg', LIXO))),
+    ).rejects.toBeInstanceOf(DadosInvalidos);
+    expect(subir).not.toHaveBeenCalled();
   });
 });

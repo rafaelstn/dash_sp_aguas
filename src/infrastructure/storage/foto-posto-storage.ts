@@ -3,6 +3,7 @@ import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getEnv } from '@/infrastructure/config/env';
 import { FalhaRepositorio } from '@/domain/errors';
+import type { FotoStorageGateway } from '@/application/ports/foto-storage-gateway';
 
 /**
  * Armazenamento da foto de capa do posto no Supabase Storage.
@@ -61,3 +62,13 @@ export async function urlAssinadaFotoPosto(caminho: string): Promise<string | nu
   if (error || !data) return null;
   return data.signedUrl;
 }
+
+/**
+ * Implementação concreta do {@link FotoStorageGateway} sobre o Supabase Storage,
+ * delegando às funções acima. É o objeto injetado nos use cases de foto.
+ */
+export const fotoStorageGateway: FotoStorageGateway = {
+  montarCaminho: montarCaminhoFoto,
+  subir: subirFotoPosto,
+  urlAssinada: urlAssinadaFotoPosto,
+};

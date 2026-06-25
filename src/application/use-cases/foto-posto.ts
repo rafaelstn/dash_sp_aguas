@@ -1,11 +1,7 @@
 import type { PostosFotosRepository } from '@/application/ports/postos-fotos-repository';
+import type { FotoStorageGateway } from '@/application/ports/foto-storage-gateway';
 import type { PostoFoto } from '@/domain/posto-foto';
 import { idadeFotoEmDias, precisaAtualizarFotoCapa } from '@/domain/posto-foto';
-import {
-  montarCaminhoFoto,
-  subirFotoPosto,
-  urlAssinadaFotoPosto,
-} from '@/infrastructure/storage/foto-posto-storage';
 import { DadosInvalidos } from '@/domain/errors';
 
 const MAX_BYTES_FOTO = 5 * 1024 * 1024;
@@ -24,12 +20,13 @@ export interface CapaPostoView {
  */
 export async function registrarFotoCapa(
   repo: PostosFotosRepository,
+  storage: FotoStorageGateway,
   entrada: { prefixo: string; fotoDataUrl: string; tiradaPor: string | null },
 ): Promise<PostoFoto> {
   const conteudo = decodificarDataUrlJpeg(entrada.fotoDataUrl);
   const tiradaEm = new Date();
-  const caminho = montarCaminhoFoto(entrada.prefixo, tiradaEm);
-  await subirFotoPosto(caminho, conteudo);
+  const caminho = storage.montarCaminho(entrada.prefixo, tiradaEm);
+  await storage.subir(caminho, conteudo);
   return repo.registrar({
     prefixo: entrada.prefixo,
     storagePath: caminho,
@@ -41,11 +38,12 @@ export async function registrarFotoCapa(
 /** Capa atual do posto pronta para exibição (signed URL + flag de validade). */
 export async function obterCapaPosto(
   repo: PostosFotosRepository,
+  storage: FotoStorageGateway,
   prefixo: string,
   agora: Date = new Date(),
 ): Promise<CapaPostoView> {
   const foto = await repo.capaAtual(prefixo);
-  const url = foto ? await urlAssinadaFotoPosto(foto.storagePath) : null;
+  const url = foto ? await storage.urlAssinada(foto.storagePath) : null;
   return {
     url,
     tiradaEm: foto?.tiradaEm ?? null,
@@ -69,6 +67,7 @@ export interface FotoHistoricoView {
  */
 export async function listarFotosPosto(
   repo: PostosFotosRepository,
+  storage: FotoStorageGateway,
   prefixo: string,
   agora: Date = new Date(),
 ): Promise<FotoHistoricoView[]> {
@@ -76,7 +75,7 @@ export async function listarFotosPosto(
   return Promise.all(
     fotos.map(async (foto) => ({
       id: foto.id,
-      url: await urlAssinadaFotoPosto(foto.storagePath),
+      url: await storage.urlAssinada(foto.storagePath),
       tiradaEm: foto.tiradaEm,
       idadeDias: idadeFotoEmDias(foto, agora),
     })),

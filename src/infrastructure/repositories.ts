@@ -69,4 +69,8 @@ export const inventarioAnaExportRepository = demo
   ? inventarioAnaExportMock
   : inventarioAnaExportPg;
 
+// Gateway de Storage (Supabase) das fotos de posto. Sem variação demo: o
+// armazenamento real é sempre usado (não há mock de bucket hoje).
+export { fotoStorageGateway } from './storage/foto-posto-storage';
+
 export const modoDemoAtivo = demo;
