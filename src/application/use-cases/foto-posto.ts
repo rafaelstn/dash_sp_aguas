@@ -95,5 +95,41 @@ function decodificarDataUrlJpeg(dataUrl: string): Buffer {
   if (conteudo.length > MAX_BYTES_FOTO) {
     throw new DadosInvalidos('Foto excede 5 MB.');
   }
+  // Defesa de upload: o prefixo do data URL é declarado pelo cliente e pode ser
+  // forjado (arquivo malicioso renomeado). Validamos a assinatura real do
+  // conteúdo (magic bytes) e exigimos que ela corresponda ao tipo declarado.
+  const tipoReal = detectarTipoImagem(conteudo);
+  if (!tipoReal) {
+    throw new DadosInvalidos('Conteúdo não é uma imagem JPEG, PNG ou WEBP válida.');
+  }
+  const tipoDeclarado = match[1] === 'jpg' ? 'jpeg' : match[1];
+  if (tipoReal !== tipoDeclarado) {
+    throw new DadosInvalidos('O tipo declarado não corresponde ao conteúdo da imagem.');
+  }
   return conteudo;
+}
+
+/**
+ * Detecta o tipo da imagem pela assinatura binária (magic bytes), ignorando o
+ * que o cliente declarou. Retorna null se não for JPEG, PNG ou WEBP.
+ */
+function detectarTipoImagem(buf: Buffer): 'jpeg' | 'png' | 'webp' | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'jpeg';
+  }
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  ) {
+    return 'png';
+  }
+  if (
+    buf.length >= 12 &&
+    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && // "RIFF"
+    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50 // "WEBP"
+  ) {
+    return 'webp';
+  }
+  return null;
 }
