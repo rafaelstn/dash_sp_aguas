@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   anaRevisaoRepository,
+  inventarioAnaExportRepository,
   papeisRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
@@ -72,6 +73,7 @@ export async function GET() {
 
   try {
     const { buffer, nomeArquivo, estatisticas } = await exportarInventarioAna(
+      inventarioAnaExportRepository,
       lote.id,
     );
 

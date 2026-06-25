@@ -22,6 +22,7 @@ for (const line of envText.split(/\r?\n/)) {
 }
 
 import { exportarInventarioAna } from '../../src/application/use-cases/inventario-ana/exportar';
+import { inventarioAnaExportRepository } from '../../src/infrastructure/db/inventario-ana-export-repository.pg';
 import { sql } from '../../src/infrastructure/db/client';
 
 async function main() {
@@ -34,7 +35,10 @@ async function main() {
   }
   console.log(`Lote: ${lote[0].nome} (${lote[0].id})`);
 
-  const { buffer, nomeArquivo, estatisticas } = await exportarInventarioAna(lote[0].id);
+  const { buffer, nomeArquivo, estatisticas } = await exportarInventarioAna(
+    inventarioAnaExportRepository,
+    lote[0].id,
+  );
 
   const outDir = join(process.cwd(), 'docs', 'relatorios');
   mkdirSync(outDir, { recursive: true });
