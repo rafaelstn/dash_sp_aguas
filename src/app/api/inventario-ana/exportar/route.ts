@@ -11,6 +11,7 @@ import {
 } from '@/infrastructure/security/rate-limit';
 import { exportarInventarioAna } from '@/application/use-cases/inventario-ana/exportar';
 import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,15 +97,14 @@ export async function GET() {
       }),
     });
   } catch (e) {
-    logger.error(
-      'inventario_ana.exportar_erro',
-      { loteId: lote.id, erro: String(e) },
-      'Falha ao exportar inventário ANA',
+    // Preserva os headers de rate-limit já calculados na resposta do helper.
+    const resposta = respostaDeErro(
+      'GET /api/inventario-ana/exportar',
+      { loteId: lote.id, usuarioId: usuario.id },
+      e,
     );
-    return NextResponse.json(
-      { erro: 'erro_interno', mensagem: 'Falha ao gerar XLSX.' },
-      { status: 500, headers },
-    );
+    headers.forEach((valor, chave) => resposta.headers.set(chave, valor));
+    return resposta;
   } finally {
     exportandoAgora.delete(usuario.id);
   }

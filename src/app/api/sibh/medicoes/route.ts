@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
 import {
@@ -7,7 +6,7 @@ import {
   SibhIndisponivelError,
 } from '@/infrastructure/sibh/sibh-client';
 import { agregarDiario } from '@/application/ports/sibh-gateway';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,19 +83,6 @@ export async function GET(request: NextRequest) {
         { status: 502 },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'sibh.medicoes.erro_inesperado',
-      { correlationId, rota: 'GET /api/sibh/medicoes', prefixo, erro: String(e) },
-      'Falha ao consultar medições do SIBH',
-    );
-    return NextResponse.json(
-      {
-        erro: 'falha_listar_medicoes',
-        mensagem: 'Falha ao consultar medições do SIBH.',
-        correlationId,
-      },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/sibh/medicoes', { prefixo }, e);
   }
 }

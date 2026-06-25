@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { favoritosRepository } from '@/infrastructure/repositories';
 import { alternarFavorito } from '@/application/use-cases/alternar-favorito';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,8 +32,8 @@ async function handler(
       prefixo,
     });
     return NextResponse.json({ prefixo, favoritado });
-  } catch {
-    return NextResponse.json({ erro: 'falha_alternar' }, { status: 500 });
+  } catch (e) {
+    return respostaDeErro('POST /api/favoritos/[prefixo]', { prefixo, usuarioId: usuario.id }, e);
   }
 }
 

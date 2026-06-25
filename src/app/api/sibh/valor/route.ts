@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
 import {
   sibhClient,
   SibhIndisponivelError,
 } from '@/infrastructure/sibh/sibh-client';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,19 +67,6 @@ export async function GET(request: NextRequest) {
         { status: 502 },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'sibh.valor.erro_inesperado',
-      { correlationId, rota: 'GET /api/sibh/valor', prefixo, erro: String(e) },
-      'Falha ao consultar leitura do SIBH',
-    );
-    return NextResponse.json(
-      {
-        erro: 'falha_consultar_valor',
-        mensagem: 'Falha ao consultar leitura do SIBH.',
-        correlationId,
-      },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/sibh/valor', { prefixo }, e);
   }
 }

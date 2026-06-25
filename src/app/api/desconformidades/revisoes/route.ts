@@ -6,6 +6,7 @@ import { marcarRevisaoDesconformidade } from '@/application/use-cases/marcar-rev
 import type { CategoriaDesconformidade } from '@/domain/desconformidade';
 import type { TipoEntidadeRevisada } from '@/domain/revisao-desconformidade';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,7 +73,11 @@ export async function POST(request: Request) {
       usuarioId: auth.id,
     });
     return NextResponse.json({ revisao }, { status: 200 });
-  } catch {
-    return NextResponse.json({ erro: 'falha_interna' }, { status: 500 });
+  } catch (e) {
+    return respostaDeErro(
+      'POST /api/desconformidades/revisoes',
+      { tipoEntidade: payload.tipoEntidade, idEntidade: payload.idEntidade },
+      e,
+    );
   }
 }

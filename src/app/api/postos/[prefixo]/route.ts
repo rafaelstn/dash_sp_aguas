@@ -13,6 +13,7 @@ import {
 } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 import type { RespostaErro, RespostaFicha } from '@/types/dto';
 import {
   checarCache,
@@ -328,15 +329,13 @@ export async function PATCH(
         { status: 409, headers },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'PATCH /api/postos/[prefixo]', prefixo, usuarioId: usuario.id, erro: String(e) },
-      'Falha ao atualizar posto',
+    // Fallback 5xx centralizado; preserva os headers de rate-limit.
+    const resposta = respostaDeErro(
+      'PATCH /api/postos/[prefixo]',
+      { prefixo, usuarioId: usuario.id },
+      e,
     );
-    return NextResponse.json(
-      { erro: 'falha_atualizacao', mensagem: 'Falha ao atualizar.', correlationId },
-      { status: 500, headers },
-    );
+    headers.forEach((valor, chave) => resposta.headers.set(chave, valor));
+    return resposta;
   }
 }

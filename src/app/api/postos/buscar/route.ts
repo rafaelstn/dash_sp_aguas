@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
 import { autocompletarPostos } from '@/application/use-cases/autocompletar-postos';
 import { postosRepository } from '@/infrastructure/repositories';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,19 +51,6 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json({ total: itens.length, itens });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'postos.buscar.erro_inesperado',
-      { correlationId, rota: 'GET /api/postos/buscar', erro: String(e) },
-      'Falha ao autocompletar postos',
-    );
-    return NextResponse.json(
-      {
-        erro: 'falha_autocompletar',
-        mensagem: 'Falha ao buscar postos.',
-        correlationId,
-      },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/postos/buscar', { q: parsed.data.q }, e);
   }
 }

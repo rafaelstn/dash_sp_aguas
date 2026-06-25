@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { diagramasRepository } from '@/infrastructure/repositories';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
@@ -8,7 +7,7 @@ import {
   listarDiagramas,
 } from '@/application/use-cases/diagramas';
 import { elementosSchema } from '@/domain/diagramas/schemas';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,16 +28,7 @@ export async function GET() {
     const diagramas = await listarDiagramas(diagramasRepository);
     return NextResponse.json({ diagramas });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'GET /api/diagramas', erro: String(e) },
-      'Falha ao listar diagramas',
-    );
-    return NextResponse.json(
-      { erro: 'falha_listagem', mensagem: 'Falha ao listar diagramas.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/diagramas', {}, e);
   }
 }
 
@@ -73,15 +63,6 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json({ diagrama }, { status: 201 });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'POST /api/diagramas', erro: String(e) },
-      'Falha ao criar diagrama',
-    );
-    return NextResponse.json(
-      { erro: 'falha_criacao', mensagem: 'Falha ao criar diagrama.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('POST /api/diagramas', { nome: parsed.data.nome }, e);
   }
 }

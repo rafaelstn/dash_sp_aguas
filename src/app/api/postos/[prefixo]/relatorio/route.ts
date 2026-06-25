@@ -9,6 +9,7 @@ import {
   RenderizadorPdfIndisponivel,
 } from '@/infrastructure/relatorio/pdf-relatorio';
 import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,23 +70,6 @@ export async function GET(
         { status: 503 },
       );
     }
-    logger.error(
-      'erro_inesperado',
-      {
-        correlationId,
-        rota: 'GET /api/postos/[prefixo]/relatorio',
-        prefixo,
-        erro: String(e),
-      },
-      'Falha ao gerar relatório do posto',
-    );
-    return NextResponse.json(
-      {
-        erro: 'erro_interno',
-        mensagem: 'Falha ao gerar o relatório.',
-        correlationId,
-      },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/postos/[prefixo]/relatorio', { prefixo }, e);
   }
 }

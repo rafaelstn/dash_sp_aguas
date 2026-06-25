@@ -5,6 +5,7 @@ import {
 } from '@/infrastructure/repositories';
 import { listarFavoritos } from '@/application/use-cases/listar-favoritos';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +22,7 @@ export async function GET() {
       usuario.id,
     );
     return NextResponse.json({ total: itens.length, itens });
-  } catch {
-    return NextResponse.json(
-      { erro: 'falha_listar_favoritos' },
-      { status: 500 },
-    );
+  } catch (e) {
+    return respostaDeErro('GET /api/favoritos', { usuarioId: usuario.id }, e);
   }
 }

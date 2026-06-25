@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { diagramasRepository } from '@/infrastructure/repositories';
 import { exigirUsuario, permitirDonoOuAprovador } from '@/app/api/_helpers/auth';
@@ -10,8 +9,7 @@ import {
   salvarElementosDiagrama,
 } from '@/application/use-cases/diagramas';
 import { elementosSchema } from '@/domain/diagramas/schemas';
-import { DiagramaNaoEncontrado } from '@/domain/errors';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,16 +45,7 @@ export async function GET(
     }
     return NextResponse.json({ diagrama });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'GET /api/diagramas/[id]', id, erro: String(e) },
-      'Falha ao obter diagrama',
-    );
-    return NextResponse.json(
-      { erro: 'falha_obtencao', mensagem: 'Falha ao obter diagrama.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/diagramas/[id]', { id }, e);
   }
 }
 
@@ -109,22 +98,8 @@ export async function PATCH(
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof DiagramaNaoEncontrado) {
-      return NextResponse.json(
-        { erro: 'nao_encontrado', mensagem: 'Diagrama não encontrado.' },
-        { status: 404 },
-      );
-    }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'PATCH /api/diagramas/[id]', id, erro: String(e) },
-      'Falha ao atualizar diagrama',
-    );
-    return NextResponse.json(
-      { erro: 'falha_atualizacao', mensagem: 'Falha ao atualizar diagrama.', correlationId },
-      { status: 500 },
-    );
+    // DiagramaNaoEncontrado -> 404 e o fallback 5xx são tratados centralmente.
+    return respostaDeErro('PATCH /api/diagramas/[id]', { id }, e);
   }
 }
 
@@ -156,21 +131,7 @@ export async function DELETE(
     await excluirDiagrama(diagramasRepository, id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    if (e instanceof DiagramaNaoEncontrado) {
-      return NextResponse.json(
-        { erro: 'nao_encontrado', mensagem: 'Diagrama não encontrado.' },
-        { status: 404 },
-      );
-    }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'DELETE /api/diagramas/[id]', id, erro: String(e) },
-      'Falha ao excluir diagrama',
-    );
-    return NextResponse.json(
-      { erro: 'falha_exclusao', mensagem: 'Falha ao excluir diagrama.', correlationId },
-      { status: 500 },
-    );
+    // DiagramaNaoEncontrado -> 404 e o fallback 5xx são tratados centralmente.
+    return respostaDeErro('DELETE /api/diagramas/[id]', { id }, e);
   }
 }

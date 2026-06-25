@@ -8,12 +8,19 @@ import {
   obterFichaVisita,
 } from '@/application/use-cases/fichas-visita';
 import { exigirUsuario, permitirDonoOuAprovador } from '@/app/api/_helpers/auth';
-import { logger } from '@/infrastructure/logging/logger';
-import { randomUUID } from 'node:crypto';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 
-/** GET /api/fichas/[id], detalhe da ficha. Requer autenticação. */
+/**
+ * GET /api/fichas/[id], detalhe da ficha. Requer autenticação.
+ *
+ * Leitura compartilhada por design institucional (SEG-4): qualquer usuário do
+ * órgão (allowlist SP Águas) pode ler qualquer ficha, para visão institucional
+ * do posto e continuidade de trabalho. A assimetria com a escrita é
+ * intencional: edição/exclusão (PATCH/DELETE) seguem restritas a dono ou
+ * aprovador. Decisão registrada para não ser reaberta como IDOR em auditoria.
+ */
 export async function GET(
   _request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -32,16 +39,7 @@ export async function GET(
     }
     return NextResponse.json({ ficha });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'GET /api/fichas/[id]', id, erro: String(e) },
-      'Falha ao obter ficha',
-    );
-    return NextResponse.json(
-      { erro: 'erro_interno', mensagem: 'Falha ao consultar ficha.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/fichas/[id]', { id }, e);
   }
 }
 
@@ -126,22 +124,15 @@ export async function PATCH(
     });
     return NextResponse.json({ ficha: atualizada });
   } catch (e) {
+    // Mantém 422 (Unprocessable Entity) para validação semântica da ficha,
+    // contrato já consumido pelo frontend; o helper trataria como 400.
     if (e instanceof DadosFichaInvalidos) {
       return NextResponse.json(
         { erro: 'dados_invalidos', mensagem: e.message, motivos: e.motivos },
         { status: 422 },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'PATCH /api/fichas/[id]', id, erro: String(e) },
-      'Falha ao atualizar ficha',
-    );
-    return NextResponse.json(
-      { erro: 'erro_interno', mensagem: 'Falha ao atualizar ficha.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('PATCH /api/fichas/[id]', { id }, e);
   }
 }
 
@@ -169,15 +160,6 @@ export async function DELETE(
     await apagarFichaVisita(fichasVisitaRepository, id);
     return new NextResponse(null, { status: 204 });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'DELETE /api/fichas/[id]', id, erro: String(e) },
-      'Falha ao apagar ficha',
-    );
-    return NextResponse.json(
-      { erro: 'erro_interno', mensagem: 'Falha ao apagar ficha.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('DELETE /api/fichas/[id]', { id }, e);
   }
 }

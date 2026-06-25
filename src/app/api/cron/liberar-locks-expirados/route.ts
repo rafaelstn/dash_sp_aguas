@@ -8,6 +8,7 @@ import {
   extrairIp,
 } from '@/infrastructure/security/rate-limit';
 import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -117,16 +118,18 @@ async function executar(request: NextRequest) {
     }
     return NextResponse.json(resultado);
   } catch (e) {
-    // String(e) escapa stack — toString do Error não inclui stack por padrão.
-    // Severity `error` alimenta alerta A3/A4 (ver alertas-siem.md).
+    // Log específico do cron mantido: severity `error` alimenta alerta A3/A4
+    // (ver alertas-siem.md). O respostaDeErro adiciona o correlationId e o
+    // fallback 5xx uniforme da API.
     logger.error(
       'cron.liberar_locks.falha',
       { job: 'triagem-liberar-locks-expirados', erro: String(e) },
       'Falha ao executar cron de liberação de locks',
     );
-    return NextResponse.json(
-      { erro: 'erro_interno' },
-      { status: 500 },
+    return respostaDeErro(
+      'POST /api/cron/liberar-locks-expirados',
+      { job: 'triagem-liberar-locks-expirados' },
+      e,
     );
   }
 }

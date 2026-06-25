@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   postosRepository,
@@ -7,7 +6,7 @@ import {
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { PrefixoDuplicado } from '@/domain/errors';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 import {
   POLITICAS,
   aplicarHeadersRateLimit,
@@ -124,20 +123,13 @@ export async function POST(request: NextRequest) {
         { status: 409, headers },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      {
-        correlationId,
-        rota: 'POST /api/postos',
-        prefixo: parsed.data.prefixo,
-        erro: String(e),
-      },
-      'Falha ao criar posto',
+    // Fallback 5xx centralizado; preserva os headers de rate-limit.
+    const resposta = respostaDeErro(
+      'POST /api/postos',
+      { prefixo: parsed.data.prefixo, usuarioId: usuario.id },
+      e,
     );
-    return NextResponse.json(
-      { erro: 'falha_criacao', mensagem: 'Falha ao criar posto.', correlationId },
-      { status: 500, headers },
-    );
+    headers.forEach((valor, chave) => resposta.headers.set(chave, valor));
+    return resposta;
   }
 }

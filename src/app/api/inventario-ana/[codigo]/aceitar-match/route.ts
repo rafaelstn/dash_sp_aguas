@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import {
   anaRevisaoRepository,
   papeisRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { PostoNaoEncontrado, PostoRemovido } from '@/domain/errors';
-import { logger } from '@/infrastructure/logging/logger';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 import {
   POLITICAS,
   aplicarHeadersRateLimit,
@@ -102,25 +101,13 @@ export async function POST(
         { status: 409, headers },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      {
-        correlationId,
-        rota: 'POST /api/inventario-ana/[codigo]/aceitar-match',
-        codigo,
-        prefixoSugerido: sugestao.prefixoSugerido,
-        erro: String(e),
-      },
-      'Falha ao aceitar match ANA',
+    // Fallback 5xx centralizado; preserva os headers de rate-limit.
+    const resposta = respostaDeErro(
+      'POST /api/inventario-ana/[codigo]/aceitar-match',
+      { codigo, prefixoSugerido: sugestao.prefixoSugerido },
+      e,
     );
-    return NextResponse.json(
-      {
-        erro: 'erro_interno',
-        mensagem: 'Falha ao aceitar match.',
-        correlationId,
-      },
-      { status: 500, headers },
-    );
+    headers.forEach((valor, chave) => resposta.headers.set(chave, valor));
+    return resposta;
   }
 }

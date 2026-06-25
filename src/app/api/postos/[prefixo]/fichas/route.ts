@@ -7,8 +7,7 @@ import {
   TipoFichaIndisponivel,
 } from '@/application/use-cases/fichas-visita';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
-import { logger } from '@/infrastructure/logging/logger';
-import { randomUUID } from 'node:crypto';
+import { respostaDeErro } from '@/app/api/_helpers/erros';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
 
 export const runtime = 'nodejs';
@@ -41,16 +40,7 @@ export async function GET(
     );
     return NextResponse.json({ fichas });
   } catch (e) {
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'GET /api/postos/[prefixo]/fichas', prefixo, erro: String(e) },
-      'Falha ao listar fichas do posto',
-    );
-    return NextResponse.json(
-      { erro: 'erro_interno', mensagem: 'Falha ao listar fichas do posto.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('GET /api/postos/[prefixo]/fichas', { prefixo }, e);
   }
 }
 
@@ -130,21 +120,14 @@ export async function POST(
         { status: 400 },
       );
     }
+    // DadosFichaInvalidos mantém 422 aqui (contrato existente); o helper o
+    // mapearia para 400. Por isso o tratamento específico permanece.
     if (e instanceof DadosFichaInvalidos) {
       return NextResponse.json(
         { erro: 'dados_invalidos', mensagem: e.message, motivos: e.motivos },
         { status: 422 },
       );
     }
-    const correlationId = randomUUID();
-    logger.error(
-      'erro_inesperado',
-      { correlationId, rota: 'POST /api/postos/[prefixo]/fichas', prefixo, erro: String(e) },
-      'Falha ao criar ficha',
-    );
-    return NextResponse.json(
-      { erro: 'erro_interno', mensagem: 'Falha ao criar ficha.', correlationId },
-      { status: 500 },
-    );
+    return respostaDeErro('POST /api/postos/[prefixo]/fichas', { prefixo }, e);
   }
 }
