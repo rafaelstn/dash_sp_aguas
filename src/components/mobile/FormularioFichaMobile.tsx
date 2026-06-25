@@ -27,6 +27,7 @@ import {
 import { gerarUuidV4 } from '@/lib/uuid-cliente';
 import { arquivoParaDataUrl, comprimirImagemParaDataUrl } from '@/lib/imagem';
 import { enfileirarEnvio } from '@/lib/fila-envios';
+import { parseNumeroPtBR } from '@/lib/numero-pt-br';
 
 const TAMANHO_MAX_FOTO_BYTES = 5 * 1024 * 1024;
 const ALVO_COMPRESSAO_BYTES = 2 * 1024 * 1024;
@@ -950,20 +951,6 @@ function SpinnerInline() {
       <path d="M21 12a9 9 0 0 1-9 9" strokeLinecap="round" />
     </svg>
   );
-}
-
-function parseNumeroPtBR(s: string): number {
-  // Aceita "1.234,56" ou "1234.56" ou "1234,56".
-  const limpo = s.trim();
-  if (!limpo) return Number.NaN;
-  // Se tem vírgula como separador decimal (pt-BR), troca pelo ponto.
-  // Antes, remove pontos como separador de milhar (heurística: sem
-  // ambiguidade quando há vírgula).
-  if (limpo.includes(',')) {
-    const semMilhares = limpo.replace(/\./g, '');
-    return Number(semMilhares.replace(',', '.'));
-  }
-  return Number(limpo);
 }
 
 function mensagemZodPtBR(codigo: string, original: string): string {

@@ -5,6 +5,11 @@ import {
   type CampoFicha,
   type FormatoCampo,
 } from '@/domain/fichas/schemas';
+import {
+  agruparDigitos,
+  mascararCpf,
+  mascararTelefone,
+} from '@/lib/mascara-campos';
 
 /**
  * Widget primitivo de campo do formulário dinâmico do app.
@@ -298,48 +303,6 @@ function aplicarMascara(formato: FormatoCampo | undefined, bruto: string): strin
     default:
       return bruto;
   }
-}
-
-/** XXX.XXX.XXX-XX progressivo. */
-function mascararCpf(bruto: string): string {
-  const d = bruto.replace(/\D/g, '').slice(0, 11);
-  let saida = d.slice(0, 3);
-  if (d.length > 3) saida += `.${d.slice(3, 6)}`;
-  if (d.length > 6) saida += `.${d.slice(6, 9)}`;
-  if (d.length > 9) saida += `-${d.slice(9, 11)}`;
-  return saida;
-}
-
-/**
- * Insere `separador` após cada posição de corte, limitando a `maxDigitos`.
- * Ex.: agruparDigitos('19122025', [2,4], '/', 8) => '19/12/2025'.
- */
-function agruparDigitos(
-  bruto: string,
-  cortes: number[],
-  separador: string,
-  maxDigitos: number,
-): string {
-  const digitos = bruto.replace(/\D/g, '').slice(0, maxDigitos);
-  let saida = '';
-  for (let i = 0; i < digitos.length; i++) {
-    if (cortes.includes(i) && i > 0) saida += separador;
-    saida += digitos[i];
-  }
-  return saida;
-}
-
-/** (XX) XXXXX-XXXX progressivo, aceitando fixo (10) ou celular (11 dígitos). */
-function mascararTelefone(bruto: string): string {
-  const d = bruto.replace(/\D/g, '').slice(0, 11);
-  if (d.length === 0) return '';
-  if (d.length <= 2) return `(${d}`;
-  const ddd = d.slice(0, 2);
-  const resto = d.slice(2);
-  if (resto.length <= 4) return `(${ddd}) ${resto}`;
-  // 8 dígitos (fixo) quebram em 4-4; 9 dígitos (celular) em 5-4.
-  const corte = resto.length <= 8 ? 4 : 5;
-  return `(${ddd}) ${resto.slice(0, corte)}-${resto.slice(corte)}`;
 }
 
 function inputModePorFormato(

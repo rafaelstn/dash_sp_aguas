@@ -7,6 +7,10 @@ import type {
   LimiaresNivel,
 } from '@/domain/diagramas/tipos';
 import { validarOrdemLimiares } from '@/domain/diagramas/limiares';
+import {
+  numeroPtBRParaTexto,
+  parseNumeroPtBROuNull,
+} from '@/lib/numero-pt-br';
 
 interface Props {
   /** Elemento em edição; null fecha o diálogo. */
@@ -66,7 +70,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     setCodigo('codigo' in elemento ? elemento.codigo : '');
     setValor(
       'valor' in elemento && elemento.valor !== null
-        ? numeroParaTexto(elemento.valor)
+        ? numeroPtBRParaTexto(elemento.valor)
         : '',
     );
     setUnidade(
@@ -115,10 +119,10 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
   // Limiares parseados e validação de ordem, recalculados a cada digitação.
   const limiaresNumericos = useMemo<LimiaresNivel>(
     () => ({
-      atencao: parseValor(limiares.atencao),
-      alerta: parseValor(limiares.alerta),
-      emergencia: parseValor(limiares.emergencia),
-      extravasamento: parseValor(limiares.extravasamento),
+      atencao: parseNumeroPtBROuNull(limiares.atencao),
+      alerta: parseNumeroPtBROuNull(limiares.alerta),
+      emergencia: parseNumeroPtBROuNull(limiares.emergencia),
+      extravasamento: parseNumeroPtBROuNull(limiares.extravasamento),
     }),
     [limiares],
   );
@@ -144,7 +148,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           ...elemento,
           nome: nome.trim() || 'Posto de nível',
           codigo: codigo.trim() || 'PN-000',
-          valor: parseValor(valor),
+          valor: parseNumeroPtBROuNull(valor),
           unidade: unidade.trim() || null,
           limiares: limiaresNumericos,
         };
@@ -154,7 +158,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           ...elemento,
           nome: nome.trim() || 'Posto de chuva',
           codigo: codigo.trim() || 'PC-000',
-          valor: parseValor(valor),
+          valor: parseNumeroPtBROuNull(valor),
         };
         break;
       case 'linha':
@@ -387,19 +391,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
 }
 
 /** Número do domínio para texto de campo (vírgula decimal pt-BR). */
-function numeroParaTexto(n: number): string {
-  return String(n).replace('.', ',');
-}
-
 /** Limiar (number|null|undefined) para texto de campo. */
 function limiarParaTexto(n: number | null | undefined): string {
-  return n === null || n === undefined ? '' : numeroParaTexto(n);
-}
-
-/** Texto de campo (pt-BR) para número; vazio/ inválido vira null. */
-function parseValor(texto: string): number | null {
-  const limpo = texto.trim().replace(/\./g, '').replace(',', '.');
-  if (limpo === '') return null;
-  const n = Number(limpo);
-  return Number.isFinite(n) ? n : null;
+  return n === null || n === undefined ? '' : numeroPtBRParaTexto(n);
 }
