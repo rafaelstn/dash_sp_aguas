@@ -18,13 +18,13 @@ export default function PaginaCadastro() {
       >
         <div className="flex items-center gap-3 border-b border-app-border-subtle pb-4">
           <Image
-            src="/logo-spaguas.png"
+            src="/logo-spaguas-header.png"
             alt=""
-            width={203}
-            height={128}
+            width={178}
+            height={100}
             unoptimized
             priority
-            className="h-10 w-auto"
+            className="h-12 w-auto"
           />
           <div className="leading-tight">
             <p className="text-2xs uppercase tracking-wider text-app-fg-muted">
