@@ -76,6 +76,7 @@ export async function obterItensNav(): Promise<ResultadoNav> {
     { href: '/favoritos', rotulo: 'Favoritos', icone: 'star', contador: totalFavoritos, atalho: 'F' },
     { href: '/desconformidades', rotulo: 'Desconformidades', icone: 'alert', contador: totalDesconformidades, atalho: 'D' },
     { href: '/diagramas', rotulo: 'Diagramas', icone: 'workflow', contador: null, atalho: 'G' },
+    { href: '/monitor', rotulo: 'Monitor', icone: 'rain', contador: null, atalho: 'M' },
   ];
   if (ehAprovador) {
     itens.push({

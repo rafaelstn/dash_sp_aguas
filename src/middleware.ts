@@ -27,7 +27,9 @@ function montarCsp(nonce: string): string {
     `script-src ${scriptSrc}`,
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // Tiles do mapa do Monitor: base OpenStreetMap e a camada WMS oficial de
+    // bacias/UGRHIs do DAEE. Sao imagens (sem script), liberadas so estes hosts.
+    "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://geodados.daee.sp.gov.br",
     "font-src 'self' data:",
     "connect-src 'self' https://*.supabase.co",
     "manifest-src 'self'",

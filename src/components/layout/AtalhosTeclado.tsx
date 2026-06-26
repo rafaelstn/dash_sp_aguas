@@ -16,6 +16,7 @@ import { DialogAjudaAtalhos } from './DialogAjudaAtalhos';
  *   `f`   → /favoritos   (exceto em /postos/<prefixo>, onde alterna favorito)
  *   `d`   → /desconformidades
  *   `t`   → /triagem  (visível pra aprovadores; tela bloqueia caso contrário)
+ *   `m`   → /monitor  (mapa do monitor pluviométrico)
  *   `h`   → / (home / busca de postos)
  *   `Esc` → limpa filtros (na home) / fecha diálogo
  *   `?`   → abre/fecha modal de ajuda
@@ -95,6 +96,10 @@ export function AtalhosTeclado() {
         case 't':
           e.preventDefault();
           router.push('/triagem');
+          return;
+        case 'm':
+          e.preventDefault();
+          router.push('/monitor');
           return;
         case 'h':
           e.preventDefault();

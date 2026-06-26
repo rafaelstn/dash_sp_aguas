@@ -240,6 +240,17 @@ export const POLITICAS = {
     limite: 6,
     janelaSegundos: 60,
   },
+  /**
+   * Leitura do Monitor (lista de estações para o mapa). Operação só de leitura
+   * e idempotente; teto alto alinhado às demais políticas de leitura
+   * (leituraTriagem, leituraInventarioAna) porque o mapa pode recarregar/
+   * refiltrar com frequência. Chave por usuário (rota autenticada).
+   */
+  leituraMonitor: {
+    politica: 'leitura-monitor',
+    limite: 200,
+    janelaSegundos: 60,
+  },
 } satisfies Record<string, ConfiguracaoRateLimit>;
 
 /** Headers HTTP padrão pra resposta — chamar após consumir. */

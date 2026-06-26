@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Inbox,
   Workflow,
+  CloudRain,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -26,6 +27,7 @@ const ICONES = {
   alert: AlertTriangle,
   inbox: Inbox,
   workflow: Workflow,
+  rain: CloudRain,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconeKey = keyof typeof ICONES;
