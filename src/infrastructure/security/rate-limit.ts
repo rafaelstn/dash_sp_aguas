@@ -229,6 +229,17 @@ export const POLITICAS = {
     limite: 30,
     janelaSegundos: 60,
   },
+  /**
+   * Disparo manual do sync do Monitor (SIBH -> banco). Operação pesada (bate
+   * na API externa e escreve em lote): limite baixo para evitar reprocessamento
+   * acidental em rajada. Restrito a aprovador na rota; o rate limit é defesa
+   * adicional contra cliques repetidos.
+   */
+  syncMonitor: {
+    politica: 'sync-monitor',
+    limite: 6,
+    janelaSegundos: 60,
+  },
 } satisfies Record<string, ConfiguracaoRateLimit>;
 
 /** Headers HTTP padrão pra resposta — chamar após consumir. */

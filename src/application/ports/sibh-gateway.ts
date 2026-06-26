@@ -28,6 +28,22 @@ export interface EstacaoSibh {
   id: string;
   /** Tipo da estação (pluviométrico, fluviométrico, etc). */
   tipo: TipoEstacaoSibh;
+  /**
+   * Latitude em graus decimais (WGS84), do campo cru `latitude` do SIBH.
+   * `null` quando a estação não traz coordenada válida (não pode ser
+   * persistida no Monitor, que exige lat/lng NOT NULL: o sync pula a estação).
+   */
+  lat: number | null;
+  /**
+   * Longitude em graus decimais (WGS84), do campo cru `longitude` do SIBH.
+   * `null` quando ausente ou inválida (mesmo tratamento de `lat`).
+   */
+  lng: number | null;
+  /**
+   * Bacia/UGRHI da estação, do campo cru `ugrhi_name` do SIBH. `null` quando
+   * não informado. Persiste em `estacoes_pluviometricas.bacia`.
+   */
+  bacia: string | null;
 }
 
 /**

@@ -79,6 +79,22 @@ interface EstacaoBruta {
   name?: string;
   id?: string | number;
   station_type_id?: string | number;
+  // Coordenadas e bacia: o endpoint /stations as expõe; o Monitor precisa
+  // delas para persistir a estação (lat/lng NOT NULL no banco).
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  ugrhi_name?: string | null;
+}
+
+/**
+ * Converte coordenada crua do SIBH (que pode vir como número ou string, ex.
+ * "-23.5489") para number finito, ou `null` quando ausente/inválida. Coordenada
+ * inválida não derruba a estação no port: vira `null` e o sync decide pular.
+ */
+function parseCoordenada(valor: string | number | null | undefined): number | null {
+  if (valor === null || valor === undefined || valor === '') return null;
+  const num = typeof valor === 'number' ? valor : Number(valor);
+  return Number.isFinite(num) ? num : null;
 }
 
 /**
@@ -185,6 +201,9 @@ async function carregarEstacoes(): Promise<EstacaoSibh[]> {
           nome: (bruta.station_name ?? bruta.name ?? prefixo).trim(),
           id,
           tipo: mapearTipo(bruta.station_type_id),
+          lat: parseCoordenada(bruta.latitude),
+          lng: parseCoordenada(bruta.longitude),
+          bacia: bruta.ugrhi_name?.trim() || null,
         });
       }
 
