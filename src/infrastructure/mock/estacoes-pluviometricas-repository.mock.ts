@@ -1,0 +1,48 @@
+import 'server-only';
+import { randomUUID } from 'node:crypto';
+import type { EstacoesPluviometricasRepository } from '@/application/ports/estacoes-pluviometricas-repository';
+import type { EstacaoPluviometrica } from '@/domain/monitor/estacao-pluviometrica';
+
+/**
+ * Adapter in-memory de EstacoesPluviometricasRepository (MODO DEMO).
+ * Armazenamento por processo, indexado por id. Perde dados ao reiniciar.
+ */
+const armazenamento = new Map<string, EstacaoPluviometrica>();
+
+/** Reset de estado entre testes (segue o padrão `_resetTriagemMock`). */
+export function _resetEstacoesPluviometricasMock(): void {
+  armazenamento.clear();
+}
+
+export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository = {
+  async listar(filtros) {
+    return Array.from(armazenamento.values())
+      .filter((e) => (filtros?.bacia ? e.bacia === filtros.bacia : true))
+      .filter((e) => (filtros?.tipo ? e.tipo === filtros.tipo : true))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  },
+
+  async obterPorId(id) {
+    return armazenamento.get(id) ?? null;
+  },
+
+  async upsertPorPrefixo(estacao) {
+    const existente = Array.from(armazenamento.values()).find(
+      (e) => e.prefixo === estacao.prefixo,
+    );
+    const resultado: EstacaoPluviometrica = {
+      id: existente?.id ?? randomUUID(),
+      prefixo: estacao.prefixo,
+      nome: estacao.nome,
+      lat: estacao.lat,
+      lng: estacao.lng,
+      tipo: estacao.tipo,
+      bacia: estacao.bacia ?? null,
+      postoId: estacao.postoId ?? null,
+      sibhId: estacao.sibhId ?? null,
+      criadoEm: existente?.criadoEm ?? new Date(),
+    };
+    armazenamento.set(resultado.id, resultado);
+    return resultado;
+  },
+};

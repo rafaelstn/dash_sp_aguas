@@ -18,6 +18,8 @@ import { anaRevisaoRepository as anaRevisaoPg } from './db/ana-revisao-repositor
 import { painelRepository as painelPg } from './db/painel-repository.pg';
 import { diagramasRepository as diagramasPg } from './db/diagramas-repository.pg';
 import { inventarioAnaExportRepository as inventarioAnaExportPg } from './db/inventario-ana-export-repository.pg';
+import { estacoesPluviometricasRepository as estacoesPluviometricasPg } from './db/estacoes-pluviometricas-repository.pg';
+import { leiturasPluviometricasRepository as leiturasPluviometricasPg } from './db/leituras-pluviometricas-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
 import { postosRepository as postosMock } from './mock/postos-repository.mock';
@@ -35,6 +37,8 @@ import { anaRevisaoRepository as anaRevisaoMock } from './mock/ana-revisao-repos
 import { painelRepository as painelMock } from './mock/painel-repository.mock';
 import { diagramasRepository as diagramasMock } from './mock/diagramas-repository.mock';
 import { inventarioAnaExportRepository as inventarioAnaExportMock } from './mock/inventario-ana-export-repository.mock';
+import { estacoesPluviometricasRepository as estacoesPluviometricasMock } from './mock/estacoes-pluviometricas-repository.mock';
+import { leiturasPluviometricasRepository as leiturasPluviometricasMock } from './mock/leituras-pluviometricas-repository.mock';
 
 /**
  * Ponto único de escolha entre repositórios PG (reais) e mock (demo).
@@ -68,6 +72,14 @@ export const diagramasRepository = demo ? diagramasMock : diagramasPg;
 export const inventarioAnaExportRepository = demo
   ? inventarioAnaExportMock
   : inventarioAnaExportPg;
+
+// Monitor Pluviométrico (fase B1.1): estações e leituras persistidas no banco.
+export const estacoesPluviometricasRepository = demo
+  ? estacoesPluviometricasMock
+  : estacoesPluviometricasPg;
+export const leiturasPluviometricasRepository = demo
+  ? leiturasPluviometricasMock
+  : leiturasPluviometricasPg;
 
 // Gateway de Storage (Supabase) das fotos de posto. Sem variação demo: o
 // armazenamento real é sempre usado (não há mock de bucket hoje).
