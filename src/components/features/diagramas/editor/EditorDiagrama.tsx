@@ -424,11 +424,12 @@ function EditorInterno({ diagrama }: Props) {
   return (
     <div className="-mx-4 -my-6 flex h-[calc(100dvh-3rem)] min-h-[28rem] flex-col overflow-hidden">
       {/* Faixa azul: identidade (voltar + nome) | toolbar | exportar + save.
-          Blocos separados por divisória e com respiro (gap-4) pra não ficar
-          encavalado. No mobile empilha; no desktop a toolbar fica no centro e
-          o bloco de exportar/save vai pra direita. */}
-      <div className="flex flex-col gap-3 bg-gov-azul px-4 py-2.5 lg:flex-row lg:items-center lg:gap-4">
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          Blocos separados por divisória e com respiro pra não ficar encavalado.
+          No mobile empilha; no desktop a toolbar fica no centro e o bloco de
+          exportar/save vai pra direita. O bloco de identidade pode encolher
+          (nome trunca) para nunca espremer a toolbar a ponto de quebrar. */}
+      <div className="flex flex-col gap-3 bg-gov-azul px-4 py-2.5 lg:flex-row lg:items-center lg:gap-3">
+        <div className="flex min-w-0 items-center gap-2 lg:max-w-[18rem] lg:flex-1">
           <Link
             href="/diagramas"
             aria-label="Voltar para a lista de diagramas"
@@ -437,7 +438,7 @@ function EditorInterno({ diagrama }: Props) {
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Link>
-          <h1 className="truncate text-sm font-semibold text-white">
+          <h1 className="min-w-0 truncate text-sm font-semibold text-white">
             {nomeDiagrama}
           </h1>
           <button
@@ -456,7 +457,7 @@ function EditorInterno({ diagrama }: Props) {
           aria-hidden="true"
         />
 
-        <div className="min-w-0 lg:flex-1">
+        <div className="shrink-0">
           <ToolbarEditor
             ferramenta={ferramenta}
             aoTrocarFerramenta={setFerramenta}
@@ -478,7 +479,7 @@ function EditorInterno({ diagrama }: Props) {
           aria-hidden="true"
         />
 
-        <div className="flex shrink-0 items-center gap-2 lg:ml-auto">
+        <div className="flex shrink-0 items-center gap-2 lg:flex-1 lg:justify-end">
           <MenuExportar
             aoExportar={(formato) => void exportar(formato)}
             aoImportar={abrirImportacao}

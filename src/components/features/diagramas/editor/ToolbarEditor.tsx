@@ -66,16 +66,25 @@ const FERRAMENTAS: ItemFerramenta[] = [
 ];
 
 /**
- * Toolbar do editor, fiel ao SIBH e reorganizada por UX para não ficar
- * "encavalada": três blocos lógicos com respiro e separadores claros —
- * Ferramentas (selecionar + adicionar) | Histórico (desfazer/refazer) |
- * Edição (editar/excluir). Cada bloco é um segmento visual; entre blocos há
- * divisória vertical e espaçamento generoso (gap-3). Em telas estreitas os
- * rótulos colapsam, restando ícone + tooltip acessível.
+ * Toolbar do editor, padrão SIBH (faixa azul, ferramenta ativa = pílula
+ * branca). Reorganizada por UX para NUNCA quebrar em segunda linha órfã na
+ * faixa do topo, mesmo no pior caso (sidebar do dashboard expandida).
  *
- * A11y: `role=toolbar`; cada ferramenta é `button` com `aria-pressed`,
- * `aria-label` e `title`. Operável por teclado (Tab + Enter/Espaço). Foco
- * visível com outline branco sobre a faixa azul.
+ * Estratégia de densidade:
+ *   - Ferramentas (grupo principal): segmento agrupado. O rótulo aparece só na
+ *     ferramenta ATIVA (a pílula branca ganha texto e contexto); as inativas
+ *     ficam só com ícone. Abaixo de `md` tudo vira só-ícone. O grupo é compacto
+ *     por construção, então não é ele que estoura.
+ *   - Histórico (desfazer/refazer) e Edição (editar/excluir): ações
+ *     secundárias, sempre só-ícone, sem rótulo (tooltip + aria-label dão o
+ *     nome). Economizam largura.
+ *   - Container `flex-nowrap`: nada quebra de linha. Como os grupos secundários
+ *     já são compactos, tudo cabe em uma faixa, da sidebar expandida ao mobile.
+ *
+ * A11y (e-MAG / WCAG 2.1 AA): `role=toolbar`; cada grupo é `role=group` com
+ * `aria-label`; ferramentas são `button` com `aria-pressed`, `aria-label` e
+ * `title`. Operável por teclado (Tab + Enter/Espaço). Foco visível com outline
+ * branco sobre a faixa azul.
  */
 export function ToolbarEditor({
   ferramenta,
@@ -92,13 +101,13 @@ export function ToolbarEditor({
     <div
       role="toolbar"
       aria-label="Ferramentas do editor"
-      className="flex flex-wrap items-center gap-x-3 gap-y-2"
+      className="flex min-w-0 flex-nowrap items-center gap-2"
     >
-      {/* Bloco 1 — Ferramentas (segmento branco translúcido) */}
+      {/* Grupo 1 — Ferramentas de desenho (segmento branco translúcido) */}
       <div
         role="group"
         aria-label="Ferramentas de desenho"
-        className="flex items-center gap-1 rounded-lg bg-white/10 p-1"
+        className="flex shrink-0 items-center gap-1 rounded-lg bg-white/10 p-1"
       >
         {FERRAMENTAS.map((item) => (
           <BotaoFerramenta
@@ -112,8 +121,12 @@ export function ToolbarEditor({
 
       <Divisoria />
 
-      {/* Bloco 2 — Histórico */}
-      <div role="group" aria-label="Histórico" className="flex items-center gap-1">
+      {/* Grupo 2 — Histórico (só-ícone) */}
+      <div
+        role="group"
+        aria-label="Histórico"
+        className="flex shrink-0 items-center gap-1"
+      >
         <BotaoAcao
           rotulo="Desfazer"
           dica="Desfazer a última ação (Ctrl+Z)"
@@ -132,8 +145,12 @@ export function ToolbarEditor({
 
       <Divisoria />
 
-      {/* Bloco 3 — Edição do elemento selecionado */}
-      <div role="group" aria-label="Edição" className="flex items-center gap-1">
+      {/* Grupo 3 — Edição do elemento selecionado (só-ícone) */}
+      <div
+        role="group"
+        aria-label="Edição"
+        className="flex shrink-0 items-center gap-1"
+      >
         <BotaoAcao
           rotulo="Editar"
           dica="Editar o elemento selecionado (Enter)"
@@ -154,17 +171,21 @@ export function ToolbarEditor({
   );
 }
 
-/** Divisória vertical entre blocos (some no mobile, onde os blocos quebram). */
+/** Divisória vertical entre grupos (some no mobile, onde o respiro já basta). */
 function Divisoria() {
   return (
     <span
-      className="hidden h-6 w-px self-center bg-white/25 sm:inline-block"
+      className="hidden h-6 w-px shrink-0 self-center bg-white/25 sm:inline-block"
       aria-hidden="true"
     />
   );
 }
 
-/** Botão de ferramenta (estado ativo = pílula branca, padrão SIBH). */
+/**
+ * Botão de ferramenta. Estado ativo = pílula branca com rótulo (padrão SIBH);
+ * inativa = só ícone, para manter o grupo compacto. Abaixo de `md`, mesmo a
+ * ativa fica só-ícone (a faixa do topo é mais disputada no mobile).
+ */
 function BotaoFerramenta({
   item,
   ativo,
@@ -182,7 +203,7 @@ function BotaoFerramenta({
       aria-label={item.rotulo}
       title={item.dica}
       className={[
-        'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150',
+        'inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors duration-150',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
         ativo
           ? 'bg-white text-gov-azul shadow-sm'
@@ -190,12 +211,21 @@ function BotaoFerramenta({
       ].join(' ')}
     >
       <item.Icone className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="hidden lg:inline">{item.rotulo}</span>
+      {/* Rótulo só na ferramenta ativa e a partir de md: dá contexto sem
+          inflar o grupo nem disputar largura na faixa. */}
+      {ativo ? (
+        <span className="hidden max-w-[10rem] truncate md:inline">
+          {item.rotulo}
+        </span>
+      ) : null}
     </button>
   );
 }
 
-/** Botão de ação (histórico/edição). `perigo` tinge o hover de vermelho. */
+/**
+ * Botão de ação secundária (histórico/edição). Sempre só-ícone: o nome vem do
+ * `aria-label` + `title`. `perigo` tinge o hover de vermelho.
+ */
 function BotaoAcao({
   rotulo,
   dica,
@@ -219,14 +249,13 @@ function BotaoAcao({
       aria-label={rotulo}
       title={dica}
       className={[
-        'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-white transition-colors duration-150',
+        'inline-flex items-center justify-center rounded-md p-1.5 text-white transition-colors duration-150',
         'disabled:cursor-not-allowed disabled:opacity-40',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
         perigo ? 'hover:bg-red-500/30' : 'hover:bg-white/15',
       ].join(' ')}
     >
       <Icone className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="hidden lg:inline">{rotulo}</span>
     </button>
   );
 }
