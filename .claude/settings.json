@@ -94,7 +94,8 @@
       "mcp__github__*",
       "mcp__filesystem__*",
       "mcp__postgres__*",
-      "mcp__supabase__*"
+      "mcp__supabase__*",
+      "mcp__plugin_playwright_playwright__*"
     ],
     "deny": [
       "Bash(rm -rf /*)",
