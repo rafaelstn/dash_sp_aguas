@@ -35,7 +35,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DialogNomeDiagrama } from '../DialogNomeDiagrama';
 import { ToolbarEditor } from './ToolbarEditor';
 import { MenuExportar } from './MenuExportar';
+import { ControleAoVivo } from './ControleAoVivo';
 import { useExportarDiagrama } from './useExportarDiagrama';
+import { useValoresAoVivo } from './useValoresAoVivo';
 import { importarJson } from './exportar-diagrama';
 import { IndicadorSalvamento } from './IndicadorSalvamento';
 import { LegendaStatus } from './LegendaStatus';
@@ -116,6 +118,15 @@ function EditorInterno({ diagrama }: Props) {
     agendar,
     tentarNovamente: tentarSalvarNovamente,
   } = useAutoSave(diagrama.id);
+
+  // Modo "AGORA" (ao vivo): overlay EFÊMERO de leitura, fora do auto-save e do
+  // histórico. Ver useValoresAoVivo; a injeção acontece em `nodesRender`.
+  const {
+    estado: estadoAoVivo,
+    ligar: ligarAoVivo,
+    atualizar: atualizarAoVivo,
+    desligar: desligarAoVivo,
+  } = useValoresAoVivo();
 
   // Histórico (undo/redo) sobre o array de elementos (hook useHistoricoDiagrama).
   // Em desfazer/refazer, `restaurarHistorico` re-renderiza os nodes e dispara
@@ -377,15 +388,69 @@ function EditorInterno({ diagrama }: Props) {
     [agendar, registrarHistorico],
   );
 
-  // Injeta as ações de edição do rio no data dos nodes-linha selecionados.
+  // Prefixos dos postos (nível/chuva) VINCULADOS ao catálogo. Só esses têm
+  // leitura ao vivo; coletado do array de elementos real (não do overlay).
+  const prefixosVinculados = useMemo(
+    () =>
+      nodes
+        .map((n) => n.data.elemento)
+        .filter(
+          (e): e is typeof e & { postoId: string } =>
+            (e.tipo === 'nivel' || e.tipo === 'chuva') &&
+            typeof e.postoId === 'string' &&
+            e.postoId.length > 0,
+        )
+        .map((e) => e.postoId),
+    [nodes],
+  );
+
+  // Toggle do modo ao vivo. Liga buscando os prefixos vinculados; desliga
+  // limpando o overlay. NÃO toca no array de elementos (nada é persistido). Ao
+  // ligar, volta para a ferramenta Selecionar: o modo ao vivo é de leitura, as
+  // ferramentas de desenho ficam bloqueadas enquanto ele está ativo.
+  const alternarAoVivo = useCallback(() => {
+    if (estadoAoVivo.ligado) {
+      desligarAoVivo();
+    } else {
+      setFerramenta('selecionar');
+      setSelecionadoId(null);
+      ligarAoVivo(prefixosVinculados);
+    }
+  }, [estadoAoVivo.ligado, desligarAoVivo, ligarAoVivo, prefixosVinculados]);
+
+  const recarregarAoVivo = useCallback(
+    () => atualizarAoVivo(prefixosVinculados),
+    [atualizarAoVivo, prefixosVinculados],
+  );
+
+  // Injeta no data dos nodes (sem alterar o array persistido): ações do rio e o
+  // overlay ao vivo nos postos. O overlay vive só aqui (efêmero); `nodes` e o
+  // que vai pro auto-save (nodesParaElementos) não enxergam a leitura.
   const nodesRender = useMemo<NodeDiagrama[]>(
     () =>
-      nodes.map((n) =>
-        n.data.elemento.tipo === 'linha'
-          ? ({ ...n, data: { ...n.data, acoes: acoesLinha } } as NodeDiagrama)
-          : n,
-      ),
-    [nodes, acoesLinha],
+      nodes.map((n) => {
+        if (n.data.elemento.tipo === 'linha') {
+          return { ...n, data: { ...n.data, acoes: acoesLinha } } as NodeDiagrama;
+        }
+        if (
+          estadoAoVivo.ligado &&
+          (n.data.elemento.tipo === 'nivel' || n.data.elemento.tipo === 'chuva')
+        ) {
+          const postoId = n.data.elemento.postoId;
+          // `undefined` quando o elemento não tem vínculo (Map.get também daria
+          // undefined p/ vinculado sem chave; por isso filtramos por postoId).
+          const leitura =
+            postoId && postoId.length > 0
+              ? (estadoAoVivo.leituras.get(postoId) ?? null)
+              : undefined;
+          return {
+            ...n,
+            data: { ...n.data, overlay: { aoVivo: true, leitura } },
+          } as NodeDiagrama;
+        }
+        return n;
+      }),
+    [nodes, acoesLinha, estadoAoVivo.ligado, estadoAoVivo.leituras],
   );
 
   // Atalhos de teclado globais do editor: undo/redo. (Delete/Enter no node
@@ -489,6 +554,7 @@ function EditorInterno({ diagrama }: Props) {
           <ToolbarEditor
             ferramenta={ferramenta}
             aoTrocarFerramenta={setFerramenta}
+            bloqueado={estadoAoVivo.ligado}
             temSelecao={selecionadoId !== null}
             aoEditar={editarSelecionado}
             aoExcluir={() => {
@@ -508,6 +574,11 @@ function EditorInterno({ diagrama }: Props) {
         />
 
         <div className="flex shrink-0 items-center gap-2 lg:flex-1 lg:justify-end">
+          <ControleAoVivo
+            estado={estadoAoVivo}
+            aoAlternar={alternarAoVivo}
+            aoAtualizar={recarregarAoVivo}
+          />
           <MenuExportar
             aoExportar={(formato) => void exportar(formato)}
             aoImportar={abrirImportacao}

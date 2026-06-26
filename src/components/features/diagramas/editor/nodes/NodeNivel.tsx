@@ -24,15 +24,25 @@ import type { NodeNivel as TipoNodeNivel } from '../tipos-editor';
  * de leve, respeitando prefers-reduced-motion (vira opacidade estática).
  */
 function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
-  const { elemento } = data;
-  const status = calcularStatus(elemento.valor, elemento.limiares);
-  const rotuloStatus = STATUS_LABELS[status];
+  const { elemento, overlay } = data;
   const unidade = elemento.unidade ?? 'm';
+  const aoVivo = overlay?.aoVivo === true;
+  // No modo ao vivo, o vínculo ausente é `undefined`; sem leitura recente é null.
+  const semVinculo = aoVivo && overlay?.leitura === undefined;
+  const leitura = overlay?.leitura ?? null;
+
+  // Valor exibido: ao vivo usa a leitura (nível em metros); senão, o salvo.
+  const valorExibido = aoVivo
+    ? (leitura?.valorNivel ?? null)
+    : elemento.valor;
+  const temValor = valorExibido !== null && valorExibido !== undefined;
+
+  const status = calcularStatus(valorExibido, elemento.limiares);
+  const rotuloStatus = STATUS_LABELS[status];
   const paleta = CARD_STATUS[status];
 
-  const temValor = elemento.valor !== null && elemento.valor !== undefined;
   const valorTexto = temValor
-    ? elemento.valor!.toLocaleString('pt-BR', {
+    ? valorExibido!.toLocaleString('pt-BR', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 3,
       })
@@ -50,7 +60,11 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
 
   const descricao =
     `Posto de nível ${elemento.nome}, código ${elemento.codigo}. ` +
-    (temValor ? `Valor ${valorTexto} ${unidade}. ` : 'Sem leitura. ') +
+    (semVinculo
+      ? 'Sem posto vinculado. '
+      : temValor
+        ? `Valor ${valorTexto} ${unidade}${aoVivo && leitura ? `, lido em ${leitura.momento}` : ''}. `
+        : 'Sem leitura. ') +
     `Status ${rotuloStatus}.`;
 
   return (
@@ -102,9 +116,39 @@ function NodeNivelBase({ data, selected }: NodeProps<TipoNodeNivel>) {
         </div>
       ) : null}
 
+      {/* Modo ao vivo: momento da leitura, ou aviso de elemento sem vínculo. */}
+      {aoVivo ? (
+        <div className="mt-0.5 text-center">
+          {semVinculo ? (
+            <span className="text-2xs font-medium text-app-fg-subtle">
+              Sem posto vinculado
+            </span>
+          ) : leitura ? (
+            <span className="text-2xs text-app-fg-muted">
+              {formatarMomento(leitura.momento)}
+            </span>
+          ) : (
+            <span className="text-2xs font-medium text-app-fg-subtle">
+              Sem leitura
+            </span>
+          )}
+        </div>
+      ) : null}
+
       <span className="sr-only">Status: {rotuloStatus}</span>
     </div>
   );
+}
+
+/**
+ * Momento da leitura "YYYY/MM/DD HH:mm" do SIBH para um formato curto pt-BR
+ * (DD/MM HH:mm). Se vier em formato inesperado, devolve o texto original.
+ */
+function formatarMomento(momento: string): string {
+  const m = momento.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2})$/);
+  if (!m) return momento;
+  const [, , mes, dia, hora] = m;
+  return `${dia}/${mes} ${hora}`;
 }
 
 /**

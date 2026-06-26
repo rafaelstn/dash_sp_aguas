@@ -18,6 +18,12 @@ import type { Ferramenta } from './tipos-editor';
 interface Props {
   ferramenta: Ferramenta;
   aoTrocarFerramenta: (f: Ferramenta) => void;
+  /**
+   * Bloqueia as ações que alteram o diagrama (ferramentas de desenho, histórico
+   * e edição). Usado no modo ao vivo, que é só de leitura. Selecionar continua
+   * liberado para navegar/inspecionar.
+   */
+  bloqueado?: boolean;
   temSelecao: boolean;
   aoEditar: () => void;
   aoExcluir: () => void;
@@ -103,6 +109,7 @@ const FERRAMENTAS: ItemFerramenta[] = [
 export function ToolbarEditor({
   ferramenta,
   aoTrocarFerramenta,
+  bloqueado = false,
   temSelecao,
   aoEditar,
   aoExcluir,
@@ -128,6 +135,9 @@ export function ToolbarEditor({
             key={item.id}
             item={item}
             ativo={ferramenta === item.id}
+            // No modo ao vivo (bloqueado) só Selecionar fica liberado: navegar
+            // e inspecionar, sem desenhar.
+            desabilitado={bloqueado && item.id !== 'selecionar'}
             aoClicar={() => aoTrocarFerramenta(item.id)}
           />
         ))}
@@ -146,14 +156,14 @@ export function ToolbarEditor({
           dica="Desfazer a última ação (Ctrl+Z)"
           Icone={Undo2}
           aoClicar={aoDesfazer}
-          desabilitado={!podeDesfazer}
+          desabilitado={bloqueado || !podeDesfazer}
         />
         <BotaoAcao
           rotulo="Refazer"
           dica="Refazer a ação desfeita (Ctrl+Shift+Z)"
           Icone={Redo2}
           aoClicar={aoRefazer}
-          desabilitado={!podeRefazer}
+          desabilitado={bloqueado || !podeRefazer}
         />
       </div>
 
@@ -170,14 +180,14 @@ export function ToolbarEditor({
           dica="Editar o elemento selecionado (Enter)"
           Icone={Pencil}
           aoClicar={aoEditar}
-          desabilitado={!temSelecao}
+          desabilitado={bloqueado || !temSelecao}
         />
         <BotaoAcao
           rotulo="Excluir"
           dica="Excluir o elemento selecionado (Delete)"
           Icone={Trash2}
           aoClicar={aoExcluir}
-          desabilitado={!temSelecao}
+          desabilitado={bloqueado || !temSelecao}
           perigo
         />
       </div>
@@ -203,21 +213,25 @@ function Divisoria() {
 function BotaoFerramenta({
   item,
   ativo,
+  desabilitado = false,
   aoClicar,
 }: {
   item: ItemFerramenta;
   ativo: boolean;
+  desabilitado?: boolean;
   aoClicar: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={aoClicar}
+      disabled={desabilitado}
       aria-pressed={ativo}
       aria-label={item.rotulo}
       title={item.dica}
       className={[
         'inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors duration-150',
+        'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
         ativo
           ? 'bg-white text-gov-azul shadow-sm'

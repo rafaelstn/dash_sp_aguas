@@ -14,10 +14,16 @@ import type { NodeChuva as TipoNodeChuva } from '../tipos-editor';
  * branco. O card é focável e descreve o posto pro leitor de tela.
  */
 function NodeChuvaBase({ data, selected }: NodeProps<TipoNodeChuva>) {
-  const { elemento } = data;
-  const temValor = elemento.valor !== null && elemento.valor !== undefined;
+  const { elemento, overlay } = data;
+  const aoVivo = overlay?.aoVivo === true;
+  const semVinculo = aoVivo && overlay?.leitura === undefined;
+  const leitura = overlay?.leitura ?? null;
+
+  // Valor exibido: ao vivo usa a leitura (chuva em mm); senão, o salvo.
+  const valorExibido = aoVivo ? (leitura?.valorMm ?? null) : elemento.valor;
+  const temValor = valorExibido !== null && valorExibido !== undefined;
   const valorTexto = temValor
-    ? elemento.valor!.toLocaleString('pt-BR', {
+    ? valorExibido!.toLocaleString('pt-BR', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
       })
@@ -25,7 +31,11 @@ function NodeChuvaBase({ data, selected }: NodeProps<TipoNodeChuva>) {
 
   const descricao =
     `Posto de chuva ${elemento.nome}, código ${elemento.codigo}. ` +
-    (temValor ? `Acumulado ${valorTexto} milímetros.` : 'Sem leitura.');
+    (semVinculo
+      ? 'Sem posto vinculado.'
+      : temValor
+        ? `Acumulado ${valorTexto} milímetros${aoVivo && leitura ? `, lido em ${leitura.momento}` : ''}.`
+        : 'Sem leitura.');
 
   return (
     <div
@@ -52,17 +62,43 @@ function NodeChuvaBase({ data, selected }: NodeProps<TipoNodeChuva>) {
         </span>
       </div>
 
-      {/* Rótulo "Chuva" centralizado, em azul */}
+      {/* Rodapé: "Chuva" no modo normal; ao vivo mostra o momento da leitura
+          ou o aviso de elemento sem vínculo. */}
       <div className="mt-0.5 text-center">
-        <span
-          className="text-2xs font-semibold"
-          style={{ color: 'hsl(var(--sibh-chuva))' }}
-        >
-          Chuva
-        </span>
+        {aoVivo && semVinculo ? (
+          <span className="text-2xs font-medium text-app-fg-subtle">
+            Sem posto vinculado
+          </span>
+        ) : aoVivo && leitura ? (
+          <span className="text-2xs text-app-fg-muted">
+            {formatarMomento(leitura.momento)}
+          </span>
+        ) : aoVivo ? (
+          <span className="text-2xs font-medium text-app-fg-subtle">
+            Sem leitura
+          </span>
+        ) : (
+          <span
+            className="text-2xs font-semibold"
+            style={{ color: 'hsl(var(--sibh-chuva))' }}
+          >
+            Chuva
+          </span>
+        )}
       </div>
     </div>
   );
+}
+
+/**
+ * Momento da leitura "YYYY/MM/DD HH:mm" do SIBH para um formato curto pt-BR
+ * (DD/MM HH:mm). Se vier em formato inesperado, devolve o texto original.
+ */
+function formatarMomento(momento: string): string {
+  const m = momento.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2})$/);
+  if (!m) return momento;
+  const [, , mes, dia, hora] = m;
+  return `${dia}/${mes} ${hora}`;
 }
 
 export const NodeChuva = memo(NodeChuvaBase);

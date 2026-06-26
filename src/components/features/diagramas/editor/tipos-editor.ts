@@ -10,6 +10,7 @@
  */
 
 import type { Node } from '@xyflow/react';
+import type { LeituraSibh } from '@/application/ports/sibh-gateway';
 import type {
   ElementoBarragem,
   ElementoChuva,
@@ -19,6 +20,23 @@ import type {
   ElementoReservatorio,
   Posicao,
 } from '@/domain/diagramas/tipos';
+
+/**
+ * Overlay do modo "AGORA" (ao vivo), injetado no `data` dos nodes de leitura
+ * (nível e chuva) APENAS para exibição. É EFÊMERO: não entra no array de
+ * elementos persistido nem no auto-save/histórico. Quando `aoVivo` é false, o
+ * node mostra o valor salvo do diagrama, ignorando `leitura`.
+ */
+export interface OverlayAoVivo {
+  /** Modo ao vivo ligado. */
+  aoVivo: boolean;
+  /**
+   * Leitura mais recente do posto vinculado, ou null quando o posto não tem
+   * leitura recente. `undefined` quando o elemento não tem posto vinculado
+   * (sem `postoId`), caso em que o node exibe o aviso "sem posto vinculado".
+   */
+  leitura?: LeituraSibh | null;
+}
 
 /** Ferramenta ativa na toolbar. */
 export type Ferramenta =
@@ -49,8 +67,14 @@ export interface AcoesLinha {
 export type NodeReservatorio = Node<{ elemento: ElementoReservatorio }, 'reservatorio'>;
 export type NodeBarragem = Node<{ elemento: ElementoBarragem }, 'barragem'>;
 export type NodeComporta = Node<{ elemento: ElementoComporta }, 'comporta'>;
-export type NodeNivel = Node<{ elemento: ElementoNivel }, 'nivel'>;
-export type NodeChuva = Node<{ elemento: ElementoChuva }, 'chuva'>;
+export type NodeNivel = Node<
+  { elemento: ElementoNivel; overlay?: OverlayAoVivo },
+  'nivel'
+>;
+export type NodeChuva = Node<
+  { elemento: ElementoChuva; overlay?: OverlayAoVivo },
+  'chuva'
+>;
 export type NodeLinha = Node<
   { elemento: ElementoLinha; acoes?: AcoesLinha },
   'linha'
