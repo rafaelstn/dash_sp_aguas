@@ -22,6 +22,7 @@ export default function PaginaCadastro() {
             alt=""
             width={203}
             height={128}
+            quality={100}
             priority
             className="h-10 w-auto"
           />
