@@ -30,6 +30,8 @@ const ZOOM_SP = 7;
 
 interface MapaMonitorProps {
   estacoes: readonly Estacao[];
+  /** Abre o painel de detalhe da estação (botão "Ver leituras" do popup). */
+  aoSelecionar: (estacao: Estacao) => void;
 }
 
 /**
@@ -42,7 +44,7 @@ interface MapaMonitorProps {
  * que aguenta milhares de vetores. Popup é criado sob demanda (bindPopup com
  * HTML escapado), não montado de antemão.
  */
-export function MapaMonitor({ estacoes }: MapaMonitorProps) {
+export function MapaMonitor({ estacoes, aoSelecionar }: MapaMonitorProps) {
   return (
     <MapContainer
       center={CENTRO_SP}
@@ -101,7 +103,7 @@ export function MapaMonitor({ estacoes }: MapaMonitorProps) {
         </LayersControl.Overlay>
       </LayersControl>
 
-      <CamadaEstacoes estacoes={estacoes} />
+      <CamadaEstacoes estacoes={estacoes} aoSelecionar={aoSelecionar} />
       <Legenda />
     </MapContainer>
   );
@@ -133,17 +135,24 @@ function htmlPopup(e: Estacao): string {
   linhas.push(
     `<div style="margin-top:4px;color:#4B5563;font-size:12px">${meta.join(' · ')}</div>`,
   );
+  // Botão data-ver-leituras: abre o painel de detalhe (gráfico de chuva) desta
+  // estação. Disponível para toda estação (o painel não depende de posto).
+  linhas.push(
+    `<div style="margin-top:6px"><button type="button" data-ver-leituras="${esc(
+      e.id,
+    )}" style="font-size:12px;font-weight:600;color:#1E40AF;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline">Ver leituras</button></div>`,
+  );
   if (e.postoId && e.prefixo) {
     // Botão data-prefixo: o handler de clique do popup navega via router
     // (SPA), evitando reload. Confirmado: rota real /postos/[prefixo].
     linhas.push(
-      `<div style="margin-top:6px"><button type="button" data-prefixo="${esc(
+      `<div style="margin-top:4px"><button type="button" data-prefixo="${esc(
         e.prefixo,
       )}" style="font-size:12px;font-weight:600;color:#1E40AF;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline">Abrir ficha do posto</button></div>`,
     );
   } else if (e.prefixo) {
     linhas.push(
-      `<div style="margin-top:6px;font-size:12px;color:#5F6572">Sem posto vinculado</div>`,
+      `<div style="margin-top:4px;font-size:12px;color:#5F6572">Sem posto vinculado</div>`,
     );
   }
   return `<div style="min-width:160px">${linhas.join('')}</div>`;
@@ -154,11 +163,21 @@ function htmlPopup(e: Estacao): string {
  * `estacoes` recriando o layerGroup. O clique no botão "Abrir ficha" navega
  * pelo router do Next (delegação de evento no contêiner do popup).
  */
-function CamadaEstacoes({ estacoes }: { estacoes: readonly Estacao[] }) {
+function CamadaEstacoes({
+  estacoes,
+  aoSelecionar,
+}: {
+  estacoes: readonly Estacao[];
+  aoSelecionar: (estacao: Estacao) => void;
+}) {
   const map = useMap();
   const router = useRouter();
   const grupoRef = useRef<L.LayerGroup | null>(null);
   const rendererRef = useRef<L.Canvas | null>(null);
+  // Ref ao callback: usado dentro do handler de popup sem recriar o layerGroup
+  // (que é caro com milhares de pontos) quando só a identidade do callback muda.
+  const aoSelecionarRef = useRef(aoSelecionar);
+  aoSelecionarRef.current = aoSelecionar;
 
   useEffect(() => {
     if (!rendererRef.current) {
@@ -167,6 +186,11 @@ function CamadaEstacoes({ estacoes }: { estacoes: readonly Estacao[] }) {
     const renderer = rendererRef.current;
 
     const grupo = L.layerGroup();
+    // Índice por id pra resolver a estação do botão "Ver leituras" no popup.
+    const porId = new Map<string, Estacao>();
+    for (const e of estacoes) {
+      porId.set(e.id, e);
+    }
     for (const e of estacoes) {
       if (!Number.isFinite(e.lat) || !Number.isFinite(e.lng)) continue;
       const estilo = estiloDaEstacao(e);
@@ -192,19 +216,41 @@ function CamadaEstacoes({ estacoes }: { estacoes: readonly Estacao[] }) {
     grupo.addTo(map);
     grupoRef.current = grupo;
 
-    // Delegação: clique no botão dentro de qualquer popup navega via router.
+    // Delegação: clique nos botões dentro de qualquer popup. "Abrir ficha"
+    // navega via router; "Ver leituras" abre o painel de detalhe.
     function aoAbrirPopup(ev: L.PopupEvent) {
       const el = ev.popup.getElement();
-      const botao = el?.querySelector<HTMLButtonElement>('button[data-prefixo]');
-      if (!botao) return;
-      botao.addEventListener(
-        'click',
-        () => {
-          const prefixo = botao.getAttribute('data-prefixo');
-          if (prefixo) router.push(`/postos/${encodeURIComponent(prefixo)}`);
-        },
-        { once: true },
+      if (!el) return;
+
+      const btnFicha = el.querySelector<HTMLButtonElement>('button[data-prefixo]');
+      if (btnFicha) {
+        btnFicha.addEventListener(
+          'click',
+          () => {
+            const prefixo = btnFicha.getAttribute('data-prefixo');
+            if (prefixo) router.push(`/postos/${encodeURIComponent(prefixo)}`);
+          },
+          { once: true },
+        );
+      }
+
+      const btnLeituras = el.querySelector<HTMLButtonElement>(
+        'button[data-ver-leituras]',
       );
+      if (btnLeituras) {
+        btnLeituras.addEventListener(
+          'click',
+          () => {
+            const id = btnLeituras.getAttribute('data-ver-leituras');
+            const estacao = id ? porId.get(id) : undefined;
+            if (estacao) {
+              map.closePopup();
+              aoSelecionarRef.current(estacao);
+            }
+          },
+          { once: true },
+        );
+      }
     }
     map.on('popupopen', aoAbrirPopup);
 

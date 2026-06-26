@@ -28,6 +28,14 @@ const MapaMonitor = dynamic(
   },
 );
 
+// Painel de detalhe carregado sob demanda: traz o recharts (pesado) e só é
+// preciso quando o usuário abre uma estação. Sem fallback visível: o próprio
+// painel só monta quando há estação selecionada.
+const PainelDetalheEstacao = dynamic(
+  () => import('./PainelDetalheEstacao').then((m) => m.PainelDetalheEstacao),
+  { ssr: false },
+);
+
 type EstadoCarga =
   | { status: 'carregando' }
   | { status: 'erro'; mensagem: string }
@@ -42,6 +50,8 @@ export function PainelMonitor() {
   const [filtros, setFiltros] = useState<ValorFiltros>({ bacia: '', tipo: '' });
   const [visao, setVisao] = useState<'mapa' | 'lista'>('mapa');
   const [filtrosAbertosMobile, setFiltrosAbertosMobile] = useState(false);
+  // Estação aberta no painel de detalhe. null = painel fechado.
+  const [estacaoDetalhe, setEstacaoDetalhe] = useState<Estacao | null>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -203,12 +213,25 @@ export function PainelMonitor() {
               descricao="Ajuste a bacia ou o tipo para ver estações no mapa."
             />
           ) : (
-            <MapaMonitor estacoes={filtradas} />
+            <MapaMonitor estacoes={filtradas} aoSelecionar={setEstacaoDetalhe} />
           )}
         </div>
       ) : (
-        <ListaTextual estacoes={filtradas} carregando={carga.status === 'carregando'} />
+        <ListaTextual
+          estacoes={filtradas}
+          carregando={carga.status === 'carregando'}
+          aoSelecionar={setEstacaoDetalhe}
+        />
       )}
+
+      {/* Painel de detalhe (drawer). Só monta o chunk do recharts quando há
+          estação selecionada; ao fechar, volta a null. */}
+      {estacaoDetalhe ? (
+        <PainelDetalheEstacao
+          estacao={estacaoDetalhe}
+          aoFechar={() => setEstacaoDetalhe(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -216,9 +239,11 @@ export function PainelMonitor() {
 function ListaTextual({
   estacoes,
   carregando,
+  aoSelecionar,
 }: {
   estacoes: readonly Estacao[];
   carregando: boolean;
+  aoSelecionar: (estacao: Estacao) => void;
 }) {
   if (carregando) {
     return (
@@ -251,7 +276,7 @@ function ListaTextual({
           bacia ou tipo para ver o conjunto completo.
         </Alerta>
       ) : null}
-      <ListaEstacoes estacoes={visiveis} />
+      <ListaEstacoes estacoes={visiveis} aoSelecionar={aoSelecionar} />
     </div>
   );
 }

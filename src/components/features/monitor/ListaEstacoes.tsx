@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, LineChart } from 'lucide-react';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import type { Estacao } from './tipos';
 import { ROTULO_TIPO } from './tipos';
@@ -13,7 +13,14 @@ import { ROTULO_TIPO } from './tipos';
  *
  * Não depende de cor pra transmitir o tipo: a coluna "Tipo" é texto.
  */
-export function ListaEstacoes({ estacoes }: { estacoes: readonly Estacao[] }) {
+export function ListaEstacoes({
+  estacoes,
+  aoSelecionar,
+}: {
+  estacoes: readonly Estacao[];
+  /** Abre o painel de detalhe (gráfico de chuva) da estação. */
+  aoSelecionar: (estacao: Estacao) => void;
+}) {
   const colunas: readonly ColunaTabela<Estacao>[] = [
     {
       chave: 'nome',
@@ -58,11 +65,28 @@ export function ListaEstacoes({ estacoes }: { estacoes: readonly Estacao[] }) {
       classeCelula: 'mono tabular text-2xs text-app-fg-subtle',
       render: (e) => `${e.lat.toFixed(4)}, ${e.lng.toFixed(4)}`,
     },
+    {
+      chave: 'acoes',
+      cabecalho: 'Detalhes',
+      alinhar: 'right',
+      interativa: true,
+      render: (e) => (
+        <button
+          type="button"
+          onClick={() => aoSelecionar(e)}
+          aria-label={`Ver leituras de ${e.nome || 'estação sem nome'}`}
+          className="inline-flex items-center gap-1.5 rounded border border-app-border-input px-2 py-1 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+        >
+          <LineChart className="h-3.5 w-3.5" aria-hidden="true" />
+          Leituras
+        </button>
+      ),
+    },
   ];
 
   return (
     <Tabela
-      legenda="Estações pluviométricas filtradas: nome, prefixo, bacia, tipo e coordenadas. Estações vinculadas a um posto do catálogo têm link para a ficha."
+      legenda="Estações pluviométricas filtradas: nome, prefixo, bacia, tipo, coordenadas e ação de detalhes. Estações vinculadas a um posto do catálogo têm link para a ficha; o botão Leituras abre o gráfico de chuva da estação."
       colunas={colunas}
       itens={estacoes}
       densidade="compact"
