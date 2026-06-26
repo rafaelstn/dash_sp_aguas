@@ -11,6 +11,7 @@ import {
   numeroPtBRParaTexto,
   parseNumeroPtBROuNull,
 } from '@/lib/numero-pt-br';
+import { BuscaPosto, type PostoSugestao } from './BuscaPosto';
 
 interface Props {
   /** Elemento em edição; null fecha o diálogo. */
@@ -57,6 +58,8 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
 
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
+  // Prefixo do posto vinculado do catálogo (null = código solto, sem vínculo).
+  const [postoId, setPostoId] = useState<string | null>(null);
   const [valor, setValor] = useState('');
   const [unidade, setUnidade] = useState('');
   const [rotulo, setRotulo] = useState('');
@@ -68,6 +71,11 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     if (!elemento) return;
     setNome('nome' in elemento ? elemento.nome : '');
     setCodigo('codigo' in elemento ? elemento.codigo : '');
+    setPostoId(
+      elemento.tipo === 'nivel' || elemento.tipo === 'chuva'
+        ? (elemento.postoId ?? null)
+        : null,
+    );
     setValor(
       'valor' in elemento && elemento.valor !== null
         ? numeroPtBRParaTexto(elemento.valor)
@@ -135,6 +143,20 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
   const tipo = elemento?.tipo;
   const podeSalvar = tipo !== 'nivel' || validacaoLimiares.valido;
 
+  // Vincular: o posto escolhido vira a fonte de codigo e nome (o prefixo é a
+  // chave do catálogo e da telemetria). A unidade do nível não vem no
+  // autocomplete, então mantém a atual.
+  function vincularPosto(posto: PostoSugestao) {
+    setPostoId(posto.prefixo);
+    setCodigo(posto.prefixo);
+    if (posto.nome) setNome(posto.nome);
+  }
+
+  // Desvincular: solta o vínculo; codigo e nome continuam editáveis como texto.
+  function desvincularPosto() {
+    setPostoId(null);
+  }
+
   function salvar() {
     if (!elemento) return;
     if (!podeSalvar) return;
@@ -148,6 +170,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           ...elemento,
           nome: nome.trim() || 'Posto de nível',
           codigo: codigo.trim() || 'PN-000',
+          postoId,
           valor: parseNumeroPtBROuNull(valor),
           unidade: unidade.trim() || null,
           limiares: limiaresNumericos,
@@ -158,6 +181,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           ...elemento,
           nome: nome.trim() || 'Posto de chuva',
           codigo: codigo.trim() || 'PC-000',
+          postoId,
           valor: parseNumeroPtBROuNull(valor),
         };
         break;
@@ -228,6 +252,16 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
           ) : null}
 
           {temCodigo ? (
+            <BuscaPosto
+              postoId={postoId}
+              aoVincular={vincularPosto}
+              aoDesvincular={desvincularPosto}
+              baseId={baseId}
+              classeLabel={classeLabel}
+            />
+          ) : null}
+
+          {temCodigo ? (
             <div className="space-y-1">
               <label htmlFor={`${baseId}-codigo`} className={classeLabel}>
                 Código
@@ -237,9 +271,20 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
                 type="text"
                 value={codigo}
                 maxLength={40}
+                readOnly={postoId !== null}
                 onChange={(e) => setCodigo(e.target.value)}
-                className={classeCampo}
+                className={
+                  postoId !== null
+                    ? `${classeCampo} cursor-not-allowed bg-app-surface-2 text-app-fg-muted`
+                    : classeCampo
+                }
               />
+              {postoId ? (
+                <p className="text-xs text-app-fg-subtle">
+                  Preenchido pelo posto vinculado. Desvincule para editar como
+                  texto livre.
+                </p>
+              ) : null}
             </div>
           ) : null}
 

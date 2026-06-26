@@ -35,6 +35,7 @@ export function criarNivel(posicao: Posicao): ElementoNivel {
     tipo: 'nivel',
     posicao,
     codigo: 'PN-000',
+    postoId: null,
     nome: 'Posto de nível',
     valor: null,
     unidade: 'm',
@@ -48,6 +49,7 @@ export function criarChuva(posicao: Posicao): ElementoChuva {
     tipo: 'chuva',
     posicao,
     codigo: 'PC-000',
+    postoId: null,
     nome: 'Posto de chuva',
     valor: null,
   };

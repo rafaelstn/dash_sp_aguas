@@ -60,8 +60,17 @@ export interface ElementoReservatorio extends ElementoBase {
 /** Posto de nível: valor avaliado contra os limiares para definir o status. */
 export interface ElementoNivel extends ElementoBase {
   tipo: 'nivel';
-  /** Código/prefixo do posto (liga ao catálogo na fase A5). */
+  /** Código/prefixo do posto (liga ao catálogo; igual ao prefixo quando vinculado). */
   codigo: string;
+  /**
+   * Prefixo do posto real no catálogo, quando o elemento foi vinculado pela
+   * busca (o prefixo é a chave estável do posto e da telemetria). Null/ausente
+   * = código digitado solto, sem vínculo. É o que habilita o valor ao vivo
+   * (telemetria por prefixo) no modo monitoramento. Quando vinculado, costuma
+   * coincidir com {@link codigo}; é mantido à parte para distinguir um posto
+   * realmente vinculado de um código digitado manualmente.
+   */
+  postoId?: string | null;
   nome: string;
   /** Valor medido. Null quando ainda não há leitura. */
   valor: number | null;
@@ -74,6 +83,8 @@ export interface ElementoNivel extends ElementoBase {
 export interface ElementoChuva extends ElementoBase {
   tipo: 'chuva';
   codigo: string;
+  /** Vínculo ao posto real do catálogo (ver {@link ElementoNivel.postoId}). */
+  postoId?: string | null;
   nome: string;
   /** Acumulado em mm. Null quando ainda não há leitura. */
   valor: number | null;

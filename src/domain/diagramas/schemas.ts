@@ -34,6 +34,7 @@ const nivelSchema = z.object({
   tipo: z.literal('nivel'),
   posicao: posicaoSchema,
   codigo: z.string().max(40),
+  postoId: z.string().max(80).nullable().optional(),
   nome: z.string().max(200),
   valor: z.number().nullable(),
   unidade: z.string().max(20).nullable().optional(),
@@ -45,6 +46,7 @@ const chuvaSchema = z.object({
   tipo: z.literal('chuva'),
   posicao: posicaoSchema,
   codigo: z.string().max(40),
+  postoId: z.string().max(80).nullable().optional(),
   nome: z.string().max(200),
   valor: z.number().nullable(),
 });
