@@ -57,6 +57,22 @@ export interface ElementoReservatorio extends ElementoBase {
   nome: string;
 }
 
+/** Barragem: estrutura de barramento no rio. Só rótulo, sem valor medido. */
+export interface ElementoBarragem extends ElementoBase {
+  tipo: 'barragem';
+  nome: string;
+}
+
+/** Estado operacional de uma comporta/vertedouro. */
+export type EstadoComporta = 'aberta' | 'fechada' | 'parcial';
+
+/** Comporta: estrutura de controle de vazão, com estado operacional. */
+export interface ElementoComporta extends ElementoBase {
+  tipo: 'comporta';
+  nome: string;
+  estado: EstadoComporta;
+}
+
 /** Posto de nível: valor avaliado contra os limiares para definir o status. */
 export interface ElementoNivel extends ElementoBase {
   tipo: 'nivel';
@@ -105,6 +121,8 @@ export interface ElementoLinha extends ElementoBase {
 /** União fechada dos 4 tipos de elemento de um diagrama. */
 export type ElementoDiagrama =
   | ElementoReservatorio
+  | ElementoBarragem
+  | ElementoComporta
   | ElementoNivel
   | ElementoChuva
   | ElementoLinha;

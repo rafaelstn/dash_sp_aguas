@@ -9,7 +9,9 @@
  */
 
 import type {
+  ElementoBarragem,
   ElementoChuva,
+  ElementoComporta,
   ElementoLinha,
   ElementoNivel,
   ElementoReservatorio,
@@ -26,6 +28,25 @@ export function criarReservatorio(posicao: Posicao): ElementoReservatorio {
     tipo: 'reservatorio',
     posicao,
     nome: 'Reservatório',
+  };
+}
+
+export function criarBarragem(posicao: Posicao): ElementoBarragem {
+  return {
+    id: novoId(),
+    tipo: 'barragem',
+    posicao,
+    nome: 'Barragem',
+  };
+}
+
+export function criarComporta(posicao: Posicao): ElementoComporta {
+  return {
+    id: novoId(),
+    tipo: 'comporta',
+    posicao,
+    nome: 'Comporta',
+    estado: 'fechada',
   };
 }
 

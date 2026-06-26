@@ -11,7 +11,9 @@
 
 import type { Node } from '@xyflow/react';
 import type {
+  ElementoBarragem,
   ElementoChuva,
+  ElementoComporta,
   ElementoLinha,
   ElementoNivel,
   ElementoReservatorio,
@@ -22,6 +24,8 @@ import type {
 export type Ferramenta =
   | 'selecionar'
   | 'reservatorio'
+  | 'barragem'
+  | 'comporta'
   | 'nivel'
   | 'chuva'
   | 'linha';
@@ -43,6 +47,8 @@ export interface AcoesLinha {
 
 /** Cada tipo de node carrega o elemento de domínio correspondente em `data`. */
 export type NodeReservatorio = Node<{ elemento: ElementoReservatorio }, 'reservatorio'>;
+export type NodeBarragem = Node<{ elemento: ElementoBarragem }, 'barragem'>;
+export type NodeComporta = Node<{ elemento: ElementoComporta }, 'comporta'>;
 export type NodeNivel = Node<{ elemento: ElementoNivel }, 'nivel'>;
 export type NodeChuva = Node<{ elemento: ElementoChuva }, 'chuva'>;
 export type NodeLinha = Node<
@@ -51,4 +57,10 @@ export type NodeLinha = Node<
 >;
 
 /** União dos nodes do editor. */
-export type NodeDiagrama = NodeReservatorio | NodeNivel | NodeChuva | NodeLinha;
+export type NodeDiagrama =
+  | NodeReservatorio
+  | NodeBarragem
+  | NodeComporta
+  | NodeNivel
+  | NodeChuva
+  | NodeLinha;

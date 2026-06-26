@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type {
   DirecaoSeta,
   ElementoDiagrama,
+  EstadoComporta,
   LimiaresNivel,
 } from '@/domain/diagramas/tipos';
 import { validarOrdemLimiares } from '@/domain/diagramas/limiares';
@@ -64,6 +65,7 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
   const [unidade, setUnidade] = useState('');
   const [rotulo, setRotulo] = useState('');
   const [direcao, setDirecao] = useState<DirecaoSeta>('direta');
+  const [estadoComporta, setEstadoComporta] = useState<EstadoComporta>('fechada');
   const [limiares, setLimiares] = useState<LimiaresTexto>(LIMIARES_VAZIO);
 
   // Carrega os campos a cada novo elemento aberto.
@@ -86,6 +88,9 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     );
     setRotulo(elemento.tipo === 'linha' ? (elemento.label ?? '') : '');
     setDirecao(elemento.tipo === 'linha' ? elemento.direcaoSeta : 'direta');
+    setEstadoComporta(
+      elemento.tipo === 'comporta' ? elemento.estado : 'fechada',
+    );
     setLimiares(
       elemento.tipo === 'nivel'
         ? {
@@ -113,6 +118,10 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     switch (elemento?.tipo) {
       case 'reservatorio':
         return 'Editar reservatório';
+      case 'barragem':
+        return 'Editar barragem';
+      case 'comporta':
+        return 'Editar comporta';
       case 'nivel':
         return 'Editar posto de nível';
       case 'chuva':
@@ -164,6 +173,16 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
     switch (elemento.tipo) {
       case 'reservatorio':
         atualizado = { ...elemento, nome: nome.trim() || 'Reservatório' };
+        break;
+      case 'barragem':
+        atualizado = { ...elemento, nome: nome.trim() || 'Barragem' };
+        break;
+      case 'comporta':
+        atualizado = {
+          ...elemento,
+          nome: nome.trim() || 'Comporta',
+          estado: estadoComporta,
+        };
         break;
       case 'nivel':
         atualizado = {
@@ -248,6 +267,26 @@ export function DialogEditarElemento({ elemento, aoSalvar, aoCancelar }: Props) 
                 onChange={(e) => setNome(e.target.value)}
                 className={classeCampo}
               />
+            </div>
+          ) : null}
+
+          {tipo === 'comporta' ? (
+            <div className="space-y-1">
+              <label htmlFor={`${baseId}-estado-comporta`} className={classeLabel}>
+                Estado
+              </label>
+              <select
+                id={`${baseId}-estado-comporta`}
+                value={estadoComporta}
+                onChange={(e) =>
+                  setEstadoComporta(e.target.value as EstadoComporta)
+                }
+                className={classeCampo}
+              >
+                <option value="aberta">Aberta</option>
+                <option value="fechada">Fechada</option>
+                <option value="parcial">Parcial</option>
+              </select>
             </div>
           ) : null}
 

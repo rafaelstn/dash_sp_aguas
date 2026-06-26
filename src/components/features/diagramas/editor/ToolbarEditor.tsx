@@ -2,8 +2,10 @@
 
 import {
   CloudRain,
+  Dam,
   Gauge,
   MousePointer2,
+  PanelTopClose,
   Pencil,
   Redo2,
   Trash2,
@@ -44,6 +46,18 @@ const FERRAMENTAS: ItemFerramenta[] = [
     rotulo: 'Reservatório',
     dica: 'Clique no canvas para adicionar um reservatório',
     Icone: Waves,
+  },
+  {
+    id: 'barragem',
+    rotulo: 'Barragem',
+    dica: 'Clique no canvas para adicionar uma barragem',
+    Icone: Dam,
+  },
+  {
+    id: 'comporta',
+    rotulo: 'Comporta',
+    dica: 'Clique no canvas para adicionar uma comporta',
+    Icone: PanelTopClose,
   },
   {
     id: 'nivel',

@@ -22,6 +22,7 @@ import { ArrowLeft, Pencil } from 'lucide-react';
 import type {
   ElementoDiagrama,
   ElementoLinha,
+  EstadoComporta,
   Posicao,
 } from '@/domain/diagramas/tipos';
 import type { Diagrama } from '@/domain/diagramas/diagrama';
@@ -40,13 +41,17 @@ import { IndicadorSalvamento } from './IndicadorSalvamento';
 import { LegendaStatus } from './LegendaStatus';
 import { DialogEditarElemento } from './DialogEditarElemento';
 import { NodeReservatorio } from './nodes/NodeReservatorio';
+import { NodeBarragem } from './nodes/NodeBarragem';
+import { NodeComporta } from './nodes/NodeComporta';
 import { NodeNivel } from './nodes/NodeNivel';
 import { NodeChuva } from './nodes/NodeChuva';
 import { NodeLinha } from './nodes/NodeLinha';
 import { useAutoSave } from './useAutoSave';
 import { elementosParaNodes, nodesParaElementos } from './mapeamento';
 import {
+  criarBarragem,
   criarChuva,
+  criarComporta,
   criarLinha,
   criarNivel,
   criarReservatorio,
@@ -60,6 +65,8 @@ interface Props {
 
 const tiposDeNode = {
   reservatorio: NodeReservatorio,
+  barragem: NodeBarragem,
+  comporta: NodeComporta,
   nivel: NodeNivel,
   chuva: NodeChuva,
   linha: NodeLinha,
@@ -240,6 +247,12 @@ function EditorInterno({ diagrama }: Props) {
       switch (ferramenta) {
         case 'reservatorio':
           novo = criarReservatorio(ponto);
+          break;
+        case 'barragem':
+          novo = criarBarragem(ponto);
+          break;
+        case 'comporta':
+          novo = criarComporta(ponto);
           break;
         case 'nivel':
           novo = criarNivel(ponto);
@@ -708,6 +721,10 @@ function descreverElemento(elemento: ElementoDiagrama): string {
   switch (elemento.tipo) {
     case 'reservatorio':
       return `Reservatório ${elemento.nome}`;
+    case 'barragem':
+      return `Barragem ${elemento.nome}`;
+    case 'comporta':
+      return `Comporta ${elemento.nome}, ${ESTADO_COMPORTA_ROTULO[elemento.estado]}`;
     case 'nivel':
       return `Posto de nível ${elemento.codigo} ${elemento.nome}`;
     case 'chuva':
@@ -716,6 +733,13 @@ function descreverElemento(elemento: ElementoDiagrama): string {
       return `Rio ${elemento.label ?? 'sem rótulo'}`;
   }
 }
+
+/** Rótulo textual do estado da comporta (lista acessível e diálogo de exclusão). */
+const ESTADO_COMPORTA_ROTULO: Record<EstadoComporta, string> = {
+  aberta: 'aberta',
+  fechada: 'fechada',
+  parcial: 'parcialmente aberta',
+};
 
 /**
  * Centro (em coordenadas de canvas) de um elemento, para a view focar nele ao

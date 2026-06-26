@@ -29,6 +29,21 @@ const reservatorioSchema = z.object({
   nome: z.string().max(200),
 });
 
+const barragemSchema = z.object({
+  id: z.string().min(1),
+  tipo: z.literal('barragem'),
+  posicao: posicaoSchema,
+  nome: z.string().max(200),
+});
+
+const comportaSchema = z.object({
+  id: z.string().min(1),
+  tipo: z.literal('comporta'),
+  posicao: posicaoSchema,
+  nome: z.string().max(200),
+  estado: z.enum(['aberta', 'fechada', 'parcial']),
+});
+
 const nivelSchema = z.object({
   id: z.string().min(1),
   tipo: z.literal('nivel'),
@@ -62,6 +77,8 @@ const linhaSchema = z.object({
 
 export const elementoSchema = z.discriminatedUnion('tipo', [
   reservatorioSchema,
+  barragemSchema,
+  comportaSchema,
   nivelSchema,
   chuvaSchema,
   linhaSchema,
