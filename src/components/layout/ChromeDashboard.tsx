@@ -75,42 +75,48 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
           href="/painel"
           aria-label="SP Águas - DMO, ir para o painel"
           className={[
-            'flex h-header shrink-0 items-center border-b border-app-border-subtle',
+            'flex h-header shrink-0 items-center overflow-hidden border-b border-app-border-subtle',
             'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul',
-            colapsado ? 'justify-center px-0' : 'gap-2.5 px-3',
+            colapsado ? 'justify-center px-0' : 'gap-2 px-3',
           ].join(' ')}
         >
-          <Image
-            src={colapsado ? '/icons/icon-192.png' : '/logo-spaguas-header.png'}
-            alt=""
-            width={colapsado ? 64 : 178}
-            height={colapsado ? 64 : 100}
-            unoptimized
-            priority
-            className={colapsado ? 'h-7 w-7' : 'h-9 w-auto'}
-          />
-          {!colapsado ? (
-            <span className="min-w-0 leading-tight">
-              <span className="block text-2xs uppercase tracking-wider text-app-fg-muted">
-                Governo do Estado de SP
-              </span>
-              <span className="block truncate text-xs font-semibold text-app-fg">
-                SP Águas - DMO
-              </span>
+          {colapsado ? (
+            // Recolhido: monograma limpo em vez do lockup espremido num
+            // quadrado (que vira "SP A" cortado e ilegível). Caixa gov-azul
+            // arredondada, nítida em 32px. O nome completo viaja no aria-label
+            // do <Link>, então o "SP" aqui é decorativo.
+            <span
+              aria-hidden="true"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-gov-card bg-gov-azul text-xs font-bold tracking-tight text-white"
+            >
+              SP
             </span>
-          ) : null}
+          ) : (
+            // Expandido: o lockup "SP ÁGUAS" já carrega a marca; a assinatura
+            // textual ao lado seria redundante e não cabe na faixa de 48px em
+            // 224px. Logo contido na faixa (h-8 + object-contain) pra não vazar.
+            <Image
+              src="/logo-spaguas-header.png"
+              alt="SP Águas - DMO, Governo do Estado de São Paulo"
+              width={178}
+              height={100}
+              unoptimized
+              priority
+              className="h-8 w-auto object-contain"
+            />
+          )}
         </Link>
 
         <nav className="flex-1 overflow-y-auto p-2">
+          {/* Rótulo de seção visível só no estado expandido. Recolhido, mantém
+              só o heading oculto pra não introduzir ruído visual (o landmark
+              nomeado é o <aside aria-label="Navegação principal">). */}
           {!colapsado ? (
             <p className="px-2 pb-2 pt-1 text-2xs font-semibold uppercase tracking-wider text-app-fg-muted">
               Navegação
             </p>
           ) : (
-            <p className="pb-2 pt-1 text-center text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle">
-              <span aria-hidden="true">•••</span>
-              <span className="sr-only">Navegação</span>
-            </p>
+            <h2 className="sr-only">Navegação</h2>
           )}
           <ul className="space-y-0.5">
             {itens.map((item) => (
@@ -128,8 +134,10 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
           </ul>
         </nav>
 
-        {/* Gatilho de colapso fixo no rodapé da sidebar. NÃO repete usuário. */}
-        <div className="border-t border-app-border-subtle p-2">
+        {/* Gatilho de colapso fixo no rodapé da sidebar. NÃO repete usuário.
+            Sem borda: o respiro do padding já separa da lista, evita mais
+            uma linha competindo com a divisória do topo e a borda lateral. */}
+        <div className="p-2">
           <button
             type="button"
             onClick={alternar}
@@ -201,8 +209,10 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
           <div className="space-y-6">{children}</div>
         </main>
 
-        <footer className="border-t border-app-border-subtle bg-app-surface">
-          <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-app-fg-muted">
+        {/* Rodapé discreto sobre o fundo da página, sem borda nem superfície
+            branca: o respiro separa do conteúdo e evita mais uma linha. */}
+        <footer>
+          <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2 text-xs text-app-fg-subtle">
             <span>
               Sistema em rede interna · Acesso restrito ao setor SP Águas
             </span>
