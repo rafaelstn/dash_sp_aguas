@@ -36,6 +36,8 @@ export interface ItemSidenavProps {
   icone: IconeKey;
   contador: number | null;
   atalho?: string;
+  /** Modo só-ícone da sidebar recolhida (desktop): rótulo via aria-label/tooltip. */
+  colapsado?: boolean;
 }
 
 export function ItemSidenav({
@@ -44,6 +46,7 @@ export function ItemSidenav({
   icone,
   contador,
   atalho,
+  colapsado = false,
 }: ItemSidenavProps) {
   const pathname = usePathname();
   const Icone = ICONES[icone];
@@ -51,6 +54,50 @@ export function ItemSidenav({
     href === '/'
       ? pathname === '/'
       : pathname === href || pathname.startsWith(href + '/');
+
+  const temContador = contador !== null && contador > 0;
+  const contadorFmt = temContador ? contador.toLocaleString('pt-BR') : '';
+
+  if (colapsado) {
+    // Recolhido: só o ícone, centralizado. O rótulo (e o contador, quando
+    // houver) viajam no aria-label e no title — o leitor de tela e o tooltip
+    // continuam comunicando tudo. O atalho de teclado segue válido (handler
+    // global), apenas não é exibido por falta de espaço.
+    const descricao = temContador ? `${rotulo}, ${contadorFmt} itens` : rotulo;
+    return (
+      <Link
+        href={href}
+        aria-current={ativo ? 'page' : undefined}
+        aria-label={descricao}
+        title={descricao}
+        className={[
+          'group relative flex h-9 items-center justify-center rounded transition-colors motion-safe:duration-100',
+          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul',
+          ativo
+            ? 'bg-gov-azul-claro text-gov-azul'
+            : 'text-app-fg-muted hover:bg-app-surface-2 hover:text-app-fg',
+        ].join(' ')}
+      >
+        {ativo ? (
+          <span
+            aria-hidden="true"
+            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-gov-azul"
+          />
+        ) : null}
+        <Icone
+          className={['h-4 w-4 shrink-0', ativo ? 'text-gov-azul' : ''].join(' ')}
+          aria-hidden="true"
+          strokeWidth={ativo ? 2.25 : 2}
+        />
+        {temContador ? (
+          <span
+            aria-hidden="true"
+            className="absolute right-1 top-1 h-2 w-2 rounded-full bg-gov-azul ring-2 ring-app-surface"
+          />
+        ) : null}
+      </Link>
+    );
+  }
 
   return (
     <Link
@@ -83,12 +130,12 @@ export function ItemSidenav({
       />
       <span className="flex-1 truncate">{rotulo}</span>
 
-      {contador !== null && contador > 0 ? (
+      {temContador ? (
         <span
           className="mono tabular min-w-[1.5rem] rounded bg-app-surface-2 px-1 text-center text-2xs font-semibold text-app-fg-muted"
           aria-label={`${contador} itens`}
         >
-          {contador.toLocaleString('pt-BR')}
+          {contadorFmt}
         </span>
       ) : null}
 
