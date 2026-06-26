@@ -29,7 +29,7 @@ export default async function PaginaLogin({
             alt=""
             width={203}
             height={128}
-            quality={100}
+            unoptimized
             priority
             className="h-10 w-auto"
           />
