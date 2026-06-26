@@ -53,13 +53,20 @@ export function criarChuva(posicao: Posicao): ElementoChuva {
   };
 }
 
+/** Metade do comprimento horizontal do traçado padrão de rio (220px). */
+const MEIO_TRACO_RIO = 110;
+
 /**
- * Cria um trecho de rio com traçado horizontal padrão a partir do ponto de
- * origem. O traçado fino (mover pontos) chega na A3; aqui nasce reto.
+ * Cria um trecho de rio com traçado horizontal padrão CENTRADO no ponto de
+ * inserção: o clique vira o meio do rio (início à esquerda, fim à direita),
+ * não a ponta. Assim, clicar perto de qualquer borda do canvas mantém o
+ * traçado em torno do ponto, e a centralização da view (no editor) o exibe
+ * inteiro. Os pontos são absolutos no canvas (o node-rio fica em {0,0}). O
+ * traçado fino (mover pontos) chega na A3; aqui nasce reto.
  */
 export function criarLinha(posicao: Posicao): ElementoLinha {
-  const inicio: Posicao = { x: posicao.x, y: posicao.y };
-  const fim: Posicao = { x: posicao.x + 220, y: posicao.y };
+  const inicio: Posicao = { x: posicao.x - MEIO_TRACO_RIO, y: posicao.y };
+  const fim: Posicao = { x: posicao.x + MEIO_TRACO_RIO, y: posicao.y };
   return {
     id: novoId(),
     tipo: 'linha',

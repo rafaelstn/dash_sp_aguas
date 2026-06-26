@@ -22,6 +22,7 @@ import { ArrowLeft, Pencil } from 'lucide-react';
 import type {
   ElementoDiagrama,
   ElementoLinha,
+  Posicao,
 } from '@/domain/diagramas/tipos';
 import type { Diagrama } from '@/domain/diagramas/diagrama';
 import {
@@ -253,6 +254,20 @@ function EditorInterno({ diagrama }: Props) {
       aplicarElementos([...nodesParaElementos(nodes), novo]);
       setSelecionadoId(novo.id);
       setFerramenta('selecionar');
+
+      // Foca a view no elemento recém-inserido (pan suave, zoom preservado):
+      // o rio, que se estende pelo canvas, e qualquer elemento inserido perto
+      // da borda passam a ficar visíveis sem o usuário precisar arrastar a
+      // tela atrás dele. (O fitView pendente em diagrama vazio, que antes
+      // atropelava este pan, foi tratado no onInit.)
+      const instancia = instanciaRef.current;
+      if (instancia) {
+        const centro = centroDoElemento(novo);
+        void instancia.setCenter(centro.x, centro.y, {
+          zoom: instancia.getZoom(),
+          duration: 300,
+        });
+      }
     },
     [ferramenta, nodes, aplicarElementos, screenToFlowPosition],
   );
@@ -531,6 +546,15 @@ function EditorInterno({ diagrama }: Props) {
           nodeTypes={tiposDeNode}
           onInit={(inst) => {
             instanciaRef.current = inst;
+            // fitView no init APENAS quando o diagrama abre com conteúdo, para
+            // enquadrar os elementos existentes. Num diagrama vazio, a prop
+            // `fitView` (ou um fitView aqui) fica pendente sem nodes e dispara
+            // no PRIMEIRO elemento inserido, atropelando o `setCenter` que foca
+            // o novo elemento. Como o fit vazio é inútil e só causa esse pulo,
+            // não o agendamos quando não há o que enquadrar.
+            if (inst.getNodes().length > 0) {
+              void inst.fitView();
+            }
           }}
           onNodesChange={aoMudarNodes}
           onNodeDoubleClick={aoDuploCliqueNode}
@@ -545,7 +569,6 @@ function EditorInterno({ diagrama }: Props) {
           }}
           deleteKeyCode={['Delete', 'Backspace']}
           nodesConnectable={false}
-          fitView
           proOptions={{ hideAttribution: true }}
           className="[&_.react-flow__pane]:cursor-crosshair data-[ferramenta=selecionar]:[&_.react-flow__pane]:cursor-default"
           data-ferramenta={ferramenta}
@@ -692,6 +715,30 @@ function descreverElemento(elemento: ElementoDiagrama): string {
     case 'linha':
       return `Rio ${elemento.label ?? 'sem rótulo'}`;
   }
+}
+
+/**
+ * Centro (em coordenadas de canvas) de um elemento, para a view focar nele ao
+ * ser inserido. O rio se estende pelo traçado, então o centro é a média dos
+ * `pontos[]` (absolutos), levando a view até o meio do trecho. Os nodes de
+ * ícone têm a `posicao` no canto superior-esquerdo; soma-se metade do ícone
+ * (~60px, ver custom nodes) para centrar no símbolo, não na quina.
+ */
+const MEIO_ICONE_NODE = 30;
+
+function centroDoElemento(elemento: ElementoDiagrama): Posicao {
+  if (elemento.tipo === 'linha') {
+    const pontos = elemento.pontos;
+    const soma = pontos.reduce(
+      (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
+      { x: 0, y: 0 },
+    );
+    return { x: soma.x / pontos.length, y: soma.y / pontos.length };
+  }
+  return {
+    x: elemento.posicao.x + MEIO_ICONE_NODE,
+    y: elemento.posicao.y + MEIO_ICONE_NODE,
+  };
 }
 
 /** Provider do React Flow (necessário para `useReactFlow`/`screenToFlowPosition`). */
