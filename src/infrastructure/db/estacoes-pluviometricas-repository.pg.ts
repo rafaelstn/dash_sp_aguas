@@ -12,6 +12,7 @@ type LinhaEstacao = {
   lng: number;
   tipo: 'manual' | 'automatico';
   bacia: string | null;
+  owner: string | null;
   posto_id: string | null;
   sibh_id: string | null;
   criado_em: Date;
@@ -26,13 +27,14 @@ function mapear(linha: LinhaEstacao): EstacaoPluviometrica {
     lng: Number(linha.lng),
     tipo: linha.tipo,
     bacia: linha.bacia,
+    owner: linha.owner,
     postoId: linha.posto_id,
     sibhId: linha.sibh_id,
     criadoEm: linha.criado_em,
   };
 }
 
-const COLUNAS = sql`id, prefixo, nome, lat, lng, tipo, bacia, posto_id, sibh_id, criado_em`;
+const COLUNAS = sql`id, prefixo, nome, lat, lng, tipo, bacia, owner, posto_id, sibh_id, criado_em`;
 
 export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository = {
   async listar(filtros) {
@@ -42,12 +44,16 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
     const condTipo = filtros?.tipo
       ? sql`AND tipo = ${filtros.tipo}`
       : sql``;
+    const condOwner = filtros?.owner
+      ? sql`AND owner = ${filtros.owner}`
+      : sql``;
     try {
       const linhas = await sql<LinhaEstacao[]>`
         SELECT ${COLUNAS} FROM estacoes_pluviometricas
          WHERE true
          ${condBacia}
          ${condTipo}
+         ${condOwner}
          ORDER BY nome
       `;
       return linhas.map(mapear);
@@ -73,7 +79,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
     try {
       const linhas = await sql<LinhaEstacao[]>`
         INSERT INTO estacoes_pluviometricas
-          (prefixo, nome, lat, lng, tipo, bacia, posto_id, sibh_id)
+          (prefixo, nome, lat, lng, tipo, bacia, owner, posto_id, sibh_id)
         VALUES (
           ${estacao.prefixo},
           ${estacao.nome},
@@ -81,6 +87,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
           ${estacao.lng},
           ${estacao.tipo},
           ${estacao.bacia ?? null},
+          ${estacao.owner ?? null},
           ${estacao.postoId ?? null}::uuid,
           ${estacao.sibhId ?? null}
         )
@@ -90,6 +97,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
           lng      = EXCLUDED.lng,
           tipo     = EXCLUDED.tipo,
           bacia    = EXCLUDED.bacia,
+          owner    = EXCLUDED.owner,
           posto_id = EXCLUDED.posto_id,
           sibh_id  = EXCLUDED.sibh_id
         RETURNING ${COLUNAS}

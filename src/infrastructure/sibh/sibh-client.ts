@@ -84,6 +84,8 @@ interface EstacaoBruta {
   latitude?: string | number | null;
   longitude?: string | number | null;
   ugrhi_name?: string | null;
+  // Entidade responsavel pela estacao (ex.: 'SP ÁGUAS', 'CEMADEN', 'ANA').
+  station_owner?: string | null;
 }
 
 /**
@@ -204,6 +206,7 @@ async function carregarEstacoes(): Promise<EstacaoSibh[]> {
           lat: parseCoordenada(bruta.latitude),
           lng: parseCoordenada(bruta.longitude),
           bacia: bruta.ugrhi_name?.trim() || null,
+          owner: bruta.station_owner?.trim() || null,
         });
       }
 

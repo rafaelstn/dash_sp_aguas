@@ -16,6 +16,8 @@ export interface Estacao {
   lng: number;
   tipo: TipoEstacao;
   bacia: string | null;
+  /** Entidade responsável (SIBH station_owner); null = "Outros". */
+  owner: string | null;
   postoId: string | null;
   sibhId: string | null;
   criadoEm: string;

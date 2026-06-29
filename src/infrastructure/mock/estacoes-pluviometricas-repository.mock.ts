@@ -19,6 +19,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
     return Array.from(armazenamento.values())
       .filter((e) => (filtros?.bacia ? e.bacia === filtros.bacia : true))
       .filter((e) => (filtros?.tipo ? e.tipo === filtros.tipo : true))
+      .filter((e) => (filtros?.owner ? e.owner === filtros.owner : true))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   },
 
@@ -38,6 +39,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
       lng: estacao.lng,
       tipo: estacao.tipo,
       bacia: estacao.bacia ?? null,
+      owner: estacao.owner ?? null,
       postoId: estacao.postoId ?? null,
       sibhId: estacao.sibhId ?? null,
       criadoEm: existente?.criadoEm ?? new Date(),

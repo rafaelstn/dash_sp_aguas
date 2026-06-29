@@ -28,6 +28,11 @@ export interface EstacaoPluviometrica {
   lng: number;
   tipo: TipoEstacaoPluviometrica;
   bacia: string | null;
+  /**
+   * Entidade responsável pela estação (SIBH `station_owner`). `null` quando não
+   * informado; exibido como "Outros" e usado para a cor/filtro por entidade.
+   */
+  owner: string | null;
   /** Vínculo opcional ao catálogo interno `postos` (ON DELETE SET NULL). */
   postoId: string | null;
   /** Identificador do registro no SIBH, para reconciliação futura. */
@@ -47,6 +52,7 @@ export interface UpsertEstacaoPluviometrica {
   lng: number;
   tipo: TipoEstacaoPluviometrica;
   bacia?: string | null;
+  owner?: string | null;
   postoId?: string | null;
   sibhId?: string | null;
 }
@@ -58,4 +64,5 @@ export interface UpsertEstacaoPluviometrica {
 export interface FiltrosEstacaoPluviometrica {
   bacia?: string;
   tipo?: TipoEstacaoPluviometrica;
+  owner?: string;
 }

@@ -44,6 +44,12 @@ export interface EstacaoSibh {
    * não informado. Persiste em `estacoes_pluviometricas.bacia`.
    */
   bacia: string | null;
+  /**
+   * Entidade responsável pela estação, do campo cru `station_owner` do SIBH
+   * (ex.: 'SP ÁGUAS', 'CEMADEN', 'ANA'). `null` quando não informado. Persiste
+   * em `estacoes_pluviometricas.owner` e dá a cor/filtro por entidade no mapa.
+   */
+  owner: string | null;
 }
 
 /**

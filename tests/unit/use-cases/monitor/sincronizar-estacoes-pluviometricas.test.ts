@@ -54,6 +54,7 @@ function fakeEstacoesRepo(): FakeEstacoesRepo {
         lng: estacao.lng,
         tipo: estacao.tipo,
         bacia: estacao.bacia ?? null,
+        owner: estacao.owner ?? null,
         postoId: estacao.postoId ?? null,
         sibhId: estacao.sibhId ?? null,
         criadoEm: new Date('2026-01-01T00:00:00Z'),
@@ -103,6 +104,7 @@ function estacao(over: Partial<EstacaoSibh>): EstacaoSibh {
     lat: -23.5,
     lng: -46.6,
     bacia: 'Alto Tietê',
+    owner: 'SP ÁGUAS',
     ...over,
   };
 }
@@ -129,6 +131,19 @@ describe('use-case/sincronizarEstacoesPluviometricas', () => {
     expect(estacoesRepo.upserts[0]!.tipo).toBe('automatico');
     expect(estacoesRepo.upserts[0]!.sibhId).toBe('1');
     expect(estacoesRepo.upserts[0]!.bacia).toBe('Alto Tietê');
+    // A entidade responsável (owner) é repassada do SIBH ao upsert.
+    expect(estacoesRepo.upserts[0]!.owner).toBe('SP ÁGUAS');
+  });
+
+  it('repassa owner null quando o SIBH não informa a entidade', async () => {
+    const sibh = fakeSibh([estacao({ prefixo: 'P001', owner: null })]);
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo({});
+
+    await sincronizarEstacoesPluviometricas(sibh, estacoesRepo, postosRepo);
+
+    expect(estacoesRepo.upserts).toHaveLength(1);
+    expect(estacoesRepo.upserts[0]!.owner).toBeNull();
   });
 
   it('pula estação sem coordenada e contabiliza', async () => {

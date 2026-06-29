@@ -5,13 +5,15 @@ import { ExternalLink, LineChart } from 'lucide-react';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import type { Estacao } from './tipos';
 import { ROTULO_TIPO } from './tipos';
+import { corDoOwner, entidadeDaEstacao } from './paleta-monitor';
 
 /**
  * Alternativa textual ao mapa (e-MAG / WCAG: conteúdo gráfico precisa de
  * equivalente acessível). Lista as estações filtradas em tabela navegável por
  * teclado e leitor de tela, com link pra ficha do posto quando vinculada.
  *
- * Não depende de cor pra transmitir o tipo: a coluna "Tipo" é texto.
+ * Não depende de cor pra transmitir informação: a entidade aparece como texto
+ * (a bolinha colorida é só apoio visual, aria-hidden) e o tipo é texto.
  */
 export function ListaEstacoes({
   estacoes,
@@ -47,8 +49,23 @@ export function ListaEstacoes({
       render: (e) => e.prefixo ?? '—',
     },
     {
+      chave: 'entidade',
+      cabecalho: 'Entidade',
+      classeCelula: 'text-app-fg-muted',
+      render: (e) => (
+        <span className="inline-flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-app-border-subtle"
+            style={{ backgroundColor: corDoOwner(e.owner) }}
+          />
+          <span className="text-sm">{entidadeDaEstacao(e)}</span>
+        </span>
+      ),
+    },
+    {
       chave: 'bacia',
-      cabecalho: 'Bacia',
+      cabecalho: 'UGRHI',
       classeCelula: 'text-app-fg-muted',
       render: (e) => e.bacia ?? '—',
     },
@@ -86,7 +103,7 @@ export function ListaEstacoes({
 
   return (
     <Tabela
-      legenda="Estações pluviométricas filtradas: nome, prefixo, bacia, tipo, coordenadas e ação de detalhes. Estações vinculadas a um posto do catálogo têm link para a ficha; o botão Leituras abre o gráfico de chuva da estação."
+      legenda="Estações pluviométricas filtradas: nome, prefixo, entidade responsável, UGRHI, tipo, coordenadas e ação de detalhes. Estações vinculadas a um posto do catálogo têm link para a ficha; o botão Leituras abre o gráfico de chuva da estação."
       colunas={colunas}
       itens={estacoes}
       densidade="compact"

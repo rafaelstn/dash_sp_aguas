@@ -94,6 +94,7 @@ async function sincronizarUma(
     // Estação vinda do SIBH é sempre o canal automático (logger).
     tipo: 'automatico',
     bacia: estacao.bacia,
+    owner: estacao.owner,
     postoId,
     sibhId: estacao.id,
   });

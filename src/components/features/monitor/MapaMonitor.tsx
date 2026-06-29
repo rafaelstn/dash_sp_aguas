@@ -14,7 +14,12 @@ import 'leaflet/dist/leaflet.css';
 
 import type { Estacao } from './tipos';
 import { ROTULO_TIPO } from './tipos';
-import { estiloDaEstacao, LEGENDA } from './paleta-monitor';
+import {
+  estiloDaEstacao,
+  entidadeDaEstacao,
+  ehVinculada,
+  LEGENDA_ENTIDADES,
+} from './paleta-monitor';
 
 /**
  * GeoServer oficial do DAEE. As camadas são WMS (não há GeoJSON publicado),
@@ -131,9 +136,17 @@ function htmlPopup(e: Estacao): string {
   const meta: string[] = [];
   if (e.prefixo) meta.push(`Prefixo ${esc(e.prefixo)}`);
   meta.push(ROTULO_TIPO[e.tipo]);
-  if (e.bacia) meta.push(`Bacia: ${esc(e.bacia)}`);
+  if (e.bacia) meta.push(`UGRHI: ${esc(e.bacia)}`);
   linhas.push(
     `<div style="margin-top:4px;color:#4B5563;font-size:12px">${meta.join(' · ')}</div>`,
+  );
+  // Entidade responsável: bolinha colorida (mesma cor do ponto) + nome em texto.
+  // A cor nunca é a única pista; o nome textual garante WCAG 1.4.1.
+  const corEntidade = estiloDaEstacao(e).cor;
+  linhas.push(
+    `<div style="margin-top:4px;display:flex;align-items:center;gap:6px;color:#374151;font-size:12px"><span aria-hidden="true" style="display:inline-block;width:10px;height:10px;border-radius:9999px;background:${corEntidade};border:1px solid #FFFFFF;box-shadow:0 0 0 1px #D1D5DB"></span>Entidade: ${esc(
+      entidadeDaEstacao(e),
+    )}</div>`,
   );
   // Botão data-ver-leituras: abre o painel de detalhe (gráfico de chuva) desta
   // estação. Disponível para toda estação (o painel não depende de posto).
@@ -142,15 +155,21 @@ function htmlPopup(e: Estacao): string {
       e.id,
     )}" style="font-size:12px;font-weight:600;color:#1E40AF;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline">Ver leituras</button></div>`,
   );
-  if (e.postoId && e.prefixo) {
-    // Botão data-prefixo: o handler de clique do popup navega via router
-    // (SPA), evitando reload. Confirmado: rota real /postos/[prefixo].
+  // Status de vínculo SEMPRE em texto (não depende de cor nem forma do ponto).
+  if (ehVinculada(e)) {
     linhas.push(
-      `<div style="margin-top:4px"><button type="button" data-prefixo="${esc(
-        e.prefixo,
-      )}" style="font-size:12px;font-weight:600;color:#1E40AF;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline">Abrir ficha do posto</button></div>`,
+      `<div style="margin-top:4px;font-size:12px;color:#166534;font-weight:600">Vinculada a posto do catálogo</div>`,
     );
-  } else if (e.prefixo) {
+    if (e.prefixo) {
+      // Botão data-prefixo: o handler de clique do popup navega via router
+      // (SPA), evitando reload. Confirmado: rota real /postos/[prefixo].
+      linhas.push(
+        `<div style="margin-top:2px"><button type="button" data-prefixo="${esc(
+          e.prefixo,
+        )}" style="font-size:12px;font-weight:600;color:#1E40AF;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline">Abrir ficha do posto</button></div>`,
+      );
+    }
+  } else {
     linhas.push(
       `<div style="margin-top:4px;font-size:12px;color:#5F6572">Sem posto vinculado</div>`,
     );
@@ -206,8 +225,10 @@ function CamadaEstacoes({
       });
       const partes = [e.nome || 'Sem nome'];
       if (e.prefixo) partes.push(`prefixo ${e.prefixo}`);
-      if (e.bacia) partes.push(`bacia ${e.bacia}`);
+      partes.push(`entidade ${entidadeDaEstacao(e)}`);
+      if (e.bacia) partes.push(`UGRHI ${e.bacia}`);
       partes.push(ROTULO_TIPO[e.tipo]);
+      if (ehVinculada(e)) partes.push('vinculada a posto do catálogo');
       marcador.bindPopup(() => htmlPopup(e));
       marcador.bindTooltip(partes.join(', '));
       grupo.addLayer(marcador);
@@ -264,31 +285,50 @@ function CamadaEstacoes({
   return null;
 }
 
-/** Legenda fixa no canto inferior esquerdo. Comunica cor E forma (raio/anel). */
+/**
+ * Legenda fixa no canto inferior esquerdo. Comunica:
+ *  - COR por entidade responsável (uma linha por órgão, "Outros" por último);
+ *  - FORMA do vínculo (ponto maior com anel branco grosso = vinculada), com
+ *    rótulo textual próprio (a forma nunca é a única pista; WCAG 1.4.1).
+ *
+ * Recolhível no mobile pra não cobrir o mapa em telas pequenas.
+ */
 function Legenda() {
   const map = useMap();
-  const itens = useMemo(() => LEGENDA, []);
+  const entidades = useMemo(() => LEGENDA_ENTIDADES, []);
 
   useEffect(() => {
     const control = new L.Control({ position: 'bottomleft' });
     control.onAdd = () => {
       const div = L.DomUtil.create('div');
       div.setAttribute('role', 'group');
-      div.setAttribute('aria-label', 'Legenda dos tipos de estação');
+      div.setAttribute('aria-label', 'Legenda do mapa: entidade responsável e vínculo a posto');
       div.style.cssText =
-        'background:#fff;padding:8px 10px;border-radius:8px;border:1px solid #E5E7EB;box-shadow:0 1px 3px rgba(0,0,0,.12);font-size:12px;line-height:1.5';
-      const linhas = itens
+        'background:#fff;padding:8px 10px;border-radius:8px;border:1px solid #E5E7EB;box-shadow:0 1px 3px rgba(0,0,0,.12);font-size:12px;line-height:1.4;max-width:200px';
+
+      const linhasEntidade = entidades
         .map((i) => {
-          const tamanho = Math.round(i.raio * 2);
-          const ponto = `display:inline-block;width:${tamanho}px;height:${tamanho}px;border-radius:9999px;background:${i.cor};border:${i.espessuraBorda}px solid ${i.corBorda};margin-right:6px;vertical-align:middle`;
-          return `<div style="display:flex;align-items:center;margin:2px 0"><span style="${ponto}"></span><span style="color:#111827">${i.rotulo}</span></div>`;
+          const ponto = `display:inline-block;width:12px;height:12px;border-radius:9999px;background:${i.cor};border:1px solid #FFFFFF;box-shadow:0 0 0 1px #D1D5DB;margin-right:6px;vertical-align:middle;flex-shrink:0`;
+          return `<div style="display:flex;align-items:center;margin:2px 0"><span aria-hidden="true" style="${ponto}"></span><span style="color:#111827">${i.rotulo}</span></div>`;
         })
         .join('');
-      // innerHTML aqui é seguro: o conteúdo é 100% literal de código (rótulos
-      // estáticos da paleta em paleta-monitor.ts), sem nenhum dado de usuário
-      // ou do banco. Conteúdo não confiável (nome/bacia da estação) só aparece
-      // no popup, onde passa por esc() antes da interpolação.
-      div.innerHTML = `<div style="font-weight:600;margin-bottom:4px;color:#111827">Tipos de estação</div>${linhas}`;
+
+      // Forma do vínculo: ponto maior, anel branco grosso, contornado em cinza
+      // pra leitura sobre fundo claro. Texto explica a pista de forma.
+      const pontoVinculo =
+        'display:inline-block;width:15px;height:15px;border-radius:9999px;background:#6B7280;border:3px solid #FFFFFF;box-shadow:0 0 0 1px #9CA3AF;margin-right:6px;vertical-align:middle;flex-shrink:0';
+
+      // innerHTML aqui é seguro: 100% literal de código (rótulos estáticos da
+      // paleta), sem dado de usuário/banco. Conteúdo não confiável só aparece
+      // no popup, com esc() antes da interpolação.
+      div.innerHTML =
+        `<details open><summary style="font-weight:600;color:#111827;cursor:pointer;list-style:none;margin-bottom:4px">Entidade responsável</summary>` +
+        linhasEntidade +
+        `<div style="height:1px;background:#E5E7EB;margin:6px 0"></div>` +
+        `<div style="font-weight:600;color:#111827;margin-bottom:2px">Vínculo</div>` +
+        `<div style="display:flex;align-items:center;margin:2px 0"><span aria-hidden="true" style="${pontoVinculo}"></span><span style="color:#111827">Vinculada a posto (ponto maior)</span></div>` +
+        `</details>`;
+
       // Não capturar arrasto/scroll do mapa ao interagir com a legenda.
       L.DomEvent.disableClickPropagation(div);
       return div;
@@ -297,7 +337,7 @@ function Legenda() {
     return () => {
       control.remove();
     };
-  }, [map, itens]);
+  }, [map, entidades]);
 
   return null;
 }

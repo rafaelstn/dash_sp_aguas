@@ -6,8 +6,9 @@ import { Map as MapIcon, List, SlidersHorizontal, CloudRain } from 'lucide-react
 import { Alerta } from '@/components/ui/Alerta';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
-import { FiltrosMonitor, type ValorFiltros } from './FiltrosMonitor';
+import { FiltrosMonitor, FILTROS_INICIAIS, type ValorFiltros } from './FiltrosMonitor';
 import { ListaEstacoes } from './ListaEstacoes';
+import { entidadeDaEstacao, LEGENDA_ENTIDADES } from './paleta-monitor';
 import type { Estacao, RespostaEstacoes } from './tipos';
 
 // Mapa carregado só no cliente: Leaflet depende de window. O fallback mostra
@@ -47,7 +48,7 @@ const TETO_LISTA = 500;
 
 export function PainelMonitor() {
   const [carga, setCarga] = useState<EstadoCarga>({ status: 'carregando' });
-  const [filtros, setFiltros] = useState<ValorFiltros>({ bacia: '', tipo: '' });
+  const [filtros, setFiltros] = useState<ValorFiltros>(FILTROS_INICIAIS);
   const [visao, setVisao] = useState<'mapa' | 'lista'>('mapa');
   const [filtrosAbertosMobile, setFiltrosAbertosMobile] = useState(false);
   // Estação aberta no painel de detalhe. null = painel fechado.
@@ -104,10 +105,29 @@ export function PainelMonitor() {
     return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [todas]);
 
+  // Entidades presentes nos dados, na ordem de relevância da legenda
+  // (SP Águas, CEMADEN, ...; "Outros" por último). Só inclui as que existem.
+  const entidadesDisponiveis = useMemo(() => {
+    const presentes = new Set<string>();
+    for (const e of todas) presentes.add(entidadeDaEstacao(e));
+    return LEGENDA_ENTIDADES.map((x) => x.nome).filter((nome) =>
+      presentes.has(nome),
+    );
+  }, [todas]);
+
   const filtradas = useMemo(() => {
+    const termo = filtros.busca.trim().toLocaleLowerCase('pt-BR');
+    const filtraEntidade = filtros.entidades.length > 0;
     return todas.filter((e) => {
       if (filtros.bacia && e.bacia !== filtros.bacia) return false;
       if (filtros.tipo && e.tipo !== filtros.tipo) return false;
+      if (filtraEntidade && !filtros.entidades.includes(entidadeDaEstacao(e)))
+        return false;
+      if (termo) {
+        const nome = (e.nome ?? '').toLocaleLowerCase('pt-BR');
+        const prefixo = (e.prefixo ?? '').toLocaleLowerCase('pt-BR');
+        if (!nome.includes(termo) && !prefixo.includes(termo)) return false;
+      }
       return true;
     });
   }, [todas, filtros]);
@@ -184,10 +204,17 @@ export function PainelMonitor() {
         ].join(' ')}
       >
         {carga.status === 'ok' ? (
-          <FiltrosMonitor valor={filtros} aoMudar={setFiltros} bacias={bacias} />
+          <FiltrosMonitor
+            valor={filtros}
+            aoMudar={setFiltros}
+            bacias={bacias}
+            entidadesDisponiveis={entidadesDisponiveis}
+          />
         ) : (
           <SkeletonGrupo rotulo="Carregando filtros">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
+              <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
               <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
               <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
             </div>
@@ -210,7 +237,7 @@ export function PainelMonitor() {
             <EstadoVazio
               icone={CloudRain}
               titulo="Nenhuma estação no filtro"
-              descricao="Ajuste a bacia ou o tipo para ver estações no mapa."
+              descricao="Ajuste a busca, a entidade, a UGRHI ou o tipo para ver estações no mapa."
             />
           ) : (
             <MapaMonitor estacoes={filtradas} aoSelecionar={setEstacaoDetalhe} />
@@ -261,7 +288,7 @@ function ListaTextual({
       <EstadoVazio
         icone={CloudRain}
         titulo="Nenhuma estação no filtro"
-        descricao="Ajuste a bacia ou o tipo para ver estações na lista."
+        descricao="Ajuste a busca, a entidade, a UGRHI ou o tipo para ver estações na lista."
       />
     );
   }
@@ -272,8 +299,8 @@ function ListaTextual({
       {limitada ? (
         <Alerta tipo="info" titulo="Lista parcial">
           Mostrando as primeiras {TETO_LISTA.toLocaleString('pt-BR')} de{' '}
-          {estacoes.length.toLocaleString('pt-BR')} estações. Refine o filtro por
-          bacia ou tipo para ver o conjunto completo.
+          {estacoes.length.toLocaleString('pt-BR')} estações. Refine a busca, a
+          entidade, a UGRHI ou o tipo para ver o conjunto completo.
         </Alerta>
       ) : null}
       <ListaEstacoes estacoes={visiveis} aoSelecionar={aoSelecionar} />

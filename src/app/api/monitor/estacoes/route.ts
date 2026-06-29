@@ -23,6 +23,11 @@ const querySchema = z.object({
     .min(1)
     .optional(),
   tipo: z.enum(['manual', 'automatico']).optional(),
+  owner: z
+    .string()
+    .trim()
+    .min(1)
+    .optional(),
 });
 
 /**
@@ -53,6 +58,7 @@ export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse({
     bacia: request.nextUrl.searchParams.get('bacia') ?? undefined,
     tipo: request.nextUrl.searchParams.get('tipo') ?? undefined,
+    owner: request.nextUrl.searchParams.get('owner') ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json(
@@ -69,6 +75,7 @@ export async function GET(request: NextRequest) {
     const itens = await estacoesPluviometricasRepository.listar({
       bacia: parsed.data.bacia,
       tipo: parsed.data.tipo,
+      owner: parsed.data.owner,
     });
 
     logger.info(
