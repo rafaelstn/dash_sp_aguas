@@ -251,6 +251,26 @@ export const POLITICAS = {
     limite: 200,
     janelaSegundos: 60,
   },
+  /**
+   * Leitura da gestão de usuários (lista). Restrita a Admin/Super Admin; teto
+   * moderado — a tela recarrega pouco e o universo de usuários é pequeno.
+   * Chave por usuário.
+   */
+  leituraAdminUsuarios: {
+    politica: 'leitura-admin-usuarios',
+    limite: 60,
+    janelaSegundos: 60,
+  },
+  /**
+   * Mutação na gestão de usuários (criar, alterar papel/senha, remover).
+   * Operação sensível (cria conta, troca senha): limite baixo para conter
+   * abuso/automação mesmo já autenticado como Admin. Chave por usuário.
+   */
+  mutacaoAdminUsuarios: {
+    politica: 'mutacao-admin-usuarios',
+    limite: 20,
+    janelaSegundos: 60,
+  },
 } satisfies Record<string, ConfiguracaoRateLimit>;
 
 /** Headers HTTP padrão pra resposta — chamar após consumir. */

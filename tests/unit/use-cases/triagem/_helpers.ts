@@ -27,6 +27,9 @@ interface OpcoesPapeis {
 export function papeisFake(opts: OpcoesPapeis = {}): PapeisRepository {
   const aprovadores = new Set(opts.aprovadores ?? []);
   return {
+    async obterPapel(id: string) {
+      return aprovadores.has(id) ? 'admin' : 'user';
+    },
     async ehAprovador(id: string) {
       return aprovadores.has(id);
     },

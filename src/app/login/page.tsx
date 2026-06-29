@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import Image from 'next/image';
 import { FormularioLogin } from './FormularioLogin';
 
@@ -54,16 +53,11 @@ export default async function PaginaLogin({
         </p>
         <FormularioLogin returnTo={returnTo} />
         <p className="mt-6 text-sm text-gov-muted">
-          Ainda não tem conta?{' '}
-          <Link
-            href="/cadastrar"
-            className="text-gov-azul underline underline-offset-2"
-          >
-            Criar conta
-          </Link>
+          Esqueceu a senha? Fale com um administrador para redefinir.
         </p>
-        <p className="mt-2 text-xs text-gov-muted">
-          Em caso de dificuldade de acesso, contate o administrador do sistema.
+        <p className="mt-4 border-t border-app-border-subtle pt-4 text-xs text-gov-muted">
+          Acesso restrito ao setor SP Águas. Em caso de dificuldade de acesso,
+          contate o administrador do sistema.
         </p>
       </section>
     </main>

@@ -86,6 +86,16 @@ export async function obterItensNav(): Promise<ResultadoNav> {
       contador: totalTriagem,
       atalho: 'T',
     });
+    // Gestão de usuários: visível para Admin e Super Admin (ambos são
+    // aprovadores). O que cada um pode fazer dentro da tela é decidido pelo
+    // papel do ator (a página resolve super vs admin) e reforçado no backend.
+    itens.push({
+      href: '/admin/usuarios',
+      rotulo: 'Usuários',
+      icone: 'users',
+      contador: null,
+      atalho: 'U',
+    });
   }
 
   return { usuario, itens };

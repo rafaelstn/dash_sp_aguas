@@ -2,6 +2,7 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { obterUsuarioAtual, type UsuarioAutenticado } from '@/infrastructure/auth/current-user';
 import { papeisRepository } from '@/infrastructure/repositories';
+import { ehAdmin, ehSuperAdmin } from '@/domain/auth/papel';
 
 /**
  * Helper de autorização compartilhado entre rotas API que não estão
@@ -27,8 +28,9 @@ export async function exigirUsuario(): Promise<UsuarioAutenticado | NextResponse
 }
 
 /**
- * Exige que o usuário autenticado seja aprovador. Retorna 401 se não
- * houver sessão e 403 se a sessão existir mas faltar o papel.
+ * Exige que o usuário autenticado seja aprovador (admin ou super_admin).
+ * Retorna 401 se não houver sessão e 403 se a sessão existir mas faltar o papel.
+ * Mantido por compatibilidade com as rotas de triagem; equivale a `exigirAdmin`.
  */
 export async function exigirAprovador(): Promise<UsuarioAutenticado | NextResponse> {
   const auth = await exigirUsuario();
@@ -37,6 +39,41 @@ export async function exigirAprovador(): Promise<UsuarioAutenticado | NextRespon
   if (!ok) {
     return NextResponse.json(
       { erro: 'sem_papel_aprovador', mensagem: 'Operação requer papel de aprovador.' },
+      { status: 403 },
+    );
+  }
+  return auth;
+}
+
+/**
+ * Exige papel de Admin ou Super Admin (equipe operacional). Mesmo critério de
+ * `exigirAprovador`, com nome alinhado ao RBAC nomeado. Use em rotas de
+ * operação privilegiada e de gestão de usuários comuns.
+ */
+export async function exigirAdmin(): Promise<UsuarioAutenticado | NextResponse> {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+  const papel = await papeisRepository.obterPapel(auth.id);
+  if (!ehAdmin(papel)) {
+    return NextResponse.json(
+      { erro: 'sem_papel_admin', mensagem: 'Operação requer papel de Admin.' },
+      { status: 403 },
+    );
+  }
+  return auth;
+}
+
+/**
+ * Exige papel de Super Admin (gestão de Admins e de papéis). Retorna 401 sem
+ * sessão e 403 se faltar o papel.
+ */
+export async function exigirSuperAdmin(): Promise<UsuarioAutenticado | NextResponse> {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+  const papel = await papeisRepository.obterPapel(auth.id);
+  if (!ehSuperAdmin(papel)) {
+    return NextResponse.json(
+      { erro: 'sem_papel_super_admin', mensagem: 'Operação requer papel de Super Admin.' },
       { status: 403 },
     );
   }

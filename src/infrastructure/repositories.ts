@@ -85,4 +85,11 @@ export const leiturasPluviometricasRepository = demo
 // armazenamento real é sempre usado (não há mock de bucket hoje).
 export { fotoStorageGateway } from './storage/foto-posto-storage';
 
+// Gestão administrativa de usuários (RBAC). Toca Supabase Auth Admin (service
+// role) + Postgres. Sem variação demo: não há Auth real em modo demo — as
+// rotas /api/admin/usuarios exigem banco e Supabase configurados. A instância
+// é preguiçosa (só abre conexão/cliente no primeiro uso), então importar aqui
+// não quebra o boot em modo demo.
+export { usuariosAdminRepository } from './db/usuarios-admin-repository.supabase';
+
 export const modoDemoAtivo = demo;

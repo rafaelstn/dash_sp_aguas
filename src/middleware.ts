@@ -102,7 +102,9 @@ function aplicarNoCacheAutenticado(response: NextResponse) {
 
 const ROTAS_PUBLICAS = new Set([
   '/login',
-  '/cadastrar',
+  // Autocadastro público foi DESATIVADO: contas são criadas pelo Admin/Super
+  // na gestão de usuários (/admin/usuarios). A rota /cadastrar não é mais
+  // pública (a própria página redireciona para /login).
   '/auth/callback',
   '/auth/sair',
   '/api/health',

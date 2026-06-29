@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 import { entrarComSenha, type ResultadoLogin } from './actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { InputSenha } from '@/components/ui/InputSenha';
 
 const estadoInicial: ResultadoLogin | null = null;
 
@@ -31,10 +32,9 @@ export function FormularioLogin({ returnTo }: { returnTo?: string }) {
         aria-describedby={estado ? 'mensagem-login' : undefined}
         disabled={pendente}
       />
-      <Input
+      <InputSenha
         id="senha"
         name="senha"
-        type="password"
         rotulo="Senha"
         required
         autoComplete="current-password"
