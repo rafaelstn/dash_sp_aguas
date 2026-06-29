@@ -9,6 +9,8 @@ import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { FiltrosMonitor, FILTROS_INICIAIS, type ValorFiltros } from './FiltrosMonitor';
 import { ListaEstacoes } from './ListaEstacoes';
 import { entidadeDaEstacao, LEGENDA_ENTIDADES } from './paleta-monitor';
+import { useComparacao } from './useComparacao';
+import { CestaComparacao } from './CestaComparacao';
 import type { Estacao, RespostaEstacoes } from './tipos';
 
 // Mapa carregado só no cliente: Leaflet depende de window. O fallback mostra
@@ -37,6 +39,13 @@ const PainelDetalheEstacao = dynamic(
   { ssr: false },
 );
 
+// Visão de comparação carregada sob demanda: também traz o recharts (pesado) e
+// só monta quando o usuário abre a comparação.
+const PainelComparacao = dynamic(
+  () => import('./PainelComparacao').then((m) => m.PainelComparacao),
+  { ssr: false },
+);
+
 type EstadoCarga =
   | { status: 'carregando' }
   | { status: 'erro'; mensagem: string }
@@ -53,6 +62,16 @@ export function PainelMonitor() {
   const [filtrosAbertosMobile, setFiltrosAbertosMobile] = useState(false);
   // Estação aberta no painel de detalhe. null = painel fechado.
   const [estacaoDetalhe, setEstacaoDetalhe] = useState<Estacao | null>(null);
+  // Cesta de comparação multi-estação + visão de comparação aberta.
+  const comparacao = useComparacao();
+  const [comparacaoAberta, setComparacaoAberta] = useState(false);
+
+  // Se a cesta cair abaixo de 2 estações (remoção/limpeza) com a visão aberta,
+  // fecha a visão: a comparação exige ao menos duas estações.
+  const totalComparacao = comparacao.total;
+  useEffect(() => {
+    if (comparacaoAberta && totalComparacao < 2) setComparacaoAberta(false);
+  }, [comparacaoAberta, totalComparacao]);
 
   useEffect(() => {
     let ativo = true;
@@ -169,7 +188,13 @@ export function PainelMonitor() {
       : 'Carregando…';
 
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className={[
+        'flex flex-col gap-3',
+        // Reserva espaço pra cesta fixa no rodapé não cobrir o conteúdo final.
+        comparacao.total > 0 ? 'pb-28 sm:pb-24' : '',
+      ].join(' ')}
+    >
       {/* Barra de controle: contagem + alternância de visão + filtros (mobile) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p
@@ -266,6 +291,11 @@ export function PainelMonitor() {
               aoSelecionar={setEstacaoDetalhe}
               entidadesAtivas={filtros.entidades}
               aoAlternarEntidade={alternarEntidade}
+              comparacao={{
+                estaSelecionada: comparacao.estaSelecionada,
+                podeAdicionar: comparacao.podeAdicionar,
+                aoAlternar: comparacao.alternar,
+              }}
             />
           )}
         </div>
@@ -274,6 +304,11 @@ export function PainelMonitor() {
           estacoes={filtradas}
           carregando={carga.status === 'carregando'}
           aoSelecionar={setEstacaoDetalhe}
+          comparacao={{
+            estaSelecionada: comparacao.estaSelecionada,
+            podeAdicionar: comparacao.podeAdicionar,
+            aoAlternar: comparacao.alternar,
+          }}
         />
       )}
 
@@ -283,6 +318,29 @@ export function PainelMonitor() {
         <PainelDetalheEstacao
           estacao={estacaoDetalhe}
           aoFechar={() => setEstacaoDetalhe(null)}
+          comparacao={{
+            selecionada: comparacao.estaSelecionada(estacaoDetalhe.id),
+            podeAdicionar: comparacao.podeAdicionar,
+            aoAlternar: comparacao.alternar,
+          }}
+        />
+      ) : null}
+
+      {/* Cesta de comparação: barra fixa no rodapé quando há seleção. */}
+      <CestaComparacao
+        estacoes={comparacao.estacoes}
+        maximo={comparacao.maximo}
+        aoRemover={comparacao.remover}
+        aoLimpar={comparacao.limpar}
+        aoComparar={() => setComparacaoAberta(true)}
+      />
+
+      {/* Visão de comparação (drawer). Só monta o chunk quando aberta E há ao
+          menos 2 estações na cesta (o botão Comparar exige isso). */}
+      {comparacaoAberta && comparacao.total >= 2 ? (
+        <PainelComparacao
+          estacoes={comparacao.estacoes}
+          aoFechar={() => setComparacaoAberta(false)}
         />
       ) : null}
     </div>
@@ -293,10 +351,12 @@ function ListaTextual({
   estacoes,
   carregando,
   aoSelecionar,
+  comparacao,
 }: {
   estacoes: readonly Estacao[];
   carregando: boolean;
   aoSelecionar: (estacao: Estacao) => void;
+  comparacao: import('./ListaEstacoes').ComparacaoLista;
 }) {
   if (carregando) {
     return (
@@ -329,7 +389,11 @@ function ListaTextual({
           entidade, a UGRHI ou o tipo para ver o conjunto completo.
         </Alerta>
       ) : null}
-      <ListaEstacoes estacoes={visiveis} aoSelecionar={aoSelecionar} />
+      <ListaEstacoes
+        estacoes={visiveis}
+        aoSelecionar={aoSelecionar}
+        comparacao={comparacao}
+      />
     </div>
   );
 }

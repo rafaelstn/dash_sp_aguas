@@ -12,6 +12,7 @@ import type { PeriodoDias } from './tipos-leituras';
 import { PERIODOS } from './tipos-leituras';
 import { useLeiturasEstacao } from './useLeiturasEstacao';
 import { GraficoChuva } from './GraficoChuva';
+import { BotaoComparar } from './BotaoComparar';
 import {
   calcularEstatisticas,
   fmtDataLonga,
@@ -19,10 +20,23 @@ import {
   temLeituraManual,
 } from './estatisticas-leituras';
 
+/**
+ * Controles de comparação injetados no painel. Opcionais: quando ausentes, o
+ * painel não mostra o botão de comparação (mantém o componente reutilizável fora
+ * do contexto do Monitor).
+ */
+export interface ControlesComparacao {
+  selecionada: boolean;
+  podeAdicionar: boolean;
+  aoAlternar: (estacao: Estacao) => void;
+}
+
 interface PainelDetalheEstacaoProps {
   /** Estação selecionada. null = painel fechado. */
   estacao: Estacao | null;
   aoFechar: () => void;
+  /** Controles da cesta de comparação. Omitido = sem botão de comparação. */
+  comparacao?: ControlesComparacao;
 }
 
 /**
@@ -38,6 +52,7 @@ interface PainelDetalheEstacaoProps {
 export function PainelDetalheEstacao({
   estacao,
   aoFechar,
+  comparacao,
 }: PainelDetalheEstacaoProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [periodo, setPeriodo] = useState<PeriodoDias>(30);
@@ -112,6 +127,7 @@ export function PainelDetalheEstacao({
           estacao={estacao}
           tituloId={tituloId}
           aoFechar={aoFechar}
+          comparacao={comparacao}
         />
 
         <SeletorPeriodo periodo={periodo} aoMudar={setPeriodo} />
@@ -144,10 +160,12 @@ function CabecalhoPainel({
   estacao,
   tituloId,
   aoFechar,
+  comparacao,
 }: {
   estacao: Estacao;
   tituloId: string;
   aoFechar: () => void;
+  comparacao?: ControlesComparacao;
 }) {
   const meta: string[] = [];
   if (estacao.prefixo) meta.push(`Prefixo ${estacao.prefixo}`);
@@ -174,6 +192,16 @@ function CabecalhoPainel({
             Sem posto do catálogo vinculado
           </p>
         )}
+        {comparacao ? (
+          <div className="mt-2.5">
+            <BotaoComparar
+              estacao={estacao}
+              selecionada={comparacao.selecionada}
+              podeAdicionar={comparacao.podeAdicionar}
+              aoAlternar={comparacao.aoAlternar}
+            />
+          </div>
+        ) : null}
       </div>
       <button
         type="button"

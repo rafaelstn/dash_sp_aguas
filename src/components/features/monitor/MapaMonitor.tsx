@@ -34,6 +34,16 @@ const WMS_DAEE = 'https://geodados.daee.sp.gov.br/geoserver/geonode/wms';
 const CENTRO_SP: [number, number] = [-22.5, -48.6];
 const ZOOM_SP = 7;
 
+/** Controles da cesta de comparação usados pelo popup do mapa. */
+export interface ComparacaoMapa {
+  /** A estação já está na cesta? Consultada ao abrir cada popup. */
+  estaSelecionada: (id: string) => boolean;
+  /** Ainda cabe estação na cesta. */
+  podeAdicionar: boolean;
+  /** Alterna a estação na cesta (botão do popup). */
+  aoAlternar: (estacao: Estacao) => void;
+}
+
 interface MapaMonitorProps {
   estacoes: readonly Estacao[];
   /** Abre o painel de detalhe da estação (botão "Ver leituras" do popup). */
@@ -45,6 +55,8 @@ interface MapaMonitorProps {
   entidadesAtivas: readonly string[];
   /** Liga/desliga uma entidade no filtro (atalho pela legenda). */
   aoAlternarEntidade: (entidade: string) => void;
+  /** Controles da cesta de comparação (botão do popup). */
+  comparacao: ComparacaoMapa;
 }
 
 /**
@@ -62,6 +74,7 @@ export function MapaMonitor({
   aoSelecionar,
   entidadesAtivas,
   aoAlternarEntidade,
+  comparacao,
 }: MapaMonitorProps) {
   return (
     <MapContainer
@@ -121,7 +134,11 @@ export function MapaMonitor({
         </LayersControl.Overlay>
       </LayersControl>
 
-      <CamadaEstacoes estacoes={estacoes} aoSelecionar={aoSelecionar} />
+      <CamadaEstacoes
+        estacoes={estacoes}
+        aoSelecionar={aoSelecionar}
+        comparacao={comparacao}
+      />
       <Legenda
         entidadesAtivas={entidadesAtivas}
         aoAlternarEntidade={aoAlternarEntidade}
@@ -144,7 +161,7 @@ function esc(valor: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-function htmlPopup(e: Estacao): string {
+function htmlPopup(e: Estacao, selecionada: boolean, podeAdicionar: boolean): string {
   const linhas: string[] = [];
   linhas.push(
     `<strong style="font-size:13px">${esc(e.nome) || 'Sem nome'}</strong>`,
@@ -170,6 +187,29 @@ function htmlPopup(e: Estacao): string {
     `<div style="margin-top:6px"><button type="button" data-ver-leituras="${esc(
       e.id,
     )}" style="font-size:12px;font-weight:600;color:#1E40AF;background:none;border:none;padding:0;cursor:pointer;text-decoration:underline">Ver leituras</button></div>`,
+  );
+  // Botão data-comparar: alterna a estação na cesta de comparação. O rótulo e o
+  // estado dependem da seleção atual (resolvida ao abrir o popup). Quando a cesta
+  // está cheia e a estação não está nela, o botão fica desabilitado com aviso.
+  // aria-pressed leva o estado de seleção pro leitor de tela; o rótulo textual
+  // garante que a informação não dependa só de cor (WCAG 1.4.1).
+  const bloqueado = !selecionada && !podeAdicionar;
+  const rotuloComparar = selecionada
+    ? 'Remover da comparação'
+    : 'Adicionar à comparação';
+  const corComparar = selecionada ? '#166534' : '#1E40AF';
+  const estiloComparar = bloqueado
+    ? 'color:#9CA3AF;cursor:not-allowed'
+    : `color:${corComparar};cursor:pointer;text-decoration:underline`;
+  const tituloComparar = bloqueado
+    ? ' title="Cesta de comparação cheia. Remova uma estação para adicionar outra."'
+    : '';
+  linhas.push(
+    `<div style="margin-top:4px"><button type="button" data-comparar="${esc(
+      e.id,
+    )}" aria-pressed="${selecionada ? 'true' : 'false'}"${
+      bloqueado ? ' disabled' : ''
+    }${tituloComparar} style="font-size:12px;font-weight:600;background:none;border:none;padding:0;${estiloComparar}">${rotuloComparar}</button></div>`,
   );
   // Status de vínculo SEMPRE em texto (não depende de cor nem forma do ponto).
   if (ehVinculada(e)) {
@@ -201,9 +241,11 @@ function htmlPopup(e: Estacao): string {
 function CamadaEstacoes({
   estacoes,
   aoSelecionar,
+  comparacao,
 }: {
   estacoes: readonly Estacao[];
   aoSelecionar: (estacao: Estacao) => void;
+  comparacao: ComparacaoMapa;
 }) {
   const map = useMap();
   const router = useRouter();
@@ -213,6 +255,11 @@ function CamadaEstacoes({
   // (que é caro com milhares de pontos) quando só a identidade do callback muda.
   const aoSelecionarRef = useRef(aoSelecionar);
   aoSelecionarRef.current = aoSelecionar;
+  // Mesma estratégia para os controles de comparação: o popup é construído
+  // sob demanda e o handler lê SEMPRE o estado atual via ref, sem reconstruir
+  // o layerGroup quando só a cesta muda.
+  const comparacaoRef = useRef(comparacao);
+  comparacaoRef.current = comparacao;
 
   useEffect(() => {
     if (!rendererRef.current) {
@@ -245,7 +292,15 @@ function CamadaEstacoes({
       if (e.bacia) partes.push(`UGRHI ${e.bacia}`);
       partes.push(ROTULO_TIPO[e.tipo]);
       if (ehVinculada(e)) partes.push('vinculada a posto do catálogo');
-      marcador.bindPopup(() => htmlPopup(e));
+      // Popup construído sob demanda: resolve o estado de seleção no momento da
+      // abertura (a cesta pode ter mudado desde a montagem do layerGroup).
+      marcador.bindPopup(() =>
+        htmlPopup(
+          e,
+          comparacaoRef.current.estaSelecionada(e.id),
+          comparacaoRef.current.podeAdicionar,
+        ),
+      );
       marcador.bindTooltip(partes.join(', '));
       grupo.addLayer(marcador);
     }
@@ -283,6 +338,26 @@ function CamadaEstacoes({
             if (estacao) {
               map.closePopup();
               aoSelecionarRef.current(estacao);
+            }
+          },
+          { once: true },
+        );
+      }
+
+      const btnComparar = el.querySelector<HTMLButtonElement>(
+        'button[data-comparar]',
+      );
+      if (btnComparar) {
+        btnComparar.addEventListener(
+          'click',
+          () => {
+            const id = btnComparar.getAttribute('data-comparar');
+            const estacao = id ? porId.get(id) : undefined;
+            if (estacao) {
+              comparacaoRef.current.aoAlternar(estacao);
+              // Fecha o popup: a cesta no rodapé dá o feedback do novo estado e
+              // o popup voltaria com o rótulo desatualizado se ficasse aberto.
+              map.closePopup();
             }
           },
           { once: true },

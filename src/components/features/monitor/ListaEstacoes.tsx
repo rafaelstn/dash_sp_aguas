@@ -6,6 +6,7 @@ import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import type { Estacao } from './tipos';
 import { ROTULO_TIPO } from './tipos';
 import { corDoOwner, entidadeDaEstacao } from './paleta-monitor';
+import { BotaoComparar } from './BotaoComparar';
 
 /**
  * Alternativa textual ao mapa (e-MAG / WCAG: conteúdo gráfico precisa de
@@ -15,13 +16,23 @@ import { corDoOwner, entidadeDaEstacao } from './paleta-monitor';
  * Não depende de cor pra transmitir informação: a entidade aparece como texto
  * (a bolinha colorida é só apoio visual, aria-hidden) e o tipo é texto.
  */
+/** Controles de comparação passados para a lista (cesta multi-estação). */
+export interface ComparacaoLista {
+  estaSelecionada: (id: string) => boolean;
+  podeAdicionar: boolean;
+  aoAlternar: (estacao: Estacao) => void;
+}
+
 export function ListaEstacoes({
   estacoes,
   aoSelecionar,
+  comparacao,
 }: {
   estacoes: readonly Estacao[];
   /** Abre o painel de detalhe (gráfico de chuva) da estação. */
   aoSelecionar: (estacao: Estacao) => void;
+  /** Controles da cesta de comparação. Omitido = sem coluna de comparação. */
+  comparacao?: ComparacaoLista;
 }) {
   const colunas: readonly ColunaTabela<Estacao>[] = [
     {
@@ -99,6 +110,26 @@ export function ListaEstacoes({
         </button>
       ),
     },
+    // Coluna de comparação: só quando os controles da cesta foram passados.
+    ...(comparacao
+      ? [
+          {
+            chave: 'comparar',
+            cabecalho: 'Comparar',
+            alinhar: 'right',
+            interativa: true,
+            render: (e: Estacao) => (
+              <BotaoComparar
+                estacao={e}
+                selecionada={comparacao.estaSelecionada(e.id)}
+                podeAdicionar={comparacao.podeAdicionar}
+                aoAlternar={comparacao.aoAlternar}
+                tamanho="compacto"
+              />
+            ),
+          } satisfies ColunaTabela<Estacao>,
+        ]
+      : []),
   ];
 
   return (

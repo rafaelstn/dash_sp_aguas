@@ -7,6 +7,7 @@ import type {
   EstatisticasPeriodo,
   LeituraDiaria,
 } from './tipos-leituras';
+import type { DiaComparacao } from './useLeiturasMultiplas';
 
 /** Arredonda para 1 casa decimal, evitando ruído de ponto flutuante. */
 function umaCasa(n: number): number {
@@ -76,5 +77,42 @@ export function calcularEstatisticas(
     diasComChuva,
     // Se nenhum dia teve chuva, não faz sentido apontar "mais chuvoso".
     diaMaisChuvoso: maisChuvoso && maisChuvoso.mm > 0 ? maisChuvoso : null,
+  };
+}
+
+/** Estatísticas resumidas de uma estação na comparação multi-estação. */
+export interface EstatisticasComparacao {
+  totalMm: number;
+  mediaDiariaMm: number;
+  maiorDiaMm: number;
+  diasComDado: number;
+}
+
+/**
+ * Calcula as estatísticas de uma estação a partir da série diária unificada da
+ * comparação (apenas a série automática). Considera só os dias em que a estação
+ * tem valor; um dia ausente não conta como zero (evita média subestimada).
+ */
+export function estatisticasDaComparacao(
+  dias: readonly DiaComparacao[],
+  estacaoId: string,
+): EstatisticasComparacao {
+  let total = 0;
+  let diasComDado = 0;
+  let maior = 0;
+
+  for (const dia of dias) {
+    const mm = dia.porEstacao[estacaoId];
+    if (mm === undefined) continue;
+    total += mm;
+    diasComDado += 1;
+    if (mm > maior) maior = mm;
+  }
+
+  return {
+    totalMm: umaCasa(total),
+    mediaDiariaMm: diasComDado > 0 ? umaCasa(total / diasComDado) : 0,
+    maiorDiaMm: umaCasa(maior),
+    diasComDado,
   };
 }
