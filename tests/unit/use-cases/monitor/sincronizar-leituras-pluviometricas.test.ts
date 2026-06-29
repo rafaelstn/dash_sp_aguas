@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  momentoSibhParaData,
-  sincronizarLeiturasPluviometricas,
-} from '@/application/use-cases/monitor/sincronizar-leituras-pluviometricas';
+import { sincronizarLeiturasPluviometricas } from '@/application/use-cases/monitor/sincronizar-leituras-pluviometricas';
 import type {
   EstacaoSibh,
   LeituraSibh,
@@ -21,7 +18,7 @@ function medicao(over: Partial<MedicaoSibh>): MedicaoSibh {
     nome: 'Estação Teste',
     valorMm: 2.5,
     momento: '2026/01/15 13:00',
-    gapMinutos: 60,
+    gapMinutos: 10,
     ...over,
   };
 }
@@ -65,30 +62,16 @@ function fakeLeiturasRepo(): FakeLeiturasRepo {
 const DESDE = new Date('2026-01-15T00:00:00Z');
 const ATE = new Date('2026-01-16T00:00:00Z');
 
-describe('momentoSibhParaData', () => {
-  it('interpreta horário de Brasília (UTC-3) e converte para instante UTC', () => {
-    // 13:00 em Brasília (UTC-3) é 16:00 UTC.
-    const d = momentoSibhParaData('2026/01/15 13:00');
-    expect(d).not.toBeNull();
-    expect(d!.toISOString()).toBe('2026-01-15T16:00:00.000Z');
-  });
-
-  it('é determinístico (não depende do timezone do servidor)', () => {
-    const a = momentoSibhParaData('2026/06/30 00:00');
-    // 00:00 Brasília vira 03:00 UTC do mesmo dia.
-    expect(a!.toISOString()).toBe('2026-06-30T03:00:00.000Z');
-  });
-
-  it('retorna null para formato inesperado', () => {
-    expect(momentoSibhParaData('15-01-2026 13h')).toBeNull();
-    expect(momentoSibhParaData('')).toBeNull();
-  });
-});
-
 describe('use-case/sincronizarLeiturasPluviometricas', () => {
-  it('grava só o canal automatico, manual fica em 0', async () => {
+  it('agrega as medições por dia hidrológico: 1 linha/dia, total somado, só canal automatico', async () => {
+    // 3 medições do mesmo dia hidrológico (todas após 07:00) viram 1 linha
+    // diária com a soma dos mm. Com gap de 10min, gravar cru geraria 3 linhas.
     const sibh = fakeSibh({
-      P001: [medicao({ valorMm: 5, momento: '2026/01/15 10:00' })],
+      P001: [
+        medicao({ momento: '2026/01/15 10:00', valorMm: 2 }),
+        medicao({ momento: '2026/01/15 10:10', valorMm: 3 }),
+        medicao({ momento: '2026/01/15 12:00', valorMm: 1 }),
+      ],
     });
     const repo = fakeLeiturasRepo();
 
@@ -101,13 +84,41 @@ describe('use-case/sincronizarLeiturasPluviometricas', () => {
     );
 
     expect(resumo.estacoesProcessadas).toBe(1);
-    expect(resumo.medicoesRecebidas).toBe(1);
+    expect(resumo.medicoesRecebidas).toBe(3);
     expect(resumo.linhasGravadas).toBe(1);
+
+    expect(repo.lotes[0]).toHaveLength(1);
     const leitura = repo.lotes[0]![0]!;
     expect(leitura.estacaoId).toBe('estacao-1');
-    expect(leitura.automaticoMm).toBe(5);
+    expect(leitura.automaticoMm).toBe(6);
     expect(leitura.manualMm).toBe(0);
-    expect(leitura.momento.toISOString()).toBe('2026-01-15T13:00:00.000Z');
+    // momento = dia hidrológico ancorado em 00:00 UTC.
+    expect(leitura.momento.toISOString()).toBe('2026-01-15T00:00:00.000Z');
+  });
+
+  it('respeita o corte do dia hidrológico (06:59 cai no dia anterior, 07:00 inicia o dia)', async () => {
+    const sibh = fakeSibh({
+      P001: [
+        medicao({ momento: '2026/01/15 06:59', valorMm: 4 }), // dia 2026-01-14
+        medicao({ momento: '2026/01/15 07:00', valorMm: 5 }), // dia 2026-01-15
+      ],
+    });
+    const repo = fakeLeiturasRepo();
+
+    const resumo = await sincronizarLeiturasPluviometricas(
+      sibh,
+      repo,
+      [{ id: 'estacao-1', prefixo: 'P001' }],
+      DESDE,
+      ATE,
+    );
+
+    expect(resumo.linhasGravadas).toBe(2);
+    const porData = Object.fromEntries(
+      repo.lotes[0]!.map((l) => [l.momento.toISOString(), l.automaticoMm]),
+    );
+    expect(porData['2026-01-14T00:00:00.000Z']).toBe(4);
+    expect(porData['2026-01-15T00:00:00.000Z']).toBe(5);
   });
 
   it('pula estação sem prefixo (não consultável no SIBH)', async () => {
@@ -127,7 +138,7 @@ describe('use-case/sincronizarLeiturasPluviometricas', () => {
     expect(repo.lotes).toHaveLength(0);
   });
 
-  it('descarta medição com carimbo malformado', async () => {
+  it('descarta medição com carimbo malformado antes de agregar', async () => {
     const sibh = fakeSibh({
       P001: [
         medicao({ momento: '2026/01/15 10:00', valorMm: 3 }),
@@ -147,6 +158,7 @@ describe('use-case/sincronizarLeiturasPluviometricas', () => {
     expect(resumo.medicoesRecebidas).toBe(2);
     expect(resumo.linhasGravadas).toBe(1);
     expect(repo.lotes[0]).toHaveLength(1);
+    expect(repo.lotes[0]![0]!.automaticoMm).toBe(3);
   });
 
   it('tolera falha por estação sem derrubar o lote', async () => {
@@ -179,7 +191,7 @@ describe('use-case/sincronizarLeiturasPluviometricas', () => {
     expect(resumo.erros[0]!.prefixo).toBe('RUIM');
   });
 
-  it('upsert idempotente: reprocessar a mesma janela não duplica (chave estacao+momento)', async () => {
+  it('upsert idempotente: reprocessar a mesma janela reenvia a mesma chave (estacao+momento)', async () => {
     // O fake conta o que foi enviado; a idempotência real está no ON CONFLICT
     // do adapter. Aqui validamos que o use-case reenvia a mesma chave estável
     // (estacaoId + momento), pré-requisito para o upsert ser idempotente.

@@ -2,19 +2,26 @@
  * Use-case: sincronizar leituras (chuva automática) do SIBH para o banco.
  *
  * Para um período [desde, ate] e uma lista de estações já persistidas, busca as
- * medições horárias no SIBH e faz upsert idempotente em `leituras_pluviometricas`.
- * Só preenche o canal automático (`automaticoMm` = valor do logger); o canal
- * manual (`manualMm`) fica em 0, pois a leitura manual virá de operador numa
- * fase futura.
+ * medições do SIBH e grava UMA linha por DIA HIDROLÓGICO em
+ * `leituras_pluviometricas` (upsert idempotente por (estacao_id, momento)).
+ *
+ * POR QUE AGREGAR: o SIBH entrega medições com gap de 10 minutos (~144 por dia
+ * por estação). Gravar cru explodiria a tabela (~194M linhas/ano nas 3690
+ * estações) sem ganho de informação para o Monitor, que compara CHUVA DIÁRIA
+ * (auto vs manual). Agregamos por dia hidrológico (07:00→06:59, convenção
+ * DAEE/ANA) reusando `agregarDiario`, gravando o total do dia em `automaticoMm`.
+ * O canal manual (`manualMm`) fica em 0: vem de operador numa fase futura.
  *
  * Camada fina e testável: portas por injeção, sem banco nem HTTP. Degrada por
  * estação (falha de uma não derruba o lote). O upsert por (estacao_id, momento)
- * torna o reprocessamento da mesma janela seguro (idempotente).
+ * torna o reprocessamento da mesma janela seguro (idempotente): uma janela que
+ * traga só parte de um dia grava o parcial e a sync seguinte o corrige.
  */
 
 import type { SibhGateway } from '@/application/ports/sibh-gateway';
 import type { LeiturasPluviometricasRepository } from '@/application/ports/leituras-pluviometricas-repository';
 import type { UpsertLeituraPluviometrica } from '@/domain/monitor/leitura-pluviometrica';
+import { agregarDiario } from '@/domain/monitor/agregacao-hidrologica';
 
 /**
  * Estação alvo da sincronização de leituras. `prefixo` é a chave de busca no
@@ -30,48 +37,28 @@ export interface ResumoSyncLeituras {
   estacoesProcessadas: number;
   /** Estações puladas por não terem prefixo (não há como consultar o SIBH). */
   estacoesSemPrefixo: number;
-  /** Total de medições recebidas do SIBH, somando todas as estações. */
+  /** Total de medições cruas recebidas do SIBH, somando todas as estações. */
   medicoesRecebidas: number;
-  /** Linhas inseridas ou atualizadas no banco (resultado dos upserts). */
+  /** Linhas inseridas ou atualizadas no banco (1 por dia hidrológico). */
   linhasGravadas: number;
   /** Estações que falharam individualmente (com motivo para diagnóstico). */
   erros: Array<{ prefixo: string; motivo: string }>;
 }
 
 /**
- * Converte o momento cru do SIBH ('YYYY/MM/DD HH:mm') em `Date` (instante UTC).
- *
- * DECISAO DE TIMEZONE: o SIBH envia horário LOCAL de Brasília sem indicação de
- * fuso. Interpretamos esse horário como UTC-3 (horário padrão de Brasília, sem
- * horário de verão, abolido no Brasil desde 2019) e produzimos o instante UTC
- * correspondente. Isso garante que o mesmo carimbo do SIBH sempre vire o mesmo
- * instante, independentemente do timezone do servidor (evita o bug de
- * `new Date('2026/01/15 13:00')`, que depende do TZ da máquina). Retorna `null`
- * quando o formato é inesperado, para a medição ser descartada em vez de virar
- * um Date inválido.
+ * Converte um dia hidrológico ('YYYY-MM-DD') no instante que o ancora na tabela:
+ * 00:00 UTC desse dia. O dia hidrológico é uma DATA, não um instante; ancorá-lo
+ * em 00:00Z dá uma chave (estacao_id, momento) estável e independente do
+ * timezone do servidor.
  */
-export function momentoSibhParaData(momento: string): Date | null {
-  const match = momento
-    .trim()
-    .match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})$/);
-  if (!match) return null;
-
-  const [, ano, mes, dia, hora, minuto] = match;
-  // Date.UTC monta o instante tratando os componentes como UTC; somamos 3h
-  // para compensar o offset de Brasília (UTC-3): 13:00 local vira 16:00 UTC.
-  const utcMs = Date.UTC(
-    Number(ano),
-    Number(mes) - 1,
-    Number(dia),
-    Number(hora) + 3,
-    Number(minuto),
-  );
-  const data = new Date(utcMs);
-  return Number.isNaN(data.getTime()) ? null : data;
+function diaHidrologicoParaMomento(data: string): Date {
+  const [ano, mes, dia] = data.split('-').map(Number);
+  return new Date(Date.UTC(ano ?? 0, (mes ?? 1) - 1, dia ?? 1));
 }
 
 /**
- * Sincroniza as leituras pluviométricas automáticas das estações no período.
+ * Sincroniza as leituras pluviométricas automáticas das estações no período,
+ * agregadas por dia hidrológico.
  *
  * @param sibh        Gateway do SIBH (fonte das medições).
  * @param leiturasRepo Repositório de leituras (upsert em lote idempotente).
@@ -105,18 +92,16 @@ export async function sincronizarLeiturasPluviometricas(
       const medicoes = await sibh.medicoesPorPrefixo(prefixo, desde, ate);
       resumo.medicoesRecebidas += medicoes.length;
 
-      const leituras: UpsertLeituraPluviometrica[] = [];
-      for (const medicao of medicoes) {
-        const momento = momentoSibhParaData(medicao.momento);
-        if (momento === null) continue; // descarta carimbo malformado
-        leituras.push({
-          estacaoId: estacao.id,
-          momento,
-          // Só o canal automático: a leitura manual vem de operador depois.
-          automaticoMm: medicao.valorMm,
-          manualMm: 0,
-        });
-      }
+      // Agrega por dia hidrológico (descarta carimbos malformados e soma os mm
+      // do dia). Cada dia vira UMA linha com o total no canal automático.
+      const agregadas = agregarDiario(medicoes);
+      const leituras: UpsertLeituraPluviometrica[] = agregadas.map((dia) => ({
+        estacaoId: estacao.id,
+        momento: diaHidrologicoParaMomento(dia.data),
+        automaticoMm: dia.totalMm,
+        // Só o canal automático: a leitura manual vem de operador depois.
+        manualMm: 0,
+      }));
 
       const gravadas = await leiturasRepo.upsertLote(leituras);
       resumo.linhasGravadas += gravadas;
