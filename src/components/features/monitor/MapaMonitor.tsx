@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check } from 'lucide-react';
 import L from 'leaflet';
 import {
   MapContainer,
@@ -37,6 +38,13 @@ interface MapaMonitorProps {
   estacoes: readonly Estacao[];
   /** Abre o painel de detalhe da estação (botão "Ver leituras" do popup). */
   aoSelecionar: (estacao: Estacao) => void;
+  /**
+   * Entidades atualmente filtradas (mesmo estado do multiselect de filtros).
+   * Vazio = todas. A legenda do mapa reflete e edita este conjunto.
+   */
+  entidadesAtivas: readonly string[];
+  /** Liga/desliga uma entidade no filtro (atalho pela legenda). */
+  aoAlternarEntidade: (entidade: string) => void;
 }
 
 /**
@@ -49,7 +57,12 @@ interface MapaMonitorProps {
  * que aguenta milhares de vetores. Popup é criado sob demanda (bindPopup com
  * HTML escapado), não montado de antemão.
  */
-export function MapaMonitor({ estacoes, aoSelecionar }: MapaMonitorProps) {
+export function MapaMonitor({
+  estacoes,
+  aoSelecionar,
+  entidadesAtivas,
+  aoAlternarEntidade,
+}: MapaMonitorProps) {
   return (
     <MapContainer
       center={CENTRO_SP}
@@ -57,7 +70,7 @@ export function MapaMonitor({ estacoes, aoSelecionar }: MapaMonitorProps) {
       preferCanvas
       scrollWheelZoom
       // O contêiner pai controla a altura; o mapa preenche 100%.
-      className="h-full w-full"
+      className="relative h-full w-full"
       // O Leaflet expõe a área do mapa como região; rótulo p/ leitor de tela.
       // A lista textual (alternativa acessível) vive fora deste componente.
       aria-label="Mapa das estações pluviométricas de São Paulo"
@@ -109,7 +122,10 @@ export function MapaMonitor({ estacoes, aoSelecionar }: MapaMonitorProps) {
       </LayersControl>
 
       <CamadaEstacoes estacoes={estacoes} aoSelecionar={aoSelecionar} />
-      <Legenda />
+      <Legenda
+        entidadesAtivas={entidadesAtivas}
+        aoAlternarEntidade={aoAlternarEntidade}
+      />
     </MapContainer>
   );
 }
@@ -286,58 +302,115 @@ function CamadaEstacoes({
 }
 
 /**
- * Legenda fixa no canto inferior esquerdo. Comunica:
+ * Legenda interativa no canto inferior esquerdo. Cada entidade é um BOTÃO que
+ * funciona como atalho do filtro: clicar liga/desliga a entidade no mesmo estado
+ * (`filtros.entidades`) usado pelo multiselect dos filtros. Legenda e multiselect
+ * ficam sempre sincronizados; lista vazia significa "todas".
+ *
+ * Comunica:
  *  - COR por entidade responsável (uma linha por órgão, "Outros" por último);
+ *  - ESTADO de cada entidade no filtro: ativa (cor cheia + marca de seleção) ou
+ *    desligada (opacidade reduzida, sem marca). aria-pressed leva o estado pro
+ *    leitor de tela; a cor nunca é a única pista (há o nome em texto e a marca).
  *  - FORMA do vínculo (ponto maior com anel branco grosso = vinculada), com
  *    rótulo textual próprio (a forma nunca é a única pista; WCAG 1.4.1).
  *
- * Recolhível no mobile pra não cobrir o mapa em telas pequenas.
+ * Renderizada como overlay React DENTRO do MapContainer (relative). Os eventos
+ * de ponteiro/scroll são contidos via L.DomEvent pra não arrastar/zoom o mapa.
  */
-function Legenda() {
+function Legenda({
+  entidadesAtivas,
+  aoAlternarEntidade,
+}: {
+  entidadesAtivas: readonly string[];
+  aoAlternarEntidade: (entidade: string) => void;
+}) {
   const map = useMap();
-  const entidades = useMemo(() => LEGENDA_ENTIDADES, []);
+  const refContainer = useRef<HTMLDivElement>(null);
 
+  // Vazio = todas ativas. Quando há seleção, só as listadas estão ativas.
+  const todasAtivas = entidadesAtivas.length === 0;
+  function entidadeAtiva(nome: string): boolean {
+    return todasAtivas || entidadesAtivas.includes(nome);
+  }
+
+  // Impede que clique/arrasto/scroll na legenda mexa no mapa (equivalente ao
+  // antigo L.DomEvent.disableClickPropagation do control imperativo).
   useEffect(() => {
-    const control = new L.Control({ position: 'bottomleft' });
-    control.onAdd = () => {
-      const div = L.DomUtil.create('div');
-      div.setAttribute('role', 'group');
-      div.setAttribute('aria-label', 'Legenda do mapa: entidade responsável e vínculo a posto');
-      div.style.cssText =
-        'background:#fff;padding:8px 10px;border-radius:8px;border:1px solid #E5E7EB;box-shadow:0 1px 3px rgba(0,0,0,.12);font-size:12px;line-height:1.4;max-width:200px';
+    const el = refContainer.current;
+    if (!el) return;
+    L.DomEvent.disableClickPropagation(el);
+    L.DomEvent.disableScrollPropagation(el);
+  }, [map]);
 
-      const linhasEntidade = entidades
-        .map((i) => {
-          const ponto = `display:inline-block;width:12px;height:12px;border-radius:9999px;background:${i.cor};border:1px solid #FFFFFF;box-shadow:0 0 0 1px #D1D5DB;margin-right:6px;vertical-align:middle;flex-shrink:0`;
-          return `<div style="display:flex;align-items:center;margin:2px 0"><span aria-hidden="true" style="${ponto}"></span><span style="color:#111827">${i.rotulo}</span></div>`;
-        })
-        .join('');
+  return (
+    <div
+      ref={refContainer}
+      role="group"
+      aria-label="Legenda e atalho de filtro por entidade responsável"
+      // z mais alto que os tiles/overlays, abaixo dos popups do Leaflet.
+      className="absolute bottom-4 left-3 z-[500] max-w-[220px] rounded-lg border border-app-border-subtle bg-app-surface/95 p-2.5 text-xs leading-snug shadow-gov-card backdrop-blur"
+    >
+      <p className="mb-1.5 font-semibold text-app-fg">Entidade responsável</p>
+      <p className="mb-2 text-[11px] text-app-fg-muted">
+        Toque para filtrar no mapa
+      </p>
 
-      // Forma do vínculo: ponto maior, anel branco grosso, contornado em cinza
-      // pra leitura sobre fundo claro. Texto explica a pista de forma.
-      const pontoVinculo =
-        'display:inline-block;width:15px;height:15px;border-radius:9999px;background:#6B7280;border:3px solid #FFFFFF;box-shadow:0 0 0 1px #9CA3AF;margin-right:6px;vertical-align:middle;flex-shrink:0';
+      <ul className="flex flex-col gap-0.5">
+        {LEGENDA_ENTIDADES.map((i) => {
+          const ativa = entidadeAtiva(i.nome);
+          return (
+            <li key={i.nome}>
+              <button
+                type="button"
+                aria-pressed={ativa}
+                onClick={() => aoAlternarEntidade(i.nome)}
+                title={
+                  ativa
+                    ? `${i.rotulo}: ativa. Toque para ocultar do mapa.`
+                    : `${i.rotulo}: oculta. Toque para mostrar no mapa.`
+                }
+                className={[
+                  'flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors',
+                  'hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul',
+                  ativa ? '' : 'opacity-45',
+                ].join(' ')}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 shrink-0 rounded-full ring-1 ring-app-border-subtle"
+                  style={{ backgroundColor: i.cor }}
+                />
+                <span className="flex-1 truncate text-app-fg">{i.rotulo}</span>
+                {ativa ? (
+                  <Check
+                    className="h-3.5 w-3.5 shrink-0 text-gov-azul"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  // Traço quando desligada: pista extra além da opacidade/cor,
+                  // garantindo que o estado não dependa só de cor (WCAG 1.4.1).
+                  <span
+                    aria-hidden="true"
+                    className="h-px w-3.5 shrink-0 bg-app-fg-muted"
+                  />
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
-      // innerHTML aqui é seguro: 100% literal de código (rótulos estáticos da
-      // paleta), sem dado de usuário/banco. Conteúdo não confiável só aparece
-      // no popup, com esc() antes da interpolação.
-      div.innerHTML =
-        `<details open><summary style="font-weight:600;color:#111827;cursor:pointer;list-style:none;margin-bottom:4px">Entidade responsável</summary>` +
-        linhasEntidade +
-        `<div style="height:1px;background:#E5E7EB;margin:6px 0"></div>` +
-        `<div style="font-weight:600;color:#111827;margin-bottom:2px">Vínculo</div>` +
-        `<div style="display:flex;align-items:center;margin:2px 0"><span aria-hidden="true" style="${pontoVinculo}"></span><span style="color:#111827">Vinculada a posto (ponto maior)</span></div>` +
-        `</details>`;
+      <div className="my-2 h-px bg-app-border-subtle" role="presentation" />
 
-      // Não capturar arrasto/scroll do mapa ao interagir com a legenda.
-      L.DomEvent.disableClickPropagation(div);
-      return div;
-    };
-    control.addTo(map);
-    return () => {
-      control.remove();
-    };
-  }, [map, entidades]);
-
-  return null;
+      <p className="mb-1 font-semibold text-app-fg">Vínculo</p>
+      <div className="flex items-center gap-2 px-1.5">
+        <span
+          aria-hidden="true"
+          className="h-[15px] w-[15px] shrink-0 rounded-full border-[3px] border-white bg-app-fg-muted ring-1 ring-app-border"
+        />
+        <span className="text-app-fg">Vinculada a posto (ponto maior)</span>
+      </div>
+    </div>
+  );
 }

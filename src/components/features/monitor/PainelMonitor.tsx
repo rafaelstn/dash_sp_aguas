@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Map as MapIcon, List, SlidersHorizontal, CloudRain } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
@@ -114,6 +114,27 @@ export function PainelMonitor() {
       presentes.has(nome),
     );
   }, [todas]);
+
+  // Atalho da legenda do mapa: liga/desliga uma entidade no MESMO estado do
+  // multiselect de filtros (filtros.entidades). Mantém a regra "vazio = todas":
+  // marcar a última faltante volta pra lista vazia, igual ao SelecaoEntidades.
+  const alternarEntidade = useCallback(
+    (entidade: string) => {
+      setFiltros((prev) => {
+        const atuais = prev.entidades;
+        if (atuais.includes(entidade)) {
+          return { ...prev, entidades: atuais.filter((e) => e !== entidade) };
+        }
+        const proximas = [...atuais, entidade];
+        return {
+          ...prev,
+          entidades:
+            proximas.length === entidadesDisponiveis.length ? [] : proximas,
+        };
+      });
+    },
+    [entidadesDisponiveis.length],
+  );
 
   const filtradas = useMemo(() => {
     const termo = filtros.busca.trim().toLocaleLowerCase('pt-BR');
@@ -240,7 +261,12 @@ export function PainelMonitor() {
               descricao="Ajuste a busca, a entidade, a UGRHI ou o tipo para ver estações no mapa."
             />
           ) : (
-            <MapaMonitor estacoes={filtradas} aoSelecionar={setEstacaoDetalhe} />
+            <MapaMonitor
+              estacoes={filtradas}
+              aoSelecionar={setEstacaoDetalhe}
+              entidadesAtivas={filtros.entidades}
+              aoAlternarEntidade={alternarEntidade}
+            />
           )}
         </div>
       ) : (

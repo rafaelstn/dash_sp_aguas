@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import type { TipoEstacao } from './tipos';
 import { LEGENDA_ENTIDADES } from './paleta-monitor';
@@ -170,23 +178,71 @@ function SelecaoEntidades({
   aoMudar: (entidades: string[]) => void;
 }) {
   const [aberto, setAberto] = useState(false);
-  const refContainer = useRef<HTMLDivElement>(null);
+  const refTrigger = useRef<HTMLButtonElement>(null);
+  const refPainel = useRef<HTMLDivElement>(null);
   const idLabel = `${idBase}-entidade-label`;
   const idListbox = `${idBase}-entidade-listbox`;
 
-  // Fecha ao clicar fora.
+  // O painel é renderizado via portal no <body> (não dentro do fluxo do mapa),
+  // então posicionamos manualmente sobre o trigger. Assim o z-index alto vale
+  // de verdade e nenhum overflow/stacking de ancestral o recorta nem o joga
+  // atrás dos panes do Leaflet.
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(
+    null,
+  );
+
+  const recalcularPosicao = useCallback(() => {
+    const t = refTrigger.current;
+    if (!t) return;
+    const r = t.getBoundingClientRect();
+    // position: fixed -> coordenadas relativas à viewport (sem somar scroll).
+    setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+  }, []);
+
+  // Mede a posição assim que abre (antes da pintura, pra não "pular").
+  useLayoutEffect(() => {
+    if (aberto) recalcularPosicao();
+  }, [aberto, recalcularPosicao]);
+
+  // Mantém o painel colado ao trigger durante scroll/resize enquanto aberto.
+  useEffect(() => {
+    if (!aberto) return;
+    function aoAtualizar() {
+      recalcularPosicao();
+    }
+    window.addEventListener('scroll', aoAtualizar, true);
+    window.addEventListener('resize', aoAtualizar);
+    return () => {
+      window.removeEventListener('scroll', aoAtualizar, true);
+      window.removeEventListener('resize', aoAtualizar);
+    };
+  }, [aberto, recalcularPosicao]);
+
+  // Fecha ao clicar fora (considera trigger E painel portado) e ao apertar Esc.
   useEffect(() => {
     if (!aberto) return;
     function aoClicarFora(ev: MouseEvent) {
+      const alvo = ev.target as Node;
       if (
-        refContainer.current &&
-        !refContainer.current.contains(ev.target as Node)
+        refTrigger.current?.contains(alvo) ||
+        refPainel.current?.contains(alvo)
       ) {
+        return;
+      }
+      setAberto(false);
+    }
+    function aoTeclar(ev: KeyboardEvent) {
+      if (ev.key === 'Escape') {
         setAberto(false);
+        refTrigger.current?.focus();
       }
     }
     document.addEventListener('mousedown', aoClicarFora);
-    return () => document.removeEventListener('mousedown', aoClicarFora);
+    document.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('mousedown', aoClicarFora);
+      document.removeEventListener('keydown', aoTeclar);
+    };
   }, [aberto]);
 
   const todasMarcadas = selecionadas.length === 0;
@@ -212,17 +268,15 @@ function SelecaoEntidades({
       : `${selecionadas.length} entidades`;
 
   return (
-    <div className="flex flex-col gap-1" ref={refContainer}>
+    <div className="flex flex-col gap-1">
       <span id={idLabel} className="text-sm font-medium text-app-fg">
         Entidade responsável
       </span>
       <div className="relative">
         <button
+          ref={refTrigger}
           type="button"
           onClick={() => setAberto((v) => !v)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setAberto(false);
-          }}
           aria-haspopup="listbox"
           aria-expanded={aberto}
           aria-controls={idListbox}
@@ -238,64 +292,83 @@ function SelecaoEntidades({
           />
         </button>
 
-        {aberto ? (
-          <div
-            id={idListbox}
-            role="listbox"
-            aria-labelledby={idLabel}
-            aria-multiselectable="true"
-            className="absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-y-auto rounded border border-app-border-input bg-app-surface py-1 shadow-lg"
-          >
-            <button
-              type="button"
-              role="option"
-              aria-selected={todasMarcadas}
-              onClick={marcarTodas}
-              className="flex w-full items-center justify-between px-3 py-2 text-sm text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
-            >
-              <span className="font-medium">Todas as entidades</span>
-              {todasMarcadas ? (
-                <Check className="h-4 w-4 text-gov-azul" aria-hidden="true" />
-              ) : null}
-            </button>
-
-            <div className="my-1 h-px bg-app-border-subtle" role="presentation" />
-
-            {disponiveis.map((entidade) => {
-              const marcada = selecionadas.includes(entidade);
-              const cor = COR_ENTIDADE.get(entidade) ?? '#94a3b8';
-              return (
+        {aberto && pos
+          ? createPortal(
+              <div
+                ref={refPainel}
+                id={idListbox}
+                role="listbox"
+                aria-labelledby={idLabel}
+                aria-multiselectable="true"
+                // z-[1100] fica acima dos panes e controles do Leaflet (que
+                // chegam a ~1000). position: fixed escapa de qualquer overflow
+                // ou stacking context do mapa.
+                style={{
+                  position: 'fixed',
+                  top: pos.top,
+                  left: pos.left,
+                  width: pos.width,
+                }}
+                className="z-[1100] max-h-72 overflow-y-auto rounded border border-app-border-input bg-app-surface py-1 shadow-lg"
+              >
                 <button
-                  key={entidade}
                   type="button"
                   role="option"
-                  aria-selected={marcada}
-                  onClick={() => alternar(entidade)}
-                  className="flex w-full items-center gap-3 px-3 py-2 text-sm text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
+                  aria-selected={todasMarcadas}
+                  onClick={marcarTodas}
+                  className="flex w-full items-center justify-between px-3 py-2 text-sm text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
                 >
-                  <span
-                    aria-hidden="true"
-                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                      marcada
-                        ? 'border-gov-azul bg-gov-azul'
-                        : 'border-app-border-input'
-                    }`}
-                  >
-                    {marcada ? (
-                      <Check className="h-3 w-3 text-white" aria-hidden="true" />
-                    ) : null}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="h-3 w-3 shrink-0 rounded-full ring-1 ring-app-border-subtle"
-                    style={{ backgroundColor: cor }}
-                  />
-                  <span className="truncate">{entidade}</span>
+                  <span className="font-medium">Todas as entidades</span>
+                  {todasMarcadas ? (
+                    <Check className="h-4 w-4 text-gov-azul" aria-hidden="true" />
+                  ) : null}
                 </button>
-              );
-            })}
-          </div>
-        ) : null}
+
+                <div
+                  className="my-1 h-px bg-app-border-subtle"
+                  role="presentation"
+                />
+
+                {disponiveis.map((entidade) => {
+                  const marcada = selecionadas.includes(entidade);
+                  const cor = COR_ENTIDADE.get(entidade) ?? '#94a3b8';
+                  return (
+                    <button
+                      key={entidade}
+                      type="button"
+                      role="option"
+                      aria-selected={marcada}
+                      onClick={() => alternar(entidade)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-sm text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          marcada
+                            ? 'border-gov-azul bg-gov-azul'
+                            : 'border-app-border-input'
+                        }`}
+                      >
+                        {marcada ? (
+                          <Check
+                            className="h-3 w-3 text-white"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="h-3 w-3 shrink-0 rounded-full ring-1 ring-app-border-subtle"
+                        style={{ backgroundColor: cor }}
+                      />
+                      <span className="truncate">{entidade}</span>
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
     </div>
   );

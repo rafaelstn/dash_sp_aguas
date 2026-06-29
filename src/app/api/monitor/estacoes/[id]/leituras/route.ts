@@ -4,6 +4,8 @@ import {
   estacoesPluviometricasRepository,
   leiturasPluviometricasRepository,
 } from '@/infrastructure/repositories';
+import { sibhClient } from '@/infrastructure/sibh/sibh-client';
+import { obterLeiturasComFallback } from '@/application/use-cases/monitor/obter-leituras-com-fallback';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import {
@@ -153,11 +155,41 @@ export async function GET(
       );
     }
 
-    const leituras = await leiturasPluviometricasRepository.listarPorEstacaoEPeriodo(
-      estacaoId,
-      desde,
-      ate,
-    );
+    // Lê do banco e, se vazio com estação consultável, busca do SIBH sob
+    // demanda, persiste e relê (fallback lazy). Mantém a arquitetura de
+    // persistência e faz o painel funcionar como o original (que lê ao vivo). O
+    // use-case é tolerante: SIBH indisponível não estoura — devolve o que houver
+    // no banco e sinaliza no resultado.
+    const { leituras, origemFallbackSibh, fallbackFalhou } =
+      await obterLeiturasComFallback(
+        sibhClient,
+        leiturasPluviometricasRepository,
+        { id: estacaoId, prefixo: estacao.prefixo },
+        desde,
+        ate,
+        (evento) =>
+          logger.info(
+            'monitor.leituras.fallback_sibh',
+            {
+              usuarioId: usuario.id,
+              estacaoId,
+              medicoesRecebidas: evento.medicoesRecebidas,
+              linhasGravadas: evento.linhasGravadas,
+              erros: evento.erros,
+              desde: desde.toISOString(),
+              ate: ate.toISOString(),
+            },
+            'Fallback de leituras ao SIBH executado sob demanda',
+          ),
+      );
+
+    if (fallbackFalhou) {
+      logger.warn(
+        'monitor.leituras.fallback_sibh_falhou',
+        { usuarioId: usuario.id, estacaoId },
+        'Fallback de leituras ao SIBH falhou; retornando o que houver no banco',
+      );
+    }
 
     const itens = leituras.map((l) => ({
       momento: l.momento.toISOString(),
@@ -171,6 +203,7 @@ export async function GET(
         usuarioId: usuario.id,
         estacaoId,
         total: itens.length,
+        origemFallbackSibh,
         desde: desde.toISOString(),
         ate: ate.toISOString(),
       },
