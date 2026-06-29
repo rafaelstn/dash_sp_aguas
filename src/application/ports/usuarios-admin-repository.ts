@@ -34,6 +34,9 @@ export interface UsuariosAdminRepository {
   /** Lista todos os usuários (Auth + papel), ordenados por email. */
   listar(): Promise<UsuarioGerenciado[]>;
 
+  /** True se existe conta no Auth com este id. Usado para responder 404. */
+  existe(usuarioId: string): Promise<boolean>;
+
   /**
    * Cria o usuário no Auth (email já confirmado) e grava o papel.
    * Retorna o id do usuário criado.

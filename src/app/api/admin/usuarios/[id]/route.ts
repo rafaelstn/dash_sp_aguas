@@ -14,6 +14,7 @@ import {
 import { type Papel, ehPapelValido } from '@/domain/auth/papel';
 import { podeGerenciar, type ResultadoAutorizacao } from '@/domain/auth/gestao-acesso';
 import { validarSenha } from '@/domain/auth/politica-senha';
+import { UsuarioNaoEncontrado } from '@/domain/errors';
 import { logger } from '@/infrastructure/logging/logger';
 
 export const runtime = 'nodejs';
@@ -124,6 +125,9 @@ export async function PATCH(
   }
 
   try {
+    if (!(await usuariosAdminRepository.existe(alvoId))) {
+      throw new UsuarioNaoEncontrado(alvoId);
+    }
     const papelAtor = await papeisRepository.obterPapel(usuario.id);
     const papelAtual = await papeisRepository.obterPapel(alvoId);
     // papelDesejado = novoPapel se foi pedido, senão mantém o atual (reset de
@@ -214,6 +218,9 @@ export async function DELETE(
   const alvoId = idParsed.data;
 
   try {
+    if (!(await usuariosAdminRepository.existe(alvoId))) {
+      throw new UsuarioNaoEncontrado(alvoId);
+    }
     const papelAtor = await papeisRepository.obterPapel(usuario.id);
     const papelAtual = await papeisRepository.obterPapel(alvoId);
 

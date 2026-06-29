@@ -17,6 +17,7 @@ const definirPapelMock = vi.fn();
 const resetarSenhaMock = vi.fn();
 const removerMock = vi.fn();
 const contarSuperAdminsMock = vi.fn();
+const existeMock = vi.fn();
 
 vi.mock('@/infrastructure/auth/current-user', () => ({
   obterUsuarioAtual: () => obterUsuarioAtualMock(),
@@ -33,6 +34,7 @@ vi.mock('@/infrastructure/repositories', () => ({
     resetarSenha: (id: string, s: string) => resetarSenhaMock(id, s),
     remover: (id: string) => removerMock(id),
     contarSuperAdmins: () => contarSuperAdminsMock(),
+    existe: (id: string) => existeMock(id),
   },
 }));
 
@@ -45,6 +47,7 @@ vi.mock('@/infrastructure/security/rate-limit', () => ({
 
 import { POST } from '@/app/api/admin/usuarios/route';
 import { PATCH, DELETE } from '@/app/api/admin/usuarios/[id]/route';
+import { EmailJaCadastrado } from '@/domain/errors';
 
 const SUPER = '11111111-1111-4111-8111-111111111111';
 const ADMIN = '22222222-2222-4222-8222-222222222222';
@@ -76,6 +79,7 @@ async function corpo(resp: NextResponse) {
 beforeEach(() => {
   vi.clearAllMocks();
   contarSuperAdminsMock.mockResolvedValue(2);
+  existeMock.mockResolvedValue(true);
 });
 
 describe('POST /api/admin/usuarios (criar)', () => {
@@ -123,6 +127,16 @@ describe('POST /api/admin/usuarios (criar)', () => {
     const resp = await POST(reqJson({ nome: 'Teste', email: 'x@sp.gov.br', senha: SENHA_OK, papel: 'user' }));
     expect(resp.status).toBe(403);
   });
+
+  it('e-mail já cadastrado -> 409', async () => {
+    obterUsuarioAtualMock.mockResolvedValue({ id: SUPER, email: 's@sp.gov.br', nome: 'S' });
+    papeis({ [SUPER]: 'super_admin' });
+    criarMock.mockRejectedValue(new EmailJaCadastrado('x@sp.gov.br'));
+
+    const resp = await POST(reqJson({ nome: 'Teste', email: 'x@sp.gov.br', senha: SENHA_OK, papel: 'user' }));
+    expect(resp.status).toBe(409);
+    expect((await corpo(resp)) as { erro: string }).toMatchObject({ erro: 'email_duplicado' });
+  });
 });
 
 describe('PATCH /api/admin/usuarios/[id]', () => {
@@ -169,6 +183,16 @@ describe('PATCH /api/admin/usuarios/[id]', () => {
     const resp = await PATCH(patchReq({ papel: 'admin' }), ctx(SUPER));
     expect(resp.status).toBe(403);
   });
+
+  it('alvo inexistente -> 404', async () => {
+    obterUsuarioAtualMock.mockResolvedValue({ id: SUPER, email: 's@sp.gov.br', nome: 'S' });
+    papeis({ [SUPER]: 'super_admin' });
+    existeMock.mockResolvedValue(false);
+
+    const resp = await PATCH(patchReq({ novaSenha: SENHA_OK }), ctx(USER));
+    expect(resp.status).toBe(404);
+    expect(resetarSenhaMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/admin/usuarios/[id]', () => {
@@ -209,6 +233,16 @@ describe('DELETE /api/admin/usuarios/[id]', () => {
 
     const resp = await DELETE(delReq(), ctx(SUPER));
     expect(resp.status).toBe(403);
+    expect(removerMock).not.toHaveBeenCalled();
+  });
+
+  it('alvo inexistente -> 404', async () => {
+    obterUsuarioAtualMock.mockResolvedValue({ id: SUPER, email: 's@sp.gov.br', nome: 'S' });
+    papeis({ [SUPER]: 'super_admin' });
+    existeMock.mockResolvedValue(false);
+
+    const resp = await DELETE(delReq(), ctx(USER));
+    expect(resp.status).toBe(404);
     expect(removerMock).not.toHaveBeenCalled();
   });
 });

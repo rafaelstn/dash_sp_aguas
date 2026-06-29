@@ -6,7 +6,7 @@ import type {
   UsuariosAdminRepository,
 } from '@/application/ports/usuarios-admin-repository';
 import { type Papel, ehPapelValido, PAPEL_PADRAO } from '@/domain/auth/papel';
-import { FalhaRepositorio } from '@/domain/errors';
+import { EmailJaCadastrado, FalhaRepositorio } from '@/domain/errors';
 import { supabaseAdmin } from '@/infrastructure/auth/supabase-admin';
 import { sql } from './client';
 
@@ -61,6 +61,17 @@ export const usuariosAdminRepository: UsuariosAdminRepository = {
     }
   },
 
+  async existe(usuarioId: string) {
+    try {
+      const linhas = await sql<{ um: number }[]>`
+        SELECT 1 AS um FROM auth.users WHERE id = ${usuarioId}::uuid LIMIT 1
+      `;
+      return linhas.length > 0;
+    } catch (e) {
+      throw new FalhaRepositorio('usuariosAdmin.existe', e);
+    }
+  },
+
   async criar(dados: NovoUsuario) {
     // 1. Cria a conta no Auth com email já confirmado (criação administrativa,
     //    não self-signup). O nome vai pro user_metadata, igual ao cadastro.
@@ -71,6 +82,12 @@ export const usuariosAdminRepository: UsuariosAdminRepository = {
       user_metadata: { nome: dados.nome },
     });
     if (error || !data.user) {
+      // E-mail já cadastrado: erro de conflito de negócio (vira 409), não 500.
+      // O message do Supabase não inclui a senha; seguro inspecionar.
+      const msg = (error?.message ?? '').toLowerCase();
+      if (msg.includes('already') || msg.includes('exist') || msg.includes('registered')) {
+        throw new EmailJaCadastrado(dados.email);
+      }
       // error.message do Supabase não inclui a senha; seguro repassar.
       throw new FalhaRepositorio('usuariosAdmin.criar', error ?? 'sem usuário retornado');
     }

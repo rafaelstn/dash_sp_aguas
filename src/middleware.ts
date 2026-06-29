@@ -192,16 +192,13 @@ export async function middleware(request: NextRequest) {
     return redir;
   }
 
-  // Usuário autenticado tentando acessar /login ou /cadastrar.
+  // Usuário autenticado tentando acessar /login.
   // Respeita `?returnTo=<path>` se for um path interno seguro (ex.: técnico
   // que volta do /auth/sair preserva o destino /app); caso contrário cai na
   // raiz. Sem isso, quem entra em /login?returnTo=/app já logado ia parar no
-  // dashboard web em vez de voltar pro app.
-  if (
-    user &&
-    (request.nextUrl.pathname === '/login' ||
-      request.nextUrl.pathname === '/cadastrar')
-  ) {
+  // dashboard web em vez de voltar pro app. (/cadastrar saiu: autocadastro
+  // desativado, a própria página redireciona.)
+  if (user && request.nextUrl.pathname === '/login') {
     const destino = validarReturnToInterno(
       request.nextUrl.searchParams.get('returnTo'),
     );

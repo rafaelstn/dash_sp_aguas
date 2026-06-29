@@ -50,6 +50,26 @@ export class TermoBuscaInvalido extends Error {
   }
 }
 
+/**
+ * Usuário (conta) inexistente em operação de gestão. Tradução padrão: HTTP 404.
+ */
+export class UsuarioNaoEncontrado extends Error {
+  constructor(public readonly id: string) {
+    super(`Usuário não encontrado: ${id}`);
+    this.name = 'UsuarioNaoEncontrado';
+  }
+}
+
+/**
+ * Tentativa de criar usuário com e-mail já cadastrado. Tradução padrão: 409.
+ */
+export class EmailJaCadastrado extends Error {
+  constructor(public readonly email: string) {
+    super('Este e-mail já está cadastrado.');
+    this.name = 'EmailJaCadastrado';
+  }
+}
+
 export class FalhaRepositorio extends Error {
   constructor(operacao: string, causa: unknown) {
     super(`Falha no repositório (${operacao}): ${String(causa)}`);

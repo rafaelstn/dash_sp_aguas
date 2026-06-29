@@ -14,6 +14,8 @@ import {
   PrefixoDuplicado,
   TermoBuscaInvalido,
   UsuarioNaoEhAprovador,
+  UsuarioNaoEncontrado,
+  EmailJaCadastrado,
 } from '@/domain/errors';
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { logger } from '@/infrastructure/logging/logger';
@@ -86,6 +88,12 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
       { status: 404 },
     );
   }
+  if (erro instanceof UsuarioNaoEncontrado) {
+    return NextResponse.json(
+      { erro: 'usuario_nao_encontrado', mensagem: 'Usuário não encontrado.' },
+      { status: 404 },
+    );
+  }
 
   // ── 409 Conflict ─────────────────────────────────────────────────────────
   if (erro instanceof PostoRemovido) {
@@ -93,6 +101,9 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
   }
   if (erro instanceof PrefixoDuplicado) {
     return NextResponse.json({ erro: 'prefixo_duplicado', mensagem: erro.message }, { status: 409 });
+  }
+  if (erro instanceof EmailJaCadastrado) {
+    return NextResponse.json({ erro: 'email_duplicado', mensagem: erro.message }, { status: 409 });
   }
   if (erro instanceof EstadoTriagemInvalido) {
     return NextResponse.json(
