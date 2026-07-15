@@ -73,7 +73,9 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
   }
 
   return (
-    <div className="space-y-4">
+    // Detalhe de auditoria (leitura + decisão): largura de leitura confortável,
+    // sem esticar os painéis de match/divergência em telas largas.
+    <div className="mx-auto w-full max-w-5xl space-y-4">
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>

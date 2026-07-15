@@ -20,7 +20,9 @@ export default async function NovaFichaPage({ params }: PageProps) {
   if (!schema.disponivel) notFound();
 
   return (
-    <div className="space-y-4">
+    // Tela de formulário: largura de leitura para não esticar os campos em
+    // telas largas (o chrome agora é full-width por padrão).
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       <nav aria-label="Breadcrumb" className="text-xs text-app-fg-muted">
         <Link href="/" className="hover:text-gov-azul hover:underline">
           Buscar postos

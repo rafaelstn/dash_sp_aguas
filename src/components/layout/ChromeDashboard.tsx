@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ItemSidenav } from './ItemSidenav';
 import { MenuMobile } from './MenuMobile';
@@ -36,18 +35,6 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
   // salva logo após montar. Evita divergência de hidratação.
   const [colapsado, setColapsado] = useState(false);
   const [hidratado, setHidratado] = useState(false);
-
-  // Largura do conteúdo é decidida por rota. O Monitor (mapa) usa a largura
-  // CHEIA disponível ao lado da navegação, aproveitando telas grandes onde o
-  // mapa é o que mais pede espaço. As demais páginas (leitura, listas e
-  // formulários como perfil e fichas) mantêm o teto confortável de leitura
-  // (max-w-content), evitando linhas longas e campos esticados. Solução
-  // contida no chrome: não altera nenhuma página individualmente.
-  const pathname = usePathname();
-  const rota = pathname ?? '';
-  // O Monitor (mapa) e o Estoque (tabelas largas) usam a largura CHEIA ao lado
-  // da navegacao; as demais paginas mantem o teto de leitura (max-w-content).
-  const larguraCheia = rota.startsWith('/monitor') || rota.startsWith('/estoque');
 
   useEffect(() => {
     try {
@@ -209,12 +196,18 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
           </div>
         </header>
 
+        {/* Área de conteúdo: largura CHEIA disponível ao lado da navegação é o
+            PADRÃO, aproveitando telas grandes (a maioria dos usuários usa
+            desktop amplo). O padding lateral (px-4/sm:px-6) garante respiro e
+            protege o mobile. O teto de max-w-screen-2k evita que o conteúdo
+            fique absurdamente largo em monitores 4K/ultrawide. Cada página
+            decide se estreita o próprio conteúdo: telas de formulário e leitura
+            aplicam seu próprio container (ex.: max-w-4xl mx-auto) para não
+            esticar campos; listas, tabelas, mapas e detalhes aproveitam a
+            largura toda. */}
         <main
           id="conteudo-principal"
-          className={[
-            'mx-auto w-full flex-1 px-4 py-6',
-            larguraCheia ? '' : 'max-w-content',
-          ].join(' ')}
+          className="mx-auto w-full max-w-[1920px] flex-1 px-4 py-6 sm:px-6"
         >
           <div className="space-y-6">{children}</div>
         </main>
@@ -222,12 +215,7 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
         {/* Rodapé discreto sobre o fundo da página, sem borda nem superfície
             branca: o respiro separa do conteúdo e evita mais uma linha. */}
         <footer>
-          <div
-            className={[
-              'mx-auto flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2 text-xs text-app-fg-subtle',
-              larguraCheia ? '' : 'max-w-content',
-            ].join(' ')}
-          >
+          <div className="mx-auto flex max-w-[1920px] flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2 text-xs text-app-fg-subtle sm:px-6">
             <span>
               Sistema em rede interna · Acesso restrito ao setor SP Águas
             </span>

@@ -48,7 +48,9 @@ export default async function DetalheFichaPage({ params }: PageProps) {
   const tipo = TIPOS_DOCUMENTO[ficha.codTipoDocumento];
 
   return (
-    <div className="space-y-4">
+    // Leitura de documento (ficha): largura de leitura confortável, não estica
+    // os pares campo/valor em telas largas (o chrome agora é full-width).
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       <nav aria-label="Breadcrumb" className="text-xs text-app-fg-muted">
         <Link href="/" className="hover:text-gov-azul hover:underline">
           Buscar postos

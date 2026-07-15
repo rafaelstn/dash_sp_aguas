@@ -100,7 +100,9 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
   const dataVisitaTexto = ficha.dataVisita.toLocaleDateString('pt-BR');
 
   return (
-    <div className="space-y-4">
+    // Estação de revisão (leitura + decisão, com aside de 320px): largura de
+    // leitura ampla, sem esticar até o extremo em telas 4K.
+    <div className="mx-auto w-full max-w-6xl space-y-4">
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>

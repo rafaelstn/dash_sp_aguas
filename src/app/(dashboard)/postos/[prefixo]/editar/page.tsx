@@ -57,7 +57,9 @@ export default async function EditarPostoPage({ params }: PageProps) {
   if (!posto) notFound();
 
   return (
-    <div className="space-y-4">
+    // Tela de formulário: largura de leitura para não esticar os campos em
+    // telas largas (o chrome agora é full-width por padrão).
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>
