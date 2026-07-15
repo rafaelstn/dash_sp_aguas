@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import L from 'leaflet';
 import {
   MapContainer,
@@ -33,6 +33,32 @@ const WMS_DAEE = 'https://geodados.daee.sp.gov.br/geoserver/geonode/wms';
 // enquadram o estado inteiro na carga inicial.
 const CENTRO_SP: [number, number] = [-22.5, -48.6];
 const ZOOM_SP = 7;
+
+/**
+ * Padding do auto-pan dos popups, compartilhado entre a legenda (que MEDE o
+ * próprio tamanho) e a camada de estações (que CRIA os popups). Guardado num
+ * objeto estável cujos arrays são mutados IN PLACE: o Leaflet lê
+ * `options.autoPanPaddingTopLeft` no instante em que cada popup abre, então
+ * mutar o array (sem trocar a referência) faz todos os popups pegarem o valor
+ * atual sem recriar as ~3690 camadas. Cada valor é uma tupla [x, y] em pixels.
+ *
+ * A legenda mora no canto INFERIOR ESQUERDO. Reservamos a faixa ESQUERDA via
+ * `topLeft[0]` (o eixo X de `autoPanPaddingTopLeft` cobre a borda esquerda no
+ * Leaflet). Isso basta pra garantir que nenhum popup cubra a legenda: o mapa
+ * desloca até o popup ficar inteiro à direita dela, independente da altura do
+ * popup. Não reservamos a faixa inferior (`bottomRight[1]`) de propósito: a
+ * legenda é alta (~350px) e reservar a borda inferior inteira empurraria demais
+ * qualquer popup do rodapé num mapa que chega a 360px de altura.
+ */
+export interface PadPopup {
+  /** [x, y]: X reserva a borda esquerda (largura da legenda + folga). */
+  topLeft: [number, number];
+  /**
+   * [x, y]: `autoPanPaddingBottomRight` do Leaflet. X afasta da borda direita,
+   * Y afasta da borda inferior. Só margens pequenas (não reserva a legenda).
+   */
+  bottomRight: [number, number];
+}
 
 /** Controles da cesta de comparação usados pelo popup do mapa. */
 export interface ComparacaoMapa {
@@ -76,6 +102,11 @@ export function MapaMonitor({
   aoAlternarEntidade,
   comparacao,
 }: MapaMonitorProps) {
+  // Padding do auto-pan dos popups, dimensionado pela legenda em runtime.
+  // Objeto estável (arrays mutados in place) lido por todos os popups ao abrir.
+  // Defaults conservadores cobrem o intervalo entre a montagem e a 1ª medição.
+  const padRef = useRef<PadPopup>({ topLeft: [244, 13], bottomRight: [13, 24] });
+
   return (
     <MapContainer
       center={CENTRO_SP}
@@ -138,10 +169,12 @@ export function MapaMonitor({
         estacoes={estacoes}
         aoSelecionar={aoSelecionar}
         comparacao={comparacao}
+        pad={padRef.current}
       />
       <Legenda
         entidadesAtivas={entidadesAtivas}
         aoAlternarEntidade={aoAlternarEntidade}
+        pad={padRef.current}
       />
     </MapContainer>
   );
@@ -242,10 +275,12 @@ function CamadaEstacoes({
   estacoes,
   aoSelecionar,
   comparacao,
+  pad,
 }: {
   estacoes: readonly Estacao[];
   aoSelecionar: (estacao: Estacao) => void;
   comparacao: ComparacaoMapa;
+  pad: PadPopup;
 }) {
   const map = useMap();
   const router = useRouter();
@@ -294,12 +329,23 @@ function CamadaEstacoes({
       if (ehVinculada(e)) partes.push('vinculada a posto do catálogo');
       // Popup construído sob demanda: resolve o estado de seleção no momento da
       // abertura (a cesta pode ter mudado desde a montagem do layerGroup).
-      marcador.bindPopup(() =>
-        htmlPopup(
-          e,
-          comparacaoRef.current.estaSelecionada(e.id),
-          comparacaoRef.current.podeAdicionar,
-        ),
+      marcador.bindPopup(
+        () =>
+          htmlPopup(
+            e,
+            comparacaoRef.current.estaSelecionada(e.id),
+            comparacaoRef.current.podeAdicionar,
+          ),
+        {
+          // Auto-pan reservando a área da legenda (canto inferior esquerdo). Os
+          // arrays vêm do objeto `pad` estável e são mutados pela legenda ao
+          // medir seu tamanho; o Leaflet lê o valor atual ao abrir cada popup.
+          // Efeito: um marcador perto da legenda faz o mapa deslocar até o popup
+          // aparecer fora dela, nunca por cima.
+          autoPan: true,
+          autoPanPaddingTopLeft: pad.topLeft,
+          autoPanPaddingBottomRight: pad.bottomRight,
+        },
       );
       marcador.bindTooltip(partes.join(', '));
       grupo.addLayer(marcador);
@@ -371,7 +417,10 @@ function CamadaEstacoes({
       grupo.remove();
       grupoRef.current = null;
     };
-  }, [estacoes, map, router]);
+    // `pad` é referência estável (objeto do padRef do pai); listado só pra
+    // satisfazer o exhaustive-deps. Não recria as camadas: os popups leem os
+    // arrays mutados in place pela legenda ao abrir.
+  }, [estacoes, map, router, pad]);
 
   return null;
 }
@@ -396,12 +445,24 @@ function CamadaEstacoes({
 function Legenda({
   entidadesAtivas,
   aoAlternarEntidade,
+  pad,
 }: {
   entidadesAtivas: readonly string[];
   aoAlternarEntidade: (entidade: string) => void;
+  pad: PadPopup;
 }) {
   const map = useMap();
   const refContainer = useRef<HTMLDivElement>(null);
+
+  // Colapsável: no mobile a legenda é alta demais (~350px) pra um mapa que
+  // chega a 360px de altura, então nasce recolhida (só o cabeçalho) pra não
+  // estourar a tela nem cobrir o mapa. No desktop nasce aberta (comportamento
+  // atual preservado). Só o palpite INICIAL depende da largura da tela; depois
+  // o usuário controla e não forçamos reabrir/recolher em resize.
+  const [aberta, setAberta] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 640px)').matches;
+  });
 
   // Vazio = todas ativas. Quando há seleção, só as listadas estão ativas.
   const todasAtivas = entidadesAtivas.length === 0;
@@ -418,6 +479,43 @@ function Legenda({
     L.DomEvent.disableScrollPropagation(el);
   }, [map]);
 
+  // Mede o tamanho REAL da legenda e dimensiona o padding do auto-pan dos
+  // popups. Reservamos a faixa esquerda: distância da legenda até a borda
+  // esquerda do mapa + largura + folga. Assim o Leaflet nunca abre um popup
+  // sobre a legenda (empurra o mapa até o popup ficar à direita dela). O
+  // ResizeObserver reage a colapsar/expandir e à variação de conteúdo
+  // (nº de entidades, bloco "Vínculo") sem recriar as camadas de pontos.
+  useEffect(() => {
+    const el = refContainer.current;
+    if (!el) return;
+    const FOLGA = 14; // respiro entre a legenda e a borda do popup
+    const POPUP_MIN = 176; // largura mínima que um popup precisa ter na tela
+    const atualizar = () => {
+      const legenda = el.getBoundingClientRect();
+      const mapa = map.getContainer().getBoundingClientRect();
+      // Offset da legenda à esquerda do mapa (bottom-4/left-3 são relativos ao
+      // contêiner do mapa; medir evita hardcodar o valor do Tailwind).
+      const offsetEsq = Math.max(0, legenda.left - mapa.left);
+      const padXcru = offsetEsq + legenda.width + FOLGA;
+      // Teto: em tela estreita, reservar a largura inteira da legenda jogaria o
+      // popup pra fora. Limitamos pra sempre sobrar espaço de popup. No desktop
+      // há largura de sobra e o teto nunca corta (garantia total mantida).
+      const padXmax = Math.max(0, mapa.width - POPUP_MIN);
+      // Mutação IN PLACE (mesma referência que os popups já leem).
+      pad.topLeft[0] = Math.round(Math.min(padXcru, padXmax));
+    };
+    atualizar();
+    const ro = new ResizeObserver(atualizar);
+    ro.observe(el);
+    window.addEventListener('resize', atualizar);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', atualizar);
+    };
+  }, [map, pad]);
+
+  const idCorpo = 'legenda-monitor-corpo';
+
   return (
     <div
       ref={refContainer}
@@ -426,65 +524,85 @@ function Legenda({
       // z mais alto que os tiles/overlays, abaixo dos popups do Leaflet.
       className="absolute bottom-4 left-3 z-[500] max-w-[220px] rounded-lg border border-app-border-subtle bg-app-surface/95 p-2.5 text-xs leading-snug shadow-gov-card backdrop-blur"
     >
-      <p className="mb-1.5 font-semibold text-app-fg">Entidade responsável</p>
-      <p className="mb-2 text-[11px] text-app-fg-muted">
-        Toque para filtrar no mapa
-      </p>
+      {/* Cabeçalho recolhível: no mobile libera o mapa; no desktop fica aberto. */}
+      <button
+        type="button"
+        aria-expanded={aberta}
+        aria-controls={idCorpo}
+        onClick={() => setAberta((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded text-left font-semibold text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
+      >
+        <span>Entidade responsável</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={[
+            'h-4 w-4 shrink-0 text-app-fg-muted transition-transform',
+            aberta ? 'rotate-180' : '',
+          ].join(' ')}
+        />
+      </button>
 
-      <ul className="flex flex-col gap-0.5">
-        {LEGENDA_ENTIDADES.map((i) => {
-          const ativa = entidadeAtiva(i.nome);
-          return (
-            <li key={i.nome}>
-              <button
-                type="button"
-                aria-pressed={ativa}
-                onClick={() => aoAlternarEntidade(i.nome)}
-                title={
-                  ativa
-                    ? `${i.rotulo}: ativa. Toque para ocultar do mapa.`
-                    : `${i.rotulo}: oculta. Toque para mostrar no mapa.`
-                }
-                className={[
-                  'flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors',
-                  'hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul',
-                  ativa ? '' : 'opacity-45',
-                ].join(' ')}
-              >
-                <span
-                  aria-hidden="true"
-                  className="h-3 w-3 shrink-0 rounded-full ring-1 ring-app-border-subtle"
-                  style={{ backgroundColor: i.cor }}
-                />
-                <span className="flex-1 truncate text-app-fg">{i.rotulo}</span>
-                {ativa ? (
-                  <Check
-                    className="h-3.5 w-3.5 shrink-0 text-gov-azul"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  // Traço quando desligada: pista extra além da opacidade/cor,
-                  // garantindo que o estado não dependa só de cor (WCAG 1.4.1).
+      {/* Corpo: limitado em altura pra nunca estourar o mapa (scroll interno). */}
+      <div id={idCorpo} hidden={!aberta} className="max-h-[48vh] overflow-y-auto">
+        <p className="mb-2 mt-1.5 text-[11px] text-app-fg-muted">
+          Toque para filtrar no mapa
+        </p>
+
+        <ul className="flex flex-col gap-0.5">
+          {LEGENDA_ENTIDADES.map((i) => {
+            const ativa = entidadeAtiva(i.nome);
+            return (
+              <li key={i.nome}>
+                <button
+                  type="button"
+                  aria-pressed={ativa}
+                  onClick={() => aoAlternarEntidade(i.nome)}
+                  title={
+                    ativa
+                      ? `${i.rotulo}: ativa. Toque para ocultar do mapa.`
+                      : `${i.rotulo}: oculta. Toque para mostrar no mapa.`
+                  }
+                  className={[
+                    'flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors',
+                    'hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul',
+                    ativa ? '' : 'opacity-45',
+                  ].join(' ')}
+                >
                   <span
                     aria-hidden="true"
-                    className="h-px w-3.5 shrink-0 bg-app-fg-muted"
+                    className="h-3 w-3 shrink-0 rounded-full ring-1 ring-app-border-subtle"
+                    style={{ backgroundColor: i.cor }}
                   />
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                  <span className="flex-1 truncate text-app-fg">{i.rotulo}</span>
+                  {ativa ? (
+                    <Check
+                      className="h-3.5 w-3.5 shrink-0 text-gov-azul"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    // Traço quando desligada: pista extra além da opacidade/cor,
+                    // garantindo que o estado não dependa só de cor (WCAG 1.4.1).
+                    <span
+                      aria-hidden="true"
+                      className="h-px w-3.5 shrink-0 bg-app-fg-muted"
+                    />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
 
-      <div className="my-2 h-px bg-app-border-subtle" role="presentation" />
+        <div className="my-2 h-px bg-app-border-subtle" role="presentation" />
 
-      <p className="mb-1 font-semibold text-app-fg">Vínculo</p>
-      <div className="flex items-center gap-2 px-1.5">
-        <span
-          aria-hidden="true"
-          className="h-[15px] w-[15px] shrink-0 rounded-full border-[3px] border-white bg-app-fg-muted ring-1 ring-app-border"
-        />
-        <span className="text-app-fg">Vinculada a posto (ponto maior)</span>
+        <p className="mb-1 font-semibold text-app-fg">Vínculo</p>
+        <div className="flex items-center gap-2 px-1.5">
+          <span
+            aria-hidden="true"
+            className="h-[15px] w-[15px] shrink-0 rounded-full border-[3px] border-white bg-app-fg-muted ring-1 ring-app-border"
+          />
+          <span className="text-app-fg">Vinculada a posto (ponto maior)</span>
+        </div>
       </div>
     </div>
   );

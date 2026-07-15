@@ -190,6 +190,10 @@ export function PainelMonitor() {
         )} estações`
       : 'Carregando…';
 
+  // Quantas das estações filtradas estão transmitindo agora. Reflete o filtro
+  // atual (tipo, entidade, busca, UGRHI), pois é derivado de `filtradas`.
+  const online = filtradas.filter((e) => e.online).length;
+
   return (
     <div
       className={[
@@ -200,13 +204,34 @@ export function PainelMonitor() {
     >
       {/* Barra de controle: contagem + alternância de visão + filtros (mobile) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p
-          className="text-sm text-app-fg-muted tabular"
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-app-fg-muted"
           role="status"
           aria-live="polite"
         >
-          {contagem}
-        </p>
+          <span className="tabular">{contagem}</span>
+          {carga.status === 'ok' ? (
+            <>
+              <span aria-hidden="true" className="text-app-fg-subtle">
+                ·
+              </span>
+              {/* Indicador de status: ponto verde + rótulo textual. O texto
+                  "online" carrega o significado, então não dependemos só da cor
+                  (WCAG 1.4.1 / e-MAG). O ponto tem anel claro pra destacar sem
+                  contar apenas com o preenchimento. */}
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 rounded-full bg-gov-sucesso ring-2 ring-green-200"
+                />
+                <span className="font-semibold tabular text-app-fg">
+                  {online.toLocaleString('pt-BR')}
+                </span>
+                <span>online</span>
+              </span>
+            </>
+          ) : null}
+        </div>
 
         <div className="flex items-center gap-2">
           {/* Toggle de filtros só no mobile (no desktop ficam sempre visíveis) */}
@@ -267,7 +292,7 @@ export function PainelMonitor() {
 
       {/* Área principal: mapa ou lista. Altura responsiva preenchendo a tela. */}
       {visao === 'mapa' ? (
-        <div className="h-[60vh] min-h-[360px] overflow-hidden rounded-gov-card border border-app-border-subtle bg-app-surface lg:h-[70vh]">
+        <div className="h-[64vh] min-h-[420px] overflow-hidden rounded-gov-card border border-app-border-subtle bg-app-surface lg:h-[74vh] 2xl:h-[80vh]">
           {carga.status === 'carregando' ? (
             <div
               role="status"

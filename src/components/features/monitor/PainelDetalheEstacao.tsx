@@ -2,16 +2,20 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { X, ExternalLink, CloudRain } from 'lucide-react';
+import { X, ExternalLink, CloudRain, Waves } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { ROTULO_TIPO, ROTULO_TIPO_HIDROLOGICO } from './tipos';
-import type { Estacao, TipoHidrologico } from './tipos';
+import type { Estacao } from './tipos';
 import type { PeriodoDias } from './tipos-leituras';
 import { PERIODOS } from './tipos-leituras';
+import type { PontoNivel } from './tipos-nivel';
 import { useLeiturasEstacao } from './useLeiturasEstacao';
+import { useNivelEstacao } from './useNivelEstacao';
 import { GraficoChuva } from './GraficoChuva';
+import { GraficoNivel } from './GraficoNivel';
+import { TabelaNivel } from './TabelaNivel';
 import { BotaoComparar } from './BotaoComparar';
 import {
   calcularEstatisticas,
@@ -19,6 +23,12 @@ import {
   fmtMm,
   temLeituraManual,
 } from './estatisticas-leituras';
+import {
+  ROTULO_GRANDEZA_NIVEL,
+  calcularEstatisticasNivel,
+  fmtMetros,
+  type TipoNivel,
+} from './estatisticas-nivel';
 
 /**
  * Controles de comparação injetados no painel. Opcionais: quando ausentes, o
@@ -45,9 +55,13 @@ interface PainelDetalheEstacaoProps {
  * ConfirmDialog do design system), sem montar um trap manual frágil. No mobile
  * vira full-screen.
  *
- * Conteúdo: cabeçalho da estação + seletor de período + gráfico de chuva diária
- * + estatísticas + tabela (alternativa textual acessível ao gráfico, e-MAG /
- * WCAG 1.1.1) + bloco de comparação auto vs manual (com guarda manual=0).
+ * Conteúdo por tipo hidrológico:
+ * - Pluviométrica: gráfico de chuva diária (barras) + estatísticas + tabela +
+ *   bloco de comparação auto vs manual (com guarda manual=0).
+ * - Fluviométrica / piezométrica: gráfico de nível (linha, metros) com faixa
+ *   mín-máx + estatísticas + tabela + aviso de valor indicativo (SIBH).
+ * Ambos com seletor de período e tabela como alternativa textual acessível ao
+ * gráfico (e-MAG / WCAG 1.1.1).
  */
 export function PainelDetalheEstacao({
   estacao,
@@ -60,15 +74,15 @@ export function PainelDetalheEstacao({
   const tituloId = `${baseId}-titulo`;
 
   const aberto = estacao !== null;
-  // Só estações pluviométricas têm série de chuva. Para fluviométricas e
-  // piezométricas a leitura de nível é fase futura: não buscamos leituras
-  // (passamos id null, o hook fica inativo) e mostramos um aviso no lugar do
-  // gráfico, mantendo o cabeçalho da estação funcionando.
+  // Pluviométrica tem série de CHUVA; fluviométrica e piezométrica têm série de
+  // NÍVEL (rota distinta). Ativamos só o hook do tipo da estação, passando id
+  // null ao outro (fica inativo, sem requisição). Todas transmitem, então
+  // sempre há uma das duas visões.
   const ehPluviometrico = estacao?.tipoEstacao === 'pluviometrico';
-  const estado = useLeiturasEstacao(
-    ehPluviometrico ? (estacao?.id ?? null) : null,
-    periodo,
-  );
+  const ehNivel = estacao?.tipoEstacao !== 'pluviometrico';
+  const idEstacao = estacao?.id ?? null;
+  const estado = useLeiturasEstacao(ehPluviometrico ? idEstacao : null, periodo);
+  const estadoNivel = useNivelEstacao(ehNivel ? idEstacao : null, periodo);
 
   // Abre/fecha o <dialog> imperativamente: o modo modal só existe via
   // showModal(); o atributo `open` declarativo não dá modalidade nem trap.
@@ -138,74 +152,51 @@ export function PainelDetalheEstacao({
           comparacao={comparacao}
         />
 
-        {ehPluviometrico ? (
-          <SeletorPeriodo periodo={periodo} aoMudar={setPeriodo} />
-        ) : null}
+        <SeletorPeriodo periodo={periodo} aoMudar={setPeriodo} />
 
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-          {!ehPluviometrico ? (
-            <AvisoLeituraIndisponivel tipo={estacao.tipoEstacao} />
-          ) : estado.status === 'carregando' || estado.status === 'inativo' ? (
+          {ehPluviometrico ? (
+            estado.status === 'carregando' || estado.status === 'inativo' ? (
+              <ConteudoCarregando />
+            ) : estado.status === 'erro' ? (
+              <Alerta tipo="erro" titulo="Falha ao carregar as leituras">
+                {estado.mensagem} Verifique a conexão e tente novamente em
+                instantes.
+              </Alerta>
+            ) : estado.dados.itens.length === 0 ? (
+              <EstadoVazio
+                icone={CloudRain}
+                titulo="Sem leituras no período"
+                descricao="Não há leituras registradas para esta estação no período selecionado. Experimente um período maior."
+                nivelTitulo={3}
+              />
+            ) : (
+              <ConteudoLeituras itens={estado.dados.itens} />
+            )
+          ) : estadoNivel.status === 'carregando' ||
+            estadoNivel.status === 'inativo' ? (
             <ConteudoCarregando />
-          ) : estado.status === 'erro' ? (
-            <Alerta tipo="erro" titulo="Falha ao carregar as leituras">
-              {estado.mensagem} Verifique a conexão e tente novamente em
+          ) : estadoNivel.status === 'erro' ? (
+            <Alerta tipo="erro" titulo="Falha ao carregar a série de nível">
+              {estadoNivel.mensagem} Verifique a conexão e tente novamente em
               instantes.
             </Alerta>
-          ) : estado.dados.itens.length === 0 ? (
+          ) : estadoNivel.dados.itens.length === 0 ? (
             <EstadoVazio
-              icone={CloudRain}
-              titulo="Sem leituras no período"
-              descricao="Não há leituras registradas para esta estação no período selecionado. Experimente um período maior."
+              icone={Waves}
+              titulo="Sem série de nível no período"
+              descricao="Não há registros de nível para esta estação no período selecionado. Experimente um período maior."
               nivelTitulo={3}
             />
           ) : (
-            <ConteudoLeituras itens={estado.dados.itens} />
+            <ConteudoNivel
+              itens={estadoNivel.dados.itens}
+              tipo={estacao.tipoEstacao as TipoNivel}
+            />
           )}
         </div>
       </div>
     </dialog>
-  );
-}
-
-// Texto do aviso por tipo hidrológico sem série de chuva. Descreve a grandeza
-// medida por cada tipo, para o aviso ser informativo e não só um "em breve".
-const AVISO_POR_TIPO: Record<
-  Exclude<TipoHidrologico, 'pluviometrico'>,
-  { grandeza: string; descricao: string }
-> = {
-  fluviometrico: {
-    grandeza: 'nível',
-    descricao:
-      'As estações fluviométricas medem o nível e a vazão dos rios. A leitura de nível para estações fluviométricas será disponibilizada em breve.',
-  },
-  piezometrico: {
-    grandeza: 'nível',
-    descricao:
-      'As estações piezométricas medem o nível das águas subterrâneas. A leitura de nível para estações piezométricas será disponibilizada em breve.',
-  },
-};
-
-/**
- * Aviso exibido no lugar do gráfico de chuva para estações fluviométricas e
- * piezométricas, cuja leitura de nível ainda não está disponível (fase futura).
- * Acessível (Alerta com role apropriado); os dados de identificação da estação
- * permanecem visíveis no cabeçalho acima.
- */
-function AvisoLeituraIndisponivel({ tipo }: { tipo: TipoHidrologico }) {
-  // Guarda de tipo: pluviométrico não chega aqui (tem gráfico). Se chegar,
-  // usa o texto fluviométrico como padrão seguro em vez de quebrar.
-  const info =
-    tipo === 'pluviometrico'
-      ? AVISO_POR_TIPO.fluviometrico
-      : AVISO_POR_TIPO[tipo];
-  return (
-    <section aria-label="Disponibilidade das leituras">
-      <Alerta tipo="info" titulo={`Leitura de ${info.grandeza} em breve`}>
-        {info.descricao} Os dados de identificação da estação já estão
-        disponíveis acima.
-      </Alerta>
-    </section>
   );
 }
 
@@ -391,6 +382,73 @@ function ConteudoLeituras({
           de tela.
         </p>
         <TabelaLeituras itens={itens} />
+      </section>
+    </div>
+  );
+}
+
+function ConteudoNivel({
+  itens,
+  tipo,
+}: {
+  itens: readonly PontoNivel[];
+  tipo: TipoNivel;
+}) {
+  const est = calcularEstatisticasNivel(itens);
+  const grandeza = ROTULO_GRANDEZA_NIVEL[tipo];
+
+  return (
+    <div className="space-y-5">
+      {/* Aviso obrigatório (decisão do cliente): o nível do SIBH não é
+          padronizado entre estações; a série indica tendência, não cota
+          oficial. Vem ANTES do gráfico para o leitor não interpretar o valor
+          absoluto como cota validada. */}
+      <section aria-label="Natureza do dado de nível">
+        <Alerta tipo="info" titulo="Valor indicativo, sujeito a validação">
+          Valor indicativo do sensor, sujeito a validação com a fonte oficial
+          (SIBH). A série reflete a tendência de variação {grandeza.artigoFrase},
+          não uma cota oficial.
+        </Alerta>
+      </section>
+
+      <section aria-label={`Gráfico de ${grandeza.titulo.toLocaleLowerCase('pt-BR')}`}>
+        <h3 className="mb-1 text-sm font-semibold text-app-fg">
+          {grandeza.titulo} (m)
+        </h3>
+        <p className="mb-2 text-xs text-app-fg-muted">
+          Linha do nível médio diário; a faixa clara indica o intervalo entre o
+          mínimo e o máximo de cada dia.
+        </p>
+        <GraficoNivel itens={itens} />
+      </section>
+
+      <section aria-label="Estatísticas do período">
+        <h3 className="mb-2 text-sm font-semibold text-app-fg">
+          Estatísticas do período
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          <CartaoEstat rotulo="Nível médio" valor={fmtMetros(est.medioM)} />
+          <CartaoEstat rotulo="Mínimo" valor={fmtMetros(est.minimoM)} />
+          <CartaoEstat rotulo="Máximo" valor={fmtMetros(est.maximoM)} />
+          <CartaoEstat
+            rotulo="Última leitura"
+            valor={est.ultima ? fmtMetros(est.ultima.nivelMedioM) : 'Sem leitura'}
+            complemento={
+              est.ultima ? fmtDataLonga(est.ultima.momento) : undefined
+            }
+          />
+        </div>
+      </section>
+
+      <section aria-label="Tabela de nível">
+        <h3 className="mb-2 text-sm font-semibold text-app-fg">
+          Nível do período
+        </h3>
+        <p className="mb-2 text-xs text-app-fg-muted">
+          Tabela equivalente ao gráfico acima, para leitura textual e por leitor
+          de tela.
+        </p>
+        <TabelaNivel itens={itens} />
       </section>
     </div>
   );

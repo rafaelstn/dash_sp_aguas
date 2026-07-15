@@ -2,6 +2,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { EstacoesPluviometricasRepository } from '@/application/ports/estacoes-pluviometricas-repository';
 import type { EstacaoPluviometrica } from '@/domain/monitor/estacao-pluviometrica';
+import { normalizarTimestampSibh } from '@/domain/monitor/timestamp-sibh';
 
 /**
  * Adapter in-memory de EstacoesPluviometricasRepository (MODO DEMO).
@@ -46,6 +47,9 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
       tipoEstacao: estacao.tipoEstacao,
       bacia: estacao.bacia ?? null,
       owner: estacao.owner ?? null,
+      transmissionStatus: estacao.transmissionStatus ?? null,
+      // Espelha o .pg: normaliza a string crua do SIBH pra ISO (ou null).
+      ultimaTransmissao: normalizarTimestampSibh(estacao.ultimaTransmissao),
       postoId: estacao.postoId ?? null,
       sibhId: estacao.sibhId,
       criadoEm: existente?.criadoEm ?? new Date(),

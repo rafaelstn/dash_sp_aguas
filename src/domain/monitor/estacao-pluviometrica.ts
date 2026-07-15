@@ -45,6 +45,18 @@ export interface EstacaoPluviometrica {
    * informado; exibido como "Outros" e usado para a cor/filtro por entidade.
    */
   owner: string | null;
+  /**
+   * Status de transmissão da estação (SIBH `transmission_status`): 'ok',
+   * 'pendente' ou `null`. Espelha a coluna `transmission_status` (migration
+   * 0053). Cru; a regra de "online" (por tipo) vive em `estacaoOnline`.
+   */
+  transmissionStatus: string | null;
+  /**
+   * Momento da última transmissão (SIBH `date_last_measurement`), em ISO 8601
+   * (UTC) ou `null`. Espelha a coluna `ultima_transmissao` timestamptz (migration
+   * 0053); o adapter converte o `Date` do banco para ISO. Alimenta "online".
+   */
+  ultimaTransmissao: string | null;
   /** Vínculo opcional ao catálogo interno `postos` (ON DELETE SET NULL). */
   postoId: string | null;
   /**
@@ -75,6 +87,18 @@ export interface UpsertEstacaoPluviometrica {
   tipoEstacao: TipoHidrologico;
   bacia?: string | null;
   owner?: string | null;
+  /**
+   * Status de transmissão cru do SIBH ('ok' | 'pendente' | ...) ou null.
+   * Persistido em `transmission_status` (migration 0053).
+   */
+  transmissionStatus?: string | null;
+  /**
+   * Última transmissão do SIBH. Aceita a STRING crua do SIBH (formato
+   * `Date#toString()`), ISO 8601, ou null: a fronteira de persistência normaliza
+   * para ISO/timestamptz (ver `normalizarTimestampSibh`). Persistido em
+   * `ultima_transmissao` (migration 0053).
+   */
+  ultimaTransmissao?: string | null;
   postoId?: string | null;
 }
 

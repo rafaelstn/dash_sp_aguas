@@ -4,6 +4,7 @@ import type {
   EstacaoSibh,
   LeituraSibh,
   MedicaoSibh,
+  PontoNivelSibh,
   SibhGateway,
 } from '@/application/ports/sibh-gateway';
 import type { EstacoesPluviometricasRepository } from '@/application/ports/estacoes-pluviometricas-repository';
@@ -22,6 +23,9 @@ function fakeSibh(estacoes: EstacaoSibh[]): SibhGateway {
       return estacoes;
     },
     async medicoesPorPrefixo(): Promise<MedicaoSibh[]> {
+      return [];
+    },
+    async serieNivelPorPrefixo(): Promise<PontoNivelSibh[]> {
       return [];
     },
     async valorAtualPorPrefixo(): Promise<LeituraSibh | null> {
@@ -56,6 +60,8 @@ function fakeEstacoesRepo(): FakeEstacoesRepo {
         tipoEstacao: estacao.tipoEstacao,
         bacia: estacao.bacia ?? null,
         owner: estacao.owner ?? null,
+        transmissionStatus: estacao.transmissionStatus ?? null,
+        ultimaTransmissao: estacao.ultimaTransmissao ?? null,
         postoId: estacao.postoId ?? null,
         sibhId: estacao.sibhId,
         criadoEm: new Date('2026-01-01T00:00:00Z'),
@@ -106,6 +112,8 @@ function estacao(over: Partial<EstacaoSibh>): EstacaoSibh {
     lng: -46.6,
     bacia: 'Alto Tietê',
     owner: 'SP ÁGUAS',
+    transmissionStatus: 'ok',
+    ultimaTransmissao: 'Wed Jul 15 2026 12:10:00 GMT+0000 (Coordinated Universal Time)',
     ...over,
   };
 }
@@ -217,6 +225,29 @@ describe('use-case/sincronizarEstacoesPluviometricas', () => {
     expect(resumo.upsertadas).toBe(1);
     expect(estacoesRepo.upserts).toHaveLength(1);
     expect(estacoesRepo.upserts[0]!.sibhId).toBe('7');
+  });
+
+  it('repassa transmissionStatus e ultimaTransmissao (crus) do SIBH ao upsert', async () => {
+    // O status de transmissao vem do SIBH e desce ate o upsert sem
+    // interpretacao aqui (a normalizacao pra ISO/timestamptz e do repo). Isso
+    // alimenta a derivacao de "online" (migration 0053).
+    const sibh = fakeSibh([
+      estacao({
+        prefixo: 'P001',
+        transmissionStatus: 'pendente',
+        ultimaTransmissao: 'Mon May 04 2026 11:00:00 GMT+0000 (Coordinated Universal Time)',
+      }),
+    ]);
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo({});
+
+    await sincronizarEstacoesPluviometricas(sibh, estacoesRepo, postosRepo);
+
+    expect(estacoesRepo.upserts).toHaveLength(1);
+    expect(estacoesRepo.upserts[0]!.transmissionStatus).toBe('pendente');
+    expect(estacoesRepo.upserts[0]!.ultimaTransmissao).toBe(
+      'Mon May 04 2026 11:00:00 GMT+0000 (Coordinated Universal Time)',
+    );
   });
 
   it('repassa owner null quando o SIBH não informa a entidade', async () => {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ItemSidenav } from './ItemSidenav';
 import { MenuMobile } from './MenuMobile';
@@ -35,6 +36,15 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
   // salva logo após montar. Evita divergência de hidratação.
   const [colapsado, setColapsado] = useState(false);
   const [hidratado, setHidratado] = useState(false);
+
+  // Largura do conteúdo é decidida por rota. O Monitor (mapa) usa a largura
+  // CHEIA disponível ao lado da navegação, aproveitando telas grandes onde o
+  // mapa é o que mais pede espaço. As demais páginas (leitura, listas e
+  // formulários como perfil e fichas) mantêm o teto confortável de leitura
+  // (max-w-content), evitando linhas longas e campos esticados. Solução
+  // contida no chrome: não altera nenhuma página individualmente.
+  const pathname = usePathname();
+  const larguraCheia = (pathname ?? '').startsWith('/monitor');
 
   useEffect(() => {
     try {
@@ -198,7 +208,10 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
 
         <main
           id="conteudo-principal"
-          className="mx-auto w-full max-w-content flex-1 px-4 py-6"
+          className={[
+            'mx-auto w-full flex-1 px-4 py-6',
+            larguraCheia ? '' : 'max-w-content',
+          ].join(' ')}
         >
           <div className="space-y-6">{children}</div>
         </main>
@@ -206,7 +219,12 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
         {/* Rodapé discreto sobre o fundo da página, sem borda nem superfície
             branca: o respiro separa do conteúdo e evita mais uma linha. */}
         <footer>
-          <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2 text-xs text-app-fg-subtle">
+          <div
+            className={[
+              'mx-auto flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-2 text-xs text-app-fg-subtle',
+              larguraCheia ? '' : 'max-w-content',
+            ].join(' ')}
+          >
             <span>
               Sistema em rede interna · Acesso restrito ao setor SP Águas
             </span>

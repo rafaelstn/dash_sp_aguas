@@ -50,6 +50,45 @@ export interface EstacaoSibh {
    * em `estacoes_pluviometricas.owner` e dá a cor/filtro por entidade no mapa.
    */
   owner: string | null;
+  /**
+   * Status de transmissão da estação (`transmission_status` cru do SIBH).
+   * Valores observados: 'ok' e 'pendente'; `null` quando não informado. NÃO é
+   * interpretado aqui: a regra de "online" (que difere por tipo hidrológico)
+   * vive no domínio (`estacaoOnline`). Persiste em
+   * `estacoes_pluviometricas.transmission_status`.
+   */
+  transmissionStatus: string | null;
+  /**
+   * Momento da última medição transmitida (`date_last_measurement` cru do SIBH),
+   * mantido como STRING crua (ex.: 'Wed Jul 15 2026 12:10:00 GMT+0000 (...)').
+   * `null` quando ausente ou vazia (''). NÃO é convertida para `Date` aqui de
+   * propósito: a normalização para ISO 8601/timestamptz acontece na fronteira de
+   * persistência (repo/coluna), não no gateway. Persiste em
+   * `estacoes_pluviometricas.ultima_transmissao` e alimenta a derivação de "online".
+   */
+  ultimaTransmissao: string | null;
+}
+
+/**
+ * Ponto BRUTO de nível (metros) de uma estação fluviométrica ou piezométrica,
+ * como vem do SIBH, já normalizado para o domínio.
+ *
+ * Diferente da chuva, o nível é grandeza INSTANTÂNEA (não acumulado do dia
+ * hidrológico): a série NÃO é persistida — é consultada ao vivo e agregada por
+ * dia de calendário no use-case. Um ponto por medição (granularidade original do
+ * SIBH, tipicamente horária).
+ */
+export interface PontoNivelSibh {
+  /** Momento da medição no formato do SIBH 'YYYY/MM/DD HH:mm'. */
+  momento: string;
+  /**
+   * Nível lido em metros. Ver a DECISÃO DE MAPEAMENTO documentada no adapter
+   * (`sibh-client.ts::serieNivelPorPrefixo`): na prática o SIBH entrega o nível
+   * físico em `read_value` quando presente e, na maioria das estações de SP
+   * Águas, em `value` (com `read_value` nulo). O ponto só existe quando há um
+   * número finito; medições sem nível finito são descartadas.
+   */
+  nivelM: number;
 }
 
 /**
@@ -136,6 +175,16 @@ export interface SibhGateway {
    * Retorna `[]` quando o prefixo não existe.
    */
   medicoesPorPrefixo(prefixo: string, desde: Date, ate: Date): Promise<MedicaoSibh[]>;
+
+  /**
+   * Busca a série BRUTA de nível (metros) de uma estação fluviométrica ou
+   * piezométrica (por prefixo) no período [desde, ate]. Um ponto por medição, na
+   * granularidade original do SIBH (tipicamente horária), SEM agregar e SEM
+   * cache (dado ao vivo). Descarta medições sem nível finito. Retorna `[]`
+   * quando o prefixo não existe. A agregação por dia de calendário fica no
+   * use-case `obterSerieNivel`.
+   */
+  serieNivelPorPrefixo(prefixo: string, desde: Date, ate: Date): Promise<PontoNivelSibh[]>;
 
   /**
    * Retorna a leitura mais recente de uma estação (por prefixo) para o "ao

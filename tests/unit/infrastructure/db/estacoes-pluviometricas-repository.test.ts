@@ -116,6 +116,32 @@ describe('estações pluviométricas (mock) — upsertPorSibhId', () => {
     await repo.upsertPorSibhId(entrada({ prefixo: 'P-002' }));
     expect((await repo.listar()).length).toBe(2);
   });
+
+  it('persiste status de transmissão: normaliza a data crua do SIBH para ISO (migration 0053)', async () => {
+    const e = await repo.upsertPorSibhId(
+      entrada({
+        sibhId: 'sibh-online',
+        transmissionStatus: 'ok',
+        ultimaTransmissao: 'Wed Jul 15 2026 13:40:00 GMT+0000 (Coordinated Universal Time)',
+      }),
+    );
+    expect(e.transmissionStatus).toBe('ok');
+    // Guardado/lido como ISO 8601 (espelha o cast do timestamptz no .pg).
+    expect(e.ultimaTransmissao).toBe('2026-07-15T13:40:00.000Z');
+
+    // Releitura por id mantém os valores.
+    const relida = await repo.obterPorId(e.id);
+    expect(relida!.transmissionStatus).toBe('ok');
+    expect(relida!.ultimaTransmissao).toBe('2026-07-15T13:40:00.000Z');
+  });
+
+  it('status de transmissão ausente/vazio vira null', async () => {
+    const e = await repo.upsertPorSibhId(
+      entrada({ sibhId: 'sibh-sem-status', ultimaTransmissao: '', transmissionStatus: null }),
+    );
+    expect(e.transmissionStatus).toBeNull();
+    expect(e.ultimaTransmissao).toBeNull();
+  });
 });
 
 describe('estações pluviométricas (mock) — listar e obterPorId', () => {
@@ -184,6 +210,24 @@ describe('estacoes-pluviometricas-repository.pg — regressão de schema', () =>
     expect(source).not.toMatch(/ON\s+CONFLICT\s+\(prefixo\)/);
     // prefixo passa a ser atualizado no DO UPDATE (qualificado com EXCLUDED).
     expect(source).toMatch(/prefixo\s*=\s*EXCLUDED\.prefixo/);
+  });
+
+  it('persiste transmission_status e ultima_transmissao (migration 0053) no insert, update e select', () => {
+    // Colunas no INSERT.
+    expect(source).toMatch(/INSERT\s+INTO\s+estacoes_pluviometricas[\s\S]*transmission_status/);
+    expect(source).toMatch(/INSERT\s+INTO\s+estacoes_pluviometricas[\s\S]*ultima_transmissao/);
+    // Atualizadas no ON CONFLICT via EXCLUDED (qualificado, sem ambiguidade).
+    expect(source).toMatch(/transmission_status\s*=\s*EXCLUDED\.transmission_status/);
+    expect(source).toMatch(/ultima_transmissao\s*=\s*EXCLUDED\.ultima_transmissao/);
+    // No SELECT (via COLUNAS).
+    expect(source).toMatch(/COLUNAS\s*=\s*sql`[^`]*transmission_status[^`]*ultima_transmissao/);
+  });
+
+  it('normaliza a data crua do SIBH e casta explicitamente para timestamptz', () => {
+    // O formato cru do SIBH (Date#toString) não casta em timestamptz; o repo
+    // normaliza pra ISO antes e faz o cast explícito (parâmetro pode ser null).
+    expect(source).toMatch(/normalizarTimestampSibh\(/);
+    expect(source).toMatch(/::timestamptz/);
   });
 
   it('todas as queries passam pela tag parametrizada sql (sem string crua)', () => {

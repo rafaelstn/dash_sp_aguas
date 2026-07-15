@@ -4,6 +4,7 @@ import type {
   EstacaoSibh,
   LeituraSibh,
   MedicaoSibh,
+  PontoNivelSibh,
   SibhGateway,
 } from '@/application/ports/sibh-gateway';
 import type { LeiturasPluviometricasRepository } from '@/application/ports/leituras-pluviometricas-repository';
@@ -34,6 +35,9 @@ function fakeSibh(
     async medicoesPorPrefixo(prefixo) {
       onErro?.(prefixo);
       return porPrefixo[prefixo] ?? [];
+    },
+    async serieNivelPorPrefixo(): Promise<PontoNivelSibh[]> {
+      return [];
     },
     async valorAtualPorPrefixo(): Promise<LeituraSibh | null> {
       return null;

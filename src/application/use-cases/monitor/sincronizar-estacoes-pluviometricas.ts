@@ -142,6 +142,9 @@ async function sincronizarUma(
     tipoEstacao: estacao.tipo,
     bacia: estacao.bacia,
     owner: estacao.owner,
+    // Status de transmissão para derivar "online" (persistido, migration 0053).
+    transmissionStatus: estacao.transmissionStatus,
+    ultimaTransmissao: estacao.ultimaTransmissao,
     postoId,
   });
 

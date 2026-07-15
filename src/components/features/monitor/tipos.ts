@@ -26,6 +26,13 @@ export interface Estacao {
   postoId: string | null;
   sibhId: string | null;
   criadoEm: string;
+  /**
+   * Estação transmitindo (derivado server-side pela regra por tipo: piezo exige
+   * última transmissão; pluvio/fluvio exigem status 'ok' + última transmissão).
+   */
+  online: boolean;
+  /** Momento da última transmissão em ISO 8601, ou null. */
+  ultimaTransmissao: string | null;
 }
 
 export interface RespostaEstacoes {

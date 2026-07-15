@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { estacoesPluviometricasRepository } from '@/infrastructure/repositories';
+import { estacaoOnline } from '@/domain/monitor/estacao-online';
 import { exigirUsuario } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import {
@@ -77,12 +78,32 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const itens = await estacoesPluviometricasRepository.listar({
+    const estacoes = await estacoesPluviometricasRepository.listar({
       bacia: parsed.data.bacia,
       tipo: parsed.data.tipo,
       tipoEstacao: parsed.data.tipoEstacao,
       owner: parsed.data.owner,
     });
+
+    // Payload explicito por estacao: computa `online` server-side (regra por
+    // tipo, migration 0053) e expoe `ultimaTransmissao`. NAO vaza
+    // `transmission_status` cru — `online` + `ultimaTransmissao` bastam pro front.
+    const itens = estacoes.map((e) => ({
+      id: e.id,
+      prefixo: e.prefixo,
+      nome: e.nome,
+      lat: e.lat,
+      lng: e.lng,
+      tipo: e.tipo,
+      tipoEstacao: e.tipoEstacao,
+      bacia: e.bacia,
+      owner: e.owner,
+      postoId: e.postoId,
+      sibhId: e.sibhId,
+      criadoEm: e.criadoEm,
+      online: estacaoOnline(e),
+      ultimaTransmissao: e.ultimaTransmissao,
+    }));
 
     logger.info(
       'monitor.estacoes.listadas',

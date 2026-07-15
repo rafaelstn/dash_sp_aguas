@@ -5,6 +5,7 @@ import type {
   EstacaoSibh,
   LeituraSibh,
   MedicaoSibh,
+  PontoNivelSibh,
   SibhGateway,
   TipoEstacaoSibh,
 } from '@/application/ports/sibh-gateway';
@@ -86,6 +87,23 @@ interface EstacaoBruta {
   ugrhi_name?: string | null;
   // Entidade responsavel pela estacao (ex.: 'SP ÁGUAS', 'CEMADEN', 'ANA').
   station_owner?: string | null;
+  // Status de transmissao: 'ok' | 'pendente' | null (deriva o "online").
+  transmission_status?: string | null;
+  // Momento da ultima medicao. Vem como string tipo Date#toString() do JS
+  // ('Wed Jul 15 2026 12:10:00 GMT+0000 (...)') ou '' quando ausente.
+  date_last_measurement?: string | null;
+}
+
+/**
+ * Normaliza uma string crua opcional para `string | null`: trim, e '' vira null.
+ * Usada em campos textuais do SIBH que podem vir vazios (owner, status, data).
+ * NÃO parseia data: `date_last_measurement` fica como string crua (a conversão
+ * para timestamptz/ISO acontece na persistência).
+ */
+function textoOuNull(valor: string | null | undefined): string | null {
+  if (typeof valor !== 'string') return null;
+  const t = valor.trim();
+  return t === '' ? null : t;
 }
 
 /**
@@ -207,6 +225,9 @@ async function carregarEstacoes(): Promise<EstacaoSibh[]> {
           lng: parseCoordenada(bruta.longitude),
           bacia: bruta.ugrhi_name?.trim() || null,
           owner: bruta.station_owner?.trim() || null,
+          transmissionStatus: textoOuNull(bruta.transmission_status),
+          // String crua (ou null): a normalizacao pra ISO fica na persistencia.
+          ultimaTransmissao: textoOuNull(bruta.date_last_measurement),
         });
       }
 
@@ -239,6 +260,38 @@ function normalizarMedicao(bruta: MedicaoBruta): MedicaoSibh | null {
     momento,
     gapMinutos: typeof bruta.measurement_gap === 'number' ? bruta.measurement_gap : 0,
   };
+}
+
+/**
+ * Extrai o nível (metros) de uma medição bruta de estação fluviométrica/
+ * piezométrica.
+ *
+ * DECISÃO DE MAPEAMENTO (verificada por curl contra o SIBH em 2026-07-15):
+ * o pressuposto inicial era `nivelM = read_value`. A inspeção da API real
+ * mostrou que isso deixaria a série VAZIA para a maioria das estações de SP
+ * Águas:
+ *   - flu 2D-028 (id 821)  -> read_value NULO, value=129.4  (nível utilizável);
+ *   - piezo 5B-505Z (id 516) -> read_value NULO, value=637.5 (nível subterrâneo);
+ *   - flu 64570000 (id 180) -> read_value=625 presente, value=25746 (logger cru);
+ *   - flu 409 (id 35370)    -> read_value NULO, value=62759 (contagem de logger).
+ * Ou seja, `read_value` é o campo físico quando presente (algumas estações,
+ * ex. ANA), mas na rede de SP Águas o nível chega em `value` (read_value nulo).
+ *
+ * Regra adotada: preferir `read_value` finito; na ausência, usar `value` finito;
+ * se nenhum for finito, o ponto é descartado. Isso mantém a série viva para as
+ * estações do cliente. Caveat conhecido (fora do nosso controle, data quality do
+ * SIBH): estações cujo `value` é contagem crua do logger (ex. 62759) entram como
+ * "nível" — a série de UMA estação é sempre auto-consistente (mesma origem em
+ * todos os pontos), então a tendência é legível, mas a unidade absoluta pode
+ * variar entre estações. A escolha do campo canônico deve ser confirmada com a
+ * equipe do SIBH.
+ */
+function nivelDaMedicao(bruta: MedicaoBruta): number | null {
+  const rv = bruta.read_value;
+  if (typeof rv === 'number' && Number.isFinite(rv)) return rv;
+  const v = bruta.value;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  return null;
 }
 
 /**
@@ -281,6 +334,42 @@ export const sibhClient: SibhGateway = {
       if (normalizada) medicoes.push(normalizada);
     }
     return medicoes;
+  },
+
+  async serieNivelPorPrefixo(
+    prefixo: string,
+    desde: Date,
+    ate: Date,
+  ): Promise<PontoNivelSibh[]> {
+    const alvo = prefixo.trim();
+    if (!alvo) return [];
+
+    const estacoes = await carregarEstacoes();
+    const estacao = estacoes.find((e) => e.prefixo === alvo);
+    if (!estacao) return [];
+
+    const inicio = format(desde, 'yyyy-MM-dd');
+    const fim = format(ate, 'yyyy-MM-dd');
+    const url =
+      `${SIBH_BASE_URL}/measurements` +
+      `?start_date=${inicio}&end_date=${fim}` +
+      `&station_prefix_ids[]=${encodeURIComponent(estacao.id)}`;
+
+    const payload = await getJson(url);
+    const brutas = extrairMedicoesBrutas(payload);
+
+    const pontos: PontoNivelSibh[] = [];
+    for (const bruta of brutas) {
+      // A resposta pode misturar prefixos quando o mesmo id atende tipos
+      // diferentes; filtra pelo prefixo pedido (mesmo padrão de medicoesPorPrefixo).
+      if (bruta.prefix?.trim() !== alvo) continue;
+      const momento = bruta.date?.trim();
+      if (!momento) continue;
+      const nivelM = nivelDaMedicao(bruta);
+      if (nivelM === null) continue;
+      pontos.push({ momento, nivelM });
+    }
+    return pontos;
   },
 
   async valorAtualPorPrefixo(prefixo: string): Promise<LeituraSibh | null> {
