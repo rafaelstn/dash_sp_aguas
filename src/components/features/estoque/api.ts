@@ -271,3 +271,63 @@ export function registrarMovimentacao(
 ): Promise<ResultadoMovimentacaoDTO> {
   return enviar('/api/estoque/movimentacoes', 'POST', payload);
 }
+
+// ── Exportacao Excel (XLSX) ──────────────────────────────────────────────────
+// A rota `GET /api/estoque/export?tipo=...` gera o XLSX no servidor (auth por
+// cookie de sessao) e responde com o arquivo como anexo. `tipo` seleciona a aba
+// e reaproveita os MESMOS filtros da listagem correspondente. So montamos aqui a
+// URL (querystring), ignorando valores vazios; o download em si e disparado pelo
+// componente `BotaoExportarExcel`.
+
+/** Filtros do export de movimentacoes. ATENCAO: o filtro de tipo de movimento
+ *  vai como `tipoMov` (o param `tipo` ja seleciona a aba do export). */
+export interface FiltrosExportMovimentacoes {
+  tipoMov?: TipoMovimentacao;
+  unidadeId?: string;
+  materialId?: string;
+  local?: string;
+  usuarioId?: string;
+  /** Data inicial (ISO). */
+  de?: string;
+  /** Data final (ISO). */
+  ate?: string;
+}
+
+/** URL do export dos itens serializados (mesmos filtros da aba Serializados). */
+export function urlExportarSerializado(f: FiltrosUnidadesUI): string {
+  return `/api/estoque/export${qs({
+    tipo: 'serializado',
+    unidade: f.unidade,
+    local: f.local,
+    estado: f.estado,
+    status: f.status,
+    materialId: f.materialId,
+    busca: f.busca,
+  })}`;
+}
+
+/** URL do export dos materiais quantificaveis (filtros aceitos pelo backend:
+ *  materialId/local/unidade). Categoria e busca da aba sao filtros de cliente e
+ *  o backend nao os aceita, entao nao entram na querystring. */
+export function urlExportarQuantificavel(f: FiltrosSaldosUI): string {
+  return `/api/estoque/export${qs({
+    tipo: 'quantificavel',
+    materialId: f.materialId,
+    local: f.local,
+    unidade: f.unidade,
+  })}`;
+}
+
+/** URL do export da trilha de movimentacoes. Sem filtro = trilha completa. */
+export function urlExportarMovimentacoes(f: FiltrosExportMovimentacoes = {}): string {
+  return `/api/estoque/export${qs({
+    tipo: 'movimentacoes',
+    tipoMov: f.tipoMov,
+    unidadeId: f.unidadeId,
+    materialId: f.materialId,
+    local: f.local,
+    usuarioId: f.usuarioId,
+    de: f.de,
+    ate: f.ate,
+  })}`;
+}

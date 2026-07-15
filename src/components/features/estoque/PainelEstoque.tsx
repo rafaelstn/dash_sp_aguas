@@ -19,7 +19,11 @@ import {
   listarMateriais,
   listarSaldos,
   listarUnidades,
+  urlExportarMovimentacoes,
+  urlExportarQuantificavel,
+  urlExportarSerializado,
 } from './api';
+import { BotaoExportarExcel } from './BotaoExportarExcel';
 import { ErroEstoque } from './erros';
 import { agruparSaldos, somarQuantidades } from './saldos-agrupados';
 import { FiltrosEstoque, FILTROS_ESTOQUE_INICIAIS, type FiltrosEstoqueUI } from './FiltrosEstoque';
@@ -442,38 +446,69 @@ export function PainelEstoque({ podeGerenciar }: Props) {
             materiais quantificáveis e trilha de movimentação
           </p>
         </div>
-        {podeGerenciar ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variante="secundario"
-              onClick={() => setGestaoAberta(true)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm"
-            >
-              <Settings2 className="h-4 w-4" aria-hidden="true" />
-              Cadastros
-            </Button>
-            {aba === 'serializado' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Exportacao Excel (LEITURA: aparece para qualquer usuario logado). */}
+          {aba === 'serializado' ? (
+            <BotaoExportarExcel
+              url={urlExportarSerializado({
+                unidade: filtros.unidade || undefined,
+                local: filtros.local || undefined,
+                estado: filtros.estado || undefined,
+                status: filtros.status || undefined,
+                busca: buscaDebounced.trim() || undefined,
+              })}
+              arquivoFallback="estoque-serializados"
+              descricao="Exporta os itens serializados com os filtros aplicados nesta aba."
+            />
+          ) : (
+            <BotaoExportarExcel
+              url={urlExportarQuantificavel({
+                unidade: filtros.unidade || undefined,
+                local: filtros.local || undefined,
+              })}
+              arquivoFallback="estoque-quantificaveis"
+              descricao="Exporta os materiais quantificáveis por unidade e local."
+            />
+          )}
+          <BotaoExportarExcel
+            url={urlExportarMovimentacoes()}
+            rotulo="Exportar movimentações"
+            arquivoFallback="estoque-movimentacoes"
+            descricao="Exporta a trilha completa de movimentações (auditoria do almoxarifado)."
+          />
+          {podeGerenciar ? (
+            <>
               <Button
                 type="button"
-                onClick={() => setFormUnidade({ aberto: true, unidade: null })}
+                variante="secundario"
+                onClick={() => setGestaoAberta(true)}
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-sm"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Novo item serializado
+                <Settings2 className="h-4 w-4" aria-hidden="true" />
+                Cadastros
               </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => setFormMaterial({ aberto: true, material: null })}
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Novo material
-              </Button>
-            )}
-          </div>
-        ) : null}
+              {aba === 'serializado' ? (
+                <Button
+                  type="button"
+                  onClick={() => setFormUnidade({ aberto: true, unidade: null })}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Novo item serializado
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setFormMaterial({ aberto: true, material: null })}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Novo material
+                </Button>
+              )}
+            </>
+          ) : null}
+        </div>
       </div>
 
       {feedback ? (

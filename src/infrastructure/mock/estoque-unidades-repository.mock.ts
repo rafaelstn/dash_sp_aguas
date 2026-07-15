@@ -1,7 +1,8 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { EstoqueUnidadesRepository } from '@/application/ports/estoque-unidades-repository';
-import type { Unidade } from '@/domain/estoque/unidade';
+import type { FiltrosUnidade, Unidade } from '@/domain/estoque/unidade';
+import { TETO_EXPORT, type UnidadeExport } from '@/domain/estoque/export';
 import { UnidadeNaoEncontrada } from '@/domain/errors';
 import { estoqueStore } from './estoque-store.mock';
 
@@ -16,28 +17,46 @@ function contemBusca(u: Unidade, busca: string): boolean {
   );
 }
 
+/** Aplica os mesmos filtros de `listar`/`listarParaExport` e ordena por descricao. */
+function filtrarOrdenar(filtros: FiltrosUnidade): Unidade[] {
+  let itens = Array.from(estoqueStore.unidades.values());
+  if (filtros.unidade) {
+    itens = itens.filter((u) => {
+      if (!u.localId) return false;
+      const local = estoqueStore.locais.get(u.localId);
+      return local?.unidade === filtros.unidade;
+    });
+  }
+  if (filtros.localId) itens = itens.filter((u) => u.localId === filtros.localId);
+  if (filtros.estado) itens = itens.filter((u) => u.estado === filtros.estado);
+  if (filtros.status) itens = itens.filter((u) => u.status === filtros.status);
+  if (filtros.materialId) itens = itens.filter((u) => u.materialId === filtros.materialId);
+  if (filtros.busca) itens = itens.filter((u) => contemBusca(u, filtros.busca as string));
+  itens.sort((a, b) => a.descricao.localeCompare(b.descricao));
+  return itens;
+}
+
 export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
   async listar(filtros) {
-    let itens = Array.from(estoqueStore.unidades.values());
-    if (filtros.unidade) {
-      itens = itens.filter((u) => {
-        if (!u.localId) return false;
-        const local = estoqueStore.locais.get(u.localId);
-        return local?.unidade === filtros.unidade;
-      });
-    }
-    if (filtros.localId) itens = itens.filter((u) => u.localId === filtros.localId);
-    if (filtros.estado) itens = itens.filter((u) => u.estado === filtros.estado);
-    if (filtros.status) itens = itens.filter((u) => u.status === filtros.status);
-    if (filtros.materialId) itens = itens.filter((u) => u.materialId === filtros.materialId);
-    if (filtros.busca) itens = itens.filter((u) => contemBusca(u, filtros.busca as string));
-    itens.sort((a, b) => a.descricao.localeCompare(b.descricao));
-
+    const itens = filtrarOrdenar(filtros);
     const total = itens.length;
     const pagina = Math.max(filtros.pagina ?? 1, 1);
     const porPagina = Math.min(Math.max(filtros.porPagina ?? 50, 1), 200);
     const inicio = (pagina - 1) * porPagina;
     return { itens: itens.slice(inicio, inicio + porPagina), total };
+  },
+
+  async listarParaExport(filtros) {
+    return filtrarOrdenar(filtros)
+      .slice(0, TETO_EXPORT)
+      .map((u): UnidadeExport => {
+        const local = u.localId ? estoqueStore.locais.get(u.localId) : undefined;
+        return {
+          ...u,
+          unidadeFisica: local?.unidade ?? null,
+          localRotulo: local?.rotulo ?? null,
+        };
+      });
   },
 
   async obterPorId(id) {

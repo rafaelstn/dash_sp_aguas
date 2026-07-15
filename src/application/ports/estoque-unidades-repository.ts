@@ -3,6 +3,7 @@ import type {
   Unidade,
   UpsertUnidade,
 } from '@/domain/estoque/unidade';
+import type { UnidadeExport } from '@/domain/estoque/export';
 
 /**
  * Port do repositorio de unidades serializadas. Adapter `.pg` persiste em
@@ -12,6 +13,11 @@ import type {
  */
 export interface EstoqueUnidadesRepository {
   listar(filtros: FiltrosUnidade): Promise<{ itens: Unidade[]; total: number }>;
+  /**
+   * Lista serializados SEM paginacao (export), com contexto de local (unidade
+   * fisica + rotulo). Mesmos filtros de `listar`; teto defensivo TETO_EXPORT.
+   */
+  listarParaExport(filtros: FiltrosUnidade): Promise<UnidadeExport[]>;
   obterPorId(id: string): Promise<Unidade | null>;
   criar(dados: UpsertUnidade): Promise<Unidade>;
   /** Edita atributos (nao mexe em local/status por fluxo de movimentacao). */

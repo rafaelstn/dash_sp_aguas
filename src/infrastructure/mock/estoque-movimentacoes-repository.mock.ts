@@ -3,11 +3,13 @@ import { randomUUID } from 'node:crypto';
 import type { EstoqueMovimentacoesRepository } from '@/application/ports/estoque-movimentacoes-repository';
 import type {
   ComandoMovimentacao,
+  FiltrosMovimentacao,
   Movimentacao,
   ResultadoMovimentacao,
 } from '@/domain/estoque/movimentacao';
 import type { Saldo } from '@/domain/estoque/saldo';
 import type { Unidade } from '@/domain/estoque/unidade';
+import { TETO_EXPORT, type MovimentacaoExport } from '@/domain/estoque/export';
 import { transicaoValida } from '@/domain/estoque/status-unidade';
 import {
   MaterialNaoEncontrado,
@@ -198,24 +200,49 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
   },
 
   async listar(filtros) {
-    let itens = [...estoqueStore.movimentacoes];
-    if (filtros.tipo) itens = itens.filter((m) => m.tipo === filtros.tipo);
-    if (filtros.unidadeId) itens = itens.filter((m) => m.unidadeId === filtros.unidadeId);
-    if (filtros.materialId) itens = itens.filter((m) => m.materialId === filtros.materialId);
-    if (filtros.usuarioId) itens = itens.filter((m) => m.usuarioId === filtros.usuarioId);
-    if (filtros.localId) {
-      itens = itens.filter(
-        (m) => m.localOrigemId === filtros.localId || m.localDestinoId === filtros.localId,
-      );
-    }
-    if (filtros.de) itens = itens.filter((m) => m.criadoEm >= (filtros.de as Date));
-    if (filtros.ate) itens = itens.filter((m) => m.criadoEm <= (filtros.ate as Date));
-    itens.sort((a, b) => b.criadoEm.getTime() - a.criadoEm.getTime());
-
+    const itens = filtrarOrdenar(filtros);
     const total = itens.length;
     const pagina = Math.max(filtros.pagina ?? 1, 1);
     const porPagina = Math.min(Math.max(filtros.porPagina ?? 50, 1), 200);
     const inicio = (pagina - 1) * porPagina;
     return { itens: itens.slice(inicio, inicio + porPagina), total };
   },
+
+  async listarParaExport(filtros) {
+    return filtrarOrdenar(filtros)
+      .slice(0, TETO_EXPORT)
+      .map((m): MovimentacaoExport => {
+        const unidade = m.unidadeId ? estoqueStore.unidades.get(m.unidadeId) : undefined;
+        const material = m.materialId ? estoqueStore.materiais.get(m.materialId) : undefined;
+        const lo = m.localOrigemId ? estoqueStore.locais.get(m.localOrigemId) : undefined;
+        const ld = m.localDestinoId ? estoqueStore.locais.get(m.localDestinoId) : undefined;
+        return {
+          ...m,
+          itemDescricao: unidade?.descricao ?? material?.descricao ?? null,
+          itemIdentificacao: unidade
+            ? unidade.patDaee ?? unidade.numeroSerie ?? unidade.codigo ?? unidade.codigoSpaguas ?? null
+            : null,
+          localOrigemRotulo: lo?.rotulo ?? null,
+          localDestinoRotulo: ld?.rotulo ?? null,
+        };
+      });
+  },
 };
+
+/** Aplica os mesmos filtros de `listar`/`listarParaExport` e ordena por data desc. */
+function filtrarOrdenar(filtros: FiltrosMovimentacao): Movimentacao[] {
+  let itens = [...estoqueStore.movimentacoes];
+  if (filtros.tipo) itens = itens.filter((m) => m.tipo === filtros.tipo);
+  if (filtros.unidadeId) itens = itens.filter((m) => m.unidadeId === filtros.unidadeId);
+  if (filtros.materialId) itens = itens.filter((m) => m.materialId === filtros.materialId);
+  if (filtros.usuarioId) itens = itens.filter((m) => m.usuarioId === filtros.usuarioId);
+  if (filtros.localId) {
+    itens = itens.filter(
+      (m) => m.localOrigemId === filtros.localId || m.localDestinoId === filtros.localId,
+    );
+  }
+  if (filtros.de) itens = itens.filter((m) => m.criadoEm >= (filtros.de as Date));
+  if (filtros.ate) itens = itens.filter((m) => m.criadoEm <= (filtros.ate as Date));
+  itens.sort((a, b) => b.criadoEm.getTime() - a.criadoEm.getTime());
+  return itens;
+}

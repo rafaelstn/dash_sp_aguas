@@ -1,5 +1,8 @@
 import 'server-only';
 import type { EstoqueUnidadesRepository } from '@/application/ports/estoque-unidades-repository';
+import type { FiltrosUnidade } from '@/domain/estoque/unidade';
+import type { UnidadeFisica } from '@/domain/estoque/local';
+import { TETO_EXPORT } from '@/domain/estoque/export';
 import { FalhaRepositorio, UnidadeNaoEncontrada } from '@/domain/errors';
 import { sql } from './client';
 import {
@@ -8,27 +11,37 @@ import {
   type LinhaUnidadePg as LinhaUnidade,
 } from './estoque-unidades-mapper';
 
+/**
+ * WHERE compartilhado por `listar` e `listarParaExport` (mesmos filtros). Usa o
+ * alias `u` (estoque_unidades); o filtro de unidade fisica e um EXISTS com alias
+ * proprio `l`, que nao colide com joins externos.
+ */
+function montarWhere(filtros: FiltrosUnidade): ReturnType<typeof sql> {
+  const wheres: ReturnType<typeof sql>[] = [sql`true`];
+  if (filtros.unidade) {
+    wheres.push(
+      sql`EXISTS (SELECT 1 FROM estoque_locais l WHERE l.id = u.local_id AND l.unidade = ${filtros.unidade})`,
+    );
+  }
+  if (filtros.localId) wheres.push(sql`u.local_id = ${filtros.localId}::uuid`);
+  if (filtros.estado) wheres.push(sql`u.estado = ${filtros.estado}`);
+  if (filtros.status) wheres.push(sql`u.status = ${filtros.status}`);
+  if (filtros.materialId) wheres.push(sql`u.material_id = ${filtros.materialId}::uuid`);
+  if (filtros.busca) {
+    const termo = `%${filtros.busca}%`;
+    wheres.push(
+      sql`(u.descricao ILIKE ${termo} OR u.numero_serie ILIKE ${termo} OR u.codigo_spaguas ILIKE ${termo} OR u.pat_daee ILIKE ${termo} OR u.codigo ILIKE ${termo})`,
+    );
+  }
+  let where = wheres[0]!;
+  for (let i = 1; i < wheres.length; i += 1) where = sql`${where} AND ${wheres[i]!}`;
+  return where;
+}
+
 export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
   async listar(filtros) {
     try {
-      const wheres: ReturnType<typeof sql>[] = [sql`true`];
-      if (filtros.unidade) {
-        wheres.push(
-          sql`EXISTS (SELECT 1 FROM estoque_locais l WHERE l.id = u.local_id AND l.unidade = ${filtros.unidade})`,
-        );
-      }
-      if (filtros.localId) wheres.push(sql`u.local_id = ${filtros.localId}::uuid`);
-      if (filtros.estado) wheres.push(sql`u.estado = ${filtros.estado}`);
-      if (filtros.status) wheres.push(sql`u.status = ${filtros.status}`);
-      if (filtros.materialId) wheres.push(sql`u.material_id = ${filtros.materialId}::uuid`);
-      if (filtros.busca) {
-        const termo = `%${filtros.busca}%`;
-        wheres.push(
-          sql`(u.descricao ILIKE ${termo} OR u.numero_serie ILIKE ${termo} OR u.codigo_spaguas ILIKE ${termo} OR u.pat_daee ILIKE ${termo} OR u.codigo ILIKE ${termo})`,
-        );
-      }
-      let where = wheres[0]!;
-      for (let i = 1; i < wheres.length; i += 1) where = sql`${where} AND ${wheres[i]!}`;
+      const where = montarWhere(filtros);
 
       const pagina = Math.max(filtros.pagina ?? 1, 1);
       const porPagina = Math.min(Math.max(filtros.porPagina ?? 50, 1), 200);
@@ -46,6 +59,31 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
       return { itens: itens.map(mapear), total: Number(totalRows[0]?.total ?? '0') };
     } catch (e) {
       throw new FalhaRepositorio('estoqueUnidades.listar', e);
+    }
+  },
+
+  async listarParaExport(filtros) {
+    try {
+      const where = montarWhere(filtros);
+      // `u.*` (nao COLUNAS bare) porque o JOIN com estoque_locais torna `id`/
+      // `criado_em` ambiguos; alias `loc` distinto do `l` do EXISTS interno.
+      const linhas = await sql<
+        (LinhaUnidade & { unidade_fisica: UnidadeFisica | null; local_rotulo: string | null })[]
+      >`
+        SELECT u.*, loc.unidade AS unidade_fisica, loc.rotulo AS local_rotulo
+          FROM estoque_unidades u
+          LEFT JOIN estoque_locais loc ON loc.id = u.local_id
+         WHERE ${where}
+         ORDER BY u.descricao, u.criado_em DESC
+         LIMIT ${TETO_EXPORT}
+      `;
+      return linhas.map((l) => ({
+        ...mapear(l),
+        unidadeFisica: l.unidade_fisica,
+        localRotulo: l.local_rotulo,
+      }));
+    } catch (e) {
+      throw new FalhaRepositorio('estoqueUnidades.listarParaExport', e);
     }
   },
 

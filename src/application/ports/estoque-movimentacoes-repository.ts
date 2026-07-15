@@ -4,6 +4,7 @@ import type {
   Movimentacao,
   ResultadoMovimentacao,
 } from '@/domain/estoque/movimentacao';
+import type { MovimentacaoExport } from '@/domain/estoque/export';
 
 /**
  * Port do repositorio de movimentacoes (o nucleo transacional do estoque).
@@ -22,4 +23,10 @@ import type {
 export interface EstoqueMovimentacoesRepository {
   registrar(comando: ComandoMovimentacao): Promise<ResultadoMovimentacao>;
   listar(filtros: FiltrosMovimentacao): Promise<{ itens: Movimentacao[]; total: number }>;
+  /**
+   * Lista a trilha SEM paginacao (export), enriquecida com descricao/identificacao
+   * do item e rotulos dos locais de origem/destino. Operador NAO e resolvido aqui
+   * (fica com `UsuariosIdentidadeRepository`). Mesmos filtros; teto TETO_EXPORT.
+   */
+  listarParaExport(filtros: FiltrosMovimentacao): Promise<MovimentacaoExport[]>;
 }

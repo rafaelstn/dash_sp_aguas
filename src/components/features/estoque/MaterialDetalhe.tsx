@@ -8,7 +8,8 @@ import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import { Drawer } from './Drawer';
 import { CampoDetalhe, ListaDetalhe, Valor } from './CampoDetalhe';
 import { TrilhaMovimentacoes } from './TrilhaMovimentacoes';
-import { listarMovimentacoes, listarSaldos, obterMaterial } from './api';
+import { BotaoExportarExcel } from './BotaoExportarExcel';
+import { listarMovimentacoes, listarSaldos, obterMaterial, urlExportarMovimentacoes } from './api';
 import { ErroEstoque } from './erros';
 import { somarQuantidades } from './saldos-agrupados';
 import { ROTULO_NATUREZA, ROTULO_UNIDADE_FISICA, formatarDataHora } from './rotulos';
@@ -208,7 +209,18 @@ export function MaterialDetalhe({
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-app-fg">Trilha de movimentação</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-app-fg">Trilha de movimentação</h3>
+              {estado.dados.historico.length > 0 ? (
+                <BotaoExportarExcel
+                  compacto
+                  url={urlExportarMovimentacoes({ materialId: estado.dados.material.id })}
+                  rotulo="Exportar movimentações"
+                  arquivoFallback="movimentacoes-material"
+                  descricao="Exporta as movimentações deste material."
+                />
+              ) : null}
+            </div>
             <TrilhaMovimentacoes movimentacoes={estado.dados.historico} nomeLocal={nomeLocal} />
           </section>
         </div>

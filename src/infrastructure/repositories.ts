@@ -26,6 +26,7 @@ import { estoqueMateriaisRepository as estoqueMateriaisPg } from './db/estoque-m
 import { estoqueUnidadesRepository as estoqueUnidadesPg } from './db/estoque-unidades-repository.pg';
 import { estoqueSaldosRepository as estoqueSaldosPg } from './db/estoque-saldos-repository.pg';
 import { estoqueMovimentacoesRepository as estoqueMovimentacoesPg } from './db/estoque-movimentacoes-repository.pg';
+import { usuariosIdentidadeRepository as usuariosIdentidadePg } from './db/usuarios-identidade-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
 import { postosRepository as postosMock } from './mock/postos-repository.mock';
@@ -51,6 +52,7 @@ import { estoqueMateriaisRepository as estoqueMateriaisMock } from './mock/estoq
 import { estoqueUnidadesRepository as estoqueUnidadesMock } from './mock/estoque-unidades-repository.mock';
 import { estoqueSaldosRepository as estoqueSaldosMock } from './mock/estoque-saldos-repository.mock';
 import { estoqueMovimentacoesRepository as estoqueMovimentacoesMock } from './mock/estoque-movimentacoes-repository.mock';
+import { usuariosIdentidadeRepository as usuariosIdentidadeMock } from './mock/usuarios-identidade-repository.mock';
 
 /**
  * Ponto único de escolha entre repositórios PG (reais) e mock (demo).
@@ -104,6 +106,12 @@ export const estoqueSaldosRepository = demo ? estoqueSaldosMock : estoqueSaldosP
 export const estoqueMovimentacoesRepository = demo
   ? estoqueMovimentacoesMock
   : estoqueMovimentacoesPg;
+
+// Resolucao de identidade de operador (email/nome) para a trilha/export do
+// Estoque. `.pg` le de auth.users em lote; `.mock` devolve vazio (sem Auth em demo).
+export const usuariosIdentidadeRepository = demo
+  ? usuariosIdentidadeMock
+  : usuariosIdentidadePg;
 
 // Gateway de Storage (Supabase) das fotos de posto. Sem variação demo: o
 // armazenamento real é sempre usado (não há mock de bucket hoje).

@@ -8,7 +8,8 @@ import { Drawer } from './Drawer';
 import { BadgeEstado, BadgeStatus } from './Badges';
 import { CampoDetalhe, ListaDetalhe, Valor } from './CampoDetalhe';
 import { TrilhaMovimentacoes } from './TrilhaMovimentacoes';
-import { obterUnidade } from './api';
+import { BotaoExportarExcel } from './BotaoExportarExcel';
+import { obterUnidade, urlExportarMovimentacoes } from './api';
 import { ErroEstoque } from './erros';
 import { formatarData, formatarDataHora } from './rotulos';
 import type { DetalheUnidadeDTO, UnidadeDTO } from './dtos';
@@ -147,7 +148,18 @@ export function UnidadeDetalhe({
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-app-fg">Trilha de movimentação</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-app-fg">Trilha de movimentação</h3>
+              {estado.dados.historico.length > 0 ? (
+                <BotaoExportarExcel
+                  compacto
+                  url={urlExportarMovimentacoes({ unidadeId: estado.dados.unidade.id })}
+                  rotulo="Exportar movimentações"
+                  arquivoFallback="movimentacoes-item"
+                  descricao="Exporta as movimentações deste item serializado."
+                />
+              ) : null}
+            </div>
             <TrilhaMovimentacoes movimentacoes={estado.dados.historico} nomeLocal={nomeLocal} />
           </section>
         </div>

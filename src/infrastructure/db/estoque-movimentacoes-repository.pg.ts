@@ -3,6 +3,7 @@ import type { Sql } from 'postgres';
 import type { EstoqueMovimentacoesRepository } from '@/application/ports/estoque-movimentacoes-repository';
 import type {
   ComandoMovimentacao,
+  FiltrosMovimentacao,
   Movimentacao,
   ResultadoMovimentacao,
   TipoMovimentacao,
@@ -10,6 +11,7 @@ import type {
 import type { Saldo } from '@/domain/estoque/saldo';
 import type { Estado } from '@/domain/estoque/estado';
 import type { Status } from '@/domain/estoque/status-unidade';
+import { TETO_EXPORT, type MovimentacaoExport } from '@/domain/estoque/export';
 import { transicaoValida } from '@/domain/estoque/status-unidade';
 import {
   FalhaRepositorio,
@@ -83,6 +85,30 @@ const COLUNAS_MOV = sql`
   estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id, criado_em
 `;
 const COLUNAS_SALDO = sql`id, material_id, local_id, quantidade, tamanho, atualizado_em`;
+
+/**
+ * WHERE compartilhado por `listar` e `listarParaExport`. Colunas QUALIFICADAS com
+ * o alias `em` (estoque_movimentacoes): o export faz JOIN com unidades/materiais/
+ * locais, onde `criado_em`/`id` existem em varias tabelas e ficariam ambiguos.
+ * O `listar` (sem join) tambem usa o alias `em` para reaproveitar este helper.
+ */
+function montarWhere(filtros: FiltrosMovimentacao): ReturnType<typeof sql> {
+  const wheres: ReturnType<typeof sql>[] = [sql`true`];
+  if (filtros.tipo) wheres.push(sql`em.tipo = ${filtros.tipo}`);
+  if (filtros.unidadeId) wheres.push(sql`em.unidade_id = ${filtros.unidadeId}::uuid`);
+  if (filtros.materialId) wheres.push(sql`em.material_id = ${filtros.materialId}::uuid`);
+  if (filtros.usuarioId) wheres.push(sql`em.usuario_id = ${filtros.usuarioId}::uuid`);
+  if (filtros.localId) {
+    wheres.push(
+      sql`(em.local_origem = ${filtros.localId}::uuid OR em.local_destino = ${filtros.localId}::uuid)`,
+    );
+  }
+  if (filtros.de) wheres.push(sql`em.criado_em >= ${filtros.de}`);
+  if (filtros.ate) wheres.push(sql`em.criado_em <= ${filtros.ate}`);
+  let where = wheres[0]!;
+  for (let i = 1; i < wheres.length; i += 1) where = sql`${where} AND ${wheres[i]!}`;
+  return where;
+}
 
 /**
  * Saida/baixa/transferencia: UPDATE GUARDADO ATOMICO. O `WHERE quantidade >= q`
@@ -166,37 +192,69 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
 
   async listar(filtros) {
     try {
-      const wheres: ReturnType<typeof sql>[] = [sql`true`];
-      if (filtros.tipo) wheres.push(sql`tipo = ${filtros.tipo}`);
-      if (filtros.unidadeId) wheres.push(sql`unidade_id = ${filtros.unidadeId}::uuid`);
-      if (filtros.materialId) wheres.push(sql`material_id = ${filtros.materialId}::uuid`);
-      if (filtros.usuarioId) wheres.push(sql`usuario_id = ${filtros.usuarioId}::uuid`);
-      if (filtros.localId) {
-        wheres.push(
-          sql`(local_origem = ${filtros.localId}::uuid OR local_destino = ${filtros.localId}::uuid)`,
-        );
-      }
-      if (filtros.de) wheres.push(sql`criado_em >= ${filtros.de}`);
-      if (filtros.ate) wheres.push(sql`criado_em <= ${filtros.ate}`);
-      let where = wheres[0]!;
-      for (let i = 1; i < wheres.length; i += 1) where = sql`${where} AND ${wheres[i]!}`;
+      const where = montarWhere(filtros);
 
       const pagina = Math.max(filtros.pagina ?? 1, 1);
       const porPagina = Math.min(Math.max(filtros.porPagina ?? 50, 1), 200);
       const offset = (pagina - 1) * porPagina;
 
       const itens = await sql<LinhaMov[]>`
-        SELECT ${COLUNAS_MOV} FROM estoque_movimentacoes
+        SELECT ${COLUNAS_MOV} FROM estoque_movimentacoes em
          WHERE ${where}
-         ORDER BY criado_em DESC
+         ORDER BY em.criado_em DESC
          LIMIT ${porPagina} OFFSET ${offset}
       `;
       const totalRows = await sql<{ total: string }[]>`
-        SELECT COUNT(*)::text AS total FROM estoque_movimentacoes WHERE ${where}
+        SELECT COUNT(*)::text AS total FROM estoque_movimentacoes em WHERE ${where}
       `;
       return { itens: itens.map(mapearMov), total: Number(totalRows[0]?.total ?? '0') };
     } catch (e) {
       throw new FalhaRepositorio('estoqueMovimentacoes.listar', e);
+    }
+  },
+
+  async listarParaExport(filtros) {
+    try {
+      const where = montarWhere(filtros);
+      // JOINs para trazer descricao/identificacao do item e rotulos dos locais.
+      // Operador NAO resolve aqui (fica no UsuariosIdentidadeRepository, batch).
+      const linhas = await sql<
+        (LinhaMov & {
+          unidade_descricao: string | null;
+          unidade_identificacao: string | null;
+          material_descricao: string | null;
+          local_origem_rotulo: string | null;
+          local_destino_rotulo: string | null;
+        })[]
+      >`
+        SELECT em.id, em.tipo, em.unidade_id, em.material_id, em.quantidade,
+               em.local_origem, em.local_destino, em.estado_anterior, em.estado_novo,
+               em.status_anterior, em.status_novo, em.motivo, em.usuario_id, em.criado_em,
+               u.descricao AS unidade_descricao,
+               COALESCE(u.pat_daee, u.numero_serie, u.codigo, u.codigo_spaguas) AS unidade_identificacao,
+               mat.descricao AS material_descricao,
+               lo.rotulo AS local_origem_rotulo,
+               ld.rotulo AS local_destino_rotulo
+          FROM estoque_movimentacoes em
+          LEFT JOIN estoque_unidades u ON u.id = em.unidade_id
+          LEFT JOIN estoque_materiais mat ON mat.id = em.material_id
+          LEFT JOIN estoque_locais lo ON lo.id = em.local_origem
+          LEFT JOIN estoque_locais ld ON ld.id = em.local_destino
+         WHERE ${where}
+         ORDER BY em.criado_em DESC
+         LIMIT ${TETO_EXPORT}
+      `;
+      return linhas.map(
+        (l): MovimentacaoExport => ({
+          ...mapearMov(l),
+          itemDescricao: l.unidade_descricao ?? l.material_descricao ?? null,
+          itemIdentificacao: l.unidade_identificacao ?? null,
+          localOrigemRotulo: l.local_origem_rotulo,
+          localDestinoRotulo: l.local_destino_rotulo,
+        }),
+      );
+    } catch (e) {
+      throw new FalhaRepositorio('estoqueMovimentacoes.listarParaExport', e);
     }
   },
 };

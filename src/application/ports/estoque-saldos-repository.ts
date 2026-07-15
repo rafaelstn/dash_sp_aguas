@@ -1,4 +1,5 @@
 import type { FiltrosSaldo, Saldo, SaldoComContexto } from '@/domain/estoque/saldo';
+import type { SaldoExport } from '@/domain/estoque/export';
 
 /**
  * Port do repositorio de saldos de quantificaveis (SOMENTE LEITURA aqui). A
@@ -10,6 +11,12 @@ import type { FiltrosSaldo, Saldo, SaldoComContexto } from '@/domain/estoque/sal
 export interface EstoqueSaldosRepository {
   /** Consulta saldo com contexto (descricao do material, rotulo/unidade do local). */
   listar(filtros: FiltrosSaldo): Promise<SaldoComContexto[]>;
+  /**
+   * Lista saldos para o export: uma linha por (material, local, tamanho), com
+   * marca/modelo/categoria do material e unidade/rotulo do local. Mesmos filtros
+   * de `listar`; teto defensivo TETO_EXPORT.
+   */
+  listarParaExport(filtros: FiltrosSaldo): Promise<SaldoExport[]>;
   obterPorMaterialLocal(
     materialId: string,
     localId: string,
