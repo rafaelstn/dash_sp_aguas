@@ -5,6 +5,7 @@ import type { Material } from '@/domain/estoque/material';
 import type { Unidade } from '@/domain/estoque/unidade';
 import type { Saldo } from '@/domain/estoque/saldo';
 import type { Movimentacao } from '@/domain/estoque/movimentacao';
+import type { Conferencia, ConferenciaItem } from '@/domain/estoque/conferencia';
 
 /**
  * Store in-memory COMPARTILHADO pelos mocks do modulo de estoque (MODO DEMO e
@@ -23,6 +24,9 @@ export const estoqueStore = {
   /** Chave: `${materialId}|${localId}|${tamanho ?? ''}`. */
   saldos: new Map<string, Saldo>(),
   movimentacoes: [] as Movimentacao[],
+  /** Conferencia fisica (inventario): sessoes e itens (ADR 0021). */
+  conferencias: new Map<string, Conferencia>(),
+  conferenciaItens: new Map<string, ConferenciaItem>(),
 };
 
 export function chaveSaldoMock(
@@ -40,4 +44,6 @@ export function _resetEstoqueMock(): void {
   estoqueStore.unidades.clear();
   estoqueStore.saldos.clear();
   estoqueStore.movimentacoes = [];
+  estoqueStore.conferencias.clear();
+  estoqueStore.conferenciaItens.clear();
 }

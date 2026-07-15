@@ -278,3 +278,62 @@ export class LocalEmUso extends Error {
     this.name = 'LocalEmUso';
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Erros da conferência física de estoque (inventário, ADR 0021).
+// Tradução pra HTTP na camada de apresentação (respostaDeErro):
+//   ConferenciaNaoEncontrada/ItemConferenciaNaoEncontrado → 404 Not Found
+//   ConferenciaFechada/ConferenciaNaoConcluida/EscopoConferenciaEmAberto → 409
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Sessão de conferência inexistente. HTTP 404. */
+export class ConferenciaNaoEncontrada extends Error {
+  constructor(public readonly id: string) {
+    super(`Conferência não encontrada: ${id}`);
+    this.name = 'ConferenciaNaoEncontrada';
+  }
+}
+
+/** Item de conferência inexistente OU que não pertence à conferência do path (IDOR). HTTP 404. */
+export class ItemConferenciaNaoEncontrado extends Error {
+  constructor(public readonly id: string) {
+    super(`Item de conferência não encontrado: ${id}`);
+    this.name = 'ItemConferenciaNaoEncontrado';
+  }
+}
+
+/** Editar contagem/sobra com a sessão fora de `aberta` (concluída/cancelada). HTTP 409. */
+export class ConferenciaFechada extends Error {
+  constructor(
+    public readonly id: string,
+    public readonly status: string,
+  ) {
+    super(`Conferência ${id} está ${status}; contagem só pode ser editada com a sessão aberta.`);
+    this.name = 'ConferenciaFechada';
+  }
+}
+
+/** Reconciliar antes de concluir a sessão (a contagem precisa estar fechada). HTTP 409. */
+export class ConferenciaNaoConcluida extends Error {
+  constructor(
+    public readonly id: string,
+    public readonly status: string,
+  ) {
+    super(`Conferência ${id} está ${status}; reconcilie apenas depois de concluir a contagem.`);
+    this.name = 'ConferenciaNaoConcluida';
+  }
+}
+
+/** Já existe uma conferência aberta no mesmo escopo (unidade + natureza + local). HTTP 409. */
+export class EscopoConferenciaEmAberto extends Error {
+  constructor(
+    public readonly unidade: string,
+    public readonly natureza: string,
+    public readonly localId: string | null,
+  ) {
+    super(
+      `Já existe uma conferência aberta neste escopo (${unidade}/${natureza}${localId ? `/${localId}` : ''}). Conclua ou cancele antes de abrir outra.`,
+    );
+    this.name = 'EscopoConferenciaEmAberto';
+  }
+}

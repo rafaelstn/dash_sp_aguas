@@ -46,6 +46,15 @@ const MENSAGEM_POR_CODIGO: Record<string, string> = {
   categoria_nao_encontrada: 'Categoria não encontrada.',
   rate_limit:
     'Muitas operações em sequência. Aguarde alguns instantes e tente de novo.',
+  // ── Conferência física (inventário) ──────────────────────────────────────
+  escopo_conferencia_em_aberto:
+    'Já existe uma conferência aberta para este escopo (unidade, natureza e local). Conclua ou cancele a conferência em aberto antes de abrir outra.',
+  conferencia_fechada:
+    'A conferência não está aberta. Não é possível registrar contagem em uma sessão já concluída ou cancelada.',
+  conferencia_nao_concluida:
+    'Conclua a conferência antes de reconciliar as divergências.',
+  conferencia_nao_encontrada: 'Conferência não encontrada.',
+  item_conferencia_nao_encontrado: 'Item de conferência não encontrado.',
 };
 
 const MENSAGEM_POR_STATUS: Record<number, string> = {

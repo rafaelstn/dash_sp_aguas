@@ -293,6 +293,18 @@ export const POLITICAS = {
     limite: 60,
     janelaSegundos: 60,
   },
+  /**
+   * Edicoes de contagem na conferencia fisica (inventario). Sao muitas escritas
+   * pequenas e rapidas durante a contagem (o almoxarife marca item a item, as
+   * vezes no celular no galpao), entao o teto e mais alto que o de movimentacao.
+   * NAO tocam o estoque real (so preenchem a contagem); a reconciliacao, que
+   * mexe no estoque, usa a politica `movimentacaoEstoque`. Chave por usuario.
+   */
+  conferenciaEstoque: {
+    politica: 'conferencia-estoque',
+    limite: 120,
+    janelaSegundos: 60,
+  },
 } satisfies Record<string, ConfiguracaoRateLimit>;
 
 /** Headers HTTP padrão pra resposta — chamar após consumir. */

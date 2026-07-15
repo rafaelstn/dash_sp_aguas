@@ -111,6 +111,8 @@ export interface MovimentacaoDTO {
   statusNovo: Status | null;
   motivo: string | null;
   usuarioId: string;
+  /** Conferencia que originou o ajuste (null nas movimentacoes normais). */
+  conferenciaId: string | null;
   criadoEm: string;
 }
 

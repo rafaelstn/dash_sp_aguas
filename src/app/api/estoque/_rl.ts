@@ -11,7 +11,7 @@ import {
  * senao `resposta` e null e os `headers` devem ser anexados a resposta final.
  */
 export function checarRateLimit(
-  politica: 'leituraEstoque' | 'movimentacaoEstoque',
+  politica: 'leituraEstoque' | 'movimentacaoEstoque' | 'conferenciaEstoque',
   chave: string,
 ): { headers: Headers; resposta: NextResponse | null } {
   const cfg = POLITICAS[politica];

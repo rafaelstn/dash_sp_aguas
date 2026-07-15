@@ -38,6 +38,7 @@ type LinhaMov = {
   status_novo: Status | null;
   motivo: string | null;
   usuario_id: string;
+  conferencia_id: string | null;
   criado_em: Date;
 };
 
@@ -65,6 +66,7 @@ function mapearMov(l: LinhaMov): Movimentacao {
     statusNovo: l.status_novo,
     motivo: l.motivo,
     usuarioId: l.usuario_id,
+    conferenciaId: l.conferencia_id,
     criadoEm: l.criado_em,
   };
 }
@@ -80,9 +82,13 @@ function mapearSaldo(l: LinhaSaldo): Saldo {
   };
 }
 
+// conferencia_id entra na lista de colunas junto com o codigo da reconciliacao
+// (migration 0064 aplicada ANTES do push, ver nota da arquitetura). A partir daqui
+// o ledger le/grava a coluna nova.
 const COLUNAS_MOV = sql`
   id, tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
-  estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id, criado_em
+  estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id,
+  conferencia_id, criado_em
 `;
 const COLUNAS_SALDO = sql`id, material_id, local_id, quantidade, tamanho, atualizado_em`;
 
@@ -165,17 +171,37 @@ async function acrescentarUpsert(
   return mapearSaldo(linhas[0]!);
 }
 
+/**
+ * NUCLEO transacional da movimentacao, reutilizavel DENTRO de uma transacao ja
+ * aberta (recebe o `tx`). Extraido de `registrar` sem mudanca de comportamento
+ * para a reconciliacao de conferencia poder gerar o ajuste na MESMA transacao,
+ * sem abrir outra `sql.begin` (que pegaria OUTRA conexao do pool e quebraria a
+ * atomicidade; e a classe de bug do advisory-lock/conexao-errada ja vista no
+ * projeto). `conferenciaId` carimba o ledger (null nas movimentacoes normais).
+ *
+ * NAO trata erro aqui: deixa os erros de dominio (SaldoInsuficiente etc.)
+ * propagarem para o rollback da transacao do chamador.
+ */
+export async function aplicarMovimentacaoNaTx(
+  tx: Sql,
+  cmd: ComandoMovimentacao,
+  conferenciaId: string | null = null,
+): Promise<ResultadoMovimentacao> {
+  if (cmd.alvo.natureza === 'serializado') {
+    return registrarSerializado(tx, cmd, conferenciaId);
+  }
+  return registrarQuantificavel(tx, cmd, conferenciaId);
+}
+
 export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
   async registrar(cmd: ComandoMovimentacao): Promise<ResultadoMovimentacao> {
     try {
       // Toda a movimentacao numa unica transacao: ledger + saldo/unidade, tudo
-      // ou nada (mesmo padrao de triagem-repository.pg / favoritos).
-      return await sql.begin(async (tx) => {
-        if (cmd.alvo.natureza === 'serializado') {
-          return registrarSerializado(tx as unknown as Sql, cmd);
-        }
-        return registrarQuantificavel(tx as unknown as Sql, cmd);
-      });
+      // ou nada (mesmo padrao de triagem-repository.pg / favoritos). Wrapper fino
+      // sobre o nucleo `aplicarMovimentacaoNaTx` (conferenciaId = null aqui).
+      return await sql.begin(async (tx) =>
+        aplicarMovimentacaoNaTx(tx as unknown as Sql, cmd, null),
+      );
     } catch (e) {
       if (
         e instanceof UnidadeNaoEncontrada ||
@@ -229,7 +255,8 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
       >`
         SELECT em.id, em.tipo, em.unidade_id, em.material_id, em.quantidade,
                em.local_origem, em.local_destino, em.estado_anterior, em.estado_novo,
-               em.status_anterior, em.status_novo, em.motivo, em.usuario_id, em.criado_em,
+               em.status_anterior, em.status_novo, em.motivo, em.usuario_id,
+               em.conferencia_id, em.criado_em,
                u.descricao AS unidade_descricao,
                COALESCE(u.pat_daee, u.numero_serie, u.codigo, u.codigo_spaguas) AS unidade_identificacao,
                mat.descricao AS material_descricao,
@@ -263,6 +290,7 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
 async function registrarSerializado(
   tx: Sql,
   cmd: ComandoMovimentacao,
+  conferenciaId: string | null,
 ): Promise<ResultadoMovimentacao> {
   const unidadeId = (cmd.alvo as { unidadeId: string }).unidadeId;
   // FOR UPDATE: serializa duas movimentacoes concorrentes na mesma unidade.
@@ -325,11 +353,12 @@ async function registrarSerializado(
   const movs = await tx<LinhaMov[]>`
     INSERT INTO estoque_movimentacoes (
       tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
-      estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id
+      estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id,
+      conferencia_id
     ) VALUES (
       ${cmd.tipo}, ${unidadeId}::uuid, NULL, 1, ${localOrigem}, ${localDestino},
       ${estadoAnterior}, ${estadoNovo}, ${statusAnterior}, ${statusNovo},
-      ${cmd.motivo}, ${cmd.usuarioId}::uuid
+      ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId}
     )
     RETURNING ${COLUNAS_MOV}
   `;
@@ -345,6 +374,7 @@ async function registrarSerializado(
 async function registrarQuantificavel(
   tx: Sql,
   cmd: ComandoMovimentacao,
+  conferenciaId: string | null,
 ): Promise<ResultadoMovimentacao> {
   const materialId = (cmd.alvo as { materialId: string }).materialId;
   const materiais = await tx<{ natureza: string }[]>`
@@ -385,10 +415,10 @@ async function registrarQuantificavel(
   const movs = await tx<LinhaMov[]>`
     INSERT INTO estoque_movimentacoes (
       tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
-      motivo, usuario_id
+      motivo, usuario_id, conferencia_id
     ) VALUES (
       ${cmd.tipo}, NULL, ${materialId}::uuid, ${q}, ${localOrigem}, ${localDestino},
-      ${cmd.motivo}, ${cmd.usuarioId}::uuid
+      ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId}
     )
     RETURNING ${COLUNAS_MOV}
   `;

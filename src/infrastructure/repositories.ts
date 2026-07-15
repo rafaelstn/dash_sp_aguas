@@ -26,6 +26,7 @@ import { estoqueMateriaisRepository as estoqueMateriaisPg } from './db/estoque-m
 import { estoqueUnidadesRepository as estoqueUnidadesPg } from './db/estoque-unidades-repository.pg';
 import { estoqueSaldosRepository as estoqueSaldosPg } from './db/estoque-saldos-repository.pg';
 import { estoqueMovimentacoesRepository as estoqueMovimentacoesPg } from './db/estoque-movimentacoes-repository.pg';
+import { estoqueConferenciasRepository as estoqueConferenciasPg } from './db/estoque-conferencias-repository.pg';
 import { usuariosIdentidadeRepository as usuariosIdentidadePg } from './db/usuarios-identidade-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
@@ -52,6 +53,7 @@ import { estoqueMateriaisRepository as estoqueMateriaisMock } from './mock/estoq
 import { estoqueUnidadesRepository as estoqueUnidadesMock } from './mock/estoque-unidades-repository.mock';
 import { estoqueSaldosRepository as estoqueSaldosMock } from './mock/estoque-saldos-repository.mock';
 import { estoqueMovimentacoesRepository as estoqueMovimentacoesMock } from './mock/estoque-movimentacoes-repository.mock';
+import { estoqueConferenciasRepository as estoqueConferenciasMock } from './mock/estoque-conferencias-repository.mock';
 import { usuariosIdentidadeRepository as usuariosIdentidadeMock } from './mock/usuarios-identidade-repository.mock';
 
 /**
@@ -106,6 +108,12 @@ export const estoqueSaldosRepository = demo ? estoqueSaldosMock : estoqueSaldosP
 export const estoqueMovimentacoesRepository = demo
   ? estoqueMovimentacoesMock
   : estoqueMovimentacoesPg;
+
+// Conferencia fisica (inventario, ADR 0021): abre sessao + snapshot congelado,
+// contagem, reconciliacao (reusa o ledger na mesma transacao, idempotente).
+export const estoqueConferenciasRepository = demo
+  ? estoqueConferenciasMock
+  : estoqueConferenciasPg;
 
 // Resolucao de identidade de operador (email/nome) para a trilha/export do
 // Estoque. `.pg` le de auth.users em lote; `.mock` devolve vazio (sem Auth em demo).

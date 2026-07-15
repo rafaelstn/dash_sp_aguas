@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Boxes, Package, Plus, QrCode, Settings2 } from 'lucide-react';
+import { Boxes, ClipboardList, Package, Plus, QrCode, Settings2 } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -487,6 +487,16 @@ export function PainelEstoque({ podeGerenciar }: Props) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Conferencia fisica (inventario). LEITURA: qualquer usuario logado
+              consulta; abrir/contar/reconciliar exige admin, verificado la dentro. */}
+          <Link
+            href="/estoque/conferencias"
+            title="Conferência física do estoque (inventário): abrir sessão, contar e reconciliar divergências."
+            className="inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+          >
+            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            Conferências
+          </Link>
           {/* Exportacao Excel (LEITURA: aparece para qualquer usuario logado). */}
           {aba === 'serializado' ? (
             <>

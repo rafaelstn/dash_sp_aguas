@@ -69,9 +69,18 @@ function guardadoMenos(
   return novo;
 }
 
-export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
-  async registrar(cmd: ComandoMovimentacao): Promise<ResultadoMovimentacao> {
-    if (cmd.alvo.natureza === 'serializado') {
+/**
+ * NUCLEO in-memory da movimentacao, reutilizavel pela reconciliacao de
+ * conferencia (mock). Espelha o `aplicarMovimentacaoNaTx` do `.pg`: mesma logica,
+ * mesmos erros de dominio, `conferenciaId` carimba a linha do ledger. Em memoria
+ * nao ha transacao/concorrencia; a garantia de nao-negativo e simulada por
+ * `guardadoMenos`. Sincrono (as operacoes de Map sao sincronas).
+ */
+export function aplicarMovimentacaoNaMemoria(
+  cmd: ComandoMovimentacao,
+  conferenciaId: string | null = null,
+): ResultadoMovimentacao {
+  if (cmd.alvo.natureza === 'serializado') {
       const unidade = estoqueStore.unidades.get(cmd.alvo.unidadeId);
       if (!unidade) throw new UnidadeNaoEncontrada(cmd.alvo.unidadeId);
 
@@ -139,6 +148,7 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
         statusNovo,
         motivo: cmd.motivo,
         usuarioId: cmd.usuarioId,
+        conferenciaId,
         criadoEm: new Date(),
       };
       estoqueStore.movimentacoes.push(mov);
@@ -193,10 +203,16 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
       statusNovo: null,
       motivo: cmd.motivo,
       usuarioId: cmd.usuarioId,
+      conferenciaId,
       criadoEm: new Date(),
     };
     estoqueStore.movimentacoes.push(mov);
     return { movimentacao: mov, saldo, unidade: null };
+}
+
+export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
+  async registrar(cmd: ComandoMovimentacao): Promise<ResultadoMovimentacao> {
+    return aplicarMovimentacaoNaMemoria(cmd, null);
   },
 
   async listar(filtros) {

@@ -197,6 +197,7 @@ describe('estoque/export, linhas do xlsx', () => {
     statusNovo: 'ativo',
     motivo: null,
     usuarioId: 'user-1',
+    conferenciaId: null,
     criadoEm: new Date('2026-07-15T18:05:00Z'),
     itemDescricao: 'Datalogger',
     itemIdentificacao: 'PAT-9',

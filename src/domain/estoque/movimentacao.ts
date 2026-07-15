@@ -59,6 +59,11 @@ export interface Movimentacao {
   statusNovo: Status | null;
   motivo: string | null;
   usuarioId: string;
+  /**
+   * Preenchido quando a movimentacao foi gerada por reconciliacao de conferencia
+   * (coluna `conferencia_id`, migration 0064). null nas movimentacoes normais.
+   */
+  conferenciaId: string | null;
   criadoEm: Date;
 }
 

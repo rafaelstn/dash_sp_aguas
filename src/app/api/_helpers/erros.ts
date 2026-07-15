@@ -28,6 +28,11 @@ import {
   MaterialEmUso,
   UnidadeComMovimentacao,
   LocalEmUso,
+  ConferenciaNaoEncontrada,
+  ItemConferenciaNaoEncontrado,
+  ConferenciaFechada,
+  ConferenciaNaoConcluida,
+  EscopoConferenciaEmAberto,
 } from '@/domain/errors';
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { logger } from '@/infrastructure/logging/logger';
@@ -142,6 +147,18 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
       { status: 404 },
     );
   }
+  if (erro instanceof ConferenciaNaoEncontrada) {
+    return NextResponse.json(
+      { erro: 'conferencia_nao_encontrada', mensagem: 'Conferência não encontrada.' },
+      { status: 404 },
+    );
+  }
+  if (erro instanceof ItemConferenciaNaoEncontrado) {
+    return NextResponse.json(
+      { erro: 'item_conferencia_nao_encontrado', mensagem: 'Item de conferência não encontrado.' },
+      { status: 404 },
+    );
+  }
 
   // ── 409 Conflict ─────────────────────────────────────────────────────────
   if (erro instanceof SaldoInsuficiente) {
@@ -173,6 +190,24 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
   }
   if (erro instanceof LocalEmUso) {
     return NextResponse.json({ erro: 'local_em_uso', mensagem: erro.message }, { status: 409 });
+  }
+  if (erro instanceof ConferenciaFechada) {
+    return NextResponse.json(
+      { erro: 'conferencia_fechada', mensagem: erro.message, status: erro.status },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof ConferenciaNaoConcluida) {
+    return NextResponse.json(
+      { erro: 'conferencia_nao_concluida', mensagem: erro.message, status: erro.status },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof EscopoConferenciaEmAberto) {
+    return NextResponse.json(
+      { erro: 'escopo_conferencia_em_aberto', mensagem: erro.message },
+      { status: 409 },
+    );
   }
   if (erro instanceof PostoRemovido) {
     return NextResponse.json({ erro: 'posto_removido', mensagem: erro.message }, { status: 409 });
