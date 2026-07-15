@@ -249,3 +249,42 @@
     }
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Impressão de etiquetas de patrimônio
+   Na visão de etiquetas (`/estoque/etiquetas`), o componente marca o
+   body com a classe `etiquetas-print`. Ao imprimir, escondemos o chrome
+   do app (navegação, header e rodapé) e os controles de tela (`.no-print`),
+   deixando só a grade de etiquetas. O container principal perde o teto de
+   largura e o padding para aproveitar a folha A4. Escopo restrito ao body
+   marcado: nenhuma outra rota é afetada.
+   ────────────────────────────────────────────────────────────────── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body.etiquetas-print #navegacao-lateral,
+  body.etiquetas-print header,
+  body.etiquetas-print footer {
+    display: none !important;
+  }
+
+  body.etiquetas-print main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Garante que a borda e o QR (preto no branco) saiam na impressão mesmo
+     com o navegador economizando tinta de fundo. */
+  body.etiquetas-print .break-inside-avoid {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

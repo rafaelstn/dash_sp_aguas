@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Boxes, Package, Plus, Settings2 } from 'lucide-react';
+import Link from 'next/link';
+import { Boxes, Package, Plus, QrCode, Settings2 } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -81,6 +82,27 @@ type AlvoExclusao =
   | { tipo: 'material'; item: MaterialDTO }
   | { tipo: 'local'; item: LocalDTO }
   | { tipo: 'categoria'; item: CategoriaDTO };
+
+/**
+ * Monta a URL da visao de impressao de etiquetas com os MESMOS filtros da aba
+ * serializada (ignora valores vazios). A pagina destino le esses parametros.
+ */
+function hrefEtiquetas(f: {
+  unidade?: string;
+  local?: string;
+  estado?: string;
+  status?: string;
+  busca?: string;
+}): string {
+  const sp = new URLSearchParams();
+  if (f.unidade) sp.set('unidade', f.unidade);
+  if (f.local) sp.set('local', f.local);
+  if (f.estado) sp.set('estado', f.estado);
+  if (f.status) sp.set('status', f.status);
+  if (f.busca) sp.set('busca', f.busca);
+  const q = sp.toString();
+  return q ? `/estoque/etiquetas?${q}` : '/estoque/etiquetas';
+}
 
 function useDebounce<T>(valor: T, ms: number): T {
   const [debounced, setDebounced] = useState(valor);
@@ -467,17 +489,35 @@ export function PainelEstoque({ podeGerenciar }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           {/* Exportacao Excel (LEITURA: aparece para qualquer usuario logado). */}
           {aba === 'serializado' ? (
-            <BotaoExportarExcel
-              url={urlExportarSerializado({
-                unidade: filtros.unidade || undefined,
-                local: filtros.local || undefined,
-                estado: filtros.estado || undefined,
-                status: filtros.status || undefined,
-                busca: buscaDebounced.trim() || undefined,
-              })}
-              arquivoFallback="estoque-serializados"
-              descricao="Exporta os itens serializados com os filtros aplicados nesta aba."
-            />
+            <>
+              <BotaoExportarExcel
+                url={urlExportarSerializado({
+                  unidade: filtros.unidade || undefined,
+                  local: filtros.local || undefined,
+                  estado: filtros.estado || undefined,
+                  status: filtros.status || undefined,
+                  busca: buscaDebounced.trim() || undefined,
+                })}
+                arquivoFallback="estoque-serializados"
+                descricao="Exporta os itens serializados com os filtros aplicados nesta aba."
+              />
+              {/* Etiquetas/QR de patrimonio (LEITURA: qualquer usuario logado
+                  imprime). Abre a visao de impressao do conjunto filtrado. */}
+              <Link
+                href={hrefEtiquetas({
+                  unidade: filtros.unidade || undefined,
+                  local: filtros.local || undefined,
+                  estado: filtros.estado || undefined,
+                  status: filtros.status || undefined,
+                  busca: buscaDebounced.trim() || undefined,
+                })}
+                title="Gera as etiquetas com QR dos itens serializados do filtro atual, prontas para imprimir e colar no equipamento."
+                className="inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+              >
+                <QrCode className="h-4 w-4" aria-hidden="true" />
+                Gerar etiquetas
+              </Link>
+            </>
           ) : (
             <BotaoExportarExcel
               url={urlExportarQuantificavel({

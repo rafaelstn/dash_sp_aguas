@@ -8,6 +8,7 @@ import { lancarErro } from './erros';
 import type { PayloadMovimentacao } from './tipos';
 import type { UpsertMaterial } from '@/domain/estoque/material';
 import type { UpsertUnidade } from '@/domain/estoque/unidade';
+import type { ItemEtiqueta } from '@/domain/estoque/etiqueta';
 import type {
   CategoriaDTO,
   DetalheUnidadeDTO,
@@ -133,6 +134,46 @@ export function atualizarUnidade(
 
 export function excluirUnidade(id: string): Promise<{ id: string; removido: boolean }> {
   return enviar(`/api/estoque/unidades/${id}`, 'DELETE');
+}
+
+// ── Etiquetas / QR de patrimonio ─────────────────────────────────────────────
+/** Filtros da geracao de etiquetas: os MESMOS da aba serializada. */
+export interface FiltrosEtiquetasUI {
+  unidade?: UnidadeFisica;
+  local?: string;
+  estado?: Estado;
+  status?: Status;
+  materialId?: string;
+  busca?: string;
+}
+
+/** Resposta enxuta da geracao de etiquetas (uma por unidade do filtro atual). */
+export interface RespostaEtiquetas {
+  itens: ItemEtiqueta[];
+  total: number;
+  /** true quando o conjunto passou do teto e foi cortado (refinar o filtro). */
+  truncado: boolean;
+}
+
+/**
+ * Busca o conjunto de serializados do filtro atual (sem paginacao) para a visao
+ * de impressao de etiquetas. Reaproveita `GET /api/estoque/unidades/etiquetas`.
+ */
+export function listarEtiquetas(
+  f: FiltrosEtiquetasUI,
+  signal?: AbortSignal,
+): Promise<RespostaEtiquetas> {
+  return getJson(
+    `/api/estoque/unidades/etiquetas${qs({
+      unidade: f.unidade,
+      local: f.local,
+      estado: f.estado,
+      status: f.status,
+      materialId: f.materialId,
+      busca: f.busca,
+    })}`,
+    signal,
+  );
 }
 
 // ── Saldos (quantificaveis) ──────────────────────────────────────────────────
