@@ -42,6 +42,36 @@ describe('mock estoque, materiais', () => {
     await unidades.criar({ descricao: 'Barco 1', materialId: m.id });
     expect(await materiais.possuiVinculos(m.id)).toBe(true);
   });
+
+  it('persiste quantidadeMinima no criar; default null quando ausente', async () => {
+    const semMinimo = await materiais.criar({ descricao: 'Cabo', natureza: 'quantificavel' });
+    expect(semMinimo.quantidadeMinima).toBeNull();
+
+    const comMinimo = await materiais.criar({
+      descricao: 'Conector',
+      natureza: 'quantificavel',
+      quantidadeMinima: 20,
+    });
+    expect(comMinimo.quantidadeMinima).toBe(20);
+    expect((await materiais.obterPorId(comMinimo.id))?.quantidadeMinima).toBe(20);
+  });
+
+  it('atualizar seta e limpa (null) o minimo; ausente nao mexe', async () => {
+    const m = await materiais.criar({
+      descricao: 'Braçadeira',
+      natureza: 'quantificavel',
+      quantidadeMinima: 15,
+    });
+
+    const setado = await materiais.atualizar(m.id, { quantidadeMinima: 5 });
+    expect(setado.quantidadeMinima).toBe(5);
+
+    const limpo = await materiais.atualizar(m.id, { quantidadeMinima: null });
+    expect(limpo.quantidadeMinima).toBeNull();
+
+    const soDescricao = await materiais.atualizar(m.id, { descricao: 'Braçadeira nova' });
+    expect(soDescricao.quantidadeMinima).toBeNull();
+  });
 });
 
 describe('mock estoque, locais (get-or-create idempotente)', () => {

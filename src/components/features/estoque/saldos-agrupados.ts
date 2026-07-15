@@ -4,6 +4,7 @@
  * o detalhamento por local. Testavel isoladamente.
  */
 
+import { abaixoDoMinimo } from '@/domain/estoque/reposicao';
 import type { SaldoContextoDTO } from './dtos';
 
 export interface MaterialAgrupado {
@@ -17,25 +18,38 @@ export interface MaterialAgrupado {
   total: number;
   /** Locais distintos com saldo. */
   totalLocais: number;
+  /**
+   * Nivel de reposicao (estoque minimo) do catalogo. null = sem minimo (nao
+   * alerta). Resolvido pelo `resolver`; sem ele fica null.
+   */
+  quantidadeMinima: number | null;
+  /**
+   * True quando `total < quantidadeMinima` (precisa reposicao). Calculado com o
+   * total ja somado, reaproveitando `abaixoDoMinimo` (domain/reposicao).
+   */
+  abaixoDoMinimo: boolean;
   /** Linhas de saldo (uma por local/tamanho), ordenadas por rotulo. */
   linhas: SaldoContextoDTO[];
 }
 
 /**
- * Resolve marca/modelo de um material a partir do catalogo ja carregado na tela.
- * Os saldos (`SaldoContextoDTO`) trazem so a descricao; marca e modelo vivem no
- * `MaterialDTO`. Passar este resolver evita depender de campo novo no payload de
- * saldos. Sem resolver, marca/modelo ficam nulos (comportamento antigo).
+ * Resolve dados do catalogo de um material ja carregado na tela. Os saldos
+ * (`SaldoContextoDTO`) trazem so a descricao; marca, modelo e o nivel de
+ * reposicao vivem no `MaterialDTO`. Passar este resolver evita depender de campo
+ * novo no payload de saldos. Sem resolver, os campos ficam nulos (comportamento
+ * antigo). `quantidadeMinima` e opcional para compatibilidade.
  */
 export type ResolverMaterial = (
   materialId: string,
-) => { marca: string | null; modelo: string | null } | undefined;
+) =>
+  | { marca: string | null; modelo: string | null; quantidadeMinima?: number | null }
+  | undefined;
 
 /**
  * Agrupa saldos por material e ordena por descricao (pt-BR). Dentro de cada
  * material, ordena as linhas por rotulo do local e tamanho. Quando `resolver` e
- * informado, anexa marca e modelo do catalogo para diferenciar materiais de
- * mesma descricao.
+ * informado, anexa marca, modelo e a quantidade minima do catalogo; o campo
+ * `abaixoDoMinimo` e calculado a partir do total somado.
  */
 export function agruparSaldos(
   saldos: readonly SaldoContextoDTO[],
@@ -56,6 +70,8 @@ export function agruparSaldos(
         modelo: material?.modelo ?? null,
         total: s.quantidade,
         totalLocais: 0,
+        quantidadeMinima: material?.quantidadeMinima ?? null,
+        abaixoDoMinimo: false,
         linhas: [s],
       });
     }
@@ -69,6 +85,8 @@ export function agruparSaldos(
         (a.tamanho ?? '').localeCompare(b.tamanho ?? '', 'pt-BR'),
     );
     g.totalLocais = new Set(g.linhas.map((l) => l.localId)).size;
+    // Total ja somado: agora a regra de reposicao pode ser avaliada uma vez.
+    g.abaixoDoMinimo = abaixoDoMinimo(g.total, g.quantidadeMinima);
   }
   grupos.sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR'));
   return grupos;
@@ -77,4 +95,16 @@ export function agruparSaldos(
 /** Soma total de itens em estoque (todas as quantidades). */
 export function somarQuantidades(saldos: readonly SaldoContextoDTO[]): number {
   return saldos.reduce((acc, s) => acc + s.quantidade, 0);
+}
+
+/** Quantos materiais estao abaixo do minimo (precisam reposicao). */
+export function contarAbaixoDoMinimo(grupos: readonly MaterialAgrupado[]): number {
+  return grupos.reduce((n, g) => (g.abaixoDoMinimo ? n + 1 : n), 0);
+}
+
+/** Mantem apenas os materiais abaixo do minimo (para o filtro de reposicao). */
+export function filtrarAbaixoDoMinimo(
+  grupos: readonly MaterialAgrupado[],
+): MaterialAgrupado[] {
+  return grupos.filter((g) => g.abaixoDoMinimo);
 }

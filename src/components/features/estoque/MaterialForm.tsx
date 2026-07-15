@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { NATUREZAS } from '@/domain/estoque/material';
-import { FormDialog, CampoSelectForm, CampoTextoForm } from './FormDialog';
+import { FormDialog, CampoNumeroForm, CampoSelectForm, CampoTextoForm } from './FormDialog';
 import { atualizarMaterial, criarMaterial } from './api';
 import { ROTULO_NATUREZA } from './rotulos';
+import type { UpsertMaterial } from '@/domain/estoque/material';
 import type { CategoriaDTO, MaterialDTO, Natureza } from './dtos';
 
 interface Props {
@@ -39,7 +40,11 @@ export function MaterialForm({
   const [modelo, setModelo] = useState('');
   const [unidadeMedida, setUnidadeMedida] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
+  const [quantidadeMinima, setQuantidadeMinima] = useState('');
   const [ativo, setAtivo] = useState(true);
+
+  // So quantificavel tem nivel de reposicao; serializado nao tem quantidade.
+  const ehQuantificavel = natureza === 'quantificavel';
 
   useEffect(() => {
     if (!aberto) return;
@@ -49,6 +54,9 @@ export function MaterialForm({
     setModelo(material?.modelo ?? '');
     setUnidadeMedida(material?.unidadeMedida ?? '');
     setCategoriaId(material?.categoriaId ?? '');
+    setQuantidadeMinima(
+      material?.quantidadeMinima != null ? String(material.quantidadeMinima) : '',
+    );
     setAtivo(material?.ativo ?? true);
   }, [aberto, material, naturezaInicial]);
 
@@ -56,7 +64,7 @@ export function MaterialForm({
     if (descricao.trim().length < 1) {
       throw new Error('Informe a descrição do material.');
     }
-    const dados = {
+    const dados: UpsertMaterial = {
       descricao: descricao.trim(),
       natureza,
       marca: vazioParaNull(marca),
@@ -64,6 +72,21 @@ export function MaterialForm({
       unidadeMedida: vazioParaNull(unidadeMedida),
       categoriaId: categoriaId || null,
     };
+    // Quantidade minima so se aplica a quantificavel. Vazio = sem minimo (null).
+    if (ehQuantificavel) {
+      const bruto = quantidadeMinima.trim();
+      if (bruto === '') {
+        dados.quantidadeMinima = null;
+      } else {
+        const n = Number(bruto);
+        if (!Number.isInteger(n) || n < 0) {
+          throw new Error(
+            'A quantidade mínima deve ser um número inteiro igual ou maior que zero.',
+          );
+        }
+        dados.quantidadeMinima = n;
+      }
+    }
     if (editando) {
       await atualizarMaterial(material.id, { ...dados, ativo });
       aoConcluir(`Material "${dados.descricao}" atualizado.`);
@@ -115,6 +138,16 @@ export function MaterialForm({
           placeholder="Sem categoria"
         />
       </div>
+      {ehQuantificavel ? (
+        <CampoNumeroForm
+          rotulo="Quantidade mínima (reposição)"
+          valor={quantidadeMinima}
+          aoMudar={setQuantidadeMinima}
+          min={0}
+          placeholder="Sem mínimo"
+          descricao="Alerta quando o saldo total cai abaixo desse valor. Deixe em branco para não alertar."
+        />
+      ) : null}
       {editando ? (
         <label className="flex items-center gap-2 text-sm text-app-fg">
           <input

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { agruparSaldos, somarQuantidades } from '@/components/features/estoque/saldos-agrupados';
+import {
+  agruparSaldos,
+  contarAbaixoDoMinimo,
+  filtrarAbaixoDoMinimo,
+  somarQuantidades,
+} from '@/components/features/estoque/saldos-agrupados';
 import type { SaldoContextoDTO } from '@/components/features/estoque/dtos';
 
 function saldo(over: Partial<SaldoContextoDTO>): SaldoContextoDTO {
@@ -72,6 +77,68 @@ describe('agruparSaldos', () => {
     const [g] = agruparSaldos([saldo({ materialId: 'mX' })], () => undefined);
     expect(g!.marca).toBeNull();
     expect(g!.modelo).toBeNull();
+  });
+
+  it('sem resolver, quantidade minima nula e nunca fica abaixo do minimo', () => {
+    const [g] = agruparSaldos([saldo({ materialId: 'm1', quantidade: 0 })]);
+    expect(g!.quantidadeMinima).toBeNull();
+    expect(g!.abaixoDoMinimo).toBe(false);
+  });
+
+  it('resolver traz a quantidade minima e marca abaixo com o total SOMADO', () => {
+    // Duas linhas do mesmo material: total 4 (3 + 1), minimo 5 -> abaixo.
+    const grupos = agruparSaldos(
+      [
+        saldo({ materialId: 'm1', localId: 'l1', quantidade: 3, localRotulo: 'A' }),
+        saldo({ materialId: 'm1', localId: 'l2', quantidade: 1, localRotulo: 'B' }),
+      ],
+      () => ({ marca: null, modelo: null, quantidadeMinima: 5 }),
+    );
+    expect(grupos[0]!.total).toBe(4);
+    expect(grupos[0]!.quantidadeMinima).toBe(5);
+    expect(grupos[0]!.abaixoDoMinimo).toBe(true);
+  });
+
+  it('total igual ao minimo NAO fica abaixo (o minimo e o piso aceitavel)', () => {
+    const [g] = agruparSaldos([saldo({ materialId: 'm1', quantidade: 10 })], () => ({
+      marca: null,
+      modelo: null,
+      quantidadeMinima: 10,
+    }));
+    expect(g!.abaixoDoMinimo).toBe(false);
+  });
+});
+
+describe('contarAbaixoDoMinimo / filtrarAbaixoDoMinimo', () => {
+  // Catalogo: m1 abaixo (total 1 < min 5), m2 ok (total 20 >= min 5), m3 sem minimo.
+  const catalogo: Record<string, { marca: null; modelo: null; quantidadeMinima: number | null }> =
+    {
+      m1: { marca: null, modelo: null, quantidadeMinima: 5 },
+      m2: { marca: null, modelo: null, quantidadeMinima: 5 },
+      m3: { marca: null, modelo: null, quantidadeMinima: null },
+    };
+  const grupos = agruparSaldos(
+    [
+      saldo({ materialId: 'm1', quantidade: 1, materialDescricao: 'Cabo' }),
+      saldo({ materialId: 'm2', quantidade: 20, materialDescricao: 'Antena' }),
+      saldo({ materialId: 'm3', quantidade: 0, materialDescricao: 'Bucha' }),
+    ],
+    (id) => catalogo[id],
+  );
+
+  it('conta apenas os materiais abaixo do minimo', () => {
+    expect(contarAbaixoDoMinimo(grupos)).toBe(1);
+  });
+
+  it('filtra mantendo so os abaixo do minimo', () => {
+    const abaixo = filtrarAbaixoDoMinimo(grupos);
+    expect(abaixo).toHaveLength(1);
+    expect(abaixo[0]!.materialId).toBe('m1');
+  });
+
+  it('conjunto vazio: zero e lista vazia', () => {
+    expect(contarAbaixoDoMinimo([])).toBe(0);
+    expect(filtrarAbaixoDoMinimo([])).toEqual([]);
   });
 });
 

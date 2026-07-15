@@ -178,6 +178,51 @@ export function CampoTextoForm({
   );
 }
 
+export function CampoNumeroForm({
+  rotulo,
+  valor,
+  aoMudar,
+  min,
+  step = 1,
+  placeholder,
+  descricao,
+}: {
+  rotulo: string;
+  valor: string;
+  aoMudar: (v: string) => void;
+  min?: number;
+  step?: number;
+  placeholder?: string;
+  descricao?: string;
+}) {
+  const id = useId();
+  const descId = descricao ? `${id}-desc` : undefined;
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium text-app-fg">
+        {rotulo}
+      </label>
+      {descricao ? (
+        <span id={descId} className="text-2xs text-app-fg-muted">
+          {descricao}
+        </span>
+      ) : null}
+      <input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        step={step}
+        value={valor}
+        placeholder={placeholder}
+        aria-describedby={descId}
+        onChange={(e) => aoMudar(e.target.value)}
+        className="rounded border border-app-border-input bg-app-surface px-3 py-2 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1 focus-visible:ring-offset-app-surface"
+      />
+    </div>
+  );
+}
+
 export function CampoSelectForm({
   rotulo,
   valor,

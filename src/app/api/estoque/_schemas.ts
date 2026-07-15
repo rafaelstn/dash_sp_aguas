@@ -27,6 +27,9 @@ export const materialCriarSchema = z.object({
   natureza: naturezaEnum,
   unidadeMedida: z.string().trim().max(20).nullish(),
   categoriaId: z.string().uuid().nullish(),
+  // Estoque minimo (nivel de reposicao). null limpa o minimo; ausente = nao mexe.
+  // So faz sentido em quantificavel; nao bloqueia em serializado (fica ignorado).
+  quantidadeMinima: z.number().int().min(0).nullable().optional(),
   ativo: z.boolean().optional(),
 });
 export const materialPatchSchema = materialCriarSchema

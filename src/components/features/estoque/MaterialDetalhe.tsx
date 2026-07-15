@@ -7,10 +7,12 @@ import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import { Drawer } from './Drawer';
 import { CampoDetalhe, ListaDetalhe, Valor } from './CampoDetalhe';
+import { BadgeAbaixoMinimo } from './Badges';
 import { TrilhaMovimentacoes } from './TrilhaMovimentacoes';
 import { BotaoExportarExcel } from './BotaoExportarExcel';
 import { listarMovimentacoes, listarSaldos, obterMaterial, urlExportarMovimentacoes } from './api';
 import { ErroEstoque } from './erros';
+import { abaixoDoMinimo } from '@/domain/estoque/reposicao';
 import { somarQuantidades } from './saldos-agrupados';
 import { ROTULO_NATUREZA, ROTULO_UNIDADE_FISICA, formatarDataHora } from './rotulos';
 import type { MaterialDTO, MovimentacaoDTO, SaldoContextoDTO } from './dtos';
@@ -186,6 +188,31 @@ export function MaterialDetalhe({
                   {somarQuantidades(estado.dados.saldos).toLocaleString('pt-BR')}
                 </span>
               </CampoDetalhe>
+              {estado.dados.material.natureza === 'quantificavel' ? (
+                <>
+                  <CampoDetalhe rotulo="Quantidade mínima">
+                    {estado.dados.material.quantidadeMinima != null ? (
+                      <span className="tabular">
+                        {estado.dados.material.quantidadeMinima.toLocaleString('pt-BR')}
+                      </span>
+                    ) : (
+                      <span className="text-app-fg-subtle">Sem mínimo definido</span>
+                    )}
+                  </CampoDetalhe>
+                  <CampoDetalhe rotulo="Reposição">
+                    {estado.dados.material.quantidadeMinima == null ? (
+                      <span className="text-app-fg-subtle">Sem alerta configurado</span>
+                    ) : abaixoDoMinimo(
+                        somarQuantidades(estado.dados.saldos),
+                        estado.dados.material.quantidadeMinima,
+                      ) ? (
+                      <BadgeAbaixoMinimo minimo={estado.dados.material.quantidadeMinima} />
+                    ) : (
+                      <span className="text-gov-sucesso">Em nível adequado</span>
+                    )}
+                  </CampoDetalhe>
+                </>
+              ) : null}
               <CampoDetalhe rotulo="Cadastrado em">
                 {formatarDataHora(estado.dados.material.criadoEm)}
               </CampoDetalhe>

@@ -12,6 +12,7 @@ type LinhaMaterial = {
   natureza: Natureza;
   unidade_medida: string | null;
   categoria_id: string | null;
+  quantidade_minima: number | null;
   ativo: boolean;
   criado_em: Date;
   atualizado_em: Date;
@@ -26,13 +27,14 @@ function mapear(l: LinhaMaterial): Material {
     natureza: l.natureza,
     unidadeMedida: l.unidade_medida,
     categoriaId: l.categoria_id,
+    quantidadeMinima: l.quantidade_minima,
     ativo: l.ativo,
     criadoEm: l.criado_em,
     atualizadoEm: l.atualizado_em,
   };
 }
 
-const COLUNAS = sql`id, descricao, marca, modelo, natureza, unidade_medida, categoria_id, ativo, criado_em, atualizado_em`;
+const COLUNAS = sql`id, descricao, marca, modelo, natureza, unidade_medida, categoria_id, quantidade_minima, ativo, criado_em, atualizado_em`;
 
 export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
   async listar(filtros) {
@@ -83,11 +85,11 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
   async criar(dados) {
     try {
       const linhas = await sql<LinhaMaterial[]>`
-        INSERT INTO estoque_materiais (descricao, marca, modelo, natureza, unidade_medida, categoria_id, ativo)
+        INSERT INTO estoque_materiais (descricao, marca, modelo, natureza, unidade_medida, categoria_id, quantidade_minima, ativo)
         VALUES (
           ${dados.descricao.trim()}, ${dados.marca ?? null}, ${dados.modelo ?? null},
           ${dados.natureza}, ${dados.unidadeMedida ?? null},
-          ${dados.categoriaId ?? null}, ${dados.ativo ?? true}
+          ${dados.categoriaId ?? null}, ${dados.quantidadeMinima ?? null}, ${dados.ativo ?? true}
         )
         RETURNING ${COLUNAS}
       `;
@@ -106,6 +108,9 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       if (dados.natureza !== undefined) sets.push(sql`natureza = ${dados.natureza}`);
       if (dados.unidadeMedida !== undefined) sets.push(sql`unidade_medida = ${dados.unidadeMedida}`);
       if (dados.categoriaId !== undefined) sets.push(sql`categoria_id = ${dados.categoriaId}`);
+      // quantidade_minima aceita null (limpa o minimo) de forma explicita.
+      if (dados.quantidadeMinima !== undefined)
+        sets.push(sql`quantidade_minima = ${dados.quantidadeMinima}`);
       if (dados.ativo !== undefined) sets.push(sql`ativo = ${dados.ativo}`);
       sets.push(sql`atualizado_em = NOW()`);
 

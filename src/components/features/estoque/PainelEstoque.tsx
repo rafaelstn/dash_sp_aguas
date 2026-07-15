@@ -25,7 +25,12 @@ import {
 } from './api';
 import { BotaoExportarExcel } from './BotaoExportarExcel';
 import { ErroEstoque } from './erros';
-import { agruparSaldos, somarQuantidades } from './saldos-agrupados';
+import {
+  agruparSaldos,
+  contarAbaixoDoMinimo,
+  filtrarAbaixoDoMinimo,
+  somarQuantidades,
+} from './saldos-agrupados';
 import { FiltrosEstoque, FILTROS_ESTOQUE_INICIAIS, type FiltrosEstoqueUI } from './FiltrosEstoque';
 import { TabelaUnidades } from './TabelaUnidades';
 import { SaldoTabela } from './SaldoTabela';
@@ -297,16 +302,29 @@ export function PainelEstoque({ podeGerenciar }: Props) {
     });
     return agruparSaldos(saldosFiltrados, (id) => {
       const mat = materialQuantPorId.get(id);
-      return mat ? { marca: mat.marca, modelo: mat.modelo } : undefined;
+      return mat
+        ? { marca: mat.marca, modelo: mat.modelo, quantidadeMinima: mat.quantidadeMinima }
+        : undefined;
     });
   }, [cargaS, buscaDebounced, filtros.categoria, materialQuantPorId]);
 
+  // Quantos materiais precisam reposicao no conjunto filtrado (independe do toggle).
+  const abaixoDoMinimoCount = useMemo(() => contarAbaixoDoMinimo(gruposQuant), [gruposQuant]);
+
+  // Lista exibida: opcionalmente so os abaixo do minimo (toggle nos filtros).
+  const gruposExibidos = useMemo(
+    () => (filtros.somenteAbaixoMinimo ? filtrarAbaixoDoMinimo(gruposQuant) : gruposQuant),
+    [filtros.somenteAbaixoMinimo, gruposQuant],
+  );
+
   const resumoQuant = useMemo(() => {
     if (cargaS.fase !== 'ok') return null;
-    const total = somarQuantidades(gruposQuant.flatMap((g) => g.linhas));
-    const locaisComSaldo = new Set(gruposQuant.flatMap((g) => g.linhas.map((l) => l.localId))).size;
-    return { materiais: gruposQuant.length, total, locais: locaisComSaldo };
-  }, [cargaS, gruposQuant]);
+    const total = somarQuantidades(gruposExibidos.flatMap((g) => g.linhas));
+    const locaisComSaldo = new Set(
+      gruposExibidos.flatMap((g) => g.linhas.map((l) => l.localId)),
+    ).size;
+    return { materiais: gruposExibidos.length, total, locais: locaisComSaldo };
+  }, [cargaS, gruposExibidos]);
 
   // ── Acoes de escrita ───────────────────────────────────────────────────────
   const abrirMovUnidade = useCallback((u: UnidadeDTO) => {
@@ -558,6 +576,11 @@ export function PainelEstoque({ podeGerenciar }: Props) {
             { rotulo: 'Materiais', valor: resumoQuant?.materiais },
             { rotulo: 'Itens em estoque', valor: resumoQuant?.total },
             { rotulo: 'Locais com saldo', valor: resumoQuant?.locais },
+            {
+              rotulo: 'Abaixo do mínimo',
+              valor: cargaS.fase === 'ok' ? abaixoDoMinimoCount : undefined,
+              alerta: true,
+            },
           ]}
         />
       )}
@@ -612,7 +635,8 @@ export function PainelEstoque({ podeGerenciar }: Props) {
       ) : (
         <SecaoQuantificavel
           carga={cargaS}
-          grupos={gruposQuant}
+          grupos={gruposExibidos}
+          filtroAbaixo={filtros.somenteAbaixoMinimo}
           podeGerenciar={podeGerenciar}
           aoAbrir={(id) => setDetalheMaterialId(id)}
           aoMovimentar={abrirMovMaterialId}
@@ -760,22 +784,40 @@ function Aba({
   );
 }
 
-function ResumoCards({ cards }: { cards: { rotulo: string; valor: number | undefined }[] }) {
+function ResumoCards({
+  cards,
+}: {
+  cards: { rotulo: string; valor: number | undefined; alerta?: boolean }[];
+}) {
   return (
     <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {cards.map((c) => (
-        <div
-          key={c.rotulo}
-          className="rounded-gov-card border border-app-border-subtle bg-app-surface px-3 py-2"
-        >
-          <dt className="text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
-            {c.rotulo}
-          </dt>
-          <dd className="mt-0.5 text-lg font-semibold tabular text-app-fg">
-            {c.valor === undefined ? '—' : c.valor.toLocaleString('pt-BR')}
-          </dd>
-        </div>
-      ))}
+      {cards.map((c) => {
+        // Card de reposicao em destaque so quando ha material abaixo do minimo.
+        const emAlerta = c.alerta === true && (c.valor ?? 0) > 0;
+        return (
+          <div
+            key={c.rotulo}
+            className={[
+              'rounded-gov-card border px-3 py-2',
+              emAlerta
+                ? 'border-amber-300 bg-amber-50'
+                : 'border-app-border-subtle bg-app-surface',
+            ].join(' ')}
+          >
+            <dt className="text-2xs font-semibold uppercase tracking-wide text-app-fg-muted">
+              {c.rotulo}
+            </dt>
+            <dd
+              className={[
+                'mt-0.5 text-lg font-semibold tabular',
+                emAlerta ? 'text-amber-900' : 'text-app-fg',
+              ].join(' ')}
+            >
+              {c.valor === undefined ? '—' : c.valor.toLocaleString('pt-BR')}
+            </dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }
@@ -847,6 +889,7 @@ function SecaoSerializado({
 function SecaoQuantificavel({
   carga,
   grupos,
+  filtroAbaixo,
   podeGerenciar,
   aoAbrir,
   aoMovimentar,
@@ -855,6 +898,7 @@ function SecaoQuantificavel({
 }: {
   carga: CargaSaldos;
   grupos: ReturnType<typeof agruparSaldos>;
+  filtroAbaixo: boolean;
   podeGerenciar: boolean;
   aoAbrir: (id: string) => void;
   aoMovimentar: (id: string) => void;
@@ -877,7 +921,13 @@ function SecaoQuantificavel({
     );
   }
   if (grupos.length === 0) {
-    return (
+    return filtroAbaixo ? (
+      <EstadoVazio
+        icone={Boxes}
+        titulo="Nenhum material abaixo do mínimo"
+        descricao="Todos os materiais do filtro atual estão em nível adequado. Desmarque “Somente abaixo do mínimo” para ver todos."
+      />
+    ) : (
       <EstadoVazio
         icone={Boxes}
         titulo="Nenhum material quantificável"

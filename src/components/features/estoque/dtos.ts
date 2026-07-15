@@ -35,6 +35,12 @@ export interface MaterialDTO {
   natureza: Natureza;
   unidadeMedida: string | null;
   categoriaId: string | null;
+  /**
+   * Nivel de reposicao (estoque minimo). null = sem minimo (nao alerta). So faz
+   * sentido em quantificavel. Para marcar "abaixo do minimo" na tela, cruzar com
+   * o saldo total agrupado do material e usar `abaixoDoMinimo` (domain/reposicao).
+   */
+  quantidadeMinima: number | null;
   ativo: boolean;
   criadoEm: string;
   atualizadoEm: string;

@@ -44,6 +44,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       natureza: dados.natureza,
       unidadeMedida: dados.unidadeMedida ?? null,
       categoriaId: dados.categoriaId ?? null,
+      quantidadeMinima: dados.quantidadeMinima ?? null,
       ativo: dados.ativo ?? true,
       criadoEm: agora,
       atualizadoEm: agora,
@@ -63,6 +64,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       ...(dados.natureza !== undefined ? { natureza: dados.natureza } : {}),
       ...(dados.unidadeMedida !== undefined ? { unidadeMedida: dados.unidadeMedida } : {}),
       ...(dados.categoriaId !== undefined ? { categoriaId: dados.categoriaId } : {}),
+      ...(dados.quantidadeMinima !== undefined ? { quantidadeMinima: dados.quantidadeMinima } : {}),
       ...(dados.ativo !== undefined ? { ativo: dados.ativo } : {}),
       atualizadoEm: new Date(),
     };

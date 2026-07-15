@@ -2,6 +2,7 @@
 
 import { ArrowLeftRight, Boxes, Pencil } from 'lucide-react';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
+import { BadgeAbaixoMinimo } from './Badges';
 import type { MaterialAgrupado } from './saldos-agrupados';
 
 /** Linha secundaria "marca · modelo" (ponto medio), omitindo campos nulos. */
@@ -36,20 +37,23 @@ export function SaldoTabela({ grupos, aoAbrir, podeGerenciar, aoMovimentar, aoEd
       render: (g) => {
         const detalhe = marcaModelo(g);
         return (
-          <button
-            type="button"
-            onClick={() => aoAbrir(g.materialId)}
-            className="group block max-w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
-          >
-            <span className="block max-w-full truncate font-medium text-gov-azul group-hover:underline">
-              {g.descricao}
-            </span>
-            {detalhe ? (
-              <span className="mt-0.5 block max-w-full truncate text-2xs text-app-fg-muted">
-                {detalhe}
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              onClick={() => aoAbrir(g.materialId)}
+              className="group block max-w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            >
+              <span className="block max-w-full truncate font-medium text-gov-azul group-hover:underline">
+                {g.descricao}
               </span>
-            ) : null}
-          </button>
+              {detalhe ? (
+                <span className="mt-0.5 block max-w-full truncate text-2xs text-app-fg-muted">
+                  {detalhe}
+                </span>
+              ) : null}
+            </button>
+            {g.abaixoDoMinimo ? <BadgeAbaixoMinimo minimo={g.quantidadeMinima} /> : null}
+          </div>
         );
       },
     },
@@ -66,9 +70,21 @@ export function SaldoTabela({ grupos, aoAbrir, podeGerenciar, aoMovimentar, aoEd
       alinhar: 'right',
       largura: '7rem',
       render: (g) => (
-        <span className="tabular font-semibold text-app-fg">
-          {g.total.toLocaleString('pt-BR')}
-        </span>
+        <div className="flex flex-col items-end">
+          <span
+            className={[
+              'tabular font-semibold',
+              g.abaixoDoMinimo ? 'text-amber-900' : 'text-app-fg',
+            ].join(' ')}
+          >
+            {g.total.toLocaleString('pt-BR')}
+          </span>
+          {g.quantidadeMinima != null ? (
+            <span className="text-2xs text-app-fg-muted tabular">
+              mín {g.quantidadeMinima.toLocaleString('pt-BR')}
+            </span>
+          ) : null}
+        </div>
       ),
     },
   ];

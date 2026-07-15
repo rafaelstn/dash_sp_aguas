@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react';
 import type { Estado, Status, TipoMovimentacao } from './dtos';
 import {
   ROTULO_STATUS,
@@ -25,4 +26,19 @@ export function BadgeStatus({ status }: { status: Status }) {
 
 export function BadgeTipoMov({ tipo }: { tipo: TipoMovimentacao }) {
   return <span className={`${BASE} ${classeBadgeTipoMov(tipo)}`}>{ROTULO_TIPO_MOV[tipo]}</span>;
+}
+
+/**
+ * Selo de reposicao para material quantificavel abaixo do minimo. Nao depende so
+ * da cor (WCAG 1.4.1 / e-MAG): traz o texto "Abaixo do minimo" e, quando ha
+ * minimo, o valor "mín X" para contexto. O icone e decorativo (aria-hidden).
+ */
+export function BadgeAbaixoMinimo({ minimo }: { minimo?: number | null }) {
+  return (
+    <span className={`${BASE} gap-1 border-amber-300 bg-amber-50 text-amber-900`}>
+      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+      Abaixo do mínimo
+      {minimo != null ? ` (mín ${minimo.toLocaleString('pt-BR')})` : ''}
+    </span>
+  );
 }

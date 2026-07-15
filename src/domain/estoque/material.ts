@@ -22,6 +22,12 @@ export interface Material {
   natureza: Natureza;
   unidadeMedida: string | null;
   categoriaId: string | null;
+  /**
+   * Nivel de reposicao (estoque minimo). NULL = sem minimo definido (nao dispara
+   * alerta). So faz sentido em quantificavel; em serializado fica NULL e e
+   * ignorado. Regra de "abaixo do minimo": ver `abaixoDoMinimo` em `reposicao.ts`.
+   */
+  quantidadeMinima: number | null;
   ativo: boolean;
   criadoEm: Date;
   atualizadoEm: Date;
@@ -35,6 +41,8 @@ export interface UpsertMaterial {
   natureza: Natureza;
   unidadeMedida?: string | null;
   categoriaId?: string | null;
+  /** Nivel de reposicao; null limpa o minimo. Ver `reposicao.ts`. */
+  quantidadeMinima?: number | null;
   ativo?: boolean;
 }
 

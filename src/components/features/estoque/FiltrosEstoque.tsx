@@ -15,6 +15,8 @@ export interface FiltrosEstoqueUI {
   estado: '' | Estado;
   status: '' | Status;
   categoria: string;
+  /** So quantificaveis: exibe apenas os materiais abaixo do minimo (reposicao). */
+  somenteAbaixoMinimo: boolean;
 }
 
 export const FILTROS_ESTOQUE_INICIAIS: FiltrosEstoqueUI = {
@@ -24,6 +26,7 @@ export const FILTROS_ESTOQUE_INICIAIS: FiltrosEstoqueUI = {
   estado: '',
   status: '',
   categoria: '',
+  somenteAbaixoMinimo: false,
 };
 
 interface Props {
@@ -52,6 +55,7 @@ export function FiltrosEstoque({ valor, aoMudar, natureza, locais, categorias }:
   const idEstado = `${idBase}-estado`;
   const idStatus = `${idBase}-status`;
   const idCategoria = `${idBase}-categoria`;
+  const idReposicao = `${idBase}-reposicao`;
   const serializado = natureza === 'serializado';
 
   const locaisVisiveis = valor.unidade
@@ -194,28 +198,49 @@ export function FiltrosEstoque({ valor, aoMudar, natureza, locais, categorias }:
           </div>
         </>
       ) : (
-        /* Categoria (quantificaveis) */
-        <div className="flex flex-col gap-1">
-          <label htmlFor={idCategoria} className="text-sm font-medium text-app-fg">
-            Categoria
-          </label>
-          <div className="relative">
-            <select
-              id={idCategoria}
-              value={valor.categoria}
-              onChange={(e) => aoMudar({ ...valor, categoria: e.target.value })}
-              className={CLASSE_SELECT}
-            >
-              <option value="">Todas as categorias</option>
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-            <SetaSelect />
+        <>
+          {/* Categoria (quantificaveis) */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor={idCategoria} className="text-sm font-medium text-app-fg">
+              Categoria
+            </label>
+            <div className="relative">
+              <select
+                id={idCategoria}
+                value={valor.categoria}
+                onChange={(e) => aoMudar({ ...valor, categoria: e.target.value })}
+                className={CLASSE_SELECT}
+              >
+                <option value="">Todas as categorias</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+              <SetaSelect />
+            </div>
           </div>
-        </div>
+
+          {/* Reposicao: so os materiais abaixo do minimo. */}
+          <div className="flex items-end">
+            <label
+              htmlFor={idReposicao}
+              className="inline-flex cursor-pointer items-center gap-2 py-2 text-sm text-app-fg"
+            >
+              <input
+                id={idReposicao}
+                type="checkbox"
+                checked={valor.somenteAbaixoMinimo}
+                onChange={(e) =>
+                  aoMudar({ ...valor, somenteAbaixoMinimo: e.target.checked })
+                }
+                className="h-4 w-4 rounded border-app-border-input text-gov-azul focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+              />
+              Somente abaixo do mínimo
+            </label>
+          </div>
+        </>
       )}
     </div>
   );
