@@ -16,6 +16,18 @@ import {
   UsuarioNaoEhAprovador,
   UsuarioNaoEncontrado,
   EmailJaCadastrado,
+  MaterialNaoEncontrado,
+  UnidadeNaoEncontrada,
+  LocalNaoEncontrado,
+  CategoriaNaoEncontrada,
+  AlvoMovimentacaoInvalido,
+  MovimentacaoInvalida,
+  NaturezaIncompativel,
+  SaldoInsuficiente,
+  TransicaoStatusInvalida,
+  MaterialEmUso,
+  UnidadeComMovimentacao,
+  LocalEmUso,
 } from '@/domain/errors';
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { logger } from '@/infrastructure/logging/logger';
@@ -60,6 +72,18 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
       { status: 400 },
     );
   }
+  if (erro instanceof AlvoMovimentacaoInvalido) {
+    return NextResponse.json({ erro: 'alvo_invalido', mensagem: erro.message }, { status: 400 });
+  }
+  if (erro instanceof MovimentacaoInvalida) {
+    return NextResponse.json({ erro: 'movimentacao_invalida', mensagem: erro.message }, { status: 400 });
+  }
+  if (erro instanceof NaturezaIncompativel) {
+    return NextResponse.json(
+      { erro: 'natureza_incompativel', mensagem: erro.message, esperada: erro.esperada, recebida: erro.recebida },
+      { status: 400 },
+    );
+  }
 
   // ── 403 Forbidden ────────────────────────────────────────────────────────
   if (erro instanceof UsuarioNaoEhAprovador) {
@@ -94,8 +118,62 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
       { status: 404 },
     );
   }
+  if (erro instanceof MaterialNaoEncontrado) {
+    return NextResponse.json(
+      { erro: 'material_nao_encontrado', mensagem: 'Material não encontrado.' },
+      { status: 404 },
+    );
+  }
+  if (erro instanceof UnidadeNaoEncontrada) {
+    return NextResponse.json(
+      { erro: 'unidade_nao_encontrada', mensagem: 'Unidade de estoque não encontrada.' },
+      { status: 404 },
+    );
+  }
+  if (erro instanceof LocalNaoEncontrado) {
+    return NextResponse.json(
+      { erro: 'local_nao_encontrado', mensagem: 'Local de estoque não encontrado.' },
+      { status: 404 },
+    );
+  }
+  if (erro instanceof CategoriaNaoEncontrada) {
+    return NextResponse.json(
+      { erro: 'categoria_nao_encontrada', mensagem: 'Categoria não encontrada.' },
+      { status: 404 },
+    );
+  }
 
   // ── 409 Conflict ─────────────────────────────────────────────────────────
+  if (erro instanceof SaldoInsuficiente) {
+    return NextResponse.json(
+      {
+        erro: 'saldo_insuficiente',
+        mensagem: 'Saldo insuficiente para a operação.',
+        materialId: erro.materialId,
+        localId: erro.localId,
+        solicitado: erro.solicitado,
+      },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof TransicaoStatusInvalida) {
+    return NextResponse.json(
+      { erro: 'transicao_invalida', mensagem: erro.message, de: erro.de, para: erro.para },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof MaterialEmUso) {
+    return NextResponse.json({ erro: 'material_em_uso', mensagem: erro.message }, { status: 409 });
+  }
+  if (erro instanceof UnidadeComMovimentacao) {
+    return NextResponse.json(
+      { erro: 'unidade_com_movimentacao', mensagem: erro.message },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof LocalEmUso) {
+    return NextResponse.json({ erro: 'local_em_uso', mensagem: erro.message }, { status: 409 });
+  }
   if (erro instanceof PostoRemovido) {
     return NextResponse.json({ erro: 'posto_removido', mensagem: erro.message }, { status: 409 });
   }

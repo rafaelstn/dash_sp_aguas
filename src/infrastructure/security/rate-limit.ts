@@ -271,6 +271,28 @@ export const POLITICAS = {
     limite: 20,
     janelaSegundos: 60,
   },
+  /**
+   * Leitura do módulo Estoque (catálogo, unidades, locais, categorias, saldos,
+   * trilha de movimentação). Só leitura e idempotente; teto alto alinhado às
+   * demais políticas de leitura (as telas filtram/paginam com frequência).
+   * Chave por usuário (rotas autenticadas).
+   */
+  leituraEstoque: {
+    politica: 'leitura-estoque',
+    limite: 200,
+    janelaSegundos: 60,
+  },
+  /**
+   * Mutação no Estoque (movimentação e CRUD de material/unidade/local/categoria).
+   * A movimentação escreve no ledger e no saldo/unidade em transação; limite
+   * moderado para conter automação/cliques repetidos mesmo autenticado como
+   * Admin. Chave por usuário.
+   */
+  movimentacaoEstoque: {
+    politica: 'movimentacao-estoque',
+    limite: 60,
+    janelaSegundos: 60,
+  },
 } satisfies Record<string, ConfiguracaoRateLimit>;
 
 /** Headers HTTP padrão pra resposta — chamar após consumir. */

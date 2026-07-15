@@ -161,3 +161,120 @@ export class IdempotencyKeyDuplicada extends Error {
     this.name = 'IdempotencyKeyDuplicada';
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Erros do módulo de Estoque (almoxarifado / patrimônio, ADR 0020).
+// Tradução pra HTTP na camada de apresentação (respostaDeErro):
+//   MaterialNaoEncontrado/UnidadeNaoEncontrada/LocalNaoEncontrado/
+//   CategoriaNaoEncontrada        → 404 Not Found
+//   AlvoMovimentacaoInvalido/MovimentacaoInvalida/NaturezaIncompativel → 400
+//   SaldoInsuficiente/TransicaoStatusInvalida/MaterialEmUso/
+//   UnidadeComMovimentacao/LocalEmUso → 409 Conflict
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class MaterialNaoEncontrado extends Error {
+  constructor(public readonly id: string) {
+    super(`Material não encontrado: ${id}`);
+    this.name = 'MaterialNaoEncontrado';
+  }
+}
+
+export class UnidadeNaoEncontrada extends Error {
+  constructor(public readonly id: string) {
+    super(`Unidade de estoque não encontrada: ${id}`);
+    this.name = 'UnidadeNaoEncontrada';
+  }
+}
+
+export class LocalNaoEncontrado extends Error {
+  constructor(public readonly id: string) {
+    super(`Local de estoque não encontrado: ${id}`);
+    this.name = 'LocalNaoEncontrado';
+  }
+}
+
+export class CategoriaNaoEncontrada extends Error {
+  constructor(public readonly id: string) {
+    super(`Categoria de estoque não encontrada: ${id}`);
+    this.name = 'CategoriaNaoEncontrada';
+  }
+}
+
+/** Alvo da movimentação não é exatamente um (unidade XOR material). HTTP 400. */
+export class AlvoMovimentacaoInvalido extends Error {
+  constructor(motivo: string) {
+    super(motivo);
+    this.name = 'AlvoMovimentacaoInvalido';
+  }
+}
+
+/** Regra estrutural da movimentação violada (locais, motivo, quantidade). HTTP 400. */
+export class MovimentacaoInvalida extends Error {
+  constructor(motivo: string) {
+    super(motivo);
+    this.name = 'MovimentacaoInvalida';
+  }
+}
+
+/** Natureza do material não bate com a operação (ex.: serializado num saldo). HTTP 400. */
+export class NaturezaIncompativel extends Error {
+  constructor(
+    public readonly esperada: string,
+    public readonly recebida: string,
+  ) {
+    super(`Natureza incompatível: esperada ${esperada}, recebida ${recebida}.`);
+    this.name = 'NaturezaIncompativel';
+  }
+}
+
+/**
+ * Saída/baixa/transferência sem saldo suficiente. Disparado quando o UPDATE
+ * guardado (`WHERE quantidade >= :q`) afeta 0 linhas. HTTP 409.
+ */
+export class SaldoInsuficiente extends Error {
+  constructor(
+    public readonly materialId: string,
+    public readonly localId: string,
+    public readonly solicitado: number,
+  ) {
+    super(
+      `Saldo insuficiente do material ${materialId} no local ${localId} para retirar ${solicitado}.`,
+    );
+    this.name = 'SaldoInsuficiente';
+  }
+}
+
+/** Transição de status inválida na máquina de estados da unidade. HTTP 409. */
+export class TransicaoStatusInvalida extends Error {
+  constructor(
+    public readonly de: string,
+    public readonly para: string,
+  ) {
+    super(`Transição de status inválida: ${de} → ${para}.`);
+    this.name = 'TransicaoStatusInvalida';
+  }
+}
+
+/** Hard-delete de material com vínculo (unidade/saldo/movimentação). HTTP 409. */
+export class MaterialEmUso extends Error {
+  constructor(public readonly id: string) {
+    super(`Material ${id} possui vínculos e não pode ser excluído (foi inativado).`);
+    this.name = 'MaterialEmUso';
+  }
+}
+
+/** Exclusão de unidade que já tem movimentação (use baixa). HTTP 409. */
+export class UnidadeComMovimentacao extends Error {
+  constructor(public readonly id: string) {
+    super(`Unidade ${id} possui movimentação e não pode ser excluída; use baixa.`);
+    this.name = 'UnidadeComMovimentacao';
+  }
+}
+
+/** Exclusão de local ainda referenciado por saldo/unidade/movimentação. HTTP 409. */
+export class LocalEmUso extends Error {
+  constructor(public readonly id: string) {
+    super(`Local ${id} está em uso e não pode ser excluído.`);
+    this.name = 'LocalEmUso';
+  }
+}

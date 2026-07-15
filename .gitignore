@@ -89,3 +89,6 @@ data/inventario-ana/
 
 # Scratch do subagent-driven-development (ledger de progresso, runtime)
 .superpowers/
+
+# dado de inventario do cliente (carga inicial do Estoque), nao versionar
+ops/estoque/*.xlsx

@@ -15,6 +15,7 @@ const ATALHOS_GERAIS: AtalhoItem[] = [
   { tecla: 'D', acao: 'Ir para Desconformidades' },
   { tecla: 'T', acao: 'Ir para Triagem' },
   { tecla: 'M', acao: 'Ir para Monitor (mapa pluviométrico)' },
+  { tecla: 'E', acao: 'Ir para Estoque (almoxarifado e patrimônio)' },
   { tecla: 'H', acao: 'Ir para Home (busca de postos)' },
   { tecla: 'Esc', acao: 'Limpar filtros (na home)' },
   { tecla: '?', acao: 'Abrir/fechar esta ajuda' },

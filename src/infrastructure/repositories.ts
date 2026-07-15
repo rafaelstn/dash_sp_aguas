@@ -20,6 +20,12 @@ import { diagramasRepository as diagramasPg } from './db/diagramas-repository.pg
 import { inventarioAnaExportRepository as inventarioAnaExportPg } from './db/inventario-ana-export-repository.pg';
 import { estacoesPluviometricasRepository as estacoesPluviometricasPg } from './db/estacoes-pluviometricas-repository.pg';
 import { leiturasPluviometricasRepository as leiturasPluviometricasPg } from './db/leituras-pluviometricas-repository.pg';
+import { estoqueCategoriasRepository as estoqueCategoriasPg } from './db/estoque-categorias-repository.pg';
+import { estoqueLocaisRepository as estoqueLocaisPg } from './db/estoque-locais-repository.pg';
+import { estoqueMateriaisRepository as estoqueMateriaisPg } from './db/estoque-materiais-repository.pg';
+import { estoqueUnidadesRepository as estoqueUnidadesPg } from './db/estoque-unidades-repository.pg';
+import { estoqueSaldosRepository as estoqueSaldosPg } from './db/estoque-saldos-repository.pg';
+import { estoqueMovimentacoesRepository as estoqueMovimentacoesPg } from './db/estoque-movimentacoes-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
 import { postosRepository as postosMock } from './mock/postos-repository.mock';
@@ -39,6 +45,12 @@ import { diagramasRepository as diagramasMock } from './mock/diagramas-repositor
 import { inventarioAnaExportRepository as inventarioAnaExportMock } from './mock/inventario-ana-export-repository.mock';
 import { estacoesPluviometricasRepository as estacoesPluviometricasMock } from './mock/estacoes-pluviometricas-repository.mock';
 import { leiturasPluviometricasRepository as leiturasPluviometricasMock } from './mock/leituras-pluviometricas-repository.mock';
+import { estoqueCategoriasRepository as estoqueCategoriasMock } from './mock/estoque-categorias-repository.mock';
+import { estoqueLocaisRepository as estoqueLocaisMock } from './mock/estoque-locais-repository.mock';
+import { estoqueMateriaisRepository as estoqueMateriaisMock } from './mock/estoque-materiais-repository.mock';
+import { estoqueUnidadesRepository as estoqueUnidadesMock } from './mock/estoque-unidades-repository.mock';
+import { estoqueSaldosRepository as estoqueSaldosMock } from './mock/estoque-saldos-repository.mock';
+import { estoqueMovimentacoesRepository as estoqueMovimentacoesMock } from './mock/estoque-movimentacoes-repository.mock';
 
 /**
  * Ponto único de escolha entre repositórios PG (reais) e mock (demo).
@@ -80,6 +92,18 @@ export const estacoesPluviometricasRepository = demo
 export const leiturasPluviometricasRepository = demo
   ? leiturasPluviometricasMock
   : leiturasPluviometricasPg;
+
+// Modulo Estoque (almoxarifado / patrimonio, ADR 0020): 6 repositorios atras de
+// ports, com adapter mock in-memory (store compartilhado) para o MODO DEMO. A
+// escrita de saldo/unidade so acontece dentro do repo de movimentacoes (transacao).
+export const estoqueCategoriasRepository = demo ? estoqueCategoriasMock : estoqueCategoriasPg;
+export const estoqueLocaisRepository = demo ? estoqueLocaisMock : estoqueLocaisPg;
+export const estoqueMateriaisRepository = demo ? estoqueMateriaisMock : estoqueMateriaisPg;
+export const estoqueUnidadesRepository = demo ? estoqueUnidadesMock : estoqueUnidadesPg;
+export const estoqueSaldosRepository = demo ? estoqueSaldosMock : estoqueSaldosPg;
+export const estoqueMovimentacoesRepository = demo
+  ? estoqueMovimentacoesMock
+  : estoqueMovimentacoesPg;
 
 // Gateway de Storage (Supabase) das fotos de posto. Sem variação demo: o
 // armazenamento real é sempre usado (não há mock de bucket hoje).

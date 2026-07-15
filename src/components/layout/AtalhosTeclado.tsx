@@ -101,6 +101,10 @@ export function AtalhosTeclado() {
           e.preventDefault();
           router.push('/monitor');
           return;
+        case 'e':
+          e.preventDefault();
+          router.push('/estoque');
+          return;
         case 'h':
           e.preventDefault();
           router.push('/');

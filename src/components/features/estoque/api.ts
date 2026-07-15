@@ -1,0 +1,273 @@
+/**
+ * Cliente da API de estoque (lado do navegador). Cada funcao resolve com os
+ * dados no sucesso ou lanca `ErroEstoque` (mensagem PT-BR pronta). A
+ * autorizacao real vive no backend; aqui so consumimos e traduzimos.
+ */
+
+import { lancarErro } from './erros';
+import type { PayloadMovimentacao } from './tipos';
+import type { UpsertMaterial } from '@/domain/estoque/material';
+import type { UpsertUnidade } from '@/domain/estoque/unidade';
+import type {
+  CategoriaDTO,
+  DetalheUnidadeDTO,
+  LocalDTO,
+  MaterialDTO,
+  MovimentacaoDTO,
+  RespostaLista,
+  RespostaPaginada,
+  ResultadoMovimentacaoDTO,
+  SaldoContextoDTO,
+  UnidadeDTO,
+  Estado,
+  Natureza,
+  Status,
+  UnidadeFisica,
+  TipoMovimentacao,
+} from './dtos';
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
+const ACCEPT = { Accept: 'application/json' } as const;
+
+async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const resp = await fetch(url, { method: 'GET', headers: ACCEPT, signal });
+  if (!resp.ok) await lancarErro(resp);
+  return (await resp.json()) as T;
+}
+
+async function enviar<T>(
+  url: string,
+  metodo: 'POST' | 'PATCH' | 'DELETE',
+  corpo?: unknown,
+): Promise<T> {
+  const resp = await fetch(url, {
+    method: metodo,
+    headers: corpo === undefined ? ACCEPT : { ...JSON_HEADERS, ...ACCEPT },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+  });
+  if (!resp.ok) await lancarErro(resp);
+  return (await resp.json()) as T;
+}
+
+/** Monta querystring ignorando valores vazios/undefined. */
+function qs(params: Record<string, string | number | undefined | null>): string {
+  const sp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue;
+    sp.set(k, String(v));
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : '';
+}
+
+// ── Filtros de leitura ───────────────────────────────────────────────────────
+export interface FiltrosUnidadesUI {
+  unidade?: UnidadeFisica;
+  local?: string;
+  estado?: Estado;
+  status?: Status;
+  materialId?: string;
+  busca?: string;
+  pagina?: number;
+  porPagina?: number;
+}
+
+export interface FiltrosSaldosUI {
+  materialId?: string;
+  local?: string;
+  unidade?: UnidadeFisica;
+}
+
+export interface FiltrosMovimentacoesUI {
+  tipo?: TipoMovimentacao;
+  unidadeId?: string;
+  materialId?: string;
+  local?: string;
+  pagina?: number;
+  porPagina?: number;
+}
+
+// ── Unidades serializadas ────────────────────────────────────────────────────
+export function listarUnidades(
+  f: FiltrosUnidadesUI,
+  signal?: AbortSignal,
+): Promise<RespostaPaginada<UnidadeDTO>> {
+  return getJson(
+    `/api/estoque/unidades${qs({
+      unidade: f.unidade,
+      local: f.local,
+      estado: f.estado,
+      status: f.status,
+      materialId: f.materialId,
+      busca: f.busca,
+      pagina: f.pagina,
+      porPagina: f.porPagina,
+    })}`,
+    signal,
+  );
+}
+
+/** Conta unidades de um filtro sem trazer as linhas (porPagina=1 -> total). */
+export async function contarUnidades(
+  f: FiltrosUnidadesUI,
+  signal?: AbortSignal,
+): Promise<number> {
+  const r = await listarUnidades({ ...f, pagina: 1, porPagina: 1 }, signal);
+  return r.total;
+}
+
+export function obterUnidade(id: string, signal?: AbortSignal): Promise<DetalheUnidadeDTO> {
+  return getJson(`/api/estoque/unidades/${id}`, signal);
+}
+
+export function criarUnidade(dados: UpsertUnidade): Promise<UnidadeDTO> {
+  return enviar('/api/estoque/unidades', 'POST', dados);
+}
+
+export function atualizarUnidade(
+  id: string,
+  dados: Partial<UpsertUnidade>,
+): Promise<UnidadeDTO> {
+  return enviar(`/api/estoque/unidades/${id}`, 'PATCH', dados);
+}
+
+export function excluirUnidade(id: string): Promise<{ id: string; removido: boolean }> {
+  return enviar(`/api/estoque/unidades/${id}`, 'DELETE');
+}
+
+// ── Saldos (quantificaveis) ──────────────────────────────────────────────────
+export function listarSaldos(
+  f: FiltrosSaldosUI,
+  signal?: AbortSignal,
+): Promise<RespostaLista<SaldoContextoDTO>> {
+  return getJson(
+    `/api/estoque/saldos${qs({
+      materialId: f.materialId,
+      local: f.local,
+      unidade: f.unidade,
+    })}`,
+    signal,
+  );
+}
+
+// ── Materiais (catalogo) ─────────────────────────────────────────────────────
+export interface FiltrosMateriaisUI {
+  natureza?: Natureza;
+  categoria?: string;
+  busca?: string;
+  apenasAtivos?: boolean;
+  pagina?: number;
+  porPagina?: number;
+}
+
+export function listarMateriais(
+  f: FiltrosMateriaisUI,
+  signal?: AbortSignal,
+): Promise<RespostaPaginada<MaterialDTO>> {
+  return getJson(
+    `/api/estoque/materiais${qs({
+      natureza: f.natureza,
+      categoria: f.categoria,
+      busca: f.busca,
+      apenasAtivos: f.apenasAtivos ? 'true' : undefined,
+      pagina: f.pagina,
+      porPagina: f.porPagina,
+    })}`,
+    signal,
+  );
+}
+
+export function obterMaterial(id: string, signal?: AbortSignal): Promise<MaterialDTO> {
+  return getJson(`/api/estoque/materiais/${id}`, signal);
+}
+
+export function criarMaterial(dados: UpsertMaterial): Promise<MaterialDTO> {
+  return enviar('/api/estoque/materiais', 'POST', dados);
+}
+
+export function atualizarMaterial(
+  id: string,
+  dados: Partial<UpsertMaterial>,
+): Promise<MaterialDTO> {
+  return enviar(`/api/estoque/materiais/${id}`, 'PATCH', dados);
+}
+
+export interface RespostaExcluirMaterial {
+  id: string;
+  inativado: boolean;
+  removido: boolean;
+  material?: MaterialDTO;
+}
+
+export function excluirMaterial(id: string): Promise<RespostaExcluirMaterial> {
+  return enviar(`/api/estoque/materiais/${id}`, 'DELETE');
+}
+
+// ── Locais ───────────────────────────────────────────────────────────────────
+export function listarLocais(
+  unidade?: UnidadeFisica,
+  signal?: AbortSignal,
+): Promise<RespostaLista<LocalDTO>> {
+  return getJson(`/api/estoque/locais${qs({ unidade })}`, signal);
+}
+
+export interface UpsertLocalUI {
+  unidade: UnidadeFisica;
+  sala?: string | null;
+  prateleira?: string | null;
+  armario?: string | null;
+  observacao?: string | null;
+}
+
+export function criarLocal(dados: UpsertLocalUI): Promise<LocalDTO> {
+  return enviar('/api/estoque/locais', 'POST', dados);
+}
+
+export function atualizarLocal(id: string, dados: Partial<UpsertLocalUI>): Promise<LocalDTO> {
+  return enviar(`/api/estoque/locais/${id}`, 'PATCH', dados);
+}
+
+export function excluirLocal(id: string): Promise<{ id: string; removido: boolean }> {
+  return enviar(`/api/estoque/locais/${id}`, 'DELETE');
+}
+
+// ── Categorias ───────────────────────────────────────────────────────────────
+export function listarCategorias(signal?: AbortSignal): Promise<RespostaLista<CategoriaDTO>> {
+  return getJson('/api/estoque/categorias', signal);
+}
+
+export function criarCategoria(nome: string): Promise<CategoriaDTO> {
+  return enviar('/api/estoque/categorias', 'POST', { nome });
+}
+
+export function atualizarCategoria(id: string, nome: string): Promise<CategoriaDTO> {
+  return enviar(`/api/estoque/categorias/${id}`, 'PATCH', { nome });
+}
+
+export function excluirCategoria(id: string): Promise<{ id: string; removido: boolean }> {
+  return enviar(`/api/estoque/categorias/${id}`, 'DELETE');
+}
+
+// ── Movimentacoes ────────────────────────────────────────────────────────────
+export function listarMovimentacoes(
+  f: FiltrosMovimentacoesUI,
+  signal?: AbortSignal,
+): Promise<RespostaPaginada<MovimentacaoDTO>> {
+  return getJson(
+    `/api/estoque/movimentacoes${qs({
+      tipo: f.tipo,
+      unidadeId: f.unidadeId,
+      materialId: f.materialId,
+      local: f.local,
+      pagina: f.pagina,
+      porPagina: f.porPagina,
+    })}`,
+    signal,
+  );
+}
+
+export function registrarMovimentacao(
+  payload: PayloadMovimentacao,
+): Promise<ResultadoMovimentacaoDTO> {
+  return enviar('/api/estoque/movimentacoes', 'POST', payload);
+}

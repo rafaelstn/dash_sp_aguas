@@ -11,6 +11,7 @@ import {
   Workflow,
   CloudRain,
   Users,
+  Boxes,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ const ICONES = {
   workflow: Workflow,
   rain: CloudRain,
   users: Users,
+  estoque: Boxes,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconeKey = keyof typeof ICONES;

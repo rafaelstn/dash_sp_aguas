@@ -44,7 +44,10 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
   // (max-w-content), evitando linhas longas e campos esticados. Solução
   // contida no chrome: não altera nenhuma página individualmente.
   const pathname = usePathname();
-  const larguraCheia = (pathname ?? '').startsWith('/monitor');
+  const rota = pathname ?? '';
+  // O Monitor (mapa) e o Estoque (tabelas largas) usam a largura CHEIA ao lado
+  // da navegacao; as demais paginas mantem o teto de leitura (max-w-content).
+  const larguraCheia = rota.startsWith('/monitor') || rota.startsWith('/estoque');
 
   useEffect(() => {
     try {
