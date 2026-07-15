@@ -13,7 +13,7 @@ import type {
   DetalheUnidadeDTO,
   LocalDTO,
   MaterialDTO,
-  MovimentacaoDTO,
+  MovimentacaoTrilhaDTO,
   RespostaLista,
   RespostaPaginada,
   ResultadoMovimentacaoDTO,
@@ -252,7 +252,7 @@ export function excluirCategoria(id: string): Promise<{ id: string; removido: bo
 export function listarMovimentacoes(
   f: FiltrosMovimentacoesUI,
   signal?: AbortSignal,
-): Promise<RespostaPaginada<MovimentacaoDTO>> {
+): Promise<RespostaPaginada<MovimentacaoTrilhaDTO>> {
   return getJson(
     `/api/estoque/movimentacoes${qs({
       tipo: f.tipo,

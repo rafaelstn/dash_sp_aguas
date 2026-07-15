@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   estoqueMovimentacoesRepository,
+  usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
 import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { registrarMovimentacao } from '@/application/use-cases/estoque/registrar-movimentacao';
+import { resolverOperadores } from '@/application/use-cases/estoque/resolver-operadores';
 import { checarRateLimit } from '../_rl';
 import { movimentacaoSchema, motivosZod, lerPaginacao, tipoMovEnum } from '../_schemas';
 import type { FiltrosMovimentacao } from '@/domain/estoque/movimentacao';
@@ -44,7 +46,29 @@ export async function GET(request: NextRequest) {
       porPagina,
     };
     const { itens, total } = await estoqueMovimentacoesRepository.listar(filtros);
-    return NextResponse.json({ itens, total, pagina, porPagina }, { status: 200, headers });
+
+    // Enriquece a trilha com o rotulo legivel do OPERADOR (mesma regra do
+    // export). Batch: um unico SELECT em auth.users. Se a resolucao falhar,
+    // degrada pro id (a trilha nao pode quebrar por causa do nome) e loga.
+    const { operadores, degradado } = await resolverOperadores(
+      usuariosIdentidadeRepository,
+      itens.map((m) => m.usuarioId),
+    );
+    if (degradado) {
+      logger.warn(
+        'estoque.movimentacoes.operador_degradado',
+        { usuarioId: auth.id },
+        'Resolucao de identidade do operador indisponivel; trilha degradada para o id',
+      );
+    }
+    const itensComOperador = itens.map((m) => ({
+      ...m,
+      operador: operadores.get(m.usuarioId) ?? m.usuarioId,
+    }));
+    return NextResponse.json(
+      { itens: itensComOperador, total, pagina, porPagina },
+      { status: 200, headers },
+    );
   } catch (e) {
     return respostaDeErro('GET /api/estoque/movimentacoes', { usuarioId: auth.id }, e);
   }

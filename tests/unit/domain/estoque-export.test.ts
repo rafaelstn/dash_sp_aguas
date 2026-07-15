@@ -7,6 +7,7 @@ import {
   linhaMovimentacao,
   linhaQuantificavel,
   linhaSerializado,
+  mapaOperadores,
   rotuloEstado,
   rotuloItem,
   rotuloNatureza,
@@ -63,6 +64,37 @@ describe('estoque/export, rotuloOperador (resolucao de identidade)', () => {
     expect(rotuloOperador('u1', { nome: null, email: 'maria@sp.gov.br' })).toBe('maria@sp.gov.br');
     expect(rotuloOperador('u1', { nome: '   ', email: '  ' })).toBe('u1');
     expect(rotuloOperador('u1', undefined)).toBe('u1');
+  });
+});
+
+describe('estoque/export, mapaOperadores (batch id -> rotulo)', () => {
+  it('resolve ids distintos pelo nome/email do mapa de identidades', () => {
+    const identidades = new Map([
+      ['u1', { nome: 'Maria Silva', email: 'maria@sp.gov.br' }],
+      ['u2', { nome: null, email: 'joao@sp.gov.br' }],
+    ]);
+    const mapa = mapaOperadores(['u1', 'u2'], identidades);
+    expect(mapa.get('u1')).toBe('Maria Silva');
+    expect(mapa.get('u2')).toBe('joao@sp.gov.br');
+    expect(mapa.size).toBe(2);
+  });
+
+  it('degrada para o id cru quando a identidade nao foi resolvida (mapa vazio)', () => {
+    const mapa = mapaOperadores(['u1', 'u2'], new Map());
+    expect(mapa.get('u1')).toBe('u1');
+    expect(mapa.get('u2')).toBe('u2');
+  });
+
+  it('UUID de sistema do import vira "Importação" mesmo sem identidade', () => {
+    const mapa = mapaOperadores([UUID_SISTEMA_IMPORT], new Map());
+    expect(mapa.get(UUID_SISTEMA_IMPORT)).toBe('Importação');
+  });
+
+  it('deduplica ids repetidos (uma entrada por id)', () => {
+    const identidades = new Map([['u1', { nome: 'Ana', email: null }]]);
+    const mapa = mapaOperadores(['u1', 'u1', 'u1'], identidades);
+    expect(mapa.size).toBe(1);
+    expect(mapa.get('u1')).toBe('Ana');
   });
 });
 

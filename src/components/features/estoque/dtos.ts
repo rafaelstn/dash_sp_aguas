@@ -114,6 +114,18 @@ export interface MovimentacaoDTO {
   criadoEm: string;
 }
 
+/**
+ * Movimentacao enriquecida para a TRILHA de auditoria (listagem
+ * `GET /api/estoque/movimentacoes` e historico do detalhe do item). Alem dos
+ * campos do ledger, traz `operador`: o rotulo legivel de quem fez o evento
+ * (nome; senao email; senao o id; "Importação" para a carga inicial), resolvido
+ * no servidor pela MESMA regra do export. So a trilha usa este DTO; o resultado
+ * do POST continua em `MovimentacaoDTO` (sem operador).
+ */
+export interface MovimentacaoTrilhaDTO extends MovimentacaoDTO {
+  operador: string;
+}
+
 export interface ResultadoMovimentacaoDTO {
   movimentacao: MovimentacaoDTO;
   saldo: {
@@ -130,5 +142,5 @@ export interface ResultadoMovimentacaoDTO {
 /** Detalhe de unidade serializada: registro + trilha de movimentacao. */
 export interface DetalheUnidadeDTO {
   unidade: UnidadeDTO;
-  historico: MovimentacaoDTO[];
+  historico: MovimentacaoTrilhaDTO[];
 }

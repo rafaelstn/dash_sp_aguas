@@ -3,11 +3,13 @@ import { z } from 'zod';
 import {
   estoqueUnidadesRepository,
   estoqueMovimentacoesRepository,
+  usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
 import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { UnidadeComMovimentacao, UnidadeNaoEncontrada } from '@/domain/errors';
 import { logger } from '@/infrastructure/logging/logger';
+import { resolverOperadores } from '@/application/use-cases/estoque/resolver-operadores';
 import { checarRateLimit } from '../../_rl';
 import { unidadePatchSchema, motivosZod } from '../../_schemas';
 
@@ -33,7 +35,27 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
       unidadeId: idParsed.data,
       porPagina: 100,
     });
-    return NextResponse.json({ unidade, historico: historico.itens }, { status: 200, headers });
+    // Mesma trilha do drawer: enriquece com o rotulo do operador (batch, mesma
+    // regra do export/listagem). Degrada pro id se a resolucao indisponivel.
+    const { operadores, degradado } = await resolverOperadores(
+      usuariosIdentidadeRepository,
+      historico.itens.map((m) => m.usuarioId),
+    );
+    if (degradado) {
+      logger.warn(
+        'estoque.unidades.operador_degradado',
+        { usuarioId: auth.id, unidadeId: idParsed.data },
+        'Resolucao de identidade do operador indisponivel; trilha degradada para o id',
+      );
+    }
+    const historicoComOperador = historico.itens.map((m) => ({
+      ...m,
+      operador: operadores.get(m.usuarioId) ?? m.usuarioId,
+    }));
+    return NextResponse.json(
+      { unidade, historico: historicoComOperador },
+      { status: 200, headers },
+    );
   } catch (e) {
     return respostaDeErro('GET /api/estoque/unidades/[id]', { usuarioId: auth.id }, e);
   }

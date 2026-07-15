@@ -159,6 +159,24 @@ export function rotuloOperador(id: string, identidade: IdentidadeUsuario | undef
   return id;
 }
 
+/**
+ * Mapa `usuarioId -> rotulo do operador` para um conjunto de ids, dado o mapa de
+ * identidades JA resolvido em lote. Puro. Deduplica os ids e roteia cada um por
+ * `rotuloOperador` (UUID de import -> "Importação"; nome; email; senao o id cru).
+ * Fonte unica da regra de rotulo para as duas superficies (trilha e export), pra
+ * o nome do operador nunca divergir entre listagem/detalhe e planilha.
+ */
+export function mapaOperadores(
+  usuarioIds: Iterable<string>,
+  identidades: Map<string, IdentidadeUsuario>,
+): Map<string, string> {
+  const mapa = new Map<string, string>();
+  for (const id of usuarioIds) {
+    if (!mapa.has(id)) mapa.set(id, rotuloOperador(id, identidades.get(id)));
+  }
+  return mapa;
+}
+
 // ── Cabecalhos (texto visivel, acento PT-BR correto) ─────────────────────────
 
 export const CABECALHO_SERIALIZADO: readonly string[] = [

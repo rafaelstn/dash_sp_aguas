@@ -3,10 +3,10 @@ import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { BadgeTipoMov } from './Badges';
 import { ROTULO_STATUS, formatarDataHora, rotuloEstado } from './rotulos';
-import type { MovimentacaoDTO } from './dtos';
+import type { MovimentacaoTrilhaDTO } from './dtos';
 
 interface TrilhaProps {
-  movimentacoes: readonly MovimentacaoDTO[];
+  movimentacoes: readonly MovimentacaoTrilhaDTO[];
   /** Resolve o rotulo legivel de um local a partir do id. */
   nomeLocal: (id: string | null) => string;
 }
@@ -27,7 +27,7 @@ export function TrilhaMovimentacoes({ movimentacoes, nomeLocal }: TrilhaProps) {
     );
   }
 
-  const colunas: readonly ColunaTabela<MovimentacaoDTO>[] = [
+  const colunas: readonly ColunaTabela<MovimentacaoTrilhaDTO>[] = [
     {
       chave: 'data',
       cabecalho: 'Data e hora',
@@ -80,6 +80,19 @@ export function TrilhaMovimentacoes({ movimentacoes, nomeLocal }: TrilhaProps) {
         if (partes.length === 0) return <span className="text-app-fg-subtle">—</span>;
         return <span className="text-app-fg-muted">{partes.join(' · ')}</span>;
       },
+    },
+    {
+      chave: 'operador',
+      cabecalho: 'Operador',
+      largura: '11rem',
+      render: (m) =>
+        m.operador ? (
+          <span className="block max-w-[11rem] truncate text-app-fg-muted" title={m.operador}>
+            {m.operador}
+          </span>
+        ) : (
+          <span className="text-app-fg-subtle">—</span>
+        ),
     },
     {
       chave: 'motivo',

@@ -15,7 +15,7 @@ import { ErroEstoque } from './erros';
 import { abaixoDoMinimo } from '@/domain/estoque/reposicao';
 import { somarQuantidades } from './saldos-agrupados';
 import { ROTULO_NATUREZA, ROTULO_UNIDADE_FISICA, formatarDataHora } from './rotulos';
-import type { MaterialDTO, MovimentacaoDTO, SaldoContextoDTO } from './dtos';
+import type { MaterialDTO, MovimentacaoTrilhaDTO, SaldoContextoDTO } from './dtos';
 
 interface Props {
   materialId: string | null;
@@ -32,7 +32,7 @@ interface Props {
 interface Dados {
   material: MaterialDTO;
   saldos: SaldoContextoDTO[];
-  historico: MovimentacaoDTO[];
+  historico: MovimentacaoTrilhaDTO[];
 }
 
 type Estado =

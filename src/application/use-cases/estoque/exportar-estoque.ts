@@ -15,7 +15,7 @@ import {
   linhaMovimentacao,
   linhaQuantificavel,
   linhaSerializado,
-  rotuloOperador,
+  mapaOperadores,
   TETO_EXPORT,
   type CelulaExport,
 } from '@/domain/estoque/export';
@@ -98,14 +98,16 @@ async function montarMovimentacoes(
   filtros: FiltrosMovimentacao,
 ): Promise<PlanilhaMontada> {
   const itens = await deps.movimentacoesRepo.listarParaExport(filtros);
-  // Resolve os operadores em UM SELECT (batch), depois roteia cada linha pelo
-  // rotulo resolvido (ou fallback do dominio: "Importacao"/id cru).
+  // Resolve os operadores em UM SELECT (batch) e mapeia cada id pelo rotulo do
+  // dominio (mesma regra da trilha; fallback "Importacao"/id cru). O export
+  // NAO degrada: se o resolver falhar, o erro sobe e vira FalhaRepositorio.
   const identidades = await deps.identidadeRepo.resolver(itens.map((m) => m.usuarioId));
+  const operadores = mapaOperadores(itens.map((m) => m.usuarioId), identidades);
   return {
     aba: 'Movimentacoes',
     cabecalho: CABECALHO_MOVIMENTACAO,
     linhas: itens.map((m) =>
-      linhaMovimentacao(m, rotuloOperador(m.usuarioId, identidades.get(m.usuarioId))),
+      linhaMovimentacao(m, operadores.get(m.usuarioId) ?? m.usuarioId),
     ),
     larguras: LARGURAS_MOVIMENTACAO,
   };
