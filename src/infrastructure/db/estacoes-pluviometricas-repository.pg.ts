@@ -11,6 +11,7 @@ type LinhaEstacao = {
   lat: number;
   lng: number;
   tipo: 'manual' | 'automatico';
+  tipo_estacao: 'pluviometrico' | 'fluviometrico' | 'piezometrico';
   bacia: string | null;
   owner: string | null;
   posto_id: string | null;
@@ -26,6 +27,7 @@ function mapear(linha: LinhaEstacao): EstacaoPluviometrica {
     lat: Number(linha.lat),
     lng: Number(linha.lng),
     tipo: linha.tipo,
+    tipoEstacao: linha.tipo_estacao,
     bacia: linha.bacia,
     owner: linha.owner,
     postoId: linha.posto_id,
@@ -34,7 +36,7 @@ function mapear(linha: LinhaEstacao): EstacaoPluviometrica {
   };
 }
 
-const COLUNAS = sql`id, prefixo, nome, lat, lng, tipo, bacia, owner, posto_id, sibh_id, criado_em`;
+const COLUNAS = sql`id, prefixo, nome, lat, lng, tipo, tipo_estacao, bacia, owner, posto_id, sibh_id, criado_em`;
 
 export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository = {
   async listar(filtros) {
@@ -43,6 +45,9 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
       : sql``;
     const condTipo = filtros?.tipo
       ? sql`AND tipo = ${filtros.tipo}`
+      : sql``;
+    const condTipoEstacao = filtros?.tipoEstacao
+      ? sql`AND tipo_estacao = ${filtros.tipoEstacao}`
       : sql``;
     const condOwner = filtros?.owner
       ? sql`AND owner = ${filtros.owner}`
@@ -53,6 +58,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
          WHERE true
          ${condBacia}
          ${condTipo}
+         ${condTipoEstacao}
          ${condOwner}
          ORDER BY nome
       `;
@@ -75,36 +81,38 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
     }
   },
 
-  async upsertPorPrefixo(estacao) {
+  async upsertPorSibhId(estacao) {
     try {
       const linhas = await sql<LinhaEstacao[]>`
         INSERT INTO estacoes_pluviometricas
-          (prefixo, nome, lat, lng, tipo, bacia, owner, posto_id, sibh_id)
+          (prefixo, nome, lat, lng, tipo, tipo_estacao, bacia, owner, posto_id, sibh_id)
         VALUES (
           ${estacao.prefixo},
           ${estacao.nome},
           ${estacao.lat},
           ${estacao.lng},
           ${estacao.tipo},
+          ${estacao.tipoEstacao},
           ${estacao.bacia ?? null},
           ${estacao.owner ?? null},
           ${estacao.postoId ?? null}::uuid,
-          ${estacao.sibhId ?? null}
+          ${estacao.sibhId}
         )
-        ON CONFLICT (prefixo) WHERE prefixo IS NOT NULL DO UPDATE SET
-          nome     = EXCLUDED.nome,
-          lat      = EXCLUDED.lat,
-          lng      = EXCLUDED.lng,
-          tipo     = EXCLUDED.tipo,
-          bacia    = EXCLUDED.bacia,
-          owner    = EXCLUDED.owner,
-          posto_id = EXCLUDED.posto_id,
-          sibh_id  = EXCLUDED.sibh_id
+        ON CONFLICT (sibh_id) WHERE sibh_id IS NOT NULL DO UPDATE SET
+          prefixo      = EXCLUDED.prefixo,
+          nome         = EXCLUDED.nome,
+          lat          = EXCLUDED.lat,
+          lng          = EXCLUDED.lng,
+          tipo         = EXCLUDED.tipo,
+          tipo_estacao = EXCLUDED.tipo_estacao,
+          bacia        = EXCLUDED.bacia,
+          owner        = EXCLUDED.owner,
+          posto_id     = EXCLUDED.posto_id
         RETURNING ${COLUNAS}
       `;
       return mapear(linhas[0]!);
     } catch (e) {
-      throw new FalhaRepositorio('estacoesPluviometricas.upsertPorPrefixo', e);
+      throw new FalhaRepositorio('estacoesPluviometricas.upsertPorSibhId', e);
     }
   },
 };

@@ -19,6 +19,9 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
     return Array.from(armazenamento.values())
       .filter((e) => (filtros?.bacia ? e.bacia === filtros.bacia : true))
       .filter((e) => (filtros?.tipo ? e.tipo === filtros.tipo : true))
+      .filter((e) =>
+        filtros?.tipoEstacao ? e.tipoEstacao === filtros.tipoEstacao : true,
+      )
       .filter((e) => (filtros?.owner ? e.owner === filtros.owner : true))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   },
@@ -27,9 +30,11 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
     return armazenamento.get(id) ?? null;
   },
 
-  async upsertPorPrefixo(estacao) {
+  async upsertPorSibhId(estacao) {
+    // Dedup pela chave natural sibhId (não por prefixo): o mesmo prefixo pode
+    // coexistir em estações de tipos hidrológicos diferentes.
     const existente = Array.from(armazenamento.values()).find(
-      (e) => e.prefixo === estacao.prefixo,
+      (e) => e.sibhId === estacao.sibhId,
     );
     const resultado: EstacaoPluviometrica = {
       id: existente?.id ?? randomUUID(),
@@ -38,10 +43,11 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
       lat: estacao.lat,
       lng: estacao.lng,
       tipo: estacao.tipo,
+      tipoEstacao: estacao.tipoEstacao,
       bacia: estacao.bacia ?? null,
       owner: estacao.owner ?? null,
       postoId: estacao.postoId ?? null,
-      sibhId: estacao.sibhId ?? null,
+      sibhId: estacao.sibhId,
       criadoEm: existente?.criadoEm ?? new Date(),
     };
     armazenamento.set(resultado.id, resultado);

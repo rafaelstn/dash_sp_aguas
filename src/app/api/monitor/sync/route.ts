@@ -83,11 +83,15 @@ export async function POST(request: NextRequest) {
       postosRepository,
     );
 
-    // Alvos das leituras: estações automáticas já persistidas (inclui as que
-    // acabaram de ser upsertadas). Filtra por tipo para não puxar leitura de
-    // estação manual cadastrada por operador numa fase futura.
+    // Alvos das leituras: estações automáticas pluviométricas já persistidas
+    // (inclui as que acabaram de ser upsertadas). Filtra por `tipo` para não
+    // puxar leitura de estação manual cadastrada por operador numa fase futura,
+    // E por `tipoEstacao` porque a leitura aqui é chuva acumulada (mm), válida
+    // só para pluviométrica; fluviométrica e piezométrica medem nível (metros)
+    // e terão sincronização própria na Fase 2.
     const persistidas = await estacoesPluviometricasRepository.listar({
       tipo: 'automatico',
+      tipoEstacao: 'pluviometrico',
     });
 
     const ate = new Date();
@@ -108,6 +112,7 @@ export async function POST(request: NextRequest) {
         dias,
         estacoesUpsertadas: estacoes.upsertadas,
         estacoesPuladas: estacoes.puladasSemCoordenada,
+        estacoesPuladasSemId: estacoes.puladasSemId,
         leiturasGravadas: leituras.linhasGravadas,
         errosEstacoes: estacoes.erros.length,
         errosLeituras: leituras.erros.length,

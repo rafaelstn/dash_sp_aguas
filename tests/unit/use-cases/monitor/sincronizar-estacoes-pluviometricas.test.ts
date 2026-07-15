@@ -44,19 +44,20 @@ function fakeEstacoesRepo(): FakeEstacoesRepo {
     async obterPorId() {
       return null;
     },
-    async upsertPorPrefixo(estacao) {
+    async upsertPorSibhId(estacao) {
       upserts.push(estacao);
       const resultado: EstacaoPluviometrica = {
-        id: `id-${estacao.prefixo}`,
+        id: `id-${estacao.sibhId}`,
         prefixo: estacao.prefixo,
         nome: estacao.nome,
         lat: estacao.lat,
         lng: estacao.lng,
         tipo: estacao.tipo,
+        tipoEstacao: estacao.tipoEstacao,
         bacia: estacao.bacia ?? null,
         owner: estacao.owner ?? null,
         postoId: estacao.postoId ?? null,
-        sibhId: estacao.sibhId ?? null,
+        sibhId: estacao.sibhId,
         criadoEm: new Date('2026-01-01T00:00:00Z'),
       };
       return resultado;
@@ -110,11 +111,13 @@ function estacao(over: Partial<EstacaoSibh>): EstacaoSibh {
 }
 
 describe('use-case/sincronizarEstacoesPluviometricas', () => {
-  it('filtra só pluviométricas e faz upsert com tipo automatico', async () => {
+  it('importa os três tipos hidrológicos e faz upsert com tipo automatico', async () => {
     const sibh = fakeSibh([
       estacao({ prefixo: 'P001', id: '1', tipo: 'pluviometrico' }),
       estacao({ prefixo: 'F002', id: '2', tipo: 'fluviometrico' }),
-      estacao({ prefixo: 'Q003', id: '3', tipo: 'qualidade' }),
+      estacao({ prefixo: 'Z003', id: '3', tipo: 'piezometrico' }),
+      estacao({ prefixo: 'Q004', id: '4', tipo: 'qualidade' }),
+      estacao({ prefixo: 'X005', id: '5', tipo: 'desconhecido' }),
     ]);
     const estacoesRepo = fakeEstacoesRepo();
     const postosRepo = fakePostosRepo({});
@@ -125,14 +128,95 @@ describe('use-case/sincronizarEstacoesPluviometricas', () => {
       postosRepo,
     );
 
-    expect(resumo.totalSibh).toBe(1);
+    // Só os três tipos hidrológicos entram; qualidade e desconhecido saem.
+    expect(resumo.totalSibh).toBe(3);
+    expect(resumo.upsertadas).toBe(3);
+    expect(estacoesRepo.upserts).toHaveLength(3);
+
+    const prefixos = estacoesRepo.upserts.map((u) => u.prefixo).sort();
+    expect(prefixos).toEqual(['F002', 'P001', 'Z003']);
+
+    // Todas gravam o canal automático e o tipo hidrológico correto vindo do SIBH.
+    for (const u of estacoesRepo.upserts) {
+      expect(u.tipo).toBe('automatico');
+    }
+    const porPrefixo = new Map(estacoesRepo.upserts.map((u) => [u.prefixo, u]));
+    expect(porPrefixo.get('P001')!.tipoEstacao).toBe('pluviometrico');
+    expect(porPrefixo.get('F002')!.tipoEstacao).toBe('fluviometrico');
+    expect(porPrefixo.get('Z003')!.tipoEstacao).toBe('piezometrico');
+
+    // Demais campos repassados corretamente na pluviométrica.
+    const p001 = porPrefixo.get('P001')!;
+    expect(p001.sibhId).toBe('1');
+    expect(p001.bacia).toBe('Alto Tietê');
+    // A entidade responsável (owner) é repassada do SIBH ao upsert.
+    expect(p001.owner).toBe('SP ÁGUAS');
+  });
+
+  it('descarta qualidade e desconhecido sem upsert', async () => {
+    const sibh = fakeSibh([
+      estacao({ prefixo: 'Q001', tipo: 'qualidade' }),
+      estacao({ prefixo: 'X002', tipo: 'desconhecido' }),
+    ]);
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo({});
+
+    const resumo = await sincronizarEstacoesPluviometricas(
+      sibh,
+      estacoesRepo,
+      postosRepo,
+    );
+
+    expect(resumo.totalSibh).toBe(0);
+    expect(resumo.upsertadas).toBe(0);
+    expect(estacoesRepo.upserts).toHaveLength(0);
+  });
+
+  it('mesmo prefixo em tipos diferentes vira dois upserts com sibhId distinto', async () => {
+    // Caso central da correção de chave: prefixo colide entre plu e flu, mas o
+    // sync conflita por sibhId (estacao.id), então as duas coexistem em vez de
+    // uma sobrescrever a outra.
+    const sibh = fakeSibh([
+      estacao({ prefixo: '1001855', id: '933', tipo: 'pluviometrico' }),
+      estacao({ prefixo: '1001855', id: '35331', tipo: 'fluviometrico' }),
+    ]);
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo({});
+
+    const resumo = await sincronizarEstacoesPluviometricas(
+      sibh,
+      estacoesRepo,
+      postosRepo,
+    );
+
+    expect(resumo.upsertadas).toBe(2);
+    expect(estacoesRepo.upserts).toHaveLength(2);
+    // Chave do upsert é o sibhId, não o prefixo (que é o mesmo nas duas).
+    const porSibh = new Map(estacoesRepo.upserts.map((u) => [u.sibhId, u]));
+    expect(porSibh.get('933')!.tipoEstacao).toBe('pluviometrico');
+    expect(porSibh.get('35331')!.tipoEstacao).toBe('fluviometrico');
+    expect(porSibh.get('933')!.prefixo).toBe('1001855');
+    expect(porSibh.get('35331')!.prefixo).toBe('1001855');
+  });
+
+  it('pula estação sem id do SIBH e contabiliza em puladasSemId', async () => {
+    const sibh = fakeSibh([
+      estacao({ prefixo: 'P001', id: '' }),
+      estacao({ prefixo: 'P002', id: '7' }),
+    ]);
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo({});
+
+    const resumo = await sincronizarEstacoesPluviometricas(
+      sibh,
+      estacoesRepo,
+      postosRepo,
+    );
+
+    expect(resumo.puladasSemId).toBe(1);
     expect(resumo.upsertadas).toBe(1);
     expect(estacoesRepo.upserts).toHaveLength(1);
-    expect(estacoesRepo.upserts[0]!.tipo).toBe('automatico');
-    expect(estacoesRepo.upserts[0]!.sibhId).toBe('1');
-    expect(estacoesRepo.upserts[0]!.bacia).toBe('Alto Tietê');
-    // A entidade responsável (owner) é repassada do SIBH ao upsert.
-    expect(estacoesRepo.upserts[0]!.owner).toBe('SP ÁGUAS');
+    expect(estacoesRepo.upserts[0]!.sibhId).toBe('7');
   });
 
   it('repassa owner null quando o SIBH não informa a entidade', async () => {
@@ -196,8 +280,8 @@ describe('use-case/sincronizarEstacoesPluviometricas', () => {
       estacao({ prefixo: 'BOM2' }),
     ]);
     const estacoesRepo = fakeEstacoesRepo();
-    const original = estacoesRepo.upsertPorPrefixo.bind(estacoesRepo);
-    estacoesRepo.upsertPorPrefixo = async (e) => {
+    const original = estacoesRepo.upsertPorSibhId.bind(estacoesRepo);
+    estacoesRepo.upsertPorSibhId = async (e) => {
       if (e.prefixo === 'RUIM') throw new Error('falha simulada de banco');
       return original(e);
     };

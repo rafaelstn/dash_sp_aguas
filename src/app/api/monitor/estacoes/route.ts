@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
 // Query da listagem. Filtros opcionais combinados com AND no repositório:
 //   - bacia: texto livre (trim); string vazia vira "sem filtro".
 //   - tipo: enum espelhando o CHECK do banco (manual | automatico).
+//   - tipoEstacao: tipo hidrológico (pluviometrico | fluviometrico | piezometrico).
 const querySchema = z.object({
   bacia: z
     .string()
@@ -23,6 +24,9 @@ const querySchema = z.object({
     .min(1)
     .optional(),
   tipo: z.enum(['manual', 'automatico']).optional(),
+  tipoEstacao: z
+    .enum(['pluviometrico', 'fluviometrico', 'piezometrico'])
+    .optional(),
   owner: z
     .string()
     .trim()
@@ -58,6 +62,7 @@ export async function GET(request: NextRequest) {
   const parsed = querySchema.safeParse({
     bacia: request.nextUrl.searchParams.get('bacia') ?? undefined,
     tipo: request.nextUrl.searchParams.get('tipo') ?? undefined,
+    tipoEstacao: request.nextUrl.searchParams.get('tipoEstacao') ?? undefined,
     owner: request.nextUrl.searchParams.get('owner') ?? undefined,
   });
   if (!parsed.success) {
@@ -75,6 +80,7 @@ export async function GET(request: NextRequest) {
     const itens = await estacoesPluviometricasRepository.listar({
       bacia: parsed.data.bacia,
       tipo: parsed.data.tipo,
+      tipoEstacao: parsed.data.tipoEstacao,
       owner: parsed.data.owner,
     });
 
@@ -85,6 +91,7 @@ export async function GET(request: NextRequest) {
         total: itens.length,
         filtroBacia: parsed.data.bacia !== undefined,
         filtroTipo: parsed.data.tipo ?? null,
+        filtroTipoEstacao: parsed.data.tipoEstacao ?? null,
       },
       'Estações do Monitor listadas',
     );

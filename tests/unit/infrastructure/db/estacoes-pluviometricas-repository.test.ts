@@ -12,55 +12,108 @@ import type { UpsertEstacaoPluviometrica } from '@/domain/monitor/estacao-pluvio
  *
  * Estratégia (mesma do projeto): exercita o adapter mock in-memory, que
  * espelha a lógica observável do .pg (filtro, ordenação, upsert idempotente
- * por prefixo). O adapter .pg real não toca Postgres aqui; é coberto por
+ * por sibhId). O adapter .pg real não toca Postgres aqui; é coberto por
  * regressão estática de schema no fim do arquivo (padrão
  * triagem-repository-regression).
  */
 
 function entrada(over: Partial<UpsertEstacaoPluviometrica> = {}): UpsertEstacaoPluviometrica {
+  // sibhId é a chave natural do upsert. Por padrão derivamos do prefixo para
+  // que prefixos distintos gerem linhas distintas; overrides explícitos vencem.
+  const prefixo = over.prefixo !== undefined ? over.prefixo : 'P-001';
   return {
-    prefixo: 'P-001',
+    sibhId: `sibh-${prefixo ?? 'nulo'}`,
+    prefixo,
     nome: 'Estação Cabreúva',
     lat: -23.3,
     lng: -47.1,
     tipo: 'automatico',
+    tipoEstacao: 'pluviometrico',
     ...over,
   };
 }
 
-describe('estações pluviométricas (mock) — upsertPorPrefixo', () => {
+describe('estações pluviométricas (mock) — upsertPorSibhId', () => {
   afterEach(() => {
     _resetEstacoesPluviometricasMock();
   });
 
-  it('insere quando o prefixo é novo e preenche defaults nuláveis', async () => {
-    const e = await repo.upsertPorPrefixo(entrada());
+  it('insere quando o sibhId é novo e preenche defaults nuláveis', async () => {
+    const e = await repo.upsertPorSibhId(entrada({ sibhId: 'sibh-42' }));
     expect(e.id).toBeTruthy();
     expect(e.prefixo).toBe('P-001');
+    expect(e.sibhId).toBe('sibh-42');
+    expect(e.tipoEstacao).toBe('pluviometrico');
     expect(e.bacia).toBeNull();
     expect(e.postoId).toBeNull();
-    expect(e.sibhId).toBeNull();
     expect(e.criadoEm).toBeInstanceOf(Date);
   });
 
-  it('é idempotente: reprocessar o mesmo prefixo mantém o id e atualiza campos', async () => {
-    const primeira = await repo.upsertPorPrefixo(entrada({ nome: 'Nome Velho' }));
-    const segunda = await repo.upsertPorPrefixo(
-      entrada({ nome: 'Nome Novo', bacia: 'Tietê', tipo: 'manual' }),
+  it('grava o tipo hidrológico informado (fluviométrico/piezométrico)', async () => {
+    const flu = await repo.upsertPorSibhId(
+      entrada({ prefixo: 'F-001', tipoEstacao: 'fluviometrico' }),
+    );
+    const piezo = await repo.upsertPorSibhId(
+      entrada({ prefixo: 'Z-001', tipoEstacao: 'piezometrico' }),
+    );
+    expect(flu.tipoEstacao).toBe('fluviometrico');
+    expect(piezo.tipoEstacao).toBe('piezometrico');
+  });
+
+  it('é idempotente por sibhId: reprocessar mantém o id e atualiza campos (inclusive prefixo)', async () => {
+    const primeira = await repo.upsertPorSibhId(
+      entrada({ sibhId: 'sibh-99', prefixo: 'P-ANTIGO', nome: 'Nome Velho' }),
+    );
+    const segunda = await repo.upsertPorSibhId(
+      entrada({
+        sibhId: 'sibh-99',
+        prefixo: 'P-NOVO',
+        nome: 'Nome Novo',
+        bacia: 'Tietê',
+        tipo: 'manual',
+        tipoEstacao: 'fluviometrico',
+      }),
     );
 
     expect(segunda.id).toBe(primeira.id);
     expect(segunda.nome).toBe('Nome Novo');
     expect(segunda.bacia).toBe('Tietê');
     expect(segunda.tipo).toBe('manual');
+    // O tipo hidrológico e o prefixo também são atualizados no reprocessamento.
+    expect(segunda.tipoEstacao).toBe('fluviometrico');
+    expect(segunda.prefixo).toBe('P-NOVO');
 
     const todas = await repo.listar();
     expect(todas.length).toBe(1);
   });
 
-  it('prefixos diferentes geram linhas distintas', async () => {
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'P-001' }));
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'P-002' }));
+  it('caso central: mesmo prefixo em tipos diferentes coexiste (sibhId distinto, sem sobrescrever)', async () => {
+    // Regressão da corrupção que a chave por prefixo causava: 364 prefixos flu
+    // colidem com plu. Com a chave em sibhId, as duas linhas coexistem.
+    const plu = await repo.upsertPorSibhId(
+      entrada({ sibhId: 'sibh-933', prefixo: '1001855', tipoEstacao: 'pluviometrico' }),
+    );
+    const flu = await repo.upsertPorSibhId(
+      entrada({ sibhId: 'sibh-35331', prefixo: '1001855', tipoEstacao: 'fluviometrico' }),
+    );
+
+    // IDs distintos: não houve sobrescrita.
+    expect(flu.id).not.toBe(plu.id);
+
+    const todas = await repo.listar();
+    expect(todas.length).toBe(2);
+
+    const porSibh = new Map(todas.map((e) => [e.sibhId, e]));
+    expect(porSibh.get('sibh-933')!.tipoEstacao).toBe('pluviometrico');
+    expect(porSibh.get('sibh-35331')!.tipoEstacao).toBe('fluviometrico');
+    // Ambas mantêm o mesmo prefixo (que deixou de ser único).
+    expect(porSibh.get('sibh-933')!.prefixo).toBe('1001855');
+    expect(porSibh.get('sibh-35331')!.prefixo).toBe('1001855');
+  });
+
+  it('sibhIds diferentes geram linhas distintas', async () => {
+    await repo.upsertPorSibhId(entrada({ prefixo: 'P-001' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'P-002' }));
     expect((await repo.listar()).length).toBe(2);
   });
 });
@@ -71,24 +124,37 @@ describe('estações pluviométricas (mock) — listar e obterPorId', () => {
   });
 
   it('ordena por nome', async () => {
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'A', nome: 'Zumbi' }));
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'B', nome: 'Abelha' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'A', nome: 'Zumbi' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'B', nome: 'Abelha' }));
     const nomes = (await repo.listar()).map((e) => e.nome);
     expect(nomes).toEqual(['Abelha', 'Zumbi']);
   });
 
   it('filtra por bacia e por tipo combinando com AND', async () => {
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'A', bacia: 'Tietê', tipo: 'manual' }));
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'B', bacia: 'Tietê', tipo: 'automatico' }));
-    await repo.upsertPorPrefixo(entrada({ prefixo: 'C', bacia: 'PCJ', tipo: 'manual' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'A', bacia: 'Tietê', tipo: 'manual' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'B', bacia: 'Tietê', tipo: 'automatico' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'C', bacia: 'PCJ', tipo: 'manual' }));
 
     expect((await repo.listar({ bacia: 'Tietê' })).length).toBe(2);
     expect((await repo.listar({ tipo: 'manual' })).length).toBe(2);
     expect((await repo.listar({ bacia: 'Tietê', tipo: 'manual' })).length).toBe(1);
   });
 
+  it('filtra por tipo hidrológico, combinando com AND', async () => {
+    await repo.upsertPorSibhId(entrada({ prefixo: 'A', tipoEstacao: 'pluviometrico' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'B', tipoEstacao: 'fluviometrico' }));
+    await repo.upsertPorSibhId(entrada({ prefixo: 'C', tipoEstacao: 'fluviometrico', bacia: 'PCJ' }));
+
+    expect((await repo.listar({ tipoEstacao: 'pluviometrico' })).length).toBe(1);
+    expect((await repo.listar({ tipoEstacao: 'fluviometrico' })).length).toBe(2);
+    expect((await repo.listar({ tipoEstacao: 'piezometrico' })).length).toBe(0);
+    expect(
+      (await repo.listar({ tipoEstacao: 'fluviometrico', bacia: 'PCJ' })).length,
+    ).toBe(1);
+  });
+
   it('obterPorId devolve a estação e null quando não existe', async () => {
-    const e = await repo.upsertPorPrefixo(entrada());
+    const e = await repo.upsertPorSibhId(entrada());
     expect((await repo.obterPorId(e.id))?.prefixo).toBe('P-001');
     expect(await repo.obterPorId('inexistente')).toBeNull();
   });
@@ -105,8 +171,19 @@ describe('estacoes-pluviometricas-repository.pg — regressão de schema', () =>
     expect(source).toMatch(/INSERT\s+INTO\s+estacoes_pluviometricas/);
   });
 
-  it('upsert casa com o índice único parcial de prefixo', () => {
-    expect(source).toMatch(/ON\s+CONFLICT\s+\(prefixo\)\s+WHERE\s+prefixo\s+IS\s+NOT\s+NULL/);
+  it('persiste a coluna tipo_estacao (migration 0051) no insert e no update', () => {
+    // Coluna no INSERT.
+    expect(source).toMatch(/INSERT\s+INTO\s+estacoes_pluviometricas[\s\S]*tipo_estacao/);
+    // Atualizada no ON CONFLICT via EXCLUDED (qualificado, sem ambiguidade).
+    expect(source).toMatch(/tipo_estacao\s*=\s*EXCLUDED\.tipo_estacao/);
+  });
+
+  it('upsert conflita por sibh_id (migration 0052), não mais por prefixo', () => {
+    expect(source).toMatch(/ON\s+CONFLICT\s+\(sibh_id\)\s+WHERE\s+sibh_id\s+IS\s+NOT\s+NULL/);
+    // A chave antiga (prefixo) não pode mais ser o alvo do conflito.
+    expect(source).not.toMatch(/ON\s+CONFLICT\s+\(prefixo\)/);
+    // prefixo passa a ser atualizado no DO UPDATE (qualificado com EXCLUDED).
+    expect(source).toMatch(/prefixo\s*=\s*EXCLUDED\.prefixo/);
   });
 
   it('todas as queries passam pela tag parametrizada sql (sem string crua)', () => {

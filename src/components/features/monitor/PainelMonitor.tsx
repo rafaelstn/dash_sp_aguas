@@ -7,6 +7,7 @@ import { Alerta } from '@/components/ui/Alerta';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { FiltrosMonitor, FILTROS_INICIAIS, type ValorFiltros } from './FiltrosMonitor';
+import { SeletorTipoHidrologico } from './SeletorTipoHidrologico';
 import { ListaEstacoes } from './ListaEstacoes';
 import { entidadeDaEstacao, LEGENDA_ENTIDADES } from './paleta-monitor';
 import { useComparacao } from './useComparacao';
@@ -159,6 +160,8 @@ export function PainelMonitor() {
     const termo = filtros.busca.trim().toLocaleLowerCase('pt-BR');
     const filtraEntidade = filtros.entidades.length > 0;
     return todas.filter((e) => {
+      // Tipo hidrológico: sempre um por vez (nunca vazio); mostra só o ativo.
+      if (e.tipoEstacao !== filtros.tipoEstacao) return false;
       if (filtros.bacia && e.bacia !== filtros.bacia) return false;
       if (filtros.tipo && e.tipo !== filtros.tipo) return false;
       if (filtraEntidade && !filtros.entidades.includes(entidadeDaEstacao(e)))
@@ -250,16 +253,10 @@ export function PainelMonitor() {
         ].join(' ')}
       >
         {carga.status === 'ok' ? (
-          <FiltrosMonitor
-            valor={filtros}
-            aoMudar={setFiltros}
-            bacias={bacias}
-            entidadesDisponiveis={entidadesDisponiveis}
-          />
+          <FiltrosMonitor valor={filtros} aoMudar={setFiltros} bacias={bacias} />
         ) : (
           <SkeletonGrupo rotulo="Carregando filtros">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
               <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
               <div className="h-14 animate-pulse rounded bg-app-border-subtle" />
@@ -311,6 +308,18 @@ export function PainelMonitor() {
           }}
         />
       )}
+
+      {/* Seletor de tipo hidrológico, logo abaixo da área do mapa. Aparece nas
+          duas visões (mapa e lista) porque controla filtros.tipoEstacao, que
+          filtra o dataset inteiro, não só a apresentação de uma delas. */}
+      <div className="rounded-gov-card border border-app-border-subtle bg-app-surface px-3 py-3">
+        <SeletorTipoHidrologico
+          valor={filtros.tipoEstacao}
+          aoMudar={(tipoEstacao) =>
+            setFiltros((prev) => ({ ...prev, tipoEstacao }))
+          }
+        />
+      </div>
 
       {/* Painel de detalhe (drawer). Só monta o chunk do recharts quando há
           estação selecionada; ao fechar, volta a null. */}

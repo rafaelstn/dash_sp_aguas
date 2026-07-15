@@ -6,8 +6,8 @@ import { X, ExternalLink, CloudRain } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
-import { ROTULO_TIPO } from './tipos';
-import type { Estacao } from './tipos';
+import { ROTULO_TIPO, ROTULO_TIPO_HIDROLOGICO } from './tipos';
+import type { Estacao, TipoHidrologico } from './tipos';
 import type { PeriodoDias } from './tipos-leituras';
 import { PERIODOS } from './tipos-leituras';
 import { useLeiturasEstacao } from './useLeiturasEstacao';
@@ -60,7 +60,15 @@ export function PainelDetalheEstacao({
   const tituloId = `${baseId}-titulo`;
 
   const aberto = estacao !== null;
-  const estado = useLeiturasEstacao(estacao?.id ?? null, periodo);
+  // Só estações pluviométricas têm série de chuva. Para fluviométricas e
+  // piezométricas a leitura de nível é fase futura: não buscamos leituras
+  // (passamos id null, o hook fica inativo) e mostramos um aviso no lugar do
+  // gráfico, mantendo o cabeçalho da estação funcionando.
+  const ehPluviometrico = estacao?.tipoEstacao === 'pluviometrico';
+  const estado = useLeiturasEstacao(
+    ehPluviometrico ? (estacao?.id ?? null) : null,
+    periodo,
+  );
 
   // Abre/fecha o <dialog> imperativamente: o modo modal só existe via
   // showModal(); o atributo `open` declarativo não dá modalidade nem trap.
@@ -130,10 +138,14 @@ export function PainelDetalheEstacao({
           comparacao={comparacao}
         />
 
-        <SeletorPeriodo periodo={periodo} aoMudar={setPeriodo} />
+        {ehPluviometrico ? (
+          <SeletorPeriodo periodo={periodo} aoMudar={setPeriodo} />
+        ) : null}
 
         <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-          {estado.status === 'carregando' || estado.status === 'inativo' ? (
+          {!ehPluviometrico ? (
+            <AvisoLeituraIndisponivel tipo={estacao.tipoEstacao} />
+          ) : estado.status === 'carregando' || estado.status === 'inativo' ? (
             <ConteudoCarregando />
           ) : estado.status === 'erro' ? (
             <Alerta tipo="erro" titulo="Falha ao carregar as leituras">
@@ -156,6 +168,47 @@ export function PainelDetalheEstacao({
   );
 }
 
+// Texto do aviso por tipo hidrológico sem série de chuva. Descreve a grandeza
+// medida por cada tipo, para o aviso ser informativo e não só um "em breve".
+const AVISO_POR_TIPO: Record<
+  Exclude<TipoHidrologico, 'pluviometrico'>,
+  { grandeza: string; descricao: string }
+> = {
+  fluviometrico: {
+    grandeza: 'nível',
+    descricao:
+      'As estações fluviométricas medem o nível e a vazão dos rios. A leitura de nível para estações fluviométricas será disponibilizada em breve.',
+  },
+  piezometrico: {
+    grandeza: 'nível',
+    descricao:
+      'As estações piezométricas medem o nível das águas subterrâneas. A leitura de nível para estações piezométricas será disponibilizada em breve.',
+  },
+};
+
+/**
+ * Aviso exibido no lugar do gráfico de chuva para estações fluviométricas e
+ * piezométricas, cuja leitura de nível ainda não está disponível (fase futura).
+ * Acessível (Alerta com role apropriado); os dados de identificação da estação
+ * permanecem visíveis no cabeçalho acima.
+ */
+function AvisoLeituraIndisponivel({ tipo }: { tipo: TipoHidrologico }) {
+  // Guarda de tipo: pluviométrico não chega aqui (tem gráfico). Se chegar,
+  // usa o texto fluviométrico como padrão seguro em vez de quebrar.
+  const info =
+    tipo === 'pluviometrico'
+      ? AVISO_POR_TIPO.fluviometrico
+      : AVISO_POR_TIPO[tipo];
+  return (
+    <section aria-label="Disponibilidade das leituras">
+      <Alerta tipo="info" titulo={`Leitura de ${info.grandeza} em breve`}>
+        {info.descricao} Os dados de identificação da estação já estão
+        disponíveis acima.
+      </Alerta>
+    </section>
+  );
+}
+
 function CabecalhoPainel({
   estacao,
   tituloId,
@@ -169,6 +222,7 @@ function CabecalhoPainel({
 }) {
   const meta: string[] = [];
   if (estacao.prefixo) meta.push(`Prefixo ${estacao.prefixo}`);
+  meta.push(ROTULO_TIPO_HIDROLOGICO[estacao.tipoEstacao]);
   meta.push(ROTULO_TIPO[estacao.tipo]);
   if (estacao.bacia) meta.push(`Bacia: ${estacao.bacia}`);
 

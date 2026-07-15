@@ -8,6 +8,9 @@
 
 export type TipoEstacao = 'manual' | 'automatico';
 
+/** Tipo hidrologico da estacao (o que ela mede). Espelha `tipo_estacao`. */
+export type TipoHidrologico = 'pluviometrico' | 'fluviometrico' | 'piezometrico';
+
 export interface Estacao {
   id: string;
   prefixo: string | null;
@@ -15,6 +18,8 @@ export interface Estacao {
   lat: number;
   lng: number;
   tipo: TipoEstacao;
+  /** Tipo hidrologico (pluviometrico | fluviometrico | piezometrico). */
+  tipoEstacao: TipoHidrologico;
   bacia: string | null;
   /** Entidade responsável (SIBH station_owner); null = "Outros". */
   owner: string | null;
@@ -32,4 +37,14 @@ export interface RespostaEstacoes {
 export const ROTULO_TIPO: Record<TipoEstacao, string> = {
   automatico: 'Automática',
   manual: 'Manual',
+};
+
+/**
+ * Rótulo legível do tipo hidrológico, reutilizado no popup, na lista e nos
+ * filtros do mapa.
+ */
+export const ROTULO_TIPO_HIDROLOGICO: Record<TipoHidrologico, string> = {
+  pluviometrico: 'Pluviométrico',
+  fluviometrico: 'Fluviométrico',
+  piezometrico: 'Piezométrico',
 };

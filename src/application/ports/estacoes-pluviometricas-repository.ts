@@ -22,10 +22,12 @@ export interface EstacoesPluviometricasRepository {
   obterPorId(id: string): Promise<EstacaoPluviometrica | null>;
 
   /**
-   * Upsert idempotente por `prefixo` (chave natural do SIBH). Insere se o
-   * prefixo é novo, atualiza os demais campos se já existe (ON CONFLICT no
-   * índice único parcial de `prefixo`). Pensado para o sync reprocessar lotes
-   * sem duplicar estação. Retorna a estação resultante.
+   * Upsert idempotente por `sibhId` (chave natural/estável do SIBH). Insere se
+   * o sibh_id é novo, atualiza os demais campos (inclusive `prefixo`) se já
+   * existe (ON CONFLICT no índice único parcial de `sibh_id`, migration 0052).
+   * Pensado para o sync reprocessar lotes sem duplicar estação, e para que o
+   * mesmo prefixo coexista em tipos hidrológicos diferentes. Retorna a estação
+   * resultante.
    */
-  upsertPorPrefixo(estacao: UpsertEstacaoPluviometrica): Promise<EstacaoPluviometrica>;
+  upsertPorSibhId(estacao: UpsertEstacaoPluviometrica): Promise<EstacaoPluviometrica>;
 }

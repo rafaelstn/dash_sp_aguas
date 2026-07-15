@@ -15,18 +15,30 @@
  */
 export type TipoEstacaoPluviometrica = 'manual' | 'automatico';
 
+/**
+ * Tipo hidrologico da estacao. Espelha o CHECK da coluna `tipo_estacao`
+ * (migration 0051) e o `station_type_id` do SIBH. Dimensao distinta de
+ * `TipoEstacaoPluviometrica` (canal manual/automatico): aqui e o que a estacao
+ * mede (chuva, nivel/cota, agua subterranea).
+ */
+export type TipoHidrologico = 'pluviometrico' | 'fluviometrico' | 'piezometrico';
+
 export interface EstacaoPluviometrica {
   id: string;
   /**
    * Código da estação no SIBH (fonte oficial). Pode ser `null` enquanto a
-   * estação não está conciliada; quando preenchido é único (índice parcial
-   * único na migration 0045). É a chave usada pelo sync via upsert.
+   * estação não está conciliada. NÃO é único: o mesmo prefixo aparece em
+   * estações de tipos hidrológicos diferentes (a partir da migration 0052 o
+   * índice de `prefixo` deixa de ser único). Continua consultável para o
+   * vínculo ao catálogo `postos`. A chave natural do upsert é `sibhId`.
    */
   prefixo: string | null;
   nome: string;
   lat: number;
   lng: number;
   tipo: TipoEstacaoPluviometrica;
+  /** Tipo hidrologico (o que a estacao mede). Espelha `tipo_estacao` (0051). */
+  tipoEstacao: TipoHidrologico;
   bacia: string | null;
   /**
    * Entidade responsável pela estação (SIBH `station_owner`). `null` quando não
@@ -35,26 +47,35 @@ export interface EstacaoPluviometrica {
   owner: string | null;
   /** Vínculo opcional ao catálogo interno `postos` (ON DELETE SET NULL). */
   postoId: string | null;
-  /** Identificador do registro no SIBH, para reconciliação futura. */
+  /**
+   * Identificador do registro no SIBH. É a chave natural/estável da estação
+   * (único quando preenchido, índice parcial único na migration 0052). `null`
+   * só em linhas legadas não conciliadas.
+   */
   sibhId: string | null;
   criadoEm: Date;
 }
 
 /**
- * Dados para upsert idempotente de estação por prefixo (usado pelo sync da
- * fase B1.2). `prefixo` é obrigatório aqui porque é a chave de conflito; os
- * demais campos refletem o que vem do SIBH na conciliação.
+ * Dados para upsert idempotente de estação por `sibhId` (usado pelo sync da
+ * fase B1.2). `sibhId` é obrigatório aqui porque é a chave de conflito (a
+ * origem é sempre o SIBH); `prefixo` virou atributo (pode repetir entre tipos,
+ * pode ser `null`). Os demais campos refletem o que vem do SIBH na conciliação.
  */
 export interface UpsertEstacaoPluviometrica {
-  prefixo: string;
+  /** Chave natural/estável da estação no SIBH. Obrigatório: é o alvo do upsert. */
+  sibhId: string;
+  /** Código no SIBH. Atributo (não é chave): pode repetir entre tipos ou ser nulo. */
+  prefixo: string | null;
   nome: string;
   lat: number;
   lng: number;
   tipo: TipoEstacaoPluviometrica;
+  /** Tipo hidrologico da estacao (obrigatorio na conciliacao com o SIBH). */
+  tipoEstacao: TipoHidrologico;
   bacia?: string | null;
   owner?: string | null;
   postoId?: string | null;
-  sibhId?: string | null;
 }
 
 /**
@@ -64,5 +85,7 @@ export interface UpsertEstacaoPluviometrica {
 export interface FiltrosEstacaoPluviometrica {
   bacia?: string;
   tipo?: TipoEstacaoPluviometrica;
+  /** Filtro opcional pelo tipo hidrologico (pluvio/fluvio/piezo). */
+  tipoEstacao?: TipoHidrologico;
   owner?: string;
 }
