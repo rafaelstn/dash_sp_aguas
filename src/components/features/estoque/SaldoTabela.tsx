@@ -4,6 +4,17 @@ import { ArrowLeftRight, Boxes, Pencil } from 'lucide-react';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import type { MaterialAgrupado } from './saldos-agrupados';
 
+/** Linha secundaria "marca · modelo" (ponto medio), omitindo campos nulos. */
+function marcaModelo(g: MaterialAgrupado): string {
+  return [g.marca, g.modelo].filter(Boolean).join(' · ');
+}
+
+/** Rotulo acessivel do material: descricao + marca/modelo quando houver. */
+function rotuloMaterial(g: MaterialAgrupado): string {
+  const detalhe = marcaModelo(g);
+  return detalhe ? `${g.descricao} (${detalhe})` : g.descricao;
+}
+
 interface Props {
   grupos: readonly MaterialAgrupado[];
   aoAbrir: (materialId: string) => void;
@@ -22,15 +33,25 @@ export function SaldoTabela({ grupos, aoAbrir, podeGerenciar, aoMovimentar, aoEd
       chave: 'descricao',
       cabecalho: 'Material',
       largura: '26rem',
-      render: (g) => (
-        <button
-          type="button"
-          onClick={() => aoAbrir(g.materialId)}
-          className="block max-w-full truncate text-left font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
-        >
-          {g.descricao}
-        </button>
-      ),
+      render: (g) => {
+        const detalhe = marcaModelo(g);
+        return (
+          <button
+            type="button"
+            onClick={() => aoAbrir(g.materialId)}
+            className="group block max-w-full text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+          >
+            <span className="block max-w-full truncate font-medium text-gov-azul group-hover:underline">
+              {g.descricao}
+            </span>
+            {detalhe ? (
+              <span className="mt-0.5 block max-w-full truncate text-2xs text-app-fg-muted">
+                {detalhe}
+              </span>
+            ) : null}
+          </button>
+        );
+      },
     },
     {
       chave: 'locais',
@@ -62,12 +83,12 @@ export function SaldoTabela({ grupos, aoAbrir, podeGerenciar, aoMovimentar, aoEd
       render: (g) => (
         <div className="flex items-center justify-end gap-1">
           <BotaoIcone
-            rotulo={`Movimentar ${g.descricao}`}
+            rotulo={`Movimentar ${rotuloMaterial(g)}`}
             onClick={() => aoMovimentar(g.materialId)}
             icone={ArrowLeftRight}
           />
           <BotaoIcone
-            rotulo={`Editar ${g.descricao}`}
+            rotulo={`Editar ${rotuloMaterial(g)}`}
             onClick={() => aoEditar(g.materialId)}
             icone={Pencil}
           />

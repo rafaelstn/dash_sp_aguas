@@ -291,7 +291,10 @@ export function PainelEstoque({ podeGerenciar }: Props) {
       }
       return true;
     });
-    return agruparSaldos(saldosFiltrados);
+    return agruparSaldos(saldosFiltrados, (id) => {
+      const mat = materialQuantPorId.get(id);
+      return mat ? { marca: mat.marca, modelo: mat.modelo } : undefined;
+    });
   }, [cargaS, buscaDebounced, filtros.categoria, materialQuantPorId]);
 
   const resumoQuant = useMemo(() => {

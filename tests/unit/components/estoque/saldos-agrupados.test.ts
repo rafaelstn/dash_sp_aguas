@@ -38,6 +38,41 @@ describe('agruparSaldos', () => {
   it('lista vazia retorna array vazio', () => {
     expect(agruparSaldos([])).toEqual([]);
   });
+
+  it('sem resolver, marca e modelo ficam nulos (comportamento antigo)', () => {
+    const [g] = agruparSaldos([saldo({ materialId: 'm1' })]);
+    expect(g!.marca).toBeNull();
+    expect(g!.modelo).toBeNull();
+  });
+
+  it('resolver anexa marca e modelo do catalogo para diferenciar homonimos', () => {
+    const catalogo: Record<string, { marca: string | null; modelo: string | null }> = {
+      m1: { marca: 'HOBECO', modelo: 'QUADRADA' },
+      m2: { marca: 'harsh', modelo: null },
+    };
+    const grupos = agruparSaldos(
+      [
+        saldo({ materialId: 'm1', materialDescricao: 'Antenas' }),
+        saldo({ materialId: 'm2', materialDescricao: 'Antenas' }),
+      ],
+      (id) => catalogo[id],
+    );
+
+    const m1 = grupos.find((g) => g.materialId === 'm1')!;
+    const m2 = grupos.find((g) => g.materialId === 'm2')!;
+    expect(m1.descricao).toBe('Antenas');
+    expect(m1.marca).toBe('HOBECO');
+    expect(m1.modelo).toBe('QUADRADA');
+    // modelo ausente no catalogo permanece nulo (omitido graciosamente na UI)
+    expect(m2.marca).toBe('harsh');
+    expect(m2.modelo).toBeNull();
+  });
+
+  it('material fora do catalogo (resolver retorna undefined) mantem nulos', () => {
+    const [g] = agruparSaldos([saldo({ materialId: 'mX' })], () => undefined);
+    expect(g!.marca).toBeNull();
+    expect(g!.modelo).toBeNull();
+  });
 });
 
 describe('somarQuantidades', () => {

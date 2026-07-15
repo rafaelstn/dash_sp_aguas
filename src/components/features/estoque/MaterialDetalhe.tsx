@@ -168,6 +168,12 @@ export function MaterialDetalhe({
               <CampoDetalhe rotulo="Situação do cadastro">
                 {estado.dados.material.ativo ? 'Ativo' : 'Inativo'}
               </CampoDetalhe>
+              <CampoDetalhe rotulo="Marca">
+                <Valor texto={estado.dados.material.marca} />
+              </CampoDetalhe>
+              <CampoDetalhe rotulo="Modelo">
+                <Valor texto={estado.dados.material.modelo} />
+              </CampoDetalhe>
               <CampoDetalhe rotulo="Categoria">
                 <Valor texto={nomeCategoria(estado.dados.material.categoriaId)} />
               </CampoDetalhe>
