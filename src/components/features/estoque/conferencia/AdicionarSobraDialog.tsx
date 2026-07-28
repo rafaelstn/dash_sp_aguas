@@ -33,6 +33,8 @@ export function AdicionarSobraDialog({ aberto, conferencia, locais, aoFechar, ao
 
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /** Falha ao carregar catalogo/busca, separada do erro de validacao do formulario. */
+  const [erroCatalogo, setErroCatalogo] = useState<string | null>(null);
 
   // Serializado
   const [buscaUnidade, setBuscaUnidade] = useState('');
@@ -57,6 +59,7 @@ export function AdicionarSobraDialog({ aberto, conferencia, locais, aoFechar, ao
     if (!aberto) return;
     setEnviando(false);
     setErro(null);
+    setErroCatalogo(null);
     setBuscaUnidade('');
     setResultados([]);
     setUnidadeId('');
@@ -86,12 +89,21 @@ export function AdicionarSobraDialog({ aberto, conferencia, locais, aoFechar, ao
     if (!aberto || serializado) return;
     let ativo = true;
     const c = new AbortController();
+    setErroCatalogo(null);
     listarMateriais({ natureza: 'quantificavel', apenasAtivos: true, porPagina: 200 }, c.signal)
       .then((r) => {
         if (ativo) setMateriais(r.itens);
       })
-      .catch(() => {
-        if (ativo) setMateriais([]);
+      .catch((e) => {
+        // Sem isto, uma falha de rede virava "Selecione" com a lista vazia e o
+        // operador concluia que o material nao existe no catalogo.
+        if (!ativo || c.signal.aborted) return;
+        setMateriais([]);
+        setErroCatalogo(
+          e instanceof ErroEstoque
+            ? e.message
+            : 'Não foi possível carregar o catálogo de materiais.',
+        );
       });
     return () => {
       ativo = false;
@@ -109,13 +121,20 @@ export function AdicionarSobraDialog({ aberto, conferencia, locais, aoFechar, ao
     }
     let ativo = true;
     const c = new AbortController();
+    setErroCatalogo(null);
     const t = setTimeout(() => {
       listarUnidades({ unidade: conferencia.unidade, busca: termo, porPagina: 20 }, c.signal)
         .then((r) => {
           if (ativo) setResultados(r.itens);
         })
-        .catch(() => {
-          if (ativo) setResultados([]);
+        .catch((e) => {
+          // Busca que falha nao pode se parecer com busca sem resultado: aqui a
+          // conclusao errada e "a unidade nao esta cadastrada".
+          if (!ativo || c.signal.aborted) return;
+          setResultados([]);
+          setErroCatalogo(
+            e instanceof ErroEstoque ? e.message : 'Não foi possível buscar as unidades.',
+          );
         });
     }, 300);
     return () => {
@@ -354,6 +373,16 @@ export function AdicionarSobraDialog({ aberto, conferencia, locais, aoFechar, ao
               </div>
             </>
           )}
+
+          {erroCatalogo ? (
+            <div
+              role="status"
+              className="rounded border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              {erroCatalogo} A lista pode estar incompleta; feche e abra o diálogo para tentar de
+              novo.
+            </div>
+          ) : null}
 
           {erro ? (
             <div

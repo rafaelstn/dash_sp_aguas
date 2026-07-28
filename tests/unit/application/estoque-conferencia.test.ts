@@ -529,3 +529,65 @@ describe('conferencia, integridade da sobra e da reconciliacao', () => {
     ).rejects.toBeInstanceOf(LocalNaoEncontrado);
   });
 });
+
+describe('conferencia, observacao do item na contagem', () => {
+  beforeEach(() => _resetEstoqueMock());
+
+  async function itemContadoCom(observacao?: string | null) {
+    await seedQuant(10);
+    const sessao = await abrirConferencia(
+      conf,
+      { unidade: 'PENHA', natureza: 'quantificavel' },
+      USER,
+    );
+    const { itens } = await conf.listarItens(sessao.id, {});
+    const item = itens[0]!;
+    await registrarContagem(
+      conf,
+      sessao.id,
+      item.id,
+      { quantidadeContada: 10, ...(observacao === undefined ? {} : { observacao }) },
+      USER,
+    );
+    return { sessao, itemId: item.id };
+  }
+
+  async function observacaoDe(sessaoId: string, itemId: string) {
+    return (await conf.obterItem(sessaoId, itemId))?.observacao;
+  }
+
+  it('grava o texto informado, sem espaco nas pontas', async () => {
+    const { sessao, itemId } = await itemContadoCom('  Caixa molhada  ');
+    expect(await observacaoDe(sessao.id, itemId)).toBe('Caixa molhada');
+  });
+
+  it('recontagem sem o campo preserva a observacao anterior', async () => {
+    const { sessao, itemId } = await itemContadoCom('Caixa molhada');
+    await registrarContagem(conf, sessao.id, itemId, { quantidadeContada: 11 }, USER);
+    expect(await observacaoDe(sessao.id, itemId)).toBe('Caixa molhada');
+  });
+
+  it('null limpa a observacao gravada por engano', async () => {
+    const { sessao, itemId } = await itemContadoCom('Texto errado');
+    await registrarContagem(
+      conf,
+      sessao.id,
+      itemId,
+      { quantidadeContada: 10, observacao: null },
+      USER,
+    );
+    expect(await observacaoDe(sessao.id, itemId)).toBeNull();
+  });
+
+  it('texto em branco tambem limpa, em vez de gravar espaco', async () => {
+    const { sessao, itemId } = await itemContadoCom('Texto errado');
+    await registrarContagem(
+      conf,
+      sessao.id,
+      itemId,
+      { quantidadeContada: 10, observacao: '   ' },
+      USER,
+    );
+    expect(await observacaoDe(sessao.id, itemId)).toBeNull();
+  });
+});

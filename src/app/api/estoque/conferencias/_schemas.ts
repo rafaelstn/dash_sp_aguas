@@ -12,6 +12,13 @@ import { naturezaEnum, unidadeFisicaEnum } from '../_schemas';
 const observacao = z.string().trim().max(2000).optional();
 
 /**
+ * Observacao da CONTAGEM: aceita `null` alem de ausente. Ausente preserva a que
+ * ja estava gravada; `null` (ou texto em branco) limpa. Sem o `null` explicito
+ * nao havia payload capaz de apagar uma observacao errada no item.
+ */
+const observacaoContagem = z.string().trim().max(2000).nullable().optional();
+
+/**
  * Teto de quantidade, igual ao da movimentacao direta (`_schemas.ts` do modulo).
  * Sem ele a contagem seria o caminho mais frouxo para o mesmo ledger: uma
  * contagem absurda vira ajuste de inventario "auditado", e acima do INTEGER do
@@ -32,11 +39,11 @@ export const contagemItemSchema = z.union([
   z.object({
     situacao: z.enum(['conferido', 'nao_encontrado', 'encontrado_em_outro_local']),
     localEncontradoId: z.string().uuid().optional(), // exigido se encontrado_em_outro_local
-    observacao,
+    observacao: observacaoContagem,
   }),
   z.object({
     quantidadeContada: z.number().int().min(0).max(QUANTIDADE_MAXIMA),
-    observacao,
+    observacao: observacaoContagem,
   }),
 ]);
 

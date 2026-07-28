@@ -324,18 +324,30 @@ export interface FiltrosItemConferencia {
   porPagina?: number;
 }
 
+/**
+ * Observacao da contagem, com tres estados distintos:
+ *  - `undefined`: nao mexe na que ja estava gravada (recontagem sem comentario);
+ *  - `null`: LIMPA a observacao;
+ *  - string: define o texto.
+ *
+ * Sem a distincao entre "nao informei" e "quero apagar", o UPDATE so sabia
+ * preservar e uma observacao errada ficava permanente no item, que e evidencia
+ * de inventario.
+ */
+export type ObservacaoContagem = string | null | undefined;
+
 /** Contagem normalizada aplicada a um item (validada contra a natureza da sessao). */
 export type ContagemComando =
   | {
       tipo: 'serializado';
       situacao: Exclude<SituacaoItem, 'pendente'>;
       localEncontradoId: string | null;
-      observacao: string | null;
+      observacao?: ObservacaoContagem;
     }
   | {
       tipo: 'quantificavel';
       quantidadeContada: number;
-      observacao: string | null;
+      observacao?: ObservacaoContagem;
     };
 
 /** Item "sobra" (contado fora do snapshot; alvo ja cadastrado). */

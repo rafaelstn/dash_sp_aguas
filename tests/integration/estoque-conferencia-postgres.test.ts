@@ -437,6 +437,38 @@ rodar('conferencia fisica contra Postgres real', () => {
     ).rejects.toMatchObject({ constraint_name: 'ck_estoque_conf_item_contagem_autor' });
   });
 
+  it('observacao do item: preserva sem o campo, limpa com null, define com texto', async () => {
+    const localId = await criarLocal('PENHA', 'SALA 1');
+    const materialId = await criarMaterial('Cabo');
+    await darEntrada(materialId, localId, 10);
+    const sessao = await repo.abrir({
+      unidade: 'PENHA',
+      natureza: 'quantificavel',
+      localId: null,
+      observacao: null,
+      criadaPor: USUARIO,
+    });
+    const item = (await repo.listarItens(sessao.id, {})).itens[0]!;
+    const contar = (quantidadeContada: number, observacao?: string | null) =>
+      repo.registrarContagem(
+        sessao.id,
+        item.id,
+        { tipo: 'quantificavel', quantidadeContada, ...(observacao === undefined ? {} : { observacao }) },
+        USUARIO,
+      );
+
+    expect((await contar(10, 'Caixa molhada')).observacao).toBe('Caixa molhada');
+    // Campo ausente: recontagem sem comentario nao apaga o que foi registrado.
+    expect((await contar(11)).observacao).toBe('Caixa molhada');
+    // null LIMPA: sem isso o COALESCE tornava a observacao permanente.
+    expect((await contar(11, null)).observacao).toBeNull();
+
+    const [linha] = await sql<{ observacao: string | null }[]>`
+      SELECT observacao FROM estoque_conferencia_itens WHERE id = ${item.id}::uuid
+    `;
+    expect(linha!.observacao).toBeNull();
+  });
+
   it('indice unico parcial barra duas sessoes abertas no mesmo escopo', async () => {
     await criarLocal('PENHA', 'SALA 1');
     await repo.abrir({

@@ -214,11 +214,12 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         contagem.situacao === 'encontrado_em_outro_local' ? contagem.localEncontradoId : null;
       // Local inexistente e 404 do modulo, nao falha de repositorio (paridade .pg).
       if (atualizado.localEncontradoId !== null) exigirLocalMock(atualizado.localEncontradoId);
-      if (contagem.observacao !== null) atualizado.observacao = contagem.observacao;
+      // undefined preserva; null limpa; texto define (paridade .pg).
+      if (contagem.observacao !== undefined) atualizado.observacao = contagem.observacao;
     } else {
       atualizado.quantidadeContada = contagem.quantidadeContada;
       atualizado.diferenca = recalcularDiferenca(atualizado);
-      if (contagem.observacao !== null) atualizado.observacao = contagem.observacao;
+      if (contagem.observacao !== undefined) atualizado.observacao = contagem.observacao;
     }
     // Autoria da contagem fisica: e dela que o ajuste patrimonial deriva
     // (migration 0065). Sempre do auth do backend, nunca do corpo.

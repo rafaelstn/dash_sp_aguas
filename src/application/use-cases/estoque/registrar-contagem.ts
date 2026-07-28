@@ -1,5 +1,10 @@
 import type { EstoqueConferenciasRepository } from '@/application/ports/estoque-conferencias-repository';
-import type { ConferenciaItem, ContagemComando, SituacaoItem } from '@/domain/estoque/conferencia';
+import type {
+  ConferenciaItem,
+  ContagemComando,
+  ObservacaoContagem,
+  SituacaoItem,
+} from '@/domain/estoque/conferencia';
 import { ConferenciaNaoEncontrada, DadosInvalidos } from '@/domain/errors';
 
 /** Forma serializada da contagem (situacao categorica). */
@@ -58,15 +63,28 @@ export async function registrarContagem(
       tipo: 'serializado',
       situacao: entrada.situacao,
       localEncontradoId: entrada.localEncontradoId ?? null,
-      observacao: entrada.observacao ?? null,
+      observacao: normalizarObservacao(entrada.observacao),
     };
   } else {
     comando = {
       tipo: 'quantificavel',
       quantidadeContada: entrada.quantidadeContada,
-      observacao: entrada.observacao ?? null,
+      observacao: normalizarObservacao(entrada.observacao),
     };
   }
 
   return repo.registrarContagem(conferenciaId, itemId, comando, usuarioId);
+}
+
+/**
+ * Traduz o campo do payload para os tres estados de `ObservacaoContagem`: campo
+ * ausente preserva; `null` ou texto em branco limpam; texto define (sem espaco
+ * nas pontas). Texto em branco vira limpeza, e nao um espaco gravado, porque
+ * apagar o campo na tela e pedido de limpeza, nao de guardar vazio.
+ */
+function normalizarObservacao(valor: string | null | undefined): ObservacaoContagem {
+  if (valor === undefined) return undefined;
+  if (valor === null) return null;
+  const texto = valor.trim();
+  return texto === '' ? null : texto;
 }

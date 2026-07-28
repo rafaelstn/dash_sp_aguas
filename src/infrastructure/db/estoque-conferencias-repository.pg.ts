@@ -454,6 +454,12 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           throw new NaturezaIncompativel('quantificavel', 'serializado');
         }
 
+        // `undefined` preserva a observacao gravada; `null` limpa; texto define.
+        // Um COALESCE nao distingue os dois primeiros casos e tornaria a
+        // observacao permanente.
+        const mexeNaObservacao = contagem.observacao !== undefined;
+        const novaObservacao = contagem.observacao ?? null;
+
         let atualizadas: LinhaItem[];
         if (contagem.tipo === 'serializado') {
           const localEncontrado =
@@ -465,7 +471,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
             UPDATE estoque_conferencia_itens
                SET situacao = ${contagem.situacao},
                    local_encontrado_id = ${localEncontrado},
-                   observacao = COALESCE(${contagem.observacao}, observacao),
+                   observacao = CASE WHEN ${mexeNaObservacao}::boolean THEN ${novaObservacao}::text ELSE observacao END,
                    contado_por = ${usuarioId}::uuid,
                    contado_em = NOW(),
                    atualizado_em = NOW()
@@ -476,7 +482,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           atualizadas = await tx<LinhaItem[]>`
             UPDATE estoque_conferencia_itens
                SET quantidade_contada = ${contagem.quantidadeContada},
-                   observacao = COALESCE(${contagem.observacao}, observacao),
+                   observacao = CASE WHEN ${mexeNaObservacao}::boolean THEN ${novaObservacao}::text ELSE observacao END,
                    contado_por = ${usuarioId}::uuid,
                    contado_em = NOW(),
                    atualizado_em = NOW()
