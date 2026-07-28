@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "lock:ci": "npx --yes npm@10.9.4 install --package-lock-only --no-audit --no-fund",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

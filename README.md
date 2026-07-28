@@ -199,6 +199,13 @@ Serviços do compose:
 | `npm run start` | Subir build de produção |
 | `npm run lint` | ESLint + jsx-a11y |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Suíte Vitest completa |
+| `npm run lock:ci` | Regenera o `package-lock.json` compatível com o npm 10 do CI |
+
+> **Lockfile e CI.** O CI e o Dockerfile de produção rodam Node 20, ou seja, npm 10.
+> Um `npm install` feito em Node 22+ (npm 11) grava um lock que o npm 10 recusa
+> (`npm ci` falha com `Missing: @emnapi/... from lock file`), e a quebra só aparece
+> no CI. Depois de alterar dependência, rodar `npm run lock:ci` e commitar o lock.
 
 ---
 

@@ -11,6 +11,9 @@ remediação 2026-06-25.
 - [ ] `npm run lint` verde (`--max-warnings 0`).
 - [ ] `npm run test` verde (toda a suíte).
 - [ ] `npm run build` conclui sem erro.
+- [ ] **CI verde no commit que vai subir** (`gh run list --workflow=CI --branch main`).
+      Verde local não substitui: o CI roda em Linux/Node 20, o mesmo par do container
+      de produção. Se o lockfile foi tocado, confirmar que veio de `npm run lock:ci`.
 
 ## 2. Segurança e segredos
 

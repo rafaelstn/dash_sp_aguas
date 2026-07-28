@@ -1,7 +1,12 @@
 name: CI
 
-# Smoke test: lint + typecheck do dashboard e py_compile dos scripts Python.
+# Porta de qualidade: lint + typecheck + testes do dashboard e py_compile dos scripts Python.
 # package-lock.json é committado — CI usa `npm ci` para build determinístico.
+#
+# O Node aqui é o mesmo do Dockerfile de produção (20), então o `npm ci` roda com
+# npm 10. Um lock gerado por npm 11 (Node 22+) omite entradas aninhadas que o npm 10
+# exige e quebra o `npm ci` só no CI. Depois de mexer em dependência, regenerar com
+# `npm run lock:ci` antes do push.
 
 on:
   push:
@@ -11,13 +16,13 @@ on:
 
 jobs:
   web:
-    name: Web — install, lint, typecheck
+    name: Web — install, lint, typecheck, testes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -31,14 +36,17 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Testes
+        run: npm test
+
   python:
     name: Python — sintaxe
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
