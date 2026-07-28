@@ -359,6 +359,52 @@ export function idsElegiveisLote(itens: ConferenciaItemDTO[]): string[] {
     .map((i) => i.id);
 }
 
+// ── Locais oferecidos na contagem do serializado ──────────────────────────────
+
+/** Locais elegiveis a "encontrado em outro local", separados por unidade fisica. */
+export interface LocaisParaContagem<L> {
+  /** Locais da mesma unidade fisica da sessao (caso comum). */
+  nesta: L[];
+  /** Locais de OUTRA unidade fisica (o equipamento mudou de predio). */
+  outras: L[];
+}
+
+/**
+ * Separa os locais que podem ser escolhidos ao marcar um serializado como
+ * encontrado em outro local. Exclui o local ESPERADO (escolhe-lo seria
+ * transferencia de A para A, que o ledger recusa; "esta no lugar certo" e o
+ * botao Conferido) e destaca os de outra unidade fisica.
+ *
+ * Ate 28/07/2026 a tela oferecia apenas a unidade fisica da sessao, entao um
+ * equipamento achado no outro predio so podia ser marcado como "nao encontrado",
+ * abrindo apuracao de item que ninguem perdeu. O ledger sempre aceitou a
+ * transferencia entre unidades; a trava era so da interface.
+ */
+export function separarLocaisParaContagem<
+  L extends { id: string; unidade: string },
+>(locais: readonly L[], unidadeDaSessao: string, localEsperadoId: string | null): LocaisParaContagem<L> {
+  const elegiveis = locais.filter((l) => l.id !== localEsperadoId);
+  return {
+    nesta: elegiveis.filter((l) => l.unidade === unidadeDaSessao),
+    outras: elegiveis.filter((l) => l.unidade !== unidadeDaSessao),
+  };
+}
+
+/**
+ * Aviso de que o local escolhido fica em outra unidade fisica, ou null quando a
+ * transferencia e interna. Puro. Mudar de predio e movimentacao patrimonial de
+ * outra ordem: precisa ser dita antes de confirmar, nao descoberta no ledger.
+ */
+export function avisoOutraUnidadeFisica<L extends { id: string; unidade: string; rotulo: string }>(
+  locais: readonly L[],
+  unidadeDaSessao: string,
+  localSelecionadoId: string,
+): string | null {
+  const local = locais.find((l) => l.id === localSelecionadoId);
+  if (!local || local.unidade === unidadeDaSessao) return null;
+  return `${local.rotulo} fica em ${local.unidade}. Reconciliar vai transferir o item de ${unidadeDaSessao} para ${local.unidade}.`;
+}
+
 // ── Ondas do lote (o servidor limita itens por requisicao) ─────────────────────
 
 /**

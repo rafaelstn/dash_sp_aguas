@@ -9,10 +9,12 @@ import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { carregarItensCompleto, registrarContagem, removerSobra } from '../conferencia-api';
 import { ErroEstoque } from '../erros';
 import {
+  avisoOutraUnidadeFisica,
   itemContado,
   montarContagemQuantidade,
   montarContagemSerializado,
   progressoContagem,
+  separarLocaisParaContagem,
 } from '../conferencia-ui';
 import type { ConferenciaDTO, ConferenciaItemDTO } from '../conferencia-dtos';
 import type { Resolvedores } from './resolvedores';
@@ -285,11 +287,14 @@ function ItemSerializado({
   const [erro, setErro] = useState<string | null>(null);
   const contado = itemContado(item);
 
-  // Fora o local esperado: escolher ele seria transferencia de A para A, que o
-  // ledger recusa. "Esta no lugar certo" e o botao Conferido.
-  const locaisUnidade = resolvedores.locais.filter(
-    (l) => l.unidade === conferencia.unidade && l.id !== item.localEsperadoId,
+  const opcoesLocal = separarLocaisParaContagem(
+    resolvedores.locais,
+    conferencia.unidade,
+    item.localEsperadoId,
   );
+  const avisoUnidade = localEncontrado
+    ? avisoOutraUnidadeFisica(resolvedores.locais, conferencia.unidade, localEncontrado)
+    : null;
 
   async function registrar(
     situacao: 'conferido' | 'nao_encontrado' | 'encontrado_em_outro_local',
@@ -392,11 +397,22 @@ function ItemSerializado({
                 className="w-full appearance-none rounded border border-app-border-input bg-app-surface px-3 py-2.5 pr-8 text-sm text-app-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
               >
                 <option value="">Selecione o local</option>
-                {locaisUnidade.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.rotulo}
-                  </option>
-                ))}
+                <optgroup label={`Nesta unidade (${conferencia.unidade})`}>
+                  {opcoesLocal.nesta.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.rotulo}
+                    </option>
+                  ))}
+                </optgroup>
+                {opcoesLocal.outras.length > 0 ? (
+                  <optgroup label="Em outra unidade física">
+                    {opcoesLocal.outras.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.rotulo} ({l.unidade})
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
               <span
                 aria-hidden="true"
@@ -424,6 +440,9 @@ function ItemSerializado({
               {salvando === 'outro' ? 'Salvando…' : 'Confirmar local'}
             </button>
           </div>
+          {avisoUnidade ? (
+            <p className="mt-2 text-2xs font-medium text-amber-900">{avisoUnidade}</p>
+          ) : null}
         </div>
       ) : null}
 

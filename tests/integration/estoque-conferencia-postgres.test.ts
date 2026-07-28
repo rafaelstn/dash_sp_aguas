@@ -355,6 +355,52 @@ rodar('conferencia fisica contra Postgres real', () => {
     expect(unidade!.local_id).toBe(l2);
   });
 
+  it('serializado achado na outra unidade fisica gera transferencia entre predios', async () => {
+    const penha = await criarLocal('PENHA', 'SALA 1');
+    const araraquara = await criarLocal('ARARAQUARA', 'SALA 1');
+    const [u] = await sql<{ id: string }[]>`
+      INSERT INTO estoque_unidades (descricao, status, local_id)
+      VALUES ('Medidor de vazao', 'ativo', ${penha}::uuid) RETURNING id
+    `;
+    const sessao = await repo.abrir({
+      unidade: 'PENHA',
+      natureza: 'serializado',
+      localId: null,
+      observacao: null,
+      criadaPor: USUARIO,
+    });
+    const item = (await repo.listarItens(sessao.id, {})).itens.find((i) => i.unidadeId === u!.id)!;
+
+    // A tela so oferecia locais da unidade da sessao, entao este caso virava
+    // "nao encontrado" e abria apuracao de item que ninguem perdeu.
+    await repo.registrarContagem(
+      sessao.id,
+      item.id,
+      {
+        tipo: 'serializado',
+        situacao: 'encontrado_em_outro_local',
+        localEncontradoId: araraquara,
+        observacao: null,
+      },
+      USUARIO,
+    );
+    await repo.concluir(sessao.id, USUARIO, null);
+
+    const r = await repo.reconciliarItem(sessao.id, item.id, USUARIO);
+    expect(r.movimentacaoId).not.toBeNull();
+    const [mov] = await sql<{ tipo: string; local_origem: string; local_destino: string }[]>`
+      SELECT tipo, local_origem, local_destino FROM estoque_movimentacoes
+       WHERE conferencia_id = ${sessao.id}::uuid
+    `;
+    expect(mov!.tipo).toBe('transferencia');
+    expect(mov!.local_origem).toBe(penha);
+    expect(mov!.local_destino).toBe(araraquara);
+    const [unidade] = await sql<{ local_id: string }[]>`
+      SELECT local_id FROM estoque_unidades WHERE id = ${u!.id}::uuid
+    `;
+    expect(unidade!.local_id).toBe(araraquara);
+  });
+
   it('serializado que saiu de operacao durante a contagem nao e transferido', async () => {
     const l1 = await criarLocal('PENHA', 'SALA 1');
     const l2 = await criarLocal('PENHA', 'SALA 2');

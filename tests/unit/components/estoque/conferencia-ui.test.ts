@@ -5,6 +5,7 @@ import {
   TAMANHO_ONDA_LOTE,
   agregarLotes,
   autoriaDoItem,
+  avisoOutraUnidadeFisica,
   descreverAjuste,
   dividirEmOndas,
   descreverBaseAlterada,
@@ -17,6 +18,7 @@ import {
   naturezaDoItem,
   progressoContagem,
   resumirLote,
+  separarLocaisParaContagem,
 } from '@/components/features/estoque/conferencia-ui';
 
 const LOCAL_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -385,5 +387,45 @@ describe('ondas do lote de reconciliacao', () => {
     ]);
     expect(parcial.reconciliados).toBe(100);
     expect(parcial.total).toBe(100);
+  });
+});
+
+describe('locais oferecidos na contagem do serializado', () => {
+  const LOCAIS = [
+    { id: LOCAL_A, unidade: 'PENHA', rotulo: 'Sala A' },
+    { id: LOCAL_B, unidade: 'PENHA', rotulo: 'Sala B' },
+    { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', unidade: 'ARARAQUARA', rotulo: 'Depósito' },
+  ];
+
+  it('nao oferece o local esperado (transferencia de A para A o ledger recusa)', () => {
+    const r = separarLocaisParaContagem(LOCAIS, 'PENHA', LOCAL_A);
+    expect(r.nesta.map((l) => l.id)).toEqual([LOCAL_B]);
+  });
+
+  it('oferece tambem os locais de outra unidade fisica, separados', () => {
+    const r = separarLocaisParaContagem(LOCAIS, 'PENHA', null);
+    expect(r.nesta).toHaveLength(2);
+    expect(r.outras.map((l) => l.rotulo)).toEqual(['Depósito']);
+  });
+
+  it('sessao da outra unidade inverte os grupos', () => {
+    const r = separarLocaisParaContagem(LOCAIS, 'ARARAQUARA', null);
+    expect(r.nesta.map((l) => l.rotulo)).toEqual(['Depósito']);
+    expect(r.outras).toHaveLength(2);
+  });
+
+  it('avisa quando o local escolhido fica em outra unidade fisica', () => {
+    const aviso = avisoOutraUnidadeFisica(
+      LOCAIS,
+      'PENHA',
+      'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    );
+    expect(aviso).toContain('ARARAQUARA');
+    expect(aviso).toContain('transferir');
+  });
+
+  it('nao avisa em transferencia interna nem para local desconhecido', () => {
+    expect(avisoOutraUnidadeFisica(LOCAIS, 'PENHA', LOCAL_B)).toBeNull();
+    expect(avisoOutraUnidadeFisica(LOCAIS, 'PENHA', 'inexistente')).toBeNull();
   });
 });
