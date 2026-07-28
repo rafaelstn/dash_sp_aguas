@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { reconciliarItem } from '../conferencia-api';
 import { ErroEstoque } from '../erros';
-import { descreverAjuste } from '../conferencia-ui';
+import { descreverAjuste, descreverBaseAlterada } from '../conferencia-ui';
 import type { ConferenciaItemDTO, ResultadoReconciliacaoDTO } from '../conferencia-dtos';
 import type { Resolvedores } from './resolvedores';
 
@@ -61,6 +61,7 @@ export function ReconciliarDialog({
   }
 
   const ajuste = descreverAjuste(item, resolvedores.nomeLocal);
+  const avisoBase = descreverBaseAlterada(item, resolvedores.nomeLocal);
 
   async function confirmar() {
     if (!item) return;
@@ -120,6 +121,22 @@ export function ReconciliarDialog({
             </p>
             <p className="mt-1 text-sm text-app-fg">{ajuste.texto}</p>
           </div>
+
+          {/* A base pode ter mudado entre a contagem e agora. O almoxarife tem
+              que ver isso ANTES de confirmar: depois o estoque já foi mexido. */}
+          {avisoBase ? (
+            <div
+              role="alert"
+              className="rounded border-l-4 border-gov-atencao bg-amber-50 p-3 text-sm text-app-fg"
+            >
+              <p className="font-semibold">A base mudou desde a contagem</p>
+              <p className="mt-1 text-xs">{avisoBase}</p>
+              <p className="mt-2 text-xs">
+                Confirme apenas se o ajuste continua correto. Se houver dúvida, recontar é mais
+                seguro do que reconciliar.
+              </p>
+            </div>
+          ) : null}
 
           {ajuste.semMovimentacao ? (
             <p className="text-2xs text-app-fg-muted">

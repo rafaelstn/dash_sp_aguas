@@ -47,6 +47,10 @@ export interface ConferenciaItemDTO {
   /** GENERATED no banco: contada - sistema (null enquanto nao contado). */
   diferenca: number | null;
   observacao: string | null;
+  /** Estado ATUAL do alvo no sistema, para avisar que a base mudou ANTES do ajuste. */
+  saldoAtual?: number | null;
+  localAtualId?: string | null;
+  statusAtual?: string | null;
   /** Autoria da contagem fisica (trilha, migration 0065). */
   contadoPor: string | null;
   contadoEm: string | null;

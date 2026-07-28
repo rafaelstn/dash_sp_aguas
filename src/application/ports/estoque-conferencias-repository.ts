@@ -2,6 +2,7 @@ import type {
   AbrirConferenciaComando,
   Conferencia,
   ConferenciaItem,
+  ConferenciaItemComEstado,
   ContagemComando,
   FiltrosConferencia,
   FiltrosItemConferencia,
@@ -38,10 +39,14 @@ export interface EstoqueConferenciasRepository {
   /** Contagens agregadas para o resumo de divergencias. Lanca `ConferenciaNaoEncontrada`. */
   resumoDivergencias(id: string): Promise<ResumoDivergencias>;
 
+  /**
+   * Lista itens com o estado ATUAL do alvo junto do congelado, para a tela poder
+   * avisar que a base mudou ANTES de o almoxarife confirmar o ajuste.
+   */
   listarItens(
     conferenciaId: string,
     filtros: FiltrosItemConferencia,
-  ): Promise<{ itens: ConferenciaItem[]; total: number }>;
+  ): Promise<{ itens: ConferenciaItemComEstado[]; total: number }>;
 
   /**
    * Busca 1 item validando que pertence a conferencia do path (guarda de IDOR:

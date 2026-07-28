@@ -4,6 +4,7 @@ import type { EstoqueConferenciasRepository } from '@/application/ports/estoque-
 import type {
   Conferencia,
   ConferenciaItem,
+  ConferenciaItemComEstado,
   ResultadoReconciliacao,
   ResumoDivergencias,
   SituacaoItem,
@@ -162,7 +163,21 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     const pagina = Math.max(filtros.pagina ?? 1, 1);
     const porPagina = Math.min(Math.max(filtros.porPagina ?? 100, 1), 500);
     const inicio = (pagina - 1) * porPagina;
-    return { itens: itens.slice(inicio, inicio + porPagina), total };
+    // Estado ATUAL do alvo junto do congelado, como o `.pg` faz no LEFT JOIN.
+    const comEstado = itens.slice(inicio, inicio + porPagina).map((i) => {
+      const unidade = i.unidadeId ? estoqueStore.unidades.get(i.unidadeId) : undefined;
+      const saldo =
+        i.materialId && i.localEsperadoId
+          ? estoqueStore.saldos.get(chaveSaldoMock(i.materialId, i.localEsperadoId, i.tamanho))
+          : undefined;
+      return {
+        ...i,
+        saldoAtual: saldo ? saldo.quantidade : i.materialId ? 0 : null,
+        localAtualId: unidade ? unidade.localId : null,
+        statusAtual: unidade ? unidade.status : null,
+      } satisfies ConferenciaItemComEstado;
+    });
+    return { itens: comEstado, total };
   },
 
   async obterItem(conferenciaId, itemId) {
@@ -385,6 +400,24 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           cmd = {
             ...cmd,
             motivo: `${motivoReconciliacao(conferenciaId)} [base congelada ${item.quantidadeSistema}, atual ${saldoAtual}]`,
+          };
+        }
+      } else if (item.unidadeId) {
+        // Serializado tambem confere a base (paridade com o .pg): a unidade pode
+        // ter sido movida ou dado baixa entre a contagem e a reconciliacao.
+        const unidade = estoqueStore.unidades.get(item.unidadeId);
+        if (!unidade) throw new UnidadeNaoEncontrada(item.unidadeId);
+        if (!['ativo', 'defeito'].includes(unidade.status)) {
+          throw new DadosInvalidos(
+            `A unidade saiu de operacao (${unidade.status}) depois da contagem. Reveja a baixa antes de reconciliar.`,
+          );
+        }
+        if (unidade.localId !== item.localEsperadoId) {
+          aviso = 'base_alterada';
+          cmd = {
+            ...cmd,
+            localOrigemId: unidade.localId,
+            motivo: `${motivoReconciliacao(conferenciaId)} [local congelado ${item.localEsperadoId ?? 'sem local'}, atual ${unidade.localId ?? 'sem local'}]`,
           };
         }
       }

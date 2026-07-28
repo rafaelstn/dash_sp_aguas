@@ -107,6 +107,8 @@ function ehErroDeReconciliacao(e: unknown): boolean {
     e.name === 'MovimentacaoInvalida' ||
     e.name === 'ItemSemDivergencia' ||
     e.name === 'LocalNaoEncontrado' ||
+    // ex.: unidade que saiu de operacao depois da contagem
+    e.name === 'DadosInvalidos' ||
     e.name === 'UnidadeNaoEncontrada' ||
     e.name === 'MaterialNaoEncontrado'
   );

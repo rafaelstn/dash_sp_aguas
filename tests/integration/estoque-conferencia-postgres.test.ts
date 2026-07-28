@@ -14,6 +14,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import postgres, { type Sql } from 'postgres';
+import { mudancasDesdeContagem } from '@/domain/estoque/conferencia';
 
 const URL_TESTE = process.env.TEST_DATABASE_URL ?? '';
 const rodar = URL_TESTE.length > 0 ? describe : describe.skip;
@@ -301,6 +302,108 @@ rodar('conferencia fisica contra Postgres real', () => {
       name: 'ItemConferenciaNaoEncontrado',
     });
     expect(await movimentacoesDaConferencia(sessao.id)).toBe(0);
+  });
+
+  it('serializado movido durante a contagem: origem sai do local ATUAL, com aviso', async () => {
+    const l1 = await criarLocal('PENHA', 'SALA 1');
+    const l2 = await criarLocal('PENHA', 'SALA 2');
+    const l3 = await criarLocal('PENHA', 'SALA 3');
+    const [u] = await sql<{ id: string }[]>`
+      INSERT INTO estoque_unidades (descricao, status, local_id)
+      VALUES ('Pluviometro', 'ativo', ${l1}::uuid) RETURNING id
+    `;
+    const sessao = await repo.abrir({
+      unidade: 'PENHA',
+      natureza: 'serializado',
+      localId: null,
+      observacao: null,
+      criadaPor: USUARIO,
+    });
+    const item = (await repo.listarItens(sessao.id, {})).itens.find((i) => i.unidadeId === u!.id)!;
+    await repo.registrarContagem(
+      sessao.id,
+      item.id,
+      { tipo: 'serializado', situacao: 'encontrado_em_outro_local', localEncontradoId: l2, observacao: null },
+      USUARIO,
+    );
+    await repo.concluir(sessao.id, USUARIO, null);
+
+    // Outra pessoa transfere a unidade para L3 antes da reconciliacao: a origem
+    // congelada (L1) ja nao e verdadeira.
+    await movRepo.registrar({
+      tipo: 'transferencia',
+      alvo: { natureza: 'serializado', unidadeId: u!.id },
+      quantidade: 1,
+      localOrigemId: l1,
+      localDestinoId: l3,
+      tamanho: null,
+      motivo: 'transferencia paralela',
+      usuarioId: USUARIO,
+    });
+
+    const r = await repo.reconciliarItem(sessao.id, item.id, USUARIO);
+    expect(r.aviso).toBe('base_alterada');
+    const [mov] = await sql<{ local_origem: string; local_destino: string }[]>`
+      SELECT local_origem, local_destino FROM estoque_movimentacoes
+       WHERE conferencia_id = ${sessao.id}::uuid
+    `;
+    expect(mov!.local_origem).toBe(l3); // origem real, nao a congelada
+    expect(mov!.local_destino).toBe(l2);
+    const [unidade] = await sql<{ local_id: string }[]>`
+      SELECT local_id FROM estoque_unidades WHERE id = ${u!.id}::uuid
+    `;
+    expect(unidade!.local_id).toBe(l2);
+  });
+
+  it('serializado que saiu de operacao durante a contagem nao e transferido', async () => {
+    const l1 = await criarLocal('PENHA', 'SALA 1');
+    const l2 = await criarLocal('PENHA', 'SALA 2');
+    const [u] = await sql<{ id: string }[]>`
+      INSERT INTO estoque_unidades (descricao, status, local_id)
+      VALUES ('Sensor', 'ativo', ${l1}::uuid) RETURNING id
+    `;
+    const sessao = await repo.abrir({
+      unidade: 'PENHA',
+      natureza: 'serializado',
+      localId: null,
+      observacao: null,
+      criadaPor: USUARIO,
+    });
+    const item = (await repo.listarItens(sessao.id, {})).itens.find((i) => i.unidadeId === u!.id)!;
+    await repo.registrarContagem(
+      sessao.id,
+      item.id,
+      { tipo: 'serializado', situacao: 'encontrado_em_outro_local', localEncontradoId: l2, observacao: null },
+      USUARIO,
+    );
+    await repo.concluir(sessao.id, USUARIO, null);
+
+    await movRepo.registrar({
+      tipo: 'baixa',
+      alvo: { natureza: 'serializado', unidadeId: u!.id },
+      quantidade: 1,
+      localOrigemId: l1,
+      localDestinoId: null,
+      tamanho: null,
+      motivo: 'descarte por dano irreparavel',
+      usuarioId: USUARIO,
+    });
+
+    // Transferir ressuscitaria a unidade num local e falsificaria o inventario.
+    await expect(repo.reconciliarItem(sessao.id, item.id, USUARIO)).rejects.toMatchObject({
+      name: 'DadosInvalidos',
+    });
+    expect(await movimentacoesDaConferencia(sessao.id)).toBe(0);
+  });
+
+  it('listagem traz o estado ATUAL junto do congelado (aviso antes do commit)', async () => {
+    const { sessao, materialId, localId } = await prepararDivergencia(10, 12);
+    await darEntrada(materialId, localId, 5); // saldo real vai a 15
+
+    const item = (await repo.listarItens(sessao.id, {})).itens[0]!;
+    expect(item.quantidadeSistema).toBe(10); // congelado
+    expect(item.saldoAtual).toBe(15); // atual, para a tela avisar antes
+    expect(mudancasDesdeContagem(item)).toEqual(['saldo']);
   });
 
   it('grava quem contou e quando (trilha exigida para orgao publico)', async () => {

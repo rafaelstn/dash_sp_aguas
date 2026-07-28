@@ -75,6 +75,31 @@ export function itemReconciliado(item: ConferenciaItemDTO): boolean {
 }
 
 /**
+ * Descreve, em PT-BR, o que mudou no sistema entre a contagem e agora, ou `null`
+ * quando a base esta estavel. Puro. E o que permite avisar ANTES de confirmar o
+ * ajuste: ate 27/07/2026 o aviso so vinha na resposta do POST, com o estoque ja
+ * alterado, o oposto da decisao humana que a ADR 0021 exige.
+ */
+export function descreverBaseAlterada(
+  item: ConferenciaItemDTO,
+  nomeLocal: (id: string | null) => string,
+): string | null {
+  if (item.materialId) {
+    const congelado = item.quantidadeSistema ?? 0;
+    const atual = item.saldoAtual ?? 0;
+    if (item.saldoAtual === undefined || atual === congelado) return null;
+    return `O sistema registrava ${congelado} na contagem e registra ${atual} agora. O ajuste é aplicado sobre o saldo atual.`;
+  }
+  if (item.statusAtual && !['ativo', 'defeito'].includes(item.statusAtual)) {
+    return `A unidade saiu de operação (${item.statusAtual}) depois da contagem. Reveja a baixa antes de reconciliar.`;
+  }
+  if (item.localAtualId !== undefined && item.localAtualId !== item.localEsperadoId) {
+    return `Na contagem a unidade constava em ${nomeLocal(item.localEsperadoId)} e agora consta em ${nomeLocal(item.localAtualId ?? null)}. A transferência sairá do local atual.`;
+  }
+  return null;
+}
+
+/**
  * Linha de trilha do item: quem contou e quem reconciliou, com data. Puro, para
  * ser testavel. Usa o rotulo resolvido pela API; nunca mostra UUID cru, e diz
  * "autoria nao registrada" para item contado antes da migration 0065 (em vez de

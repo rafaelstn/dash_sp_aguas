@@ -3,6 +3,7 @@ import type { ConferenciaItemDTO } from '@/components/features/estoque/conferenc
 import {
   autoriaDoItem,
   descreverAjuste,
+  descreverBaseAlterada,
   divergenciaDoItem,
   idsElegiveisLote,
   itemContado,
@@ -218,6 +219,61 @@ describe('itemReconciliado e progressoContagem', () => {
     expect(progressoContagem(5, 20)).toMatchObject({ pct: 25 });
     expect(progressoContagem(0, 0).pct).toBe(0);
     expect(progressoContagem(3, 3).pct).toBe(100);
+  });
+});
+
+describe('descreverBaseAlterada (aviso antes de confirmar)', () => {
+  it('base estavel nao gera aviso', () => {
+    expect(
+      descreverBaseAlterada(
+        quant({ quantidadeSistema: 10, quantidadeContada: 12, saldoAtual: 10 }),
+        nomeLocal,
+      ),
+    ).toBeNull();
+  });
+
+  it('quantificavel: mostra o congelado e o atual', () => {
+    const texto = descreverBaseAlterada(
+      quant({ quantidadeSistema: 10, quantidadeContada: 12, saldoAtual: 15 }),
+      nomeLocal,
+    );
+    expect(texto).toContain('registrava 10');
+    expect(texto).toContain('registra 15');
+  });
+
+  it('serializado: unidade movida durante a contagem aponta os dois locais', () => {
+    const texto = descreverBaseAlterada(
+      serial({
+        situacao: 'encontrado_em_outro_local',
+        localEsperadoId: LOCAL_A,
+        localEncontradoId: LOCAL_B,
+        localAtualId: LOCAL_B,
+        statusAtual: 'ativo',
+      }),
+      nomeLocal,
+    );
+    expect(texto).toContain('Sala A');
+    expect(texto).toContain('Sala B');
+  });
+
+  it('serializado fora de operacao avisa a baixa, que tem precedencia', () => {
+    const texto = descreverBaseAlterada(
+      serial({
+        situacao: 'encontrado_em_outro_local',
+        localEsperadoId: LOCAL_A,
+        localAtualId: null,
+        statusAtual: 'descarte',
+      }),
+      nomeLocal,
+    );
+    expect(texto).toContain('saiu de operação');
+    expect(texto).toContain('descarte');
+  });
+
+  it('sem estado atual carregado, nao inventa aviso', () => {
+    expect(
+      descreverBaseAlterada(quant({ quantidadeSistema: 10, quantidadeContada: 12 }), nomeLocal),
+    ).toBeNull();
   });
 });
 

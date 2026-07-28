@@ -88,6 +88,28 @@ const COLUNAS_ITEM = sql`
   observacao, contado_por, contado_em, movimentacao_id, reconciliado_por, reconciliado_em,
   criado_em, atualizado_em
 `;
+/** Mesma lista, qualificada: a listagem faz JOIN e coluna nua sai ambigua. */
+const COLUNAS_ITEM_Q = sql`
+  i.id, i.conferencia_id, i.unidade_id, i.material_id, i.local_esperado_id, i.tamanho, i.origem,
+  i.situacao, i.local_encontrado_id, i.quantidade_sistema, i.quantidade_contada, i.diferenca,
+  i.observacao, i.contado_por, i.contado_em, i.movimentacao_id, i.reconciliado_por,
+  i.reconciliado_em, i.criado_em, i.atualizado_em
+`;
+
+/** Estado ATUAL do alvo, lido junto do congelado (ver `listarItens`). */
+type LinhaEstadoAtual = {
+  saldo_atual: number | null;
+  local_atual_id: string | null;
+  status_atual: string | null;
+};
+
+function mapEstadoAtual(l: LinhaEstadoAtual) {
+  return {
+    saldoAtual: l.saldo_atual === null ? null : Number(l.saldo_atual),
+    localAtualId: l.local_atual_id,
+    statusAtual: l.status_atual,
+  };
+}
 
 function mapConf(l: LinhaConf): Conferencia {
   return {
@@ -337,16 +359,19 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       `;
       if (existe.length === 0) throw new ConferenciaNaoEncontrada(conferenciaId);
 
-      const wheres: ReturnType<typeof sql>[] = [sql`conferencia_id = ${conferenciaId}::uuid`];
-      if (filtros.situacao) wheres.push(sql`situacao = ${filtros.situacao}`);
+      // TODA coluna qualificada com `i.`: a listagem faz LEFT JOIN em
+      // estoque_saldos (que tambem tem material_id) e um predicado nu quebraria
+      // com AmbiguousColumn, erro que so aparece em Postgres.
+      const wheres: ReturnType<typeof sql>[] = [sql`i.conferencia_id = ${conferenciaId}::uuid`];
+      if (filtros.situacao) wheres.push(sql`i.situacao = ${filtros.situacao}`);
       // divergente (mesma regra do resumo).
       const condDivergente: ReturnType<typeof sql> = sql`(
-        (material_id IS NOT NULL AND quantidade_contada IS NOT NULL AND diferenca <> 0)
-         OR (unidade_id IS NOT NULL AND situacao IN ('nao_encontrado', 'encontrado_em_outro_local'))
+        (i.material_id IS NOT NULL AND i.quantidade_contada IS NOT NULL AND i.diferenca <> 0)
+         OR (i.unidade_id IS NOT NULL AND i.situacao IN ('nao_encontrado', 'encontrado_em_outro_local'))
       )`;
       if (filtros.apenasDivergentes) wheres.push(condDivergente);
       if (filtros.apenasPendentesRecon) {
-        wheres.push(sql`${condDivergente} AND reconciliado_em IS NULL`);
+        wheres.push(sql`${condDivergente} AND i.reconciliado_em IS NULL`);
       }
       let where = wheres[0]!;
       for (let i = 1; i < wheres.length; i += 1) where = sql`${where} AND ${wheres[i]!}`;
@@ -355,16 +380,32 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       const porPagina = Math.min(Math.max(filtros.porPagina ?? 100, 1), 500);
       const offset = (pagina - 1) * porPagina;
 
-      const itens = await sql<LinhaItem[]>`
-        SELECT ${COLUNAS_ITEM} FROM estoque_conferencia_itens
+      // Junto do congelado vem o estado ATUAL do alvo (saldo do quantificavel,
+      // local e status do serializado). E o que permite a tela avisar que a base
+      // mudou ANTES de o almoxarife confirmar o ajuste: antes disso o aviso so
+      // existia na resposta do POST, ou seja, depois do estoque ja mexido.
+      const itens = await sql<(LinhaItem & LinhaEstadoAtual)[]>`
+        SELECT ${COLUNAS_ITEM_Q},
+               s.quantidade AS saldo_atual,
+               u.local_id   AS local_atual_id,
+               u.status     AS status_atual
+          FROM estoque_conferencia_itens i
+          LEFT JOIN estoque_saldos s
+                 ON s.material_id = i.material_id
+                AND s.local_id = i.local_esperado_id
+                AND COALESCE(s.tamanho, '') = COALESCE(i.tamanho, '')
+          LEFT JOIN estoque_unidades u ON u.id = i.unidade_id
          WHERE ${where}
-         ORDER BY criado_em ASC
+         ORDER BY i.criado_em ASC
          LIMIT ${porPagina} OFFSET ${offset}
       `;
       const totalRows = await sql<{ total: string }[]>`
-        SELECT COUNT(*)::text AS total FROM estoque_conferencia_itens WHERE ${where}
+        SELECT COUNT(*)::text AS total FROM estoque_conferencia_itens i WHERE ${where}
       `;
-      return { itens: itens.map(mapItem), total: Number(totalRows[0]?.total ?? '0') };
+      return {
+        itens: itens.map((l) => ({ ...mapItem(l), ...mapEstadoAtual(l) })),
+        total: Number(totalRows[0]?.total ?? '0'),
+      };
     } catch (e) {
       if (e instanceof ConferenciaNaoEncontrada) throw e;
       throw new FalhaRepositorio('estoqueConferencias.listarItens', e);
@@ -639,7 +680,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           }
         } else {
           let cmd = comando;
-          // 4a. Aviso de base alterada (quantificavel): re-le o saldo ATUAL e
+          // 4a. Base alterada: re-le o estado ATUAL do alvo dentro da transacao e
           // compara com o congelado. Nunca reconcilia em silencio (governo).
           if (item.materialId && item.localEsperadoId) {
             const saldoRows = await tx<{ quantidade: number }[]>`
@@ -654,6 +695,34 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
               cmd = {
                 ...cmd,
                 motivo: `${motivoReconciliacao(conferenciaId)} [base congelada ${item.quantidadeSistema}, atual ${saldoAtual}]`,
+              };
+            }
+          } else if (item.unidadeId) {
+            // Serializado nao tinha verificacao nenhuma: a transferencia saia com
+            // a origem congelada mesmo que a unidade tivesse sido movida ou dado
+            // baixa durante a contagem, gravando no ledger uma origem que nunca
+            // foi verdadeira.
+            const uRows = await tx<{ local_id: string | null; status: string }[]>`
+              SELECT local_id, status FROM estoque_unidades
+               WHERE id = ${item.unidadeId}::uuid FOR UPDATE
+            `;
+            if (uRows.length === 0) throw new UnidadeNaoEncontrada(item.unidadeId);
+            const atual = uRows[0]!;
+            // Fora de operacao (baixa/descarte) nao se transfere: seria
+            // ressuscitar a unidade num local, falsificando o inventario.
+            if (!['ativo', 'defeito'].includes(atual.status)) {
+              throw new DadosInvalidos(
+                `A unidade saiu de operacao (${atual.status}) depois da contagem. Reveja a baixa antes de reconciliar.`,
+              );
+            }
+            if (atual.local_id !== item.localEsperadoId) {
+              aviso = 'base_alterada';
+              // A origem tem que ser onde a unidade esta AGORA, senao o ledger
+              // registra uma transferencia que nao aconteceu.
+              cmd = {
+                ...cmd,
+                localOrigemId: atual.local_id,
+                motivo: `${motivoReconciliacao(conferenciaId)} [local congelado ${item.localEsperadoId ?? 'sem local'}, atual ${atual.local_id ?? 'sem local'}]`,
               };
             }
           }
@@ -700,6 +769,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         e instanceof SaldoInsuficiente ||
         e instanceof TransicaoStatusInvalida ||
         e instanceof MovimentacaoInvalida ||
+        e instanceof DadosInvalidos ||
         e instanceof LocalNaoEncontrado ||
         e instanceof NaturezaIncompativel ||
         e instanceof UnidadeNaoEncontrada ||

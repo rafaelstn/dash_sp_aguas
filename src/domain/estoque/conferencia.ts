@@ -103,6 +103,45 @@ export interface ConferenciaItem {
   atualizadoEm: Date;
 }
 
+/**
+ * Item somado ao estado ATUAL do alvo no sistema, lido no mesmo SELECT do
+ * congelado. Serve para a tela comparar antes de reconciliar: a decisao humana
+ * sobre base alterada tem que acontecer ANTES do ajuste, nao depois (ADR 0021,
+ * secao 4.5). Campos null quando nao se aplicam (saldo para serializado, local
+ * e status para quantificavel) ou quando o alvo nao tem saldo/local.
+ */
+export interface ConferenciaItemComEstado extends ConferenciaItem {
+  saldoAtual: number | null;
+  localAtualId: string | null;
+  statusAtual: string | null;
+}
+
+/** O que mudou no sistema entre o snapshot e agora. */
+export type MudancaBase = 'saldo' | 'local' | 'status';
+
+/**
+ * Compara o congelado com o atual e devolve o que mudou desde a contagem. Puro.
+ * Lista vazia = base estavel, o ajuste previsto continua valendo.
+ *
+ * Quantificavel: o saldo do alvo mudou. Serializado: a unidade foi movida por
+ * outro caminho, ou saiu de operacao (baixa/descarte) durante a contagem, casos
+ * em que a transferencia da reconciliacao registraria uma origem que ja nao e
+ * verdadeira.
+ */
+export function mudancasDesdeContagem(item: ConferenciaItemComEstado): MudancaBase[] {
+  const mudancas: MudancaBase[] = [];
+  if (item.materialId !== null) {
+    const atual = item.saldoAtual ?? 0;
+    if (atual !== (item.quantidadeSistema ?? 0)) mudancas.push('saldo');
+    return mudancas;
+  }
+  if (item.localAtualId !== item.localEsperadoId) mudancas.push('local');
+  if (item.statusAtual !== null && !['ativo', 'defeito'].includes(item.statusAtual)) {
+    mudancas.push('status');
+  }
+  return mudancas;
+}
+
 // ── Maquina de estados da SESSAO ────────────────────────────────────────────────
 
 const TRANSICOES_STATUS: ReadonlyMap<StatusConferencia, ReadonlySet<StatusConferencia>> =

@@ -199,10 +199,14 @@ export function ConferenciaDetalhe({ conferenciaId, podeGerenciar }: Props) {
       ) : null}
 
       {/* Resumo */}
+      {/* "Não contados" é card de primeira classe: item não contado não é
+          divergência nem pendência, então sumia do resumo e o inventário podia
+          ser declarado completo com parte do escopo não verificada. */}
       <ResumoCards
         cards={[
           { rotulo: 'Total de itens', valor: resumo.totalItens },
           { rotulo: 'Contados', valor: resumo.contados },
+          { rotulo: 'Não contados', valor: resumo.naoContados, alerta: resumo.naoContados > 0 },
           { rotulo: 'Divergentes', valor: resumo.divergentes, alerta: true },
           { rotulo: 'Reconciliados', valor: resumo.reconciliados },
           { rotulo: 'Pendentes', valor: resumo.pendentesReconciliacao, alerta: true },
@@ -240,8 +244,22 @@ export function ConferenciaDetalhe({ conferenciaId, podeGerenciar }: Props) {
         descricao={
           acaoPendente === 'concluir' ? (
             <>
-              Concluir a contagem? Depois de concluída, a contagem fica final (auditável) e você
-              passa a tratar as divergências. Itens ainda não contados continuam como estavam.
+              Concluir a contagem? Depois de concluída, a contagem fica final (auditável), não há
+              como reabrir, e você passa a tratar as divergências.
+              {resumo.naoContados > 0 ? (
+                <>
+                  {' '}
+                  <strong>
+                    {resumo.naoContados.toLocaleString('pt-BR')} de{' '}
+                    {resumo.totalItens.toLocaleString('pt-BR')}{' '}
+                    {resumo.naoContados === 1 ? 'item ainda não foi contado' : 'itens ainda não foram contados'}
+                  </strong>{' '}
+                  e vão ficar fora do inventário, sem aparecer como divergência. Conte antes de
+                  concluir, ou registre o motivo na observação.
+                </>
+              ) : (
+                ' Todos os itens do escopo foram contados.'
+              )}
             </>
           ) : (
             <>

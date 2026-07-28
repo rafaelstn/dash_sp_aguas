@@ -360,6 +360,23 @@ discrepancia fisica observada; movimentacoes concorrentes sao linhas independent
 humano ve o aviso e pode cancelar/recontar aquele item. Governo-grade: nunca reconciliar em silencio
 sobre uma base que mudou.
 
+> **Revisao pos-auditoria (27/07/2026).** Este texto descrevia metade do que existia. O aviso so
+> vinha na RESPOSTA do POST, ou seja, depois do estoque ja alterado: o almoxarife era informado de
+> algo que nao teve chance de decidir, o oposto da decisao humana prometida. E o serializado nao
+> tinha verificacao nenhuma, entao uma unidade movida por outro caminho durante a contagem gerava
+> transferencia com uma origem que nunca foi verdadeira. Agora:
+>
+> - `listarItens` traz o estado ATUAL do alvo junto do congelado (`saldoAtual`, `localAtualId`,
+>   `statusAtual`), e o dialog de reconciliar mostra o alerta com os dois valores ANTES de habilitar
+>   a confirmacao. A funcao pura `mudancasDesdeContagem` decide o que mudou.
+> - Serializado passa a reler a unidade dentro da transacao: se o local mudou, a origem da
+>   transferencia vira o local ATUAL (e o motivo registra os dois); se a unidade saiu de operacao
+>   (baixa/descarte), a reconciliacao e RECUSADA, porque transferir ressuscitaria a unidade num
+>   local e falsificaria o inventario.
+> - O resumo ganhou o card "Nao contados" e a confirmacao de concluir diz quantos itens ficarao de
+>   fora. Item nao contado nao e divergencia nem pendencia, entao sumia do resumo e o inventario
+>   podia ser declarado completo com parte do escopo nao verificada.
+
 ### 4.6 Automatica vs por item: decisao e justificativa
 
 **Por item, decisao humana, com opcao de aplicar em lote.** Nao automatica ao concluir. Razoes:
