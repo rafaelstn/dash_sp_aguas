@@ -388,7 +388,10 @@ sobre uma base que mudou.
 - O aviso de concorrencia (4.5) precisa de decisao humana por item.
 
 O "aplicar em lote" e conveniencia: itera o mesmo apply transacional+idempotente por item (cada um
-individualmente atomico e trilhado); nao e um caminho paralelo. Concluir a sessao apenas congela a
+individualmente atomico e trilhado); nao e um caminho paralelo. Como a iteracao e em SERIE, a rota
+aceita no maximo `ITENS_POR_LOTE` (100) por requisicao e a UI divide o conjunto em ondas desse
+tamanho, mostrando o progresso. Se uma onda falha, o envio para e a tela informa QUANTOS itens ja
+foram aplicados: o parcial e real (cada item ja commitou) e esconde-lo faria reprocessar as cegas. Concluir a sessao apenas congela a
 contagem e lista as divergencias como "pendentes de tratamento"; nao mexe no estoque.
 
 ---
@@ -436,10 +439,12 @@ export const abrirConferenciaSchema = z.object({
 export const contagemItemSchema = z.union([
   z.object({ situacao: z.enum(['conferido', 'nao_encontrado', 'encontrado_em_outro_local']),
              localEncontradoId: z.string().uuid().optional(),   // exigido se encontrado_em_outro_local
-             observacao: z.string().trim().max(2000).optional() }),
-  z.object({ quantidadeContada: z.number().int().min(0),
-             observacao: z.string().trim().max(2000).optional() }),
+             observacao: z.string().trim().max(2000).nullable().optional() }),
+  z.object({ quantidadeContada: z.number().int().min(0).max(1_000_000),
+             observacao: z.string().trim().max(2000).nullable().optional() }),
 ]);
+// observacao do ITEM tem tres estados: ausente preserva, `null` (ou texto em branco) limpa,
+// texto define. Com o COALESCE anterior nao havia payload capaz de apagar um texto errado.
 
 export const sobraItemSchema = z.union([
   z.object({ unidadeId: z.string().uuid(), localEncontradoId: z.string().uuid() }),          // serializado
@@ -453,8 +458,9 @@ export const acaoConferenciaSchema = z.object({
   observacao: z.string().trim().max(2000).optional(),
 });
 
+export const ITENS_POR_LOTE = 100;                       // teto por REQUISICAO, nao por inventario
 export const reconciliarLoteSchema = z.object({
-  itemIds: z.array(z.string().uuid()).min(1).max(500),   // itens que o almoxarife revisou
+  itemIds: z.array(z.string().uuid()).min(1).max(ITENS_POR_LOTE),
 });
 ```
 
@@ -621,4 +627,10 @@ Riscos e mitigacoes:
   fluxo transacional de reconciliacao provados em Postgres real.
 - **Contagens concorrentes no mesmo escopo**: indice unico parcial `uq_estoque_conf_aberta_escopo`
   barra duas sessoes abertas na mesma unidade+natureza+local.
+- **Escopo maior que a carga da tela**: a UI busca ate 12 paginas de 200 itens e, quando o teto
+  corta, mostra alerta de lista parcial com o total real. Truncar em silencio faria uma contagem
+  incompleta parecer completa.
+- **Serializado achado na OUTRA unidade fisica**: a contagem aceita local de qualquer unidade e a
+  reconciliacao gera a transferencia entre predios (a tela avisa antes de confirmar). Restringir a
+  escolha a unidade da sessao empurrava o caso para `nao_encontrado`, abrindo apuracao indevida.
 ```
