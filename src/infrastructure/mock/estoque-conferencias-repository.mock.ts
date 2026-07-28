@@ -21,10 +21,13 @@ import {
   DadosInvalidos,
   EscopoConferenciaEmAberto,
   ItemConferenciaNaoEncontrado,
+  ItemSemDivergencia,
+  LocalNaoEncontrado,
   MaterialNaoEncontrado,
   NaturezaIncompativel,
   UnidadeNaoEncontrada,
 } from '@/domain/errors';
+import { validarComandoEstrutural } from '@/domain/estoque/movimentacao';
 import { estoqueStore, chaveSaldoMock } from './estoque-store.mock';
 import { aplicarMovimentacaoNaMemoria } from './estoque-movimentacoes-repository.mock';
 
@@ -39,6 +42,13 @@ import { aplicarMovimentacaoNaMemoria } from './estoque-movimentacoes-repository
 function recalcularDiferenca(item: ConferenciaItem): number | null {
   if (item.quantidadeContada === null || item.quantidadeSistema === null) return null;
   return item.quantidadeContada - item.quantidadeSistema;
+}
+
+/** Espelha o `exigirLocal` do `.pg`: 404 do modulo em vez de FK violada. */
+function exigirLocalMock(localId: string): { unidade: string } {
+  const local = estoqueStore.locais.get(localId);
+  if (!local) throw new LocalNaoEncontrado(localId);
+  return local;
 }
 
 function itensDaConferencia(conferenciaId: string): ConferenciaItem[] {
@@ -182,11 +192,13 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     if (contagem.tipo === 'serializado') {
       // A partir de `pendente` qualquer das 3 situacoes contadas e valida; a
       // reclassificacao entre situacoes contadas (ex.: nao_encontrado ->
-      // conferido) tambem, enquanto a sessao esta aberta. `situacaoContagemValida`
-      // (pura, testada) so barra volta a `pendente`, que o schema ja nao permite.
+      // conferido) tambem, enquanto a sessao esta aberta. A volta para `pendente`
+      // ja e barrada pelo enum do schema.
       atualizado.situacao = contagem.situacao;
       atualizado.localEncontradoId =
         contagem.situacao === 'encontrado_em_outro_local' ? contagem.localEncontradoId : null;
+      // Local inexistente e 404 do modulo, nao falha de repositorio (paridade .pg).
+      if (atualizado.localEncontradoId !== null) exigirLocalMock(atualizado.localEncontradoId);
       if (contagem.observacao !== null) atualizado.observacao = contagem.observacao;
     } else {
       atualizado.quantidadeContada = contagem.quantidadeContada;
@@ -207,6 +219,19 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     if (sobra.tipo === 'serializado') {
       const unidade = estoqueStore.unidades.get(sobra.unidadeId);
       if (!unidade) throw new UnidadeNaoEncontrada(sobra.unidadeId);
+      exigirLocalMock(sobra.localEncontradoId);
+      // Sem local de origem a reconciliacao montaria transferencia sem origem
+      // (o ledger recusa). Espelha a guarda do .pg.
+      if (unidade.localId === null) {
+        throw new DadosInvalidos(
+          'Esta unidade nao tem local cadastrado no sistema. Aloque-a por uma movimentacao antes de conferir.',
+        );
+      }
+      if (unidade.localId === sobra.localEncontradoId) {
+        throw new DadosInvalidos(
+          'A unidade ja consta neste local no sistema; nao ha divergencia a registrar.',
+        );
+      }
       // Nao duplica o mesmo alvo na conferencia (uq_estoque_conf_item_unidade).
       const dup = itensDaConferencia(conferenciaId).some((i) => i.unidadeId === sobra.unidadeId);
       if (dup) throw new DadosInvalidos('Esta unidade ja consta na conferencia.');
@@ -241,6 +266,19 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     if (material.natureza !== 'quantificavel') {
       throw new NaturezaIncompativel('quantificavel', material.natureza);
     }
+    // O local da sobra tem que estar no escopo da sessao (senao a reconciliacao
+    // somaria a contagem a um saldo que a conferencia nunca cobriu).
+    const local = exigirLocalMock(sobra.localId);
+    if (local.unidade !== conf.unidade) {
+      throw new DadosInvalidos(
+        'O local informado e de outra unidade fisica; a sobra tem que estar no escopo da conferencia.',
+      );
+    }
+    if (conf.localId !== null && conf.localId !== sobra.localId) {
+      throw new DadosInvalidos(
+        'Esta conferencia esta escopada em um local; a sobra tem que ser desse mesmo local.',
+      );
+    }
     // Nao duplica (material, local, tamanho) na conferencia (uq_estoque_conf_item_material).
     const dupQ = itensDaConferencia(conferenciaId).some(
       (i) =>
@@ -249,6 +287,10 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         (i.tamanho ?? '') === (sobra.tamanho ?? ''),
     );
     if (dupQ) throw new DadosInvalidos('Este material/local/tamanho ja consta na conferencia.');
+    // Saldo REAL do alvo, nao 0 fixo (paridade com o .pg).
+    const quantidadeSistema =
+      estoqueStore.saldos.get(chaveSaldoMock(sobra.materialId, sobra.localId, sobra.tamanho ?? null))
+        ?.quantidade ?? 0;
     const item: ConferenciaItem = {
       id: randomUUID(),
       conferenciaId,
@@ -259,9 +301,9 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       origem: 'sobra',
       situacao: null,
       localEncontradoId: null,
-      quantidadeSistema: 0, // sem saldo no snapshot
+      quantidadeSistema,
       quantidadeContada: sobra.quantidadeContada,
-      diferenca: sobra.quantidadeContada, // contada - 0
+      diferenca: sobra.quantidadeContada - quantidadeSistema,
       observacao: null,
       movimentacaoId: null,
       reconciliadoPor: null,
@@ -304,6 +346,13 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       throw new ConferenciaNaoConcluida(conferenciaId, conf.status);
     }
 
+    // Item sem divergencia nao se reconcilia (paridade com o .pg): carimbar
+    // marcaria como tratado algo que ninguem apurou.
+    const divergencia = calcularDivergencia(item);
+    if (!divergencia.divergente) {
+      throw new ItemSemDivergencia(itemId, divergencia.tipo);
+    }
+
     const comando = resolverReconciliacao(item);
     let movimentacaoId: string | null = null;
     let aviso: 'base_alterada' | null = null;
@@ -331,10 +380,10 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           };
         }
       }
-      const resultado = aplicarMovimentacaoNaMemoria(
-        { ...cmd, usuarioId },
-        conferenciaId,
-      );
+      // Mesma validacao estrutural da movimentacao direta (paridade com o .pg).
+      const cmdCompleto = { ...cmd, usuarioId };
+      validarComandoEstrutural(cmdCompleto);
+      const resultado = aplicarMovimentacaoNaMemoria(cmdCompleto, conferenciaId);
       movimentacaoId = resultado.movimentacao.id;
     }
 

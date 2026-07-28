@@ -13,10 +13,12 @@ import type {
 } from '@/domain/estoque/conferencia';
 import type { UnidadeFisica } from '@/domain/estoque/local';
 import {
+  calcularDivergencia,
   motivoReconciliacao,
   resolverReconciliacao,
   statusConferenciaValido,
 } from '@/domain/estoque/conferencia';
+import { validarComandoEstrutural } from '@/domain/estoque/movimentacao';
 import {
   ConferenciaFechada,
   ConferenciaNaoConcluida,
@@ -25,7 +27,10 @@ import {
   EscopoConferenciaEmAberto,
   FalhaRepositorio,
   ItemConferenciaNaoEncontrado,
+  ItemSemDivergencia,
+  LocalNaoEncontrado,
   MaterialNaoEncontrado,
+  MovimentacaoInvalida,
   NaturezaIncompativel,
   SaldoInsuficiente,
   TransicaoStatusInvalida,
@@ -127,6 +132,18 @@ function ehUniqueViolation(e: unknown): boolean {
     'code' in e &&
     (e as { code?: string }).code === '23505'
   );
+}
+
+/**
+ * Carrega o local DENTRO da transacao, lancando o 404 do modulo em vez de deixar
+ * a violacao de FK virar 500. Devolve a unidade fisica, usada para checar escopo.
+ */
+async function exigirLocal(tx: Sql, localId: string): Promise<{ unidade: UnidadeFisica }> {
+  const rows = await tx<{ unidade: UnidadeFisica }[]>`
+    SELECT unidade FROM estoque_locais WHERE id = ${localId}::uuid
+  `;
+  if (rows.length === 0) throw new LocalNaoEncontrado(localId);
+  return rows[0]!;
 }
 
 // ── Repositorio ─────────────────────────────────────────────────────────────────
@@ -395,6 +412,9 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         if (contagem.tipo === 'serializado') {
           const localEncontrado =
             contagem.situacao === 'encontrado_em_outro_local' ? contagem.localEncontradoId : null;
+          // Local removido entre o carregamento da tela e a contagem viraria
+          // violacao de FK (500 opaco). O contrato do modulo e 404.
+          if (localEncontrado !== null) await exigirLocal(tx, localEncontrado);
           atualizadas = await tx<LinhaItem[]>`
             UPDATE estoque_conferencia_itens
                SET situacao = ${contagem.situacao},
@@ -421,6 +441,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         e instanceof ConferenciaNaoEncontrada ||
         e instanceof ConferenciaFechada ||
         e instanceof ItemConferenciaNaoEncontrado ||
+        e instanceof LocalNaoEncontrado ||
         e instanceof NaturezaIncompativel
       ) {
         throw e;
@@ -433,16 +454,25 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     try {
       return await sql.begin(async (txRaw) => {
         const tx = txRaw as unknown as Sql;
-        const confRows = await tx<{ status: StatusConferencia; natureza: NaturezaConferida }[]>`
-          SELECT status, natureza FROM estoque_conferencias WHERE id = ${conferenciaId}::uuid FOR UPDATE
+        const confRows = await tx<
+          {
+            status: StatusConferencia;
+            natureza: NaturezaConferida;
+            unidade: UnidadeFisica;
+            local_id: string | null;
+          }[]
+        >`
+          SELECT status, natureza, unidade, local_id
+            FROM estoque_conferencias WHERE id = ${conferenciaId}::uuid FOR UPDATE
         `;
         if (confRows.length === 0) throw new ConferenciaNaoEncontrada(conferenciaId);
-        if (confRows[0]!.status !== 'aberta') {
-          throw new ConferenciaFechada(conferenciaId, confRows[0]!.status);
+        const conf = confRows[0]!;
+        if (conf.status !== 'aberta') {
+          throw new ConferenciaFechada(conferenciaId, conf.status);
         }
         // A sobra tem que ser da MESMA natureza da sessao (sessao single-natureza).
-        if (confRows[0]!.natureza !== sobra.tipo) {
-          throw new NaturezaIncompativel(confRows[0]!.natureza, sobra.tipo);
+        if (conf.natureza !== sobra.tipo) {
+          throw new NaturezaIncompativel(conf.natureza, sobra.tipo);
         }
 
         if (sobra.tipo === 'serializado') {
@@ -450,10 +480,26 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
             SELECT local_id FROM estoque_unidades WHERE id = ${sobra.unidadeId}::uuid
           `;
           if (uRows.length === 0) throw new UnidadeNaoEncontrada(sobra.unidadeId);
+          const localAtual = uRows[0]!.local_id;
+          // O local encontrado precisa existir: a FK sozinha viraria 500 opaco.
+          await exigirLocal(tx, sobra.localEncontradoId);
+          // Sem local de origem a reconciliacao montaria uma transferencia sem
+          // origem, que o CHECK do ledger recusa (500 opaco, item travado).
+          if (localAtual === null) {
+            throw new DadosInvalidos(
+              'Esta unidade nao tem local cadastrado no sistema. Aloque-a por uma movimentacao antes de conferir.',
+            );
+          }
+          // Origem igual a destino nao e sobra: e item ja no lugar certo.
+          if (localAtual === sobra.localEncontradoId) {
+            throw new DadosInvalidos(
+              'A unidade ja consta neste local no sistema; nao ha divergencia a registrar.',
+            );
+          }
           const inseridas = await tx<LinhaItem[]>`
             INSERT INTO estoque_conferencia_itens
               (conferencia_id, unidade_id, local_esperado_id, situacao, local_encontrado_id, origem)
-            VALUES (${conferenciaId}::uuid, ${sobra.unidadeId}::uuid, ${uRows[0]!.local_id},
+            VALUES (${conferenciaId}::uuid, ${sobra.unidadeId}::uuid, ${localAtual},
                     'encontrado_em_outro_local', ${sobra.localEncontradoId}::uuid, 'sobra')
             RETURNING ${COLUNAS_ITEM}
           `;
@@ -468,11 +514,35 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         if (mRows[0]!.natureza !== 'quantificavel') {
           throw new NaturezaIncompativel('quantificavel', mRows[0]!.natureza);
         }
+        // O local da sobra tem que estar DENTRO do escopo da sessao. Fora dele o
+        // snapshot nao cobre o local, entao a reconciliacao somaria a contagem
+        // inteira a um saldo que ninguem conferiu (inflaria o patrimonio).
+        const local = await exigirLocal(tx, sobra.localId);
+        if (local.unidade !== conf.unidade) {
+          throw new DadosInvalidos(
+            'O local informado e de outra unidade fisica; a sobra tem que estar no escopo da conferencia.',
+          );
+        }
+        if (conf.local_id !== null && conf.local_id !== sobra.localId) {
+          throw new DadosInvalidos(
+            'Esta conferencia esta escopada em um local; a sobra tem que ser desse mesmo local.',
+          );
+        }
+        // Le o saldo REAL do alvo em vez de assumir 0: material fora do snapshot
+        // pode ter saldo (ex.: entrada durante a contagem). Com 0 fixo a
+        // reconciliacao somaria a contagem inteira ao saldo existente.
+        const saldoRows = await tx<{ quantidade: number }[]>`
+          SELECT quantidade FROM estoque_saldos
+           WHERE material_id = ${sobra.materialId}::uuid
+             AND local_id = ${sobra.localId}::uuid
+             AND COALESCE(tamanho, '') = COALESCE(${sobra.tamanho ?? null}, '')
+        `;
+        const quantidadeSistema = saldoRows.length > 0 ? Number(saldoRows[0]!.quantidade) : 0;
         const inseridas = await tx<LinhaItem[]>`
           INSERT INTO estoque_conferencia_itens
             (conferencia_id, material_id, local_esperado_id, tamanho, quantidade_sistema, quantidade_contada, origem)
           VALUES (${conferenciaId}::uuid, ${sobra.materialId}::uuid, ${sobra.localId}::uuid,
-                  ${sobra.tamanho}, 0, ${sobra.quantidadeContada}, 'sobra')
+                  ${sobra.tamanho}, ${quantidadeSistema}, ${sobra.quantidadeContada}, 'sobra')
           RETURNING ${COLUNAS_ITEM}
         `;
         return mapItem(inseridas[0]!);
@@ -486,6 +556,8 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         e instanceof ConferenciaFechada ||
         e instanceof UnidadeNaoEncontrada ||
         e instanceof MaterialNaoEncontrado ||
+        e instanceof LocalNaoEncontrado ||
+        e instanceof DadosInvalidos ||
         e instanceof NaturezaIncompativel
       ) {
         throw e;
@@ -534,6 +606,14 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           throw new ConferenciaNaoConcluida(conferenciaId, confRows[0]!.status);
         }
 
+        // 3a. Item sem divergencia nao se reconcilia: carimbar marcaria como
+        // tratado (e tiraria das pendencias) algo que ninguem apurou. Vale
+        // tambem para o item nunca contado, que o lote poderia arrastar junto.
+        const divergencia = calcularDivergencia(item);
+        if (!divergencia.divergente) {
+          throw new ItemSemDivergencia(itemId, divergencia.tipo);
+        }
+
         // 4. Mapeamento (puro) divergencia -> movimentacao (ou null = so carimba).
         const comando = resolverReconciliacao(item);
         let movimentacaoId: string | null = null;
@@ -564,11 +644,17 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
               };
             }
           }
+          // 4b. Mesma validacao estrutural da movimentacao direta. Sem ela o
+          // comando so encontraria o CHECK do banco (transferencia com origem
+          // nula ou igual ao destino), que sai como 500 opaco e trava o item.
+          const cmdCompleto = { ...cmd, usuarioId };
+          validarComandoEstrutural(cmdCompleto);
+
           // 5. Aplica a movimentacao na MESMA transacao (reusa o nucleo do ledger,
           // sem abrir outra sql.begin/conexao). Carimba conferencia_id.
           const resultado = await aplicarMovimentacaoNaTx(
             tx,
-            { ...cmd, usuarioId },
+            cmdCompleto,
             conferenciaId,
           );
           movimentacaoId = resultado.movimentacao.id;
@@ -595,10 +681,13 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     } catch (e) {
       if (
         e instanceof ItemConferenciaNaoEncontrado ||
+        e instanceof ItemSemDivergencia ||
         e instanceof ConferenciaNaoEncontrada ||
         e instanceof ConferenciaNaoConcluida ||
         e instanceof SaldoInsuficiente ||
         e instanceof TransicaoStatusInvalida ||
+        e instanceof MovimentacaoInvalida ||
+        e instanceof LocalNaoEncontrado ||
         e instanceof NaturezaIncompativel ||
         e instanceof UnidadeNaoEncontrada ||
         e instanceof MaterialNaoEncontrado

@@ -105,6 +105,8 @@ function ehErroDeReconciliacao(e: unknown): boolean {
     e.name === 'TransicaoStatusInvalida' ||
     e.name === 'NaturezaIncompativel' ||
     e.name === 'MovimentacaoInvalida' ||
+    e.name === 'ItemSemDivergencia' ||
+    e.name === 'LocalNaoEncontrado' ||
     e.name === 'UnidadeNaoEncontrada' ||
     e.name === 'MaterialNaoEncontrado'
   );

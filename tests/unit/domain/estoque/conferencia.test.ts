@@ -3,7 +3,6 @@ import {
   calcularDivergencia,
   motivoReconciliacao,
   resolverReconciliacao,
-  situacaoContagemValida,
   statusConferenciaValido,
   type ConferenciaItem,
 } from '@/domain/estoque/conferencia';
@@ -43,20 +42,10 @@ describe('conferencia, maquina de estados da sessao', () => {
   });
 });
 
-describe('conferencia, situacao de contagem (serializado)', () => {
-  it('de pendente para qualquer das tres contadas; nunca volta a pendente', () => {
-    expect(situacaoContagemValida('pendente', 'conferido')).toBe(true);
-    expect(situacaoContagemValida('pendente', 'nao_encontrado')).toBe(true);
-    expect(situacaoContagemValida('pendente', 'encontrado_em_outro_local')).toBe(true);
-    expect(situacaoContagemValida('conferido', 'pendente')).toBe(false);
-    expect(situacaoContagemValida('conferido', 'conferido')).toBe(false);
-  });
-
-  it('reclassifica entre situacoes contadas (achou o que estava nao_encontrado)', () => {
-    expect(situacaoContagemValida('nao_encontrado', 'conferido')).toBe(true);
-    expect(situacaoContagemValida('encontrado_em_outro_local', 'conferido')).toBe(true);
-  });
-});
+// A contagem do serializado nao tem funcao de transicao propria: as guardas sao o
+// enum do schema (nao aceita `pendente`) e a exigencia de sessao aberta, ambas
+// cobertas nos testes de use-case. O `situacaoContagemValida` que existia aqui era
+// codigo morto descrito no doc como guarda ativa; removido junto com este bloco.
 
 describe('conferencia, calcularDivergencia (quantificavel)', () => {
   it('nao contado ainda nao e divergencia', () => {

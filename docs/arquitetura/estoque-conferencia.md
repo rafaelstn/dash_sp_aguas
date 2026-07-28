@@ -77,7 +77,13 @@ encontrado_em_outro_local   -> encontrado em local diferente do esperado (diverg
 
 Transicoes validas a partir de `pendente`: para qualquer das outras tres. Reclassificar (ex.:
 `nao_encontrado` -> `conferido` apos achar) so e permitido enquanto a sessao estiver `aberta`. Depois
-de `concluida`, a contagem e final (auditavel). Funcao pura `situacaoContagemValida(de, para)`.
+de `concluida`, a contagem e final (auditavel).
+
+As guardas efetivas sao duas, e nao uma funcao de transicao: o enum do schema zod (que nao aceita
+volta para `pendente`) e a exigencia de sessao `aberta` no repositorio. Recontar a MESMA situacao e
+idempotente de proposito (o almoxarife reclica sem penalidade). Ate 27/07/2026 esta secao descrevia
+um `situacaoContagemValida(de, para)` que nenhum adapter chamava; a funcao foi removida na revisao
+pos-auditoria para o codigo e o documento contarem a mesma historia.
 
 ### 3.2 Status da sessao: maquina de estados
 
@@ -108,11 +114,24 @@ divergencias do snapshot. Justificativa: um inventario de governo precisa expor 
 e o sistema desconhece, nao apenas o que falta.
 
 - **Quantificavel sobra**: `(material, local, tamanho)` contado sem saldo no snapshot ->
-  `quantidade_sistema = 0`, `quantidade_contada = N`, reconciliacao = `entrada` de N. Permitido na
-  Fase 1 (o material precisa existir no catalogo; se nao existir, cadastra antes via CRUD do modulo).
+  `quantidade_sistema` = **saldo REAL do alvo lido na hora** (0 quando nao ha saldo),
+  `quantidade_contada = N`, reconciliacao = `entrada`/`saida` da diferenca. Permitido na Fase 1 (o
+  material precisa existir no catalogo; se nao existir, cadastra antes via CRUD do modulo).
+  O local da sobra tem que estar **dentro do escopo da sessao** (mesma unidade fisica e, quando a
+  sessao for escopada por local, o mesmo local). Fora do escopo o snapshot nao cobre aquele local, e
+  a reconciliacao somaria a contagem inteira a um saldo que ninguem conferiu.
 - **Serializado sobra**: uma unidade JA cadastrada, encontrada num local fora do escopo do seu
   snapshot -> item `origem='sobra'`, `unidade_id` setado, `situacao='encontrado_em_outro_local'`,
   `local_encontrado_id = local atual`; reconciliacao = `transferencia`. Permitido na Fase 1.
+  Duas recusas explicitas: unidade **sem local** no sistema (a transferencia nasceria sem origem) e
+  local encontrado **igual** ao local atual (transferencia de A para A). As duas viravam 500 opaco
+  pelo CHECK do ledger, com o item travado sem poder reconciliar.
+
+> **Revisao pos-auditoria (27/07/2026).** A auditoria de QA e seguranca do submodulo apontou que a
+> sobra quantificavel gravava `quantidade_sistema = 0` fixo e aceitava qualquer local, o que inflava
+> o saldo de um local fora do escopo com aparencia de ajuste auditado. Corrigido junto com: recusa de
+> reconciliar item sem divergencia (`ItemSemDivergencia`, 409), `validarComandoEstrutural` no caminho
+> de reconciliacao, teto de quantidade na contagem e `LocalNaoEncontrado` (404) no lugar de 500.
 - **Item fisico NAO cadastrado** (nao existe unidade/material no sistema): fica **Fase 2**. Capturar
   exigiria uma linha com alvo nulo (quebra o XOR) + fluxo de cadastro inline. Na Fase 1 o almoxarife
   cadastra a unidade/material primeiro (CRUD ja existe) e depois adiciona como sobra. Mantem o modelo
@@ -451,7 +470,7 @@ componentes.
 src/domain/estoque/
   conferencia.ts          # Conferencia, StatusConferencia, NaturezaConferida, ConferenciaItem,
                           #   SituacaoItem enum, statusConferenciaValido(de,para),
-                          #   situacaoContagemValida(de,para), calcularDivergencia(item) (puro),
+                          #   calcularDivergencia(item) (puro),
                           #   resolverReconciliacao(item) -> ComandoMovimentacao | null (puro)
 
 src/application/ports/

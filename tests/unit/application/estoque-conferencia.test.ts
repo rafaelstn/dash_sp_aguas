@@ -16,8 +16,11 @@ import { concluirConferencia } from '@/application/use-cases/estoque/concluir-co
 import { registrarMovimentacao } from '@/application/use-cases/estoque/registrar-movimentacao';
 import {
   ConferenciaNaoConcluida,
+  DadosInvalidos,
   EscopoConferenciaEmAberto,
   ItemConferenciaNaoEncontrado,
+  ItemSemDivergencia,
+  LocalNaoEncontrado,
 } from '@/domain/errors';
 
 const USER = '99999999-9999-9999-9999-999999999999';
@@ -133,11 +136,15 @@ describe('conferencia, contagem + reconciliacao (quantificavel)', () => {
     expect((await saldos.obterPorMaterialLocal(seed.material.id, seed.l1.id, null))?.quantidade).toBe(7);
   });
 
-  it('diferenca zero: so carimba, sem movimentacao', async () => {
+  it('diferenca zero nao se reconcilia: recusa sem tocar o estoque', async () => {
+    // Antes o item batido era carimbado como reconciliado (saia das pendencias
+    // e entrava no total de tratados) sem que nada tivesse sido apurado.
     const { sessao, item } = await abrirEContar(10, 10);
     await concluirConferencia(conf, sessao.id, 'concluir', USER);
-    const r = await reconciliarItem(conf, sessao.id, item.id, USER);
-    expect(r.movimentacaoId).toBeNull();
+    await expect(reconciliarItem(conf, sessao.id, item.id, USER)).rejects.toBeInstanceOf(
+      ItemSemDivergencia,
+    );
+    expect((await conf.obterItem(sessao.id, item.id))?.reconciliadoEm).toBeNull();
     expect(movsComConferencia()).toBe(0);
   });
 
@@ -279,5 +286,189 @@ describe('conferencia, sobra / IDOR / lote / resumo', () => {
     const cancelada = await concluirConferencia(conf, sessao.id, 'cancelar', USER);
     expect(cancelada.status).toBe('cancelada');
     expect(movsComConferencia()).toBe(0);
+  });
+});
+
+describe('conferencia, integridade da sobra e da reconciliacao', () => {
+  beforeEach(() => _resetEstoqueMock());
+
+  it('sobra em local COM saldo congela o saldo real, nao zero', async () => {
+    // O local L2 tem saldo 200 e esta fora do snapshot (a sessao e escopada em L1).
+    // Com `quantidade_sistema = 0` fixo, a contagem 200 viraria uma entrada de 200
+    // sobre um saldo que ja era 200: o inventario ganharia 200 unidades fantasma.
+    const material = await materiais.criar({ descricao: 'Antena', natureza: 'quantificavel' });
+    const l1 = await locais.criar({ unidade: 'PENHA', sala: '1' });
+    const l2 = await locais.criar({ unidade: 'PENHA', sala: '2' });
+    await registrarMovimentacao(
+      mov,
+      { tipo: 'entrada', materialId: material.id, quantidade: 200, localDestino: l2.id },
+      USER,
+    );
+    const sessao = await abrirConferencia(
+      conf,
+      { unidade: 'PENHA', natureza: 'quantificavel', localId: l1.id },
+      USER,
+    );
+
+    const item = await conf.adicionarSobra(
+      sessao.id,
+      { tipo: 'quantificavel', materialId: material.id, localId: l1.id, tamanho: null, quantidadeContada: 5 },
+      USER,
+    );
+    expect(item.quantidadeSistema).toBe(0); // L1 realmente nao tem saldo
+    expect(item.diferenca).toBe(5);
+
+    // E o caso que motivou a correcao: sobra num local que JA tem saldo.
+    const s2 = await abrirConferencia(
+      conf,
+      { unidade: 'PENHA', natureza: 'quantificavel', localId: l2.id },
+      USER,
+    );
+    const doL2 = (await conf.listarItens(s2.id, {})).itens[0]!;
+    await registrarContagem(conf, s2.id, doL2.id, { quantidadeContada: 200 }, USER);
+    await concluirConferencia(conf, s2.id, 'concluir', USER);
+    // Contagem igual ao saldo: nada a reconciliar, e o saldo continua 200.
+    await expect(reconciliarItem(conf, s2.id, doL2.id, USER)).rejects.toBeInstanceOf(
+      ItemSemDivergencia,
+    );
+    expect((await saldos.obterPorMaterialLocal(material.id, l2.id, null))?.quantidade).toBe(200);
+  });
+
+  it('sobra fora do escopo da sessao e recusada', async () => {
+    const material = await materiais.criar({ descricao: 'Antena', natureza: 'quantificavel' });
+    const l1 = await locais.criar({ unidade: 'PENHA', sala: '1' });
+    const outraUnidade = await locais.criar({ unidade: 'ARARAQUARA', sala: '9' });
+    const sessao = await abrirConferencia(
+      conf,
+      { unidade: 'PENHA', natureza: 'quantificavel', localId: l1.id },
+      USER,
+    );
+
+    // Local de outra unidade fisica.
+    await expect(
+      conf.adicionarSobra(
+        sessao.id,
+        { tipo: 'quantificavel', materialId: material.id, localId: outraUnidade.id, tamanho: null, quantidadeContada: 3 },
+        USER,
+      ),
+    ).rejects.toBeInstanceOf(DadosInvalidos);
+
+    // Local da mesma unidade, mas fora do local em que a sessao foi escopada.
+    const l3 = await locais.criar({ unidade: 'PENHA', sala: '3' });
+    await expect(
+      conf.adicionarSobra(
+        sessao.id,
+        { tipo: 'quantificavel', materialId: material.id, localId: l3.id, tamanho: null, quantidadeContada: 3 },
+        USER,
+      ),
+    ).rejects.toBeInstanceOf(DadosInvalidos);
+
+    // Local inexistente vira 404 do modulo, nao falha de repositorio.
+    await expect(
+      conf.adicionarSobra(
+        sessao.id,
+        {
+          tipo: 'quantificavel',
+          materialId: material.id,
+          localId: 'ffffffff-0000-0000-0000-000000000000',
+          tamanho: null,
+          quantidadeContada: 3,
+        },
+        USER,
+      ),
+    ).rejects.toBeInstanceOf(LocalNaoEncontrado);
+  });
+
+  it('sobra serializada sem local de origem, ou no proprio local, e recusada', async () => {
+    const l1 = await locais.criar({ unidade: 'PENHA', sala: '1' });
+    const l2 = await locais.criar({ unidade: 'PENHA', sala: '2' });
+    const semLocal = await unidades.criar({ descricao: 'Sensor', status: 'ativo', localId: null });
+    const comLocal = await unidades.criar({ descricao: 'Radar', status: 'ativo', localId: l1.id });
+    const sessao = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'serializado' }, USER);
+
+    // Sem local atual a reconciliacao montaria transferencia sem origem.
+    await expect(
+      conf.adicionarSobra(
+        sessao.id,
+        { tipo: 'serializado', unidadeId: semLocal.id, localEncontradoId: l2.id },
+        USER,
+      ),
+    ).rejects.toBeInstanceOf(DadosInvalidos);
+
+    // Encontrado no mesmo local em que ja consta: transferencia de A para A.
+    await expect(
+      conf.adicionarSobra(
+        sessao.id,
+        { tipo: 'serializado', unidadeId: comLocal.id, localEncontradoId: l1.id },
+        USER,
+      ),
+    ).rejects.toBeInstanceOf(DadosInvalidos);
+  });
+
+  it('reconciliar item sem divergencia e recusado, e nao carimba o item', async () => {
+    const { material, l1 } = await seedQuant(10);
+    void material;
+    void l1;
+    const sessao = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'quantificavel' }, USER);
+    const item = (await conf.listarItens(sessao.id, {})).itens[0]!;
+
+    // Nem contado: nao ha o que apurar.
+    await concluirConferencia(conf, sessao.id, 'concluir', USER);
+    await expect(reconciliarItem(conf, sessao.id, item.id, USER)).rejects.toBeInstanceOf(
+      ItemSemDivergencia,
+    );
+    const depois = await conf.obterItem(sessao.id, item.id);
+    expect(depois?.reconciliadoEm).toBeNull();
+    expect(depois?.reconciliadoPor).toBeNull();
+    expect(movsComConferencia()).toBe(0);
+  });
+
+  it('lote: item sem divergencia cai como falha e nao derruba o item bom', async () => {
+    const material = await materiais.criar({ descricao: 'Cabo', natureza: 'quantificavel' });
+    const l1 = await locais.criar({ unidade: 'PENHA', sala: '1' });
+    const l2 = await locais.criar({ unidade: 'PENHA', sala: '2' });
+    await registrarMovimentacao(
+      mov,
+      { tipo: 'entrada', materialId: material.id, quantidade: 10, localDestino: l1.id },
+      USER,
+    );
+    await registrarMovimentacao(
+      mov,
+      { tipo: 'entrada', materialId: material.id, quantidade: 7, localDestino: l2.id },
+      USER,
+    );
+    const sessao = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'quantificavel' }, USER);
+    const itens = (await conf.listarItens(sessao.id, {})).itens;
+    const divergente = itens.find((i) => i.localEsperadoId === l1.id)!;
+    const igual = itens.find((i) => i.localEsperadoId === l2.id)!;
+    await registrarContagem(conf, sessao.id, divergente.id, { quantidadeContada: 12 }, USER);
+    await registrarContagem(conf, sessao.id, igual.id, { quantidadeContada: 7 }, USER);
+    await concluirConferencia(conf, sessao.id, 'concluir', USER);
+
+    const res = await reconciliarLote(conf, sessao.id, [divergente.id, igual.id], USER);
+    expect(res.reconciliados).toBe(1);
+    expect(res.falhas).toBe(1);
+    expect(res.itens.find((i) => i.itemId === igual.id)?.erro).toBe('ItemSemDivergencia');
+    expect((await saldos.obterPorMaterialLocal(material.id, l1.id, null))?.quantidade).toBe(12);
+    expect((await saldos.obterPorMaterialLocal(material.id, l2.id, null))?.quantidade).toBe(7);
+  });
+
+  it('contagem serializada em local inexistente devolve o 404 do modulo', async () => {
+    const { unidade } = await seedSerial();
+    void unidade;
+    const sessao = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'serializado' }, USER);
+    const item = (await conf.listarItens(sessao.id, {})).itens[0]!;
+    await expect(
+      registrarContagem(
+        conf,
+        sessao.id,
+        item.id,
+        {
+          situacao: 'encontrado_em_outro_local',
+          localEncontradoId: 'ffffffff-0000-0000-0000-000000000000',
+        },
+        USER,
+      ),
+    ).rejects.toBeInstanceOf(LocalNaoEncontrado);
   });
 });

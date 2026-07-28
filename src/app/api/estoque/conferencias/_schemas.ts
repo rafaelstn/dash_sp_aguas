@@ -11,6 +11,14 @@ import { naturezaEnum, unidadeFisicaEnum } from '../_schemas';
 
 const observacao = z.string().trim().max(2000).optional();
 
+/**
+ * Teto de quantidade, igual ao da movimentacao direta (`_schemas.ts` do modulo).
+ * Sem ele a contagem seria o caminho mais frouxo para o mesmo ledger: uma
+ * contagem absurda vira ajuste de inventario "auditado", e acima do INTEGER do
+ * Postgres estoura em 500 no lugar de 400.
+ */
+const QUANTIDADE_MAXIMA = 1_000_000;
+
 export const abrirConferenciaSchema = z.object({
   unidade: unidadeFisicaEnum, // PENHA | ARARAQUARA
   natureza: naturezaEnum, // serializado | quantificavel
@@ -27,7 +35,7 @@ export const contagemItemSchema = z.union([
     observacao,
   }),
   z.object({
-    quantidadeContada: z.number().int().min(0),
+    quantidadeContada: z.number().int().min(0).max(QUANTIDADE_MAXIMA),
     observacao,
   }),
 ]);
@@ -44,7 +52,7 @@ export const sobraItemSchema = z.union([
     materialId: z.string().uuid(),
     localId: z.string().uuid(),
     tamanho: z.string().trim().min(1).max(60).optional(),
-    quantidadeContada: z.number().int().min(1),
+    quantidadeContada: z.number().int().min(1).max(QUANTIDADE_MAXIMA),
   }),
 ]);
 

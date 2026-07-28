@@ -117,25 +117,16 @@ export function statusConferenciaValido(
   return TRANSICOES_STATUS.get(de)?.has(para) ?? false;
 }
 
-// ── Maquina de estados da SITUACAO (serializado) ────────────────────────────────
-
-/**
- * Valida a transicao de contagem categorica do serializado. A partir de qualquer
- * situacao ja contada, o almoxarife pode RECLASSIFICAR para outra situacao contada
- * (ex.: `nao_encontrado` -> `conferido` apos achar), enquanto a sessao estiver
- * aberta (a guarda de "so aberta" e do repositorio). Nunca volta para `pendente`
- * (o snapshot ja nasce pendente; recontar e escolher uma das tres finais). Funcao
- * pura.
- */
-export function situacaoContagemValida(de: SituacaoItem, para: SituacaoItem): boolean {
-  if (de === para) return false;
-  if (para === 'pendente') return false;
-  return (
-    para === 'conferido' ||
-    para === 'nao_encontrado' ||
-    para === 'encontrado_em_outro_local'
-  );
-}
+// ── Situacao do serializado (contagem categorica) ───────────────────────────────
+//
+// Nao ha funcao de transicao aqui: a contagem do serializado e livre entre as tres
+// situacoes finais enquanto a sessao estiver aberta (reclassificar `nao_encontrado`
+// -> `conferido` depois de achar o item e uso normal, e recontar a mesma situacao
+// tem que ser idempotente). As duas unicas guardas reais sao o enum do schema, que
+// nao aceita volta para `pendente`, e a exigencia de sessao `aberta` no repositorio.
+// Existia aqui um `situacaoContagemValida` que ninguem chamava e que a arquitetura
+// descrevia como a guarda efetiva; removido para o codigo e o documento contarem a
+// mesma historia.
 
 // ── Divergencia ─────────────────────────────────────────────────────────────────
 

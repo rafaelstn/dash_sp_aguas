@@ -391,7 +391,7 @@ function Paginacao({
       className="flex flex-wrap items-center justify-between gap-3 border-t border-app-border-subtle pt-3"
     >
       <p className="text-xs text-app-fg-muted tabular">
-        Página {pagina} de {totalPaginas} — {total.toLocaleString('pt-BR')} conferências
+        Página {pagina} de {totalPaginas}, {total.toLocaleString('pt-BR')} conferências
       </p>
       <div className="flex items-center gap-2">
         <button

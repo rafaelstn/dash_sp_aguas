@@ -272,7 +272,11 @@ function ItemSerializado({
   const [erro, setErro] = useState<string | null>(null);
   const contado = itemContado(item);
 
-  const locaisUnidade = resolvedores.locais.filter((l) => l.unidade === conferencia.unidade);
+  // Fora o local esperado: escolher ele seria transferencia de A para A, que o
+  // ledger recusa. "Esta no lugar certo" e o botao Conferido.
+  const locaisUnidade = resolvedores.locais.filter(
+    (l) => l.unidade === conferencia.unidade && l.id !== item.localEsperadoId,
+  );
 
   async function registrar(
     situacao: 'conferido' | 'nao_encontrado' | 'encontrado_em_outro_local',
@@ -655,7 +659,7 @@ function PaginacaoCliente({
       className="flex flex-wrap items-center justify-between gap-3 border-t border-app-border-subtle pt-3"
     >
       <p className="text-xs text-app-fg-muted tabular">
-        Página {pagina} de {totalPaginas} — {total.toLocaleString('pt-BR')} itens
+        Página {pagina} de {totalPaginas}, {total.toLocaleString('pt-BR')} itens
       </p>
       <div className="flex items-center gap-2">
         <button

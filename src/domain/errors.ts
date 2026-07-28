@@ -324,6 +324,25 @@ export class ConferenciaNaoConcluida extends Error {
   }
 }
 
+/**
+ * Reconciliar item que não tem divergência a tratar (contagem bate com o sistema,
+ * ou o item nem foi contado). Reconciliar carimbaria o item como tratado e
+ * inflaria o resumo sem que nada tenha sido apurado. HTTP 409.
+ */
+export class ItemSemDivergencia extends Error {
+  constructor(
+    public readonly id: string,
+    public readonly tipo: string,
+  ) {
+    super(
+      tipo === 'nao_contado'
+        ? `Item ${id} ainda não foi contado; conte antes de reconciliar.`
+        : `Item ${id} não tem divergência a reconciliar.`,
+    );
+    this.name = 'ItemSemDivergencia';
+  }
+}
+
 /** Já existe uma conferência aberta no mesmo escopo (unidade + natureza + local). HTTP 409. */
 export class EscopoConferenciaEmAberto extends Error {
   constructor(

@@ -30,6 +30,7 @@ import {
   LocalEmUso,
   ConferenciaNaoEncontrada,
   ItemConferenciaNaoEncontrado,
+  ItemSemDivergencia,
   ConferenciaFechada,
   ConferenciaNaoConcluida,
   EscopoConferenciaEmAberto,
@@ -200,6 +201,12 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
   if (erro instanceof ConferenciaNaoConcluida) {
     return NextResponse.json(
       { erro: 'conferencia_nao_concluida', mensagem: erro.message, status: erro.status },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof ItemSemDivergencia) {
+    return NextResponse.json(
+      { erro: 'item_sem_divergencia', mensagem: erro.message, tipo: erro.tipo },
       { status: 409 },
     );
   }

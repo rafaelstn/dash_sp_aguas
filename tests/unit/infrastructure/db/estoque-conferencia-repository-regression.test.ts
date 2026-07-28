@@ -50,7 +50,28 @@ describe('estoque-conferencias-repository.pg, snapshot + reconciliacao', () => {
   });
 
   it('carimba conferencia_id na movimentacao gerada', () => {
-    expect(src).toMatch(/aplicarMovimentacaoNaTx\(\s*tx,\s*\{ \.\.\.cmd, usuarioId \},\s*conferenciaId,?\s*\)/);
+    expect(src).toMatch(/const cmdCompleto = \{ \.\.\.cmd, usuarioId \};/);
+    expect(src).toMatch(/aplicarMovimentacaoNaTx\(\s*tx,\s*cmdCompleto,\s*conferenciaId,?\s*\)/);
+  });
+
+  it('valida o comando estruturalmente antes de tocar o ledger', () => {
+    // Sem isso, transferencia sem origem (ou origem igual ao destino) so seria
+    // barrada pelo CHECK do banco, virando 500 opaco com o item travado.
+    expect(src).toMatch(/validarComandoEstrutural\(cmdCompleto\)/);
+  });
+
+  it('recusa reconciliar item sem divergencia', () => {
+    expect(src).toMatch(/const divergencia = calcularDivergencia\(item\)/);
+    expect(src).toMatch(/throw new ItemSemDivergencia\(itemId, divergencia\.tipo\)/);
+  });
+
+  it('sobra quantificavel le o saldo real e valida o escopo', () => {
+    // `quantidade_sistema` vinha como literal 0: a reconciliacao somava a
+    // contagem inteira sobre um saldo que ninguem conferiu.
+    expect(src).toMatch(/const quantidadeSistema = saldoRows\.length > 0/);
+    expect(src).not.toMatch(/\$\{sobra\.tamanho\}, 0, \$\{sobra\.quantidadeContada\}/);
+    expect(src).toMatch(/local\.unidade !== conf\.unidade/);
+    expect(src).toMatch(/conf\.local_id !== null && conf\.local_id !== sobra\.localId/);
   });
 
   it('avisa base_alterada re-lendo o saldo atual (COALESCE do tamanho)', () => {

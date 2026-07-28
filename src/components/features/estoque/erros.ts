@@ -55,6 +55,8 @@ const MENSAGEM_POR_CODIGO: Record<string, string> = {
     'Conclua a conferência antes de reconciliar as divergências.',
   conferencia_nao_encontrada: 'Conferência não encontrada.',
   item_conferencia_nao_encontrado: 'Item de conferência não encontrado.',
+  item_sem_divergencia:
+    'Este item não tem divergência a reconciliar. Itens que batem com o sistema, ou que ainda não foram contados, não geram ajuste.',
 };
 
 const MENSAGEM_POR_STATUS: Record<number, string> = {
