@@ -10,6 +10,7 @@
 import type {
   ConferenciaItemDTO,
   ContagemPayload,
+  ResultadoLoteDTO,
   StatusConferencia,
 } from './conferencia-dtos';
 import type { SituacaoItem } from '@/domain/estoque/conferencia';
@@ -356,6 +357,47 @@ export function idsElegiveisLote(itens: ConferenciaItemDTO[]): string[] {
   return itens
     .filter((i) => !itemReconciliado(i) && divergenciaDoItem(i).divergente)
     .map((i) => i.id);
+}
+
+// ── Ondas do lote (o servidor limita itens por requisicao) ─────────────────────
+
+/**
+ * Itens por requisicao de reconciliacao em lote. Espelha `ITENS_POR_LOTE` do
+ * schema da rota: o servidor RECUSA um lote maior, entao a UI divide o conjunto
+ * em ondas deste tamanho e envia uma de cada vez.
+ */
+export const TAMANHO_ONDA_LOTE = 100;
+
+/** Divide os ids em ondas de no maximo `tamanho`. Puro. */
+export function dividirEmOndas(ids: readonly string[], tamanho = TAMANHO_ONDA_LOTE): string[][] {
+  if (tamanho < 1) throw new Error('O tamanho da onda precisa ser pelo menos 1.');
+  const ondas: string[][] = [];
+  for (let i = 0; i < ids.length; i += tamanho) {
+    ondas.push(ids.slice(i, i + tamanho));
+  }
+  return ondas;
+}
+
+/**
+ * Soma os resultados das ondas num unico resultado de lote. Preserva a ordem dos
+ * itens. Puro. E o que permite reportar o PARCIAL quando uma onda falha: o que
+ * ja foi aplicado esta aplicado (cada item e atomico no servidor) e o operador
+ * precisa saber disso, nao so ver "erro".
+ */
+export function agregarLotes(
+  conferenciaId: string,
+  partes: readonly ResultadoLoteDTO[],
+): ResultadoLoteDTO {
+  return partes.reduce<ResultadoLoteDTO>(
+    (acc, p) => ({
+      conferenciaId,
+      total: acc.total + p.total,
+      reconciliados: acc.reconciliados + p.reconciliados,
+      falhas: acc.falhas + p.falhas,
+      itens: [...acc.itens, ...p.itens],
+    }),
+    { conferenciaId, total: 0, reconciliados: 0, falhas: 0, itens: [] },
+  );
 }
 
 // ── Progresso da contagem ─────────────────────────────────────────────────────

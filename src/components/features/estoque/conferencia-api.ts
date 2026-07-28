@@ -5,7 +5,8 @@
  * real (leitura=usuario, escrita=admin) vive no backend; aqui so consumimos.
  */
 
-import { lancarErro } from './erros';
+import { ErroEstoque, lancarErro } from './erros';
+import { agregarLotes, dividirEmOndas } from './conferencia-ui';
 import type {
   AbrirConferenciaPayload,
   AcaoConferenciaPayload,
@@ -128,6 +129,44 @@ export function listarItensConferencia(
   );
 }
 
+/** Teto de paginas de uma carga completa e tamanho de cada pagina do servidor. */
+const POR_PAGINA_SERVIDOR = 200;
+const TETO_PAGINAS = 12;
+
+export interface CargaItens {
+  itens: ConferenciaItemDTO[];
+  /** Total do escopo segundo o servidor (pode ser maior que `itens.length`). */
+  total: number;
+  /** true quando o teto de paginas cortou o resultado: a tela NAO tem tudo. */
+  parcial: boolean;
+}
+
+/**
+ * Carrega todos os itens de um escopo, pagina a pagina, ate o teto de seguranca.
+ * Devolve `parcial: true` quando o teto cortou, para a tela poder AVISAR: uma
+ * conferencia maior que o teto era truncada em silencio, e uma contagem que
+ * parece completa sem estar e exatamente o que um inventario nao pode produzir.
+ */
+export async function carregarItensCompleto(
+  id: string,
+  filtros: FiltrosItensUI,
+  signal?: AbortSignal,
+): Promise<CargaItens> {
+  const acc: ConferenciaItemDTO[] = [];
+  let total = 0;
+  for (let pagina = 1; pagina <= TETO_PAGINAS; pagina += 1) {
+    const r = await listarItensConferencia(
+      id,
+      { ...filtros, pagina, porPagina: POR_PAGINA_SERVIDOR },
+      signal,
+    );
+    total = r.total;
+    acc.push(...r.itens);
+    if (acc.length >= r.total || r.itens.length === 0) break;
+  }
+  return { itens: acc, total, parcial: acc.length < total };
+}
+
 export function registrarContagem(
   id: string,
   itemId: string,
@@ -162,4 +201,51 @@ export function reconciliarLote(
   payload: ReconciliarLotePayload,
 ): Promise<ResultadoLoteDTO> {
   return enviar(`/api/estoque/conferencias/${id}/reconciliar`, 'POST', payload);
+}
+
+/** Progresso de um lote dividido em ondas, para a barra da tela. */
+export interface ProgressoLote {
+  enviados: number;
+  total: number;
+}
+
+export interface ResultadoOndas {
+  /** Agregado das ondas que CHEGARAM a ser processadas pelo servidor. */
+  resultado: ResultadoLoteDTO;
+  /** Mensagem do erro que interrompeu; null quando todas as ondas passaram. */
+  interrompido: string | null;
+}
+
+/**
+ * Reconcilia um conjunto de qualquer tamanho dividindo-o em ondas do teto do
+ * servidor, uma requisicao de cada vez (nunca em paralelo: cada item mexe no
+ * ledger, e disparar ondas concorrentes so aumenta contencao de lock e consumo
+ * de rate limit).
+ *
+ * Se uma onda falhar, PARA e devolve o agregado do que ja foi aplicado junto do
+ * motivo. O que passou esta aplicado de verdade (cada item e uma transacao
+ * atomica no servidor), entao esconder o parcial atras de um "erro" seco faria
+ * o operador reprocessar as cegas.
+ */
+export async function reconciliarEmOndas(
+  id: string,
+  itemIds: readonly string[],
+  aoProgredir?: (p: ProgressoLote) => void,
+): Promise<ResultadoOndas> {
+  const partes: ResultadoLoteDTO[] = [];
+  let enviados = 0;
+  for (const onda of dividirEmOndas(itemIds)) {
+    try {
+      partes.push(await reconciliarLote(id, { itemIds: onda }));
+    } catch (e) {
+      return {
+        resultado: agregarLotes(id, partes),
+        interrompido:
+          e instanceof ErroEstoque ? e.message : 'Não foi possível reconciliar o lote.',
+      };
+    }
+    enviados += onda.length;
+    aoProgredir?.({ enviados, total: itemIds.length });
+  }
+  return { resultado: agregarLotes(id, partes), interrompido: null };
 }

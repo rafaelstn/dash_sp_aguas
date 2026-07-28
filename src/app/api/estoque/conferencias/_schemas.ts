@@ -61,6 +61,16 @@ export const acaoConferenciaSchema = z.object({
   observacao,
 });
 
+/**
+ * Teto de itens por requisicao de lote. Cada item e uma transacao propria
+ * (`FOR UPDATE` + movimentacao no ledger) processada em SERIE, entao o teto
+ * limita o tempo da requisicao, nao o tamanho do inventario: a UI divide o
+ * conjunto em ondas deste tamanho. Com 500 numa requisicao so, um inventario
+ * grande estourava o tempo da funcao e o operador recebia erro sem saber
+ * quantos itens ja tinham sido aplicados.
+ */
+export const ITENS_POR_LOTE = 100;
+
 export const reconciliarLoteSchema = z.object({
-  itemIds: z.array(z.string().uuid()).min(1).max(500), // itens que o almoxarife revisou
+  itemIds: z.array(z.string().uuid()).min(1).max(ITENS_POR_LOTE), // itens que o almoxarife revisou
 });

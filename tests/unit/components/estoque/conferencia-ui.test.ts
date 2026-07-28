@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { ITENS_POR_LOTE } from '@/app/api/estoque/conferencias/_schemas';
 import type { ConferenciaItemDTO } from '@/components/features/estoque/conferencia-dtos';
 import {
+  TAMANHO_ONDA_LOTE,
+  agregarLotes,
   autoriaDoItem,
   descreverAjuste,
+  dividirEmOndas,
   descreverBaseAlterada,
   divergenciaDoItem,
   idsElegiveisLote,
@@ -315,5 +319,71 @@ describe('autoriaDoItem (trilha da contagem)', () => {
     );
     expect(texto).toContain('Contado por Maria');
     expect(texto).toContain('Reconciliado por João');
+  });
+});
+
+describe('ondas do lote de reconciliacao', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `id-${i}`);
+
+  it('conjunto menor que o teto vira uma onda so', () => {
+    expect(dividirEmOndas(ids(30))).toEqual([ids(30)]);
+  });
+
+  it('divide no teto do servidor sem perder nem repetir id', () => {
+    const ondas = dividirEmOndas(ids(250));
+    expect(ondas.map((o) => o.length)).toEqual([100, 100, 50]);
+    expect(ondas.flat()).toEqual(ids(250));
+    expect(new Set(ondas.flat()).size).toBe(250);
+  });
+
+  it('nenhuma onda excede o teto que a rota aceita', () => {
+    for (const onda of dividirEmOndas(ids(1000))) {
+      expect(onda.length).toBeLessThanOrEqual(TAMANHO_ONDA_LOTE);
+    }
+  });
+
+  it('conjunto vazio nao gera requisicao', () => {
+    expect(dividirEmOndas([])).toEqual([]);
+  });
+
+  // Se as duas constantes divergirem, a UI monta uma onda que a rota recusa com
+  // 400 e o operador ve "erro" no meio do lote.
+  it('o teto da UI e o mesmo que a rota aceita', () => {
+    expect(TAMANHO_ONDA_LOTE).toBe(ITENS_POR_LOTE);
+  });
+
+  it('agrega as ondas somando os contadores e preservando a ordem dos itens', () => {
+    const agregado = agregarLotes('conf-1', [
+      {
+        conferenciaId: 'conf-1',
+        total: 2,
+        reconciliados: 2,
+        falhas: 0,
+        itens: [
+          { itemId: 'a', sucesso: true },
+          { itemId: 'b', sucesso: true },
+        ],
+      },
+      {
+        conferenciaId: 'conf-1',
+        total: 2,
+        reconciliados: 1,
+        falhas: 1,
+        itens: [
+          { itemId: 'c', sucesso: true },
+          { itemId: 'd', sucesso: false, erro: 'SaldoInsuficiente' },
+        ],
+      },
+    ]);
+    expect(agregado).toMatchObject({ total: 4, reconciliados: 3, falhas: 1 });
+    expect(agregado.itens.map((i) => i.itemId)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('interrupcao no meio agrega so o que foi aplicado (o parcial e real)', () => {
+    const parcial = agregarLotes('conf-1', [
+      { conferenciaId: 'conf-1', total: 100, reconciliados: 100, falhas: 0, itens: [] },
+    ]);
+    expect(parcial.reconciliados).toBe(100);
+    expect(parcial.total).toBe(100);
   });
 });

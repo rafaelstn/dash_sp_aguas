@@ -6,7 +6,7 @@ import { Alerta } from '@/components/ui/Alerta';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
-import { listarItensConferencia, registrarContagem, removerSobra } from '../conferencia-api';
+import { carregarItensCompleto, registrarContagem, removerSobra } from '../conferencia-api';
 import { ErroEstoque } from '../erros';
 import {
   itemContado,
@@ -26,8 +26,6 @@ interface Props {
   aoNotificar: (tipo: 'sucesso' | 'erro', texto: string) => void;
 }
 
-const POR_PAGINA_SERVIDOR = 200;
-const TETO_PAGINAS = 12;
 const POR_PAGINA_CLIENTE = 25;
 
 type Vista = 'pendentes' | 'contados' | 'todos';
@@ -35,24 +33,7 @@ type Vista = 'pendentes' | 'contados' | 'todos';
 type Carga =
   | { fase: 'carregando' }
   | { fase: 'erro'; mensagem: string }
-  | { fase: 'ok'; itens: ConferenciaItemDTO[] };
-
-async function carregarTodosItens(
-  conferenciaId: string,
-  signal: AbortSignal,
-): Promise<ConferenciaItemDTO[]> {
-  const acc: ConferenciaItemDTO[] = [];
-  for (let pagina = 1; pagina <= TETO_PAGINAS; pagina += 1) {
-    const r = await listarItensConferencia(
-      conferenciaId,
-      { pagina, porPagina: POR_PAGINA_SERVIDOR },
-      signal,
-    );
-    acc.push(...r.itens);
-    if (acc.length >= r.total || r.itens.length === 0) break;
-  }
-  return acc;
-}
+  | { fase: 'ok'; itens: ConferenciaItemDTO[]; total: number; parcial: boolean };
 
 /**
  * Tela de CONTAGEM (sessao aberta), mobile-first. Carrega os itens do escopo e
@@ -78,9 +59,9 @@ export function ContagemPanel({
     let ativo = true;
     const c = new AbortController();
     setCarga({ fase: 'carregando' });
-    carregarTodosItens(conferenciaId, c.signal)
-      .then((itens) => {
-        if (ativo) setCarga({ fase: 'ok', itens });
+    carregarItensCompleto(conferenciaId, {}, c.signal)
+      .then((carregado) => {
+        if (ativo) setCarga({ fase: 'ok', ...carregado });
       })
       .catch((e) => {
         if (!ativo || c.signal.aborted) return;
@@ -104,7 +85,10 @@ export function ContagemPanel({
     (atualizado: ConferenciaItemDTO) => {
       setCarga((prev) =>
         prev.fase === 'ok'
-          ? { fase: 'ok', itens: prev.itens.map((i) => (i.id === atualizado.id ? atualizado : i)) }
+          ? {
+              ...prev,
+              itens: prev.itens.map((i) => (i.id === atualizado.id ? atualizado : i)),
+            }
           : prev,
       );
       aoMudar();
@@ -116,7 +100,11 @@ export function ContagemPanel({
     (itemId: string) => {
       setCarga((prev) =>
         prev.fase === 'ok'
-          ? { fase: 'ok', itens: prev.itens.filter((i) => i.id !== itemId) }
+          ? {
+              ...prev,
+              itens: prev.itens.filter((i) => i.id !== itemId),
+              total: Math.max(0, prev.total - 1),
+            }
           : prev,
       );
       aoMudar();
@@ -193,6 +181,14 @@ export function ContagemPanel({
           />
         </div>
       </div>
+
+      {carga.parcial ? (
+        <Alerta tipo="aviso" titulo="Lista parcial">
+          Esta conferência tem {carga.total.toLocaleString('pt-BR')} itens e a tela carregou os{' '}
+          {itens.length.toLocaleString('pt-BR')} primeiros. O progresso acima considera apenas os
+          itens listados. Abra conferências com escopo por local para contar o inventário inteiro.
+        </Alerta>
+      ) : null}
 
       {/* Filtro de vista */}
       <div role="group" aria-label="Filtrar itens" className="flex flex-wrap gap-1">

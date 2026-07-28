@@ -7,9 +7,14 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
-import { listarItensConferencia, reconciliarLote } from '../conferencia-api';
+import {
+  carregarItensCompleto,
+  reconciliarEmOndas,
+  type ProgressoLote,
+} from '../conferencia-api';
 import { ErroEstoque } from '../erros';
 import {
+  TAMANHO_ONDA_LOTE,
   autoriaDoItem,
   descreverAjuste,
   divergenciaDoItem,
@@ -36,30 +41,10 @@ interface Props {
   aoNotificar: (tipo: 'sucesso' | 'erro', texto: string) => void;
 }
 
-const POR_PAGINA_SERVIDOR = 200;
-const TETO_PAGINAS = 12;
-
 type Carga =
   | { fase: 'carregando' }
   | { fase: 'erro'; mensagem: string }
-  | { fase: 'ok'; itens: ConferenciaItemDTO[] };
-
-async function carregarDivergentes(
-  conferenciaId: string,
-  signal: AbortSignal,
-): Promise<ConferenciaItemDTO[]> {
-  const acc: ConferenciaItemDTO[] = [];
-  for (let pagina = 1; pagina <= TETO_PAGINAS; pagina += 1) {
-    const r = await listarItensConferencia(
-      conferenciaId,
-      { apenasDivergentes: true, pagina, porPagina: POR_PAGINA_SERVIDOR },
-      signal,
-    );
-    acc.push(...r.itens);
-    if (acc.length >= r.total || r.itens.length === 0) break;
-  }
-  return acc;
-}
+  | { fase: 'ok'; itens: ConferenciaItemDTO[]; total: number; parcial: boolean };
 
 /**
  * Painel de DIVERGÊNCIAS + reconciliação (sessão concluída). Lista as divergências
@@ -80,6 +65,7 @@ export function DivergenciasPanel({
   const [versao, setVersao] = useState(0);
   const [itemDialog, setItemDialog] = useState<ConferenciaItemDTO | null>(null);
   const [loteAberto, setLoteAberto] = useState(false);
+  const [progresso, setProgresso] = useState<ProgressoLote | null>(null);
   const conferenciaId = conferencia.id;
 
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
@@ -88,9 +74,9 @@ export function DivergenciasPanel({
     let ativo = true;
     const c = new AbortController();
     setCarga({ fase: 'carregando' });
-    carregarDivergentes(conferenciaId, c.signal)
-      .then((itens) => {
-        if (ativo) setCarga({ fase: 'ok', itens });
+    carregarItensCompleto(conferenciaId, { apenasDivergentes: true }, c.signal)
+      .then((carregado) => {
+        if (ativo) setCarga({ fase: 'ok', ...carregado });
       })
       .catch((e) => {
         if (!ativo || c.signal.aborted) return;
@@ -133,25 +119,35 @@ export function DivergenciasPanel({
   );
 
   async function confirmarLote() {
+    setProgresso({ enviados: 0, total: elegiveis.length });
     try {
-      const resultado = await reconciliarLote(conferenciaId, { itemIds: elegiveis });
+      const { resultado, interrompido } = await reconciliarEmOndas(
+        conferenciaId,
+        elegiveis,
+        setProgresso,
+      );
       setLoteAberto(false);
       const houveBaseAlterada = resultado.itens.some((i) => i.aviso === 'base_alterada');
-      if (resultado.falhas > 0) {
+      const aplicados = resultado.reconciliados.toLocaleString('pt-BR');
+      if (interrompido) {
+        // O que passou esta aplicado de verdade; dizer so "erro" faria o operador
+        // reprocessar as cegas.
         aoNotificar(
           'erro',
-          `${resultado.reconciliados.toLocaleString('pt-BR')} reconciliado(s), ${resultado.falhas.toLocaleString('pt-BR')} com falha. Reveja os itens que restaram.`,
+          `${interrompido} O processamento parou com ${aplicados} de ${elegiveis.length.toLocaleString('pt-BR')} item(ns) já aplicado(s). Recarregue e reconcilie o que restou.`,
+        );
+      } else if (resultado.falhas > 0) {
+        aoNotificar(
+          'erro',
+          `${aplicados} reconciliado(s), ${resultado.falhas.toLocaleString('pt-BR')} com falha. Reveja os itens que restaram.`,
         );
       } else if (houveBaseAlterada) {
         aoNotificar(
           'erro',
-          `${resultado.reconciliados.toLocaleString('pt-BR')} reconciliado(s). Atenção: o saldo do sistema mudou desde a contagem em algum item.`,
+          `${aplicados} reconciliado(s). Atenção: o saldo do sistema mudou desde a contagem em algum item.`,
         );
       } else {
-        aoNotificar(
-          'sucesso',
-          `${resultado.reconciliados.toLocaleString('pt-BR')} item(ns) reconciliado(s).`,
-        );
+        aoNotificar('sucesso', `${aplicados} item(ns) reconciliado(s).`);
       }
       recarregar();
       aoMudar();
@@ -159,6 +155,8 @@ export function DivergenciasPanel({
       throw new Error(
         e instanceof ErroEstoque ? e.message : 'Não foi possível reconciliar o lote.',
       );
+    } finally {
+      setProgresso(null);
     }
   }
 
@@ -219,6 +217,14 @@ export function DivergenciasPanel({
         ) : null}
       </div>
 
+      {carga.parcial ? (
+        <Alerta tipo="aviso" titulo="Lista parcial">
+          Esta conferência tem {carga.total.toLocaleString('pt-BR')} divergências e a tela carregou
+          as {itens.length.toLocaleString('pt-BR')} primeiras. Reconciliar em lote aplica apenas o
+          que está listado; repita a operação depois de recarregar para tratar o restante.
+        </Alerta>
+      ) : null}
+
       {!podeGerenciar ? (
         <Alerta tipo="info" titulo="Somente leitura">
           Você pode consultar as divergências, mas apenas um administrador pode reconciliá-las.
@@ -275,7 +281,16 @@ export function DivergenciasPanel({
             <p className="text-2xs text-app-fg-muted">
               Cada item gera uma movimentação atômica e rastreável. Um item com problema não impede
               os demais.
+              {resumoLote.total > TAMANHO_ONDA_LOTE
+                ? ` O envio é feito em ${Math.ceil(resumoLote.total / TAMANHO_ONDA_LOTE)} etapas de até ${TAMANHO_ONDA_LOTE} itens.`
+                : ''}
             </p>
+            {progresso ? (
+              <p aria-live="polite" className="text-2xs font-medium text-app-fg tabular">
+                Aplicando: {progresso.enviados.toLocaleString('pt-BR')} de{' '}
+                {progresso.total.toLocaleString('pt-BR')} item(ns).
+              </p>
+            ) : null}
           </div>
         }
         rotuloConfirmar={`Reconciliar ${resumoLote.total}`}
