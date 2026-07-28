@@ -9,8 +9,12 @@
 -- tratados como desconformidades.
 -- =============================================================================
 
+-- IF NOT EXISTS: o `db/migrate.sh` do deploy conteinerizado reaplica a pasta
+-- inteira a cada execucao do servico `migrate`, entao toda migration tem que
+-- suportar reexecucao. Sem isso, um segundo boot aborta aqui e as migrations
+-- seguintes nunca chegam ao banco.
 ALTER TABLE arquivos_indexados
-  ADD COLUMN formato_nome VARCHAR(16) NOT NULL DEFAULT 'COMPLETO'
+  ADD COLUMN IF NOT EXISTS formato_nome VARCHAR(16) NOT NULL DEFAULT 'COMPLETO'
     CHECK (formato_nome IN ('COMPLETO', 'PARCIAL', 'LEGADO'));
 
 COMMENT ON COLUMN arquivos_indexados.formato_nome IS

@@ -199,8 +199,23 @@ Serviços do compose:
 | `npm run start` | Subir build de produção |
 | `npm run lint` | ESLint + jsx-a11y |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Suíte Vitest completa |
+| `npm test` | Suíte Vitest completa (a integração é pulada sem `TEST_DATABASE_URL`) |
+| `npm run test:integration` | Testes contra Postgres real (exige `TEST_DATABASE_URL`) |
+| `npm run db:test:up` / `db:test:schema` / `db:test:down` | Sobe, popula e derruba o Postgres de teste local |
 | `npm run lock:ci` | Regenera o `package-lock.json` compatível com o npm 10 do CI |
+
+> **Testes de integração.** Provam contra Postgres o que o mock in-memory não
+> alcança: atomicidade, idempotência sob concorrência, coluna `GENERATED`, índice
+> único parcial. Rodam só quando `TEST_DATABASE_URL` aponta para um banco
+> descartável, então nunca tocam produção. Local:
+> ```bash
+> npm run db:test:up && npm run db:test:schema
+> TEST_DATABASE_URL=postgresql://spaguas:teste@localhost:55432/spaguas_test npm run test:integration
+> npm run db:test:down
+> ```
+> No CI, o job `integracao` sobe o banco, aplica o schema **duas vezes** (as
+> migrations têm que suportar reexecução, que é como o deploy on-prem roda) e
+> executa a suíte.
 
 > **Lockfile e CI.** O CI e o Dockerfile de produção rodam Node 20, ou seja, npm 10.
 > Um `npm install` feito em Node 22+ (npm 11) grava um lock que o npm 10 recusa

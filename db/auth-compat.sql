@@ -63,5 +63,41 @@ CREATE OR REPLACE FUNCTION auth.uid()
     )::uuid;
   $$;
 
+-- ----------------------------------------------------------------------------
+-- auth.role(): no Supabase devolve o role do JWT ('anon' | 'authenticated' |
+-- 'service_role'). Usada pelas policies da migration 0042 (postos_fotos). Sem
+-- ela, `db/migrate.sh` aborta em 0042 e o deploy conteinerizado nunca completa
+-- o schema. Sem PostgREST, lê a GUC `request.jwt.claim.role`; na ausência dela
+-- cai para o role efetivo da conexão, o que mantém a policy fail-closed (a app
+-- conecta com role privilegiada e não depende de RLS em runtime).
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION auth.role()
+  RETURNS text
+  LANGUAGE sql
+  STABLE
+  AS $$
+    SELECT COALESCE(
+      NULLIF(current_setting('request.jwt.claim.role', true), ''),
+      current_user
+    );
+  $$;
+
+-- ----------------------------------------------------------------------------
+-- auth.jwt(): stub para policies que leem claims arbitrários. Devolve o JSON da
+-- GUC `request.jwt.claims` quando existir, senão objeto vazio (nunca NULL, para
+-- não quebrar `->>` nas policies).
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION auth.jwt()
+  RETURNS jsonb
+  LANGUAGE sql
+  STABLE
+  AS $$
+    SELECT COALESCE(
+      NULLIF(current_setting('request.jwt.claims', true), '')::jsonb,
+      '{}'::jsonb
+    );
+  $$;
+
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT SELECT ON auth.users TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION auth.uid(), auth.role(), auth.jwt() TO anon, authenticated, service_role;

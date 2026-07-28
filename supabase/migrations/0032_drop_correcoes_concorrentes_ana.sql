@@ -26,22 +26,39 @@
 -- -----------------------------------------------------------------------------
 -- 1. Preserva conteúdo das colunas que serão removidas em ana_revisao_evento
 -- -----------------------------------------------------------------------------
-INSERT INTO ana_revisao_evento (estacao_id, evento, ator_id, valores_antes, observacao)
-SELECT
-  id,
-  'corrigida_manual',
-  NULL,
-  jsonb_build_object(
-    'correcoes', correcoes,
-    'justificativa', justificativa,
-    'status_pre_drop', status
-  ),
-  'Snapshot antes do DROP correcoes/justificativa (migration 0032). ' ||
-  'Conteudo preservado por LGPD/auditoria. Decisao final esta em postos ' ||
-  '(se status=promovida_a_posto) ou pendente revisao humana.'
-FROM ana_revisao_estacao
-WHERE (correcoes <> '{}'::jsonb OR justificativa IS NOT NULL)
-  AND status <> 'promovida_a_posto';
+-- O passo 1 le colunas que o passo 2 remove, entao so pode rodar enquanto elas
+-- existirem. Sem esta guarda a migration falha em toda reexecucao (o servico
+-- `migrate` do compose reaplica a pasta inteira a cada boot) e as migrations
+-- seguintes nunca chegam ao banco.
+DO $migration_0032$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'ana_revisao_estacao'
+       AND column_name = 'correcoes'
+  ) THEN
+    EXECUTE $sql$
+      INSERT INTO ana_revisao_evento (estacao_id, evento, ator_id, valores_antes, observacao)
+      SELECT
+        id,
+        'corrigida_manual',
+        NULL,
+        jsonb_build_object(
+          'correcoes', correcoes,
+          'justificativa', justificativa,
+          'status_pre_drop', status
+        ),
+        'Snapshot antes do DROP correcoes/justificativa (migration 0032). ' ||
+        'Conteudo preservado por LGPD/auditoria. Decisao final esta em postos ' ||
+        '(se status=promovida_a_posto) ou pendente revisao humana.'
+      FROM ana_revisao_estacao
+      WHERE (correcoes <> '{}'::jsonb OR justificativa IS NOT NULL)
+        AND status <> 'promovida_a_posto'
+    $sql$;
+  END IF;
+END
+$migration_0032$;
 
 -- -----------------------------------------------------------------------------
 -- 2. Drop das colunas concorrentes

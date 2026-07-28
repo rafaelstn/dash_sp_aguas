@@ -39,6 +39,59 @@ jobs:
       - name: Testes
         run: npm test
 
+  integracao:
+    name: Integração — schema e fluxo transacional em Postgres
+    runs-on: ubuntu-latest
+    # Prova contra Postgres de verdade o que o mock in-memory não alcança:
+    # atomicidade, idempotência sob concorrência, coluna GENERATED, índice único
+    # parcial. Exigência escrita da ADR 0021. Também garante que as migrations
+    # aplicam do zero e suportam reexecução, que é como o deploy on-prem roda.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_USER: spaguas
+          POSTGRES_PASSWORD: spaguas
+          POSTGRES_DB: spaguas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U spaguas -d spaguas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://spaguas:spaguas@localhost:5432/spaguas_test
+      PGPASSWORD: spaguas
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Aplicar schema (shim de auth + migrations, do zero)
+        run: |
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
+          for arquivo in $(ls supabase/migrations/*.sql | sort); do
+            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$arquivo"
+          done
+
+      - name: Reaplicar tudo (as migrations têm que ser idempotentes)
+        run: |
+          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
+          for arquivo in $(ls supabase/migrations/*.sql | sort); do
+            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$arquivo"
+          done
+
+      - name: Testes de integração
+        run: npx vitest run tests/integration
+
   python:
     name: Python — sintaxe
     runs-on: ubuntu-latest
