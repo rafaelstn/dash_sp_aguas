@@ -172,7 +172,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     return item;
   },
 
-  async registrarContagem(conferenciaId, itemId, contagem) {
+  async registrarContagem(conferenciaId, itemId, contagem, usuarioId) {
     const conf = exigirConferencia(conferenciaId);
     const item = estoqueStore.conferenciaItens.get(itemId);
     if (!item || item.conferenciaId !== conferenciaId) {
@@ -205,11 +205,15 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       atualizado.diferenca = recalcularDiferenca(atualizado);
       if (contagem.observacao !== null) atualizado.observacao = contagem.observacao;
     }
+    // Autoria da contagem fisica: e dela que o ajuste patrimonial deriva
+    // (migration 0065). Sempre do auth do backend, nunca do corpo.
+    atualizado.contadoPor = usuarioId;
+    atualizado.contadoEm = new Date();
     estoqueStore.conferenciaItens.set(itemId, atualizado);
     return atualizado;
   },
 
-  async adicionarSobra(conferenciaId, sobra) {
+  async adicionarSobra(conferenciaId, sobra, usuarioId) {
     const conf = exigirConferencia(conferenciaId);
     if (conf.status !== 'aberta') throw new ConferenciaFechada(conferenciaId, conf.status);
     // A sobra tem que ser da MESMA natureza da sessao (sessao single-natureza).
@@ -250,6 +254,8 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         quantidadeContada: null,
         diferenca: null,
         observacao: null,
+        contadoPor: usuarioId,
+        contadoEm: agora,
         movimentacaoId: null,
         reconciliadoPor: null,
         reconciliadoEm: null,
@@ -305,6 +311,8 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       quantidadeContada: sobra.quantidadeContada,
       diferenca: sobra.quantidadeContada - quantidadeSistema,
       observacao: null,
+      contadoPor: usuarioId,
+      contadoEm: agora,
       movimentacaoId: null,
       reconciliadoPor: null,
       reconciliadoEm: null,
@@ -418,6 +426,8 @@ function criarItemSnapshotSerializado(
     quantidadeContada: null,
     diferenca: null,
     observacao: null,
+    contadoPor: null,
+    contadoEm: null,
     movimentacaoId: null,
     reconciliadoPor: null,
     reconciliadoEm: null,
@@ -449,6 +459,8 @@ function criarItemSnapshotQuantificavel(
     quantidadeContada: null,
     diferenca: null,
     observacao: null,
+    contadoPor: null,
+    contadoEm: null,
     movimentacaoId: null,
     reconciliadoPor: null,
     reconciliadoEm: null,

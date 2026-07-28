@@ -69,6 +69,8 @@ type LinhaItem = {
   quantidade_contada: number | null;
   diferenca: number | null;
   observacao: string | null;
+  contado_por: string | null;
+  contado_em: Date | null;
   movimentacao_id: string | null;
   reconciliado_por: string | null;
   reconciliado_em: Date | null;
@@ -83,7 +85,8 @@ const COLUNAS_CONF = sql`
 const COLUNAS_ITEM = sql`
   id, conferencia_id, unidade_id, material_id, local_esperado_id, tamanho, origem,
   situacao, local_encontrado_id, quantidade_sistema, quantidade_contada, diferenca,
-  observacao, movimentacao_id, reconciliado_por, reconciliado_em, criado_em, atualizado_em
+  observacao, contado_por, contado_em, movimentacao_id, reconciliado_por, reconciliado_em,
+  criado_em, atualizado_em
 `;
 
 function mapConf(l: LinhaConf): Conferencia {
@@ -117,6 +120,8 @@ function mapItem(l: LinhaItem): ConferenciaItem {
     quantidadeContada: l.quantidade_contada === null ? null : Number(l.quantidade_contada),
     diferenca: l.diferenca === null ? null : Number(l.diferenca),
     observacao: l.observacao,
+    contadoPor: l.contado_por,
+    contadoEm: l.contado_em,
     movimentacaoId: l.movimentacao_id,
     reconciliadoPor: l.reconciliado_por,
     reconciliadoEm: l.reconciliado_em,
@@ -380,7 +385,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     }
   },
 
-  async registrarContagem(conferenciaId, itemId, contagem) {
+  async registrarContagem(conferenciaId, itemId, contagem, usuarioId) {
     try {
       return await sql.begin(async (txRaw) => {
         const tx = txRaw as unknown as Sql;
@@ -420,6 +425,8 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
                SET situacao = ${contagem.situacao},
                    local_encontrado_id = ${localEncontrado},
                    observacao = COALESCE(${contagem.observacao}, observacao),
+                   contado_por = ${usuarioId}::uuid,
+                   contado_em = NOW(),
                    atualizado_em = NOW()
              WHERE id = ${itemId}::uuid
              RETURNING ${COLUNAS_ITEM}
@@ -429,6 +436,8 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
             UPDATE estoque_conferencia_itens
                SET quantidade_contada = ${contagem.quantidadeContada},
                    observacao = COALESCE(${contagem.observacao}, observacao),
+                   contado_por = ${usuarioId}::uuid,
+                   contado_em = NOW(),
                    atualizado_em = NOW()
              WHERE id = ${itemId}::uuid
              RETURNING ${COLUNAS_ITEM}
@@ -450,7 +459,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     }
   },
 
-  async adicionarSobra(conferenciaId, sobra) {
+  async adicionarSobra(conferenciaId, sobra, usuarioId) {
     try {
       return await sql.begin(async (txRaw) => {
         const tx = txRaw as unknown as Sql;
@@ -498,9 +507,11 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           }
           const inseridas = await tx<LinhaItem[]>`
             INSERT INTO estoque_conferencia_itens
-              (conferencia_id, unidade_id, local_esperado_id, situacao, local_encontrado_id, origem)
+              (conferencia_id, unidade_id, local_esperado_id, situacao, local_encontrado_id, origem,
+               contado_por, contado_em)
             VALUES (${conferenciaId}::uuid, ${sobra.unidadeId}::uuid, ${localAtual},
-                    'encontrado_em_outro_local', ${sobra.localEncontradoId}::uuid, 'sobra')
+                    'encontrado_em_outro_local', ${sobra.localEncontradoId}::uuid, 'sobra',
+                    ${usuarioId}::uuid, NOW())
             RETURNING ${COLUNAS_ITEM}
           `;
           return mapItem(inseridas[0]!);
@@ -540,9 +551,11 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         const quantidadeSistema = saldoRows.length > 0 ? Number(saldoRows[0]!.quantidade) : 0;
         const inseridas = await tx<LinhaItem[]>`
           INSERT INTO estoque_conferencia_itens
-            (conferencia_id, material_id, local_esperado_id, tamanho, quantidade_sistema, quantidade_contada, origem)
+            (conferencia_id, material_id, local_esperado_id, tamanho, quantidade_sistema,
+             quantidade_contada, origem, contado_por, contado_em)
           VALUES (${conferenciaId}::uuid, ${sobra.materialId}::uuid, ${sobra.localId}::uuid,
-                  ${sobra.tamanho}, ${quantidadeSistema}, ${sobra.quantidadeContada}, 'sobra')
+                  ${sobra.tamanho}, ${quantidadeSistema}, ${sobra.quantidadeContada}, 'sobra',
+                  ${usuarioId}::uuid, NOW())
           RETURNING ${COLUNAS_ITEM}
         `;
         return mapItem(inseridas[0]!);

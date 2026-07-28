@@ -10,6 +10,7 @@ import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { listarItensConferencia, reconciliarLote } from '../conferencia-api';
 import { ErroEstoque } from '../erros';
 import {
+  autoriaDoItem,
   descreverAjuste,
   divergenciaDoItem,
   idsElegiveisLote,
@@ -342,6 +343,10 @@ function LinhaDivergencia({
         </p>
         <p className="mt-0.5 text-sm text-app-fg">{ajuste.texto}</p>
       </div>
+
+      {/* Trilha: o ajuste patrimonial deriva da contagem, entao quem contou faz
+          parte da evidencia, nao e detalhe de interface. */}
+      <p className="mt-2 text-2xs text-app-fg-muted">{autoriaDoItem(item)}</p>
 
       {podeGerenciar && !reconciliado ? (
         <div className="mt-3 flex justify-end">

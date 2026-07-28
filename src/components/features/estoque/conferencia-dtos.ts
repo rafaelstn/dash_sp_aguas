@@ -47,8 +47,14 @@ export interface ConferenciaItemDTO {
   /** GENERATED no banco: contada - sistema (null enquanto nao contado). */
   diferenca: number | null;
   observacao: string | null;
+  /** Autoria da contagem fisica (trilha, migration 0065). */
+  contadoPor: string | null;
+  contadoEm: string | null;
+  /** Rotulo legivel resolvido pela API (nome/email), nunca o UUID cru na tela. */
+  contadoPorRotulo?: string | null;
   movimentacaoId: string | null;
   reconciliadoPor: string | null;
+  reconciliadoPorRotulo?: string | null;
   reconciliadoEm: string | null;
   criadoEm: string;
   atualizadoEm: string;

@@ -89,6 +89,13 @@ export interface ConferenciaItem {
   /** GENERATED no banco: contada - sistema (null enquanto nao contado). */
   diferenca: number | null;
   observacao: string | null;
+  /**
+   * Quem declarou a contagem fisica e quando. O ajuste patrimonial deriva desse
+   * numero, entao a autoria e trilha, nao conveniencia (migration 0065). Sempre
+   * do auth do backend; `null` enquanto o item nao foi contado.
+   */
+  contadoPor: string | null;
+  contadoEm: Date | null;
   movimentacaoId: string | null;
   reconciliadoPor: string | null;
   reconciliadoEm: Date | null;

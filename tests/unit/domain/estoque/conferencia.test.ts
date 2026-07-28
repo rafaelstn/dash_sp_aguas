@@ -23,6 +23,8 @@ function item(over: Partial<ConferenciaItem>): ConferenciaItem {
     quantidadeContada: null,
     diferenca: null,
     observacao: null,
+    contadoPor: null,
+    contadoEm: null,
     movimentacaoId: null,
     reconciliadoPor: null,
     reconciliadoEm: null,

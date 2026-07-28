@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ConferenciaItemDTO } from '@/components/features/estoque/conferencia-dtos';
 import {
+  autoriaDoItem,
   descreverAjuste,
   divergenciaDoItem,
   idsElegiveisLote,
@@ -36,6 +37,8 @@ function itemBase(over: Partial<ConferenciaItemDTO>): ConferenciaItemDTO {
     quantidadeContada: null,
     diferenca: null,
     observacao: null,
+    contadoPor: null,
+    contadoEm: null,
     movimentacaoId: null,
     reconciliadoPor: null,
     reconciliadoEm: null,
@@ -215,5 +218,46 @@ describe('itemReconciliado e progressoContagem', () => {
     expect(progressoContagem(5, 20)).toMatchObject({ pct: 25 });
     expect(progressoContagem(0, 0).pct).toBe(0);
     expect(progressoContagem(3, 3).pct).toBe(100);
+  });
+});
+
+describe('autoriaDoItem (trilha da contagem)', () => {
+  it('item nao contado nao inventa autoria', () => {
+    expect(autoriaDoItem(quant({ quantidadeContada: null }))).toBe('Ainda não contado');
+  });
+
+  it('usa o rotulo resolvido pela API, nunca o UUID cru', () => {
+    const texto = autoriaDoItem(
+      quant({
+        quantidadeContada: 8,
+        contadoPor: '33333333-3333-3333-3333-333333333333',
+        contadoPorRotulo: 'Maria Souza',
+        contadoEm: '2026-07-15T14:30:00Z',
+      }),
+    );
+    expect(texto).toContain('Contado por Maria Souza');
+    expect(texto).not.toContain('33333333');
+  });
+
+  it('item contado antes da migration 0065 admite a lacuna em vez de forjar autor', () => {
+    expect(autoriaDoItem(quant({ quantidadeContada: 8, contadoPor: null }))).toBe(
+      'Contado (autoria não registrada)',
+    );
+  });
+
+  it('junta contagem e reconciliacao quando as duas existem', () => {
+    const texto = autoriaDoItem(
+      quant({
+        quantidadeContada: 8,
+        contadoPor: 'u1',
+        contadoPorRotulo: 'Maria',
+        contadoEm: '2026-07-15T14:30:00Z',
+        reconciliadoPor: 'u2',
+        reconciliadoPorRotulo: 'João',
+        reconciliadoEm: '2026-07-16T09:00:00Z',
+      }),
+    );
+    expect(texto).toContain('Contado por Maria');
+    expect(texto).toContain('Reconciliado por João');
   });
 });

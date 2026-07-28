@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { estoqueConferenciasRepository } from '@/infrastructure/repositories';
+import {
+  estoqueConferenciasRepository,
+  usuariosIdentidadeRepository,
+} from '@/infrastructure/repositories';
+import { resolverOperadores } from '@/application/use-cases/estoque/resolver-operadores';
 import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
@@ -42,7 +46,33 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       porPagina,
     };
     const { itens, total } = await estoqueConferenciasRepository.listarItens(idParsed.data, filtros);
-    return NextResponse.json({ itens, total, pagina, porPagina }, { status: 200, headers });
+
+    // Rotulo legivel de quem contou e de quem reconciliou, pela MESMA regra do
+    // export e da trilha de movimentacoes (um unico SELECT em lote). Sem isso a
+    // tela mostraria UUID e a trilha nao serviria para auditoria do orgao.
+    const ids = itens.flatMap((i) =>
+      [i.contadoPor, i.reconciliadoPor].filter((v): v is string => v !== null),
+    );
+    const { operadores, degradado } = await resolverOperadores(usuariosIdentidadeRepository, ids);
+    if (degradado) {
+      logger.warn(
+        'estoque.conferencia.operador_degradado',
+        { usuarioId: auth.id, conferenciaId: idParsed.data },
+        'Resolucao de identidade do operador indisponivel; trilha degradada para o id',
+      );
+    }
+    const itensComOperador = itens.map((i) => ({
+      ...i,
+      contadoPorRotulo: i.contadoPor ? (operadores.get(i.contadoPor) ?? i.contadoPor) : null,
+      reconciliadoPorRotulo: i.reconciliadoPor
+        ? (operadores.get(i.reconciliadoPor) ?? i.reconciliadoPor)
+        : null,
+    }));
+
+    return NextResponse.json(
+      { itens: itensComOperador, total, pagina, porPagina },
+      { status: 200, headers },
+    );
   } catch (e) {
     return respostaDeErro('GET /api/estoque/conferencias/[id]/itens', { usuarioId: auth.id }, e);
   }

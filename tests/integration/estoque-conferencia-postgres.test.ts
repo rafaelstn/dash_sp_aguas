@@ -303,6 +303,37 @@ rodar('conferencia fisica contra Postgres real', () => {
     expect(await movimentacoesDaConferencia(sessao.id)).toBe(0);
   });
 
+  it('grava quem contou e quando (trilha exigida para orgao publico)', async () => {
+    const localId = await criarLocal('PENHA', 'SALA 1');
+    const materialId = await criarMaterial('Cabo');
+    await darEntrada(materialId, localId, 10);
+    const sessao = await repo.abrir({
+      unidade: 'PENHA',
+      natureza: 'quantificavel',
+      localId: null,
+      observacao: null,
+      criadaPor: USUARIO,
+    });
+    const item = (await repo.listarItens(sessao.id, {})).itens[0]!;
+    // Snapshot nasce sem autoria: ninguem contou ainda.
+    expect(item.contadoPor).toBeNull();
+    expect(item.contadoEm).toBeNull();
+
+    const contado = await repo.registrarContagem(
+      sessao.id,
+      item.id,
+      { tipo: 'quantificavel', quantidadeContada: 7, observacao: null },
+      USUARIO,
+    );
+    expect(contado.contadoPor).toBe(USUARIO);
+    expect(contado.contadoEm).toBeInstanceOf(Date);
+
+    // E o CHECK do banco nao aceita data de contagem sem autor.
+    await expect(
+      sql`UPDATE estoque_conferencia_itens SET contado_por = NULL WHERE id = ${item.id}::uuid`,
+    ).rejects.toMatchObject({ constraint_name: 'ck_estoque_conf_item_contagem_autor' });
+  });
+
   it('indice unico parcial barra duas sessoes abertas no mesmo escopo', async () => {
     await criarLocal('PENHA', 'SALA 1');
     await repo.abrir({

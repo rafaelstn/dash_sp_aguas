@@ -13,6 +13,7 @@ import type {
   StatusConferencia,
 } from './conferencia-dtos';
 import type { SituacaoItem } from '@/domain/estoque/conferencia';
+import { formatarDataHora } from './rotulos';
 
 // ── Rotulos ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,32 @@ export function itemContado(item: ConferenciaItemDTO): boolean {
 /** Item ja reconciliado (carimbado)? */
 export function itemReconciliado(item: ConferenciaItemDTO): boolean {
   return item.reconciliadoEm !== null;
+}
+
+/**
+ * Linha de trilha do item: quem contou e quem reconciliou, com data. Puro, para
+ * ser testavel. Usa o rotulo resolvido pela API; nunca mostra UUID cru, e diz
+ * "autoria nao registrada" para item contado antes da migration 0065 (em vez de
+ * inventar um responsavel).
+ */
+export function autoriaDoItem(item: ConferenciaItemDTO): string {
+  const partes: string[] = [];
+  if (itemContado(item)) {
+    const quem = item.contadoPorRotulo ?? item.contadoPor;
+    const quando = item.contadoEm ? formatarDataHora(item.contadoEm) : null;
+    partes.push(
+      quem
+        ? `Contado por ${quem}${quando ? ` em ${quando}` : ''}`
+        : 'Contado (autoria não registrada)',
+    );
+  }
+  if (item.reconciliadoEm !== null) {
+    const quem = item.reconciliadoPorRotulo ?? item.reconciliadoPor;
+    partes.push(
+      `Reconciliado por ${quem ?? 'autoria não registrada'} em ${formatarDataHora(item.reconciliadoEm)}`,
+    );
+  }
+  return partes.length > 0 ? partes.join(' · ') : 'Ainda não contado';
 }
 
 // ── Divergencia (DTO) ─────────────────────────────────────────────────────────
