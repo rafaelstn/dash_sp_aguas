@@ -45,7 +45,9 @@ export async function GET(
     const pdf = await htmlParaPdf(html);
 
     const nomeArquivo = `relatorio-${prefixo.replace(/[^\w.-]+/g, '_')}.pdf`;
-    return new NextResponse(pdf, {
+    // Mesmo cast dos demais downloads binarios: `Buffer<ArrayBufferLike>` nao
+    // casa com `BodyInit` nos tipos do Node 22, mas Buffer E um Uint8Array.
+    return new NextResponse(pdf as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
