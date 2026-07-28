@@ -77,6 +77,15 @@ export interface EstoqueConferenciasRepository {
     usuarioId: string,
   ): Promise<ConferenciaItem>;
 
+  /**
+   * Remove um item de SOBRA adicionado por engano. So `origem = 'sobra'`, so com
+   * a sessao `aberta` e so enquanto nao reconciliado: item de snapshot e
+   * evidencia do escopo e nao se apaga, e sobra ja reconciliada tem movimentacao
+   * no ledger (a correcao ali e uma nova movimentacao, nao um delete). Lanca
+   * `ItemConferenciaNaoEncontrado`, `ConferenciaFechada`, `DadosInvalidos`.
+   */
+  removerSobra(conferenciaId: string, itemId: string): Promise<void>;
+
   /** Conclui a sessao (aberta -> concluida). Lanca `ConferenciaNaoEncontrada`/`ConferenciaFechada`. */
   concluir(id: string, usuarioId: string, observacao: string | null): Promise<Conferencia>;
   /** Cancela a sessao (aberta -> cancelada). */

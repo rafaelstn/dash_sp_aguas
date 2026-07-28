@@ -75,3 +75,46 @@ export async function PATCH(
     );
   }
 }
+
+/**
+ * DELETE /api/estoque/conferencias/[id]/itens/[itemId] — remove um item de SOBRA
+ * adicionado por engano. Escrita: admin. Mesma guarda de IDOR do PATCH.
+ *
+ * So apaga `origem = 'sobra'`, com a sessao aberta e antes de reconciliar: item
+ * de snapshot e evidencia do escopo, e sobra ja reconciliada tem movimentacao no
+ * ledger (corrige-se com uma nova movimentacao, nunca com delete).
+ * Erros: 404 item; 409 conferencia_fechada; 400 quando nao e sobra ou ja foi
+ * reconciliado.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  ctx: { params: Promise<{ id: string; itemId: string }> },
+) {
+  const auth = await exigirAdmin();
+  if (auth instanceof NextResponse) return auth;
+  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id);
+  if (resposta) return resposta;
+
+  const params = await ctx.params;
+  const idParsed = idSchema.safeParse(params.id);
+  const itemParsed = idSchema.safeParse(params.itemId);
+  if (!idParsed.success || !itemParsed.success) {
+    return NextResponse.json({ erro: 'id_invalido' }, { status: 400, headers });
+  }
+
+  try {
+    await estoqueConferenciasRepository.removerSobra(idParsed.data, itemParsed.data);
+    logger.info(
+      'estoque.conferencias.sobra_removida',
+      { usuarioId: auth.id, conferenciaId: idParsed.data, itemId: itemParsed.data },
+      'Item de sobra removido da conferência',
+    );
+    return new NextResponse(null, { status: 204, headers });
+  } catch (e) {
+    return respostaDeErro(
+      'DELETE /api/estoque/conferencias/[id]/itens/[itemId]',
+      { usuarioId: auth.id },
+      e,
+    );
+  }
+}

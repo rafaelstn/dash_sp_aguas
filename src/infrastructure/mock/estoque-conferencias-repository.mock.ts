@@ -338,6 +338,26 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     return item;
   },
 
+  async removerSobra(conferenciaId, itemId) {
+    const conf = exigirConferencia(conferenciaId);
+    if (conf.status !== 'aberta') throw new ConferenciaFechada(conferenciaId, conf.status);
+    const item = estoqueStore.conferenciaItens.get(itemId);
+    if (!item || item.conferenciaId !== conferenciaId) {
+      throw new ItemConferenciaNaoEncontrado(itemId);
+    }
+    if (item.origem !== 'sobra') {
+      throw new DadosInvalidos(
+        'Só item adicionado como sobra pode ser removido. Item do escopo conferido faz parte da evidência.',
+      );
+    }
+    if (item.reconciliadoEm !== null) {
+      throw new DadosInvalidos(
+        'Este item já foi reconciliado e gerou movimentação no estoque. Corrija por uma nova movimentação.',
+      );
+    }
+    estoqueStore.conferenciaItens.delete(itemId);
+  },
+
   async concluir(id, usuarioId, observacao) {
     return transicionar(id, 'concluida', usuarioId, observacao);
   },

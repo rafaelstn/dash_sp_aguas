@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ClipboardList, MapPin, PackageSearch } from 'lucide-react';
+import { Check, ClipboardList, MapPin, PackageSearch, Trash2 } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
-import { listarItensConferencia, registrarContagem } from '../conferencia-api';
+import { listarItensConferencia, registrarContagem, removerSobra } from '../conferencia-api';
 import { ErroEstoque } from '../erros';
 import {
   itemContado,
@@ -104,6 +105,18 @@ export function ContagemPanel({
       setCarga((prev) =>
         prev.fase === 'ok'
           ? { fase: 'ok', itens: prev.itens.map((i) => (i.id === atualizado.id ? atualizado : i)) }
+          : prev,
+      );
+      aoMudar();
+    },
+    [aoMudar],
+  );
+
+  const aoRemover = useCallback(
+    (itemId: string) => {
+      setCarga((prev) =>
+        prev.fase === 'ok'
+          ? { fase: 'ok', itens: prev.itens.filter((i) => i.id !== itemId) }
           : prev,
       );
       aoMudar();
@@ -222,6 +235,7 @@ export function ContagemPanel({
                     podeGerenciar={podeGerenciar}
                     resolvedores={resolvedores}
                     aoContar={aoContar}
+                    aoRemover={aoRemover}
                     aoNotificar={aoNotificar}
                   />
                 ) : (
@@ -231,6 +245,7 @@ export function ContagemPanel({
                     podeGerenciar={podeGerenciar}
                     resolvedores={resolvedores}
                     aoContar={aoContar}
+                    aoRemover={aoRemover}
                     aoNotificar={aoNotificar}
                   />
                 )}
@@ -257,6 +272,7 @@ function ItemSerializado({
   podeGerenciar,
   resolvedores,
   aoContar,
+  aoRemover,
   aoNotificar,
 }: {
   item: ConferenciaItemDTO;
@@ -264,6 +280,7 @@ function ItemSerializado({
   podeGerenciar: boolean;
   resolvedores: Resolvedores;
   aoContar: (i: ConferenciaItemDTO) => void;
+  aoRemover: (itemId: string) => void;
   aoNotificar: (tipo: 'sucesso' | 'erro', texto: string) => void;
 }) {
   const [salvando, setSalvando] = useState<'conferido' | 'nao_encontrado' | 'outro' | null>(null);
@@ -419,6 +436,18 @@ function ItemSerializado({
           {erro}
         </p>
       ) : null}
+
+      {/* Sobra adicionada por engano tem saída; item de snapshot, não. */}
+      {podeGerenciar && item.origem === 'sobra' && item.reconciliadoEm === null ? (
+        <div className="mt-2 flex justify-end">
+          <RemoverSobra
+            item={item}
+            conferenciaId={conferencia.id}
+            aoRemover={aoRemover}
+            aoNotificar={aoNotificar}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -431,6 +460,7 @@ function ItemQuantificavel({
   podeGerenciar,
   resolvedores,
   aoContar,
+  aoRemover,
   aoNotificar,
 }: {
   item: ConferenciaItemDTO;
@@ -438,6 +468,7 @@ function ItemQuantificavel({
   podeGerenciar: boolean;
   resolvedores: Resolvedores;
   aoContar: (i: ConferenciaItemDTO) => void;
+  aoRemover: (itemId: string) => void;
   aoNotificar: (tipo: 'sucesso' | 'erro', texto: string) => void;
 }) {
   const [valor, setValor] = useState<string>(
@@ -568,11 +599,88 @@ function ItemQuantificavel({
           {erro}
         </p>
       ) : null}
+
+      {/* Sobra adicionada por engano tem saída; item de snapshot, não. */}
+      {podeGerenciar && item.origem === 'sobra' && item.reconciliadoEm === null ? (
+        <div className="mt-2 flex justify-end">
+          <RemoverSobra
+            item={item}
+            conferenciaId={conferenciaId}
+            aoRemover={aoRemover}
+            aoNotificar={aoNotificar}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
 // ── Auxiliares de UI ────────────────────────────────────────────────────────────
+
+/**
+ * Excluir item de SOBRA adicionado por engano (ex.: a unidade errada, entre duas
+ * de descricao parecida). So aparece para sobra: item do escopo conferido e
+ * evidencia e nao se apaga. Sem `window.confirm`: ConfirmDialog do projeto.
+ */
+function RemoverSobra({
+  item,
+  conferenciaId,
+  aoRemover,
+  aoNotificar,
+}: {
+  item: ConferenciaItemDTO;
+  conferenciaId: string;
+  aoRemover: (itemId: string) => void;
+  aoNotificar: (tipo: 'sucesso' | 'erro', texto: string) => void;
+}) {
+  const [confirmando, setConfirmando] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
+
+  async function remover() {
+    setRemovendo(true);
+    try {
+      await removerSobra(conferenciaId, item.id);
+      aoNotificar('sucesso', 'Item de sobra removido da conferência.');
+      aoRemover(item.id);
+    } catch (e) {
+      aoNotificar(
+        'erro',
+        e instanceof ErroEstoque ? e.message : 'Não foi possível remover o item.',
+      );
+      setRemovendo(false);
+    } finally {
+      setConfirmando(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setConfirmando(true)}
+        disabled={removendo}
+        className="inline-flex min-h-11 items-center gap-1.5 rounded px-2 py-1 text-2xs font-medium text-gov-perigo hover:bg-red-50 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-perigo"
+      >
+        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        Excluir sobra
+      </button>
+      <ConfirmDialog
+        aberto={confirmando}
+        titulo="Excluir item de sobra"
+        descricao={
+          <>
+            Remover este item da conferência? Ele foi adicionado como sobra e ainda não gerou
+            movimentação no estoque. Esta ação não pode ser desfeita.
+          </>
+        }
+        rotuloConfirmar="Excluir"
+        variante="perigo"
+        aoConfirmar={remover}
+        aoCancelar={() => setConfirmando(false)}
+      />
+    </>
+  );
+}
 
 function BotaoContagem({
   children,

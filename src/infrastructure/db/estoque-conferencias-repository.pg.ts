@@ -620,6 +620,57 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     }
   },
 
+  async removerSobra(conferenciaId, itemId) {
+    try {
+      await sql.begin(async (txRaw) => {
+        const tx = txRaw as unknown as Sql;
+        const confRows = await tx<{ status: StatusConferencia }[]>`
+          SELECT status FROM estoque_conferencias WHERE id = ${conferenciaId}::uuid FOR UPDATE
+        `;
+        if (confRows.length === 0) throw new ConferenciaNaoEncontrada(conferenciaId);
+        if (confRows[0]!.status !== 'aberta') {
+          throw new ConferenciaFechada(conferenciaId, confRows[0]!.status);
+        }
+
+        // Guarda de IDOR igual ao resto: id + conferencia_id juntos.
+        const itemRows = await tx<LinhaItem[]>`
+          SELECT ${COLUNAS_ITEM} FROM estoque_conferencia_itens
+           WHERE id = ${itemId}::uuid AND conferencia_id = ${conferenciaId}::uuid
+           FOR UPDATE
+        `;
+        if (itemRows.length === 0) throw new ItemConferenciaNaoEncontrado(itemId);
+        const item = mapItem(itemRows[0]!);
+
+        // Item de snapshot e a evidencia do escopo conferido: apagar deixaria o
+        // inventario menor do que a realidade que ele deveria cobrir.
+        if (item.origem !== 'sobra') {
+          throw new DadosInvalidos(
+            'Só item adicionado como sobra pode ser removido. Item do escopo conferido faz parte da evidência.',
+          );
+        }
+        // Ja reconciliado tem movimentacao no ledger: corrigir e uma nova
+        // movimentacao, nunca um delete que deixaria o ajuste orfao.
+        if (item.reconciliadoEm !== null) {
+          throw new DadosInvalidos(
+            'Este item já foi reconciliado e gerou movimentação no estoque. Corrija por uma nova movimentação.',
+          );
+        }
+
+        await tx`DELETE FROM estoque_conferencia_itens WHERE id = ${itemId}::uuid`;
+      });
+    } catch (e) {
+      if (
+        e instanceof ConferenciaNaoEncontrada ||
+        e instanceof ConferenciaFechada ||
+        e instanceof ItemConferenciaNaoEncontrado ||
+        e instanceof DadosInvalidos
+      ) {
+        throw e;
+      }
+      throw new FalhaRepositorio('estoqueConferencias.removerSobra', e);
+    }
+  },
+
   async concluir(id, usuarioId, observacao) {
     return transicionar(id, 'concluida', usuarioId, observacao);
   },

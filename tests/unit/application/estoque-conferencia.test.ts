@@ -15,6 +15,7 @@ import {
 import { concluirConferencia } from '@/application/use-cases/estoque/concluir-conferencia';
 import { registrarMovimentacao } from '@/application/use-cases/estoque/registrar-movimentacao';
 import {
+  ConferenciaFechada,
   ConferenciaNaoConcluida,
   DadosInvalidos,
   EscopoConferenciaEmAberto,
@@ -451,6 +452,62 @@ describe('conferencia, integridade da sobra e da reconciliacao', () => {
     expect(res.itens.find((i) => i.itemId === igual.id)?.erro).toBe('ItemSemDivergencia');
     expect((await saldos.obterPorMaterialLocal(material.id, l1.id, null))?.quantidade).toBe(12);
     expect((await saldos.obterPorMaterialLocal(material.id, l2.id, null))?.quantidade).toBe(7);
+  });
+
+  it('remover sobra: apaga a adicionada por engano e protege o resto', async () => {
+    const material = await materiais.criar({ descricao: 'Antena', natureza: 'quantificavel' });
+    const l1 = await locais.criar({ unidade: 'PENHA', sala: '1' });
+    await registrarMovimentacao(
+      mov,
+      { tipo: 'entrada', materialId: material.id, quantidade: 10, localDestino: l1.id },
+      USER,
+    );
+    const sessao = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'quantificavel' }, USER);
+    const doSnapshot = (await conf.listarItens(sessao.id, {})).itens[0]!;
+
+    const outroMaterial = await materiais.criar({ descricao: 'Cabo', natureza: 'quantificavel' });
+    const sobra = await conf.adicionarSobra(
+      sessao.id,
+      { tipo: 'quantificavel', materialId: outroMaterial.id, localId: l1.id, tamanho: null, quantidadeContada: 3 },
+      USER,
+    );
+
+    // Item do escopo conferido e evidencia: nao se apaga.
+    await expect(conf.removerSobra(sessao.id, doSnapshot.id)).rejects.toBeInstanceOf(DadosInvalidos);
+    // IDOR: a remocao tambem exige item + conferencia juntos.
+    const outra = await abrirConferencia(
+      conf,
+      { unidade: 'ARARAQUARA', natureza: 'quantificavel' },
+      USER,
+    );
+    await expect(conf.removerSobra(outra.id, sobra.id)).rejects.toBeInstanceOf(
+      ItemConferenciaNaoEncontrado,
+    );
+
+    await conf.removerSobra(sessao.id, sobra.id);
+    const restantes = (await conf.listarItens(sessao.id, {})).itens.map((i) => i.id);
+    expect(restantes).toEqual([doSnapshot.id]);
+  });
+
+  it('remover sobra: recusa depois de reconciliada e com a sessao fechada', async () => {
+    const material = await materiais.criar({ descricao: 'Antena', natureza: 'quantificavel' });
+    const l1 = await locais.criar({ unidade: 'PENHA', sala: '1' });
+    const sessao = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'quantificavel' }, USER);
+    const sobra = await conf.adicionarSobra(
+      sessao.id,
+      { tipo: 'quantificavel', materialId: material.id, localId: l1.id, tamanho: null, quantidadeContada: 4 },
+      USER,
+    );
+
+    await concluirConferencia(conf, sessao.id, 'concluir', USER);
+    // Sessao fechada: a contagem esta final, nao se mexe mais nos itens.
+    await expect(conf.removerSobra(sessao.id, sobra.id)).rejects.toBeInstanceOf(ConferenciaFechada);
+
+    await reconciliarItem(conf, sessao.id, sobra.id, USER);
+    // E depois de reconciliada existe movimentacao no ledger: apagar deixaria o
+    // ajuste orfao. A correcao ali e uma nova movimentacao.
+    await expect(conf.removerSobra(sessao.id, sobra.id)).rejects.toBeInstanceOf(ConferenciaFechada);
+    expect((await saldos.obterPorMaterialLocal(material.id, l1.id, null))?.quantidade).toBe(4);
   });
 
   it('contagem serializada em local inexistente devolve o 404 do modulo', async () => {

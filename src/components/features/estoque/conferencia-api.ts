@@ -140,6 +140,15 @@ export function adicionarSobra(id: string, payload: SobraPayload): Promise<Confe
   return enviar(`/api/estoque/conferencias/${id}/itens`, 'POST', payload);
 }
 
+/** Remove um item de SOBRA adicionado por engano (204 sem corpo). */
+export async function removerSobra(id: string, itemId: string): Promise<void> {
+  const resp = await fetch(`/api/estoque/conferencias/${id}/itens/${itemId}`, {
+    method: 'DELETE',
+    headers: ACCEPT,
+  });
+  if (!resp.ok) await lancarErro(resp);
+}
+
 // ── Reconciliacao ────────────────────────────────────────────────────────────
 export function reconciliarItem(
   id: string,
