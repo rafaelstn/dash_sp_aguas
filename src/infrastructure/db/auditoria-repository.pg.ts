@@ -24,6 +24,22 @@ export const auditoriaRepository: AuditoriaRepository = {
     }
   },
 
+  async anonimizarPiiRetida(diasRetencao) {
+    try {
+      const linhas = await sql<{ tabela: string; linhas_anonimizadas: string }[]>`
+        SELECT tabela, linhas_anonimizadas FROM anonimizar_trilha_auditoria(${diasRetencao})
+      `;
+      return linhas.map((l) => ({
+        tabela: l.tabela,
+        // BIGINT chega como string no driver; Number sem checagem viraria NaN
+        // silencioso no relatorio do job.
+        linhasAnonimizadas: Number(l.linhas_anonimizadas ?? 0),
+      }));
+    } catch (e) {
+      throw new FalhaRepositorio('anonimizarPiiRetida', e);
+    }
+  },
+
   async listarRecentesDoUsuario(usuarioId, limite) {
     try {
       // GROUP BY prefixo + MAX(ocorreu_em) deduplica e mantém o último

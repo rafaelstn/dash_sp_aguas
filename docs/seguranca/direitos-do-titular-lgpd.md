@@ -58,12 +58,18 @@ indireto (art. 6º III/V e art. 16 da LGPD):
   (migration `0048_anonimizar_trilha_lgpd.sql`), idempotente e `SECURITY DEFINER`
   (a anonimização de PII é a exceção controlada à imutabilidade, restrita às
   colunas `ip`/`user_agent`).
-- Execução: job mensal `scripts/manutencao/anonimizar_trilha_lgpd.py`
-  (`--dias` ajusta o prazo, `--dry-run` apenas conta). Recomenda-se agendar via
-  cron mensal no ambiente de produção.
+- Execução automática: endpoint `GET /api/cron/anonimizar-trilha`, protegido por
+  `CRON_SECRET`, disparado mensalmente pelo agendador externo. O prazo NÃO vem da
+  requisição (a anonimização é irreversível): sai de `TRILHA_RETENCAO_DIAS` ou do
+  padrão de 180 dias, com piso de 30. Runbook de ativação e verificação em
+  `docs/runbooks/expurgo-lgpd-trilha.md`.
+- Execução manual/administrativa: `scripts/manutencao/anonimizar_trilha_lgpd.py`
+  (`--dias` ajusta o prazo, `--dry-run` apenas conta), para ajuste pontual com
+  credencial de operador.
 
-Pendência de ativação (Rafael/SP Águas): agendar o job mensal no servidor e
-confirmar o prazo de 180 dias com o encarregado (DPO) do órgão.
+Pendência de ativação (Rafael/SP Águas): cadastrar o disparo mensal no agendador
+(o endpoint já está pronto e testado) e confirmar o prazo de 180 dias com o
+encarregado (DPO) do órgão.
 
 ## 6. Roadmap
 

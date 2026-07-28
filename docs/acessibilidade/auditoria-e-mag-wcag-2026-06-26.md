@@ -118,8 +118,17 @@ para padronização de tokens, sem impacto de acessibilidade.
 
 ## 9. Recomendação de fechamento
 
-Para homologação formal em órgão público: tratar CONTRASTE-02 e COR-02, e executar
-uma rodada de teste com NVDA + teclado nos fluxos de modal/dropdown/formulário antes
-de declarar conformidade e-MAG. Os fluxos centrais do agente em campo (login, busca
-de posto, preenchimento e foto de ficha) estão, nos pontos auditados, em
-conformidade com WCAG 2.1 AA.
+> **Atualizado em 28/07/2026.** CONTRASTE-02 e COR-02 foram corrigidos na própria
+> rodada de 26/06 (§5 e §6) e a correção está no código: o token `--border-input`
+> existe em `src/styles/globals.css` e é aplicado em 31 arquivos; a severidade da
+> taxa de desconformidade entra no rótulo acessível da `BarraProgresso` em
+> `src/app/(dashboard)/painel/page.tsx`. Esta seção ainda pedia para tratá-los,
+> contradizendo as duas seções anteriores do próprio relatório.
+
+Para homologação formal em órgão público resta **um único item**: executar uma
+rodada de teste com NVDA + teclado nos fluxos de modal/dropdown/formulário. A
+auditoria foi estática, e conformidade e-MAG não se declara sem verificação com
+tecnologia assistiva real.
+
+Os fluxos centrais do agente em campo (login, busca de posto, preenchimento e foto
+de ficha) estão, nos pontos auditados, em conformidade com WCAG 2.1 AA.

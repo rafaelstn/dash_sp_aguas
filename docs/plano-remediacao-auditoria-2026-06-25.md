@@ -167,13 +167,14 @@ desempenho e arquitetura).
 > `docs/acessibilidade/auditoria-e-mag-wcag-2026-06-26.md`. Veredito: 0 CRÍTICO,
 > 2 ALTO, 5 MÉDIO, 4 BAIXO. Os 2 ALTOS (contraste de `--fg-subtle` e links inline
 > sem sublinhado) e a maioria dos MÉDIOS/BAIXOS foram **corrigidos** nesta rodada
-> (typecheck/lint/307 testes verdes). Pendentes priorizados: CONTRASTE-02 (borda
-> de input < 3:1, 1.4.11) e COR-02 (severidade só por cor). Faltam: teste com
-> leitor de tela real (NVDA) + teclado antes de declarar conformidade formal.
+> (typecheck/lint/307 testes verdes). CONTRASTE-02 (borda de input < 3:1, 1.4.11)
+> e COR-02 (severidade só por cor) também foram corrigidos na mesma rodada
+> — verificado no código em 28/07/2026. Falta apenas o teste com leitor de tela
+> real (NVDA) + teclado antes de declarar conformidade formal.
 
 | ID | Item | Esforço | Estado |
 |----|------|---------|--------|
-| ACES-1 | Auditoria e-MAG/WCAG 2.1 AA: navegação por teclado, leitor de tela, contraste, foco visível, labels de formulário, especialmente no PWA mobile | M a G | Auditado + ALTOS corrigidos; 2 MÉDIOS e teste com AT pendentes |
+| ACES-1 | Auditoria e-MAG/WCAG 2.1 AA: navegação por teclado, leitor de tela, contraste, foco visível, labels de formulário, especialmente no PWA mobile | M a G | Auditado; achados corrigidos. Pendente só o teste com tecnologia assistiva real (NVDA + teclado) |
 
 ## 10. Sequência recomendada
 

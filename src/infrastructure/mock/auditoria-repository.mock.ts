@@ -29,6 +29,21 @@ export const auditoriaRepository: AuditoriaRepository = {
     }
   },
 
+  async anonimizarPiiRetida(diasRetencao) {
+    // Paridade com o .pg: zera so os metadados de rede dos eventos vencidos e
+    // preserva o evento. Em MODO DEMO a trilha e o array acima.
+    const corte = Date.now() - diasRetencao * 24 * 60 * 60 * 1000;
+    let anonimizados = 0;
+    for (const ev of trilha) {
+      if (ev.registradoEm.getTime() >= corte) continue;
+      if (ev.ip === null && ev.userAgent === null) continue;
+      ev.ip = null;
+      ev.userAgent = null;
+      anonimizados += 1;
+    }
+    return [{ tabela: 'acesso_ficha', linhasAnonimizadas: anonimizados }];
+  },
+
   async listarRecentesDoUsuario(usuarioId, limite) {
     // Filtra do final pro começo (mais recente primeiro) e deduplica por prefixo.
     const visto = new Set<string>();

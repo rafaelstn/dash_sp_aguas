@@ -32,7 +32,9 @@ remediação 2026-06-25.
 ## 4. LGPD e governo
 
 - [ ] Backup de produção cifrado e com ACL restrita (`BACKUP_ENCRYPTION_KEY` setada).
-- [ ] Job de anonimização da trilha (LGPD-4) agendado/funcionando.
+- [ ] Job de anonimização da trilha (LGPD-4) agendado e com execução recente no log
+      (`cron.anonimizar_trilha.sucesso`). Endpoint e ativação em
+      `docs/runbooks/expurgo-lgpd-trilha.md`.
 - [ ] Audit trail registrando acesso a dado de cidadão (quem, quando, o quê).
 - [ ] Mudança com impacto em dado pessoal revisada quanto a finalidade/minimização.
 
