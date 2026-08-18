@@ -2,19 +2,28 @@
 
 | Campo | Valor |
 |-------|-------|
-| Status | **Parcialmente superada — 2026-05-08** (ver ADR-0006). Decisões de isolamento arquitetural, allowlist, ausência de MFA e ausência de RBAC permanecem válidas; o método de login (magic link) e a desativação do self-signup foram revisados. |
+| Status | **Parcialmente superada** (ADR-0006 em 2026-05-08; ADR-0022 em 2026-08-18). Permanecem válidas as decisões de isolamento arquitetural, allowlist e ausência de MFA. Revisados: o método de login e a desativação do self-signup (ADR-0006) e a **ausência de RBAC, hoje superada** pelos três papéis do ADR-0022. |
 | Status original | Aceito — 2026-04-23 |
 | Autor | Damasceno Dev OS (André — Segurança; Bruno — Engenharia) |
 | Contexto | Ficha Técnica de Postos Hidrológicos SPÁguas — MVP (Fase 1) |
 | Substitui / complementa | ADR-0002 (§"Sem cliente supabase-js no MVP") |
-| Atualizada por | **ADR-0006** (pivô para email + senha + cadastro self-service) |
-| Referências | `docs/spec.md §1.2, §4.5, US-008`; `docs/architecture.md §5.6, §10`; `docs/adr/0006-auth-pivot-email-senha-self-signup.md` |
+| Atualizada por | **ADR-0006** (pivô para email + senha) e **ADR-0022** (RBAC com três papéis) |
+| Referências | `docs/spec.md §1.2, §4.5, US-008`; `docs/architecture.md §5.6, §10`; `docs/adr/0006-auth-pivot-email-senha-self-signup.md`; `docs/adr/0022-rbac-tres-papeis.md` |
 
-> **Aviso de leitura — 2026-05-08:** os itens 2 e 4 da seção "Decisão" (magic
-> link e ausência de self-signup funcional) **não refletem mais o sistema em
-> produção**. Foram substituídos pelo método email + senha com cadastro
-> self-service via `/cadastrar`, conforme ADR-0006. O restante da decisão
-> (provedor, isolamento, allowlist, sem MFA, sem RBAC) permanece em vigor.
+> **Aviso de leitura, atualizado em 2026-08-18:** três pontos da seção "Decisão"
+> **não refletem mais o sistema em produção**.
+>
+> 1. **Magic link** e **ausência de self-signup funcional** (itens 2 e 4) foram
+>    substituídos pelo login com e-mail e senha, conforme ADR-0006. O autocadastro
+>    público chegou a existir e depois foi **desativado**: hoje as contas são criadas
+>    pelo Admin ou Super Admin em `/admin/usuarios`, e `/cadastrar` apenas redireciona
+>    para `/login`.
+> 2. **Ausência de RBAC** foi superada pelo ADR-0022, que registra os três papéis
+>    (`super_admin`, `admin`, `user`) em vigor desde o commit 29324b4. A flag
+>    `aprovador` deixou de ser armazenada e passou a ser derivada do papel.
+>
+> Permanecem em vigor: provedor, isolamento arquitetural, allowlist de domínio e
+> ausência de MFA (esta última reafirmada pelo ADR-0010).
 
 ---
 

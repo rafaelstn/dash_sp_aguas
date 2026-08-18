@@ -6,10 +6,26 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 
 ---
 
-## Pré-condição obrigatória de deploy
+## Controle de acesso
 
+> **O sistema exige autenticação individual.** Nenhuma rota de dado é servida sem sessão válida: o `src/middleware.ts` barra tudo que não esteja na lista de rotas públicas (`/login`, callback e encerramento de sessão, `/api/health` e os artefatos do PWA).
 
-> **Durante o MVP, o sistema deve rodar exclusivamente em rede interna do setor, sem exposição à internet pública.** A autenticação individual de usuários foi deliberadamente adiada para a Fase 2 (ver `docs/spec.md` §1.2 e `docs/architecture.md` §5.6), e a proteção do ambiente depende da topologia de rede. Qualquer operação de deploy deve verificar essa pré-condição antes de expor o serviço.
+O acesso é governado por três papéis (`src/domain/auth/papel.ts`, espelhando o `CHECK` da coluna `papel` em `usuarios_papeis`, migration 0050):
+
+| Papel | Alcance |
+|-------|---------|
+| `user` | App de campo (preenche e envia fichas) e consulta |
+| `admin` | Tudo de `user`, mais aprovação de triagem, edição de dado oficial e gestão de usuários comuns |
+| `super_admin` | Tudo de `admin`, mais criação e edição de Admins e definição de papéis |
+
+Controles complementares em vigor:
+
+- **Login por e-mail e senha** (ADR-0006, que atualiza o magic link do ADR-0004). Sem MFA, por decisão registrada no ADR-0010.
+- **Autocadastro público desativado.** Contas são criadas pelo Admin ou Super Admin em `/admin/usuarios`; `/cadastrar` apenas redireciona para `/login`.
+- **Allowlist de domínio institucional** server-side (`src/infrastructure/auth/allowlist.ts`).
+- **Autorização reforçada no servidor**, nunca só na tela: cada rota de `/api/admin/*` revalida o papel do ator, e a política nega remoção do último Super Admin e auto remoção.
+- **Cabeçalhos de segurança** em toda resposta (HSTS de dois anos, CSP com nonce por request montada no middleware, `X-Frame-Options`, COOP e CORP, `Permissions-Policy` restritiva). Ver `next.config.ts`.
+- **Trilha de acesso** com identidade individual (`acesso_ficha`), base das obrigações de LGPD.
 
 ---
 
@@ -52,8 +68,7 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 ├── supabase/migrations/         # Schema SQL versionado
 ├── db/                          # auth-compat.sql (shim Supabase) + migrate.sh
 ├── scripts/                     # db-migrate, dev (bash)
-├── start.ps1                    # Subir dashboard oculto (Windows)
-├── stop.ps1                     # Encerrar dashboard (Windows)
+├── startApp.ps1                 # Abre o PWA /app num navegador em viewport mobile (Windows)
 ├── Dockerfile                   # Imagem do app (Next standalone)
 ├── docker-compose.yml           # Stack conteinerizada (db + migrate + app + workers)
 ├── .env.docker.example          # Template de ambiente do compose
@@ -66,7 +81,7 @@ Este repositório implementa a Fase 1 (MVP) definida em `docs/spec.md` e `docs/a
 
 O dashboard possui um modo de demonstração para preview rápido das telas sem depender da conexão com o PostgreSQL do cliente. É útil quando a VPN do setor ainda não está disponível ou para apresentações internas.
 
-**Como ativar:** basta executar `start.ps1` (ou `npm run dev`) com `DATABASE_URL` ausente ou vazia no `.env.local`. O sistema sobe normalmente e exibe um aviso no topo da tela indicando que os dados são fixtures em memória.
+**Como ativar:** basta executar `npm run dev` com `DATABASE_URL` ausente ou vazia no `.env.local`. O sistema sobe normalmente e exibe um aviso no topo da tela indicando que os dados são fixtures em memória.
 
 **O que está disponível em modo demo:**
 
@@ -122,7 +137,7 @@ Se houver prefixos duplicados na fonte, a importação aborta com código `2` e 
 
 ### 5. Subir o dashboard
 
-**Windows (recomendado):** clicar em `start.ps1` (roda oculto em segundo plano, abre/atualiza a aba do navegador automaticamente). Para encerrar, `stop.ps1`.
+> **Windows: rode de uma letra de unidade, nunca de um caminho UNC.** O `cmd.exe` não aceita `\\servidor\compartilhamento` como diretório atual e silenciosamente troca para a pasta do Windows, então o `eslint` e o `tsc` não acham a própria configuração e falham com erro que não tem nada a ver com o projeto. Se o repositório estiver num compartilhamento de rede, acesse pela unidade mapeada (por exemplo `F:\...`) ou trabalhe de um clone em disco local.
 
 **Linha de comando (qualquer SO):**
 
@@ -133,6 +148,11 @@ npm run dev
 ```
 
 Abrir http://localhost:3000.
+
+**App móvel (PWA) no desktop:** `startApp.ps1` abre `/app` num Chrome ou Edge configurado como
+simulador de celular (viewport mobile, user-agent Android, perfil isolado). Se o Next não estiver
+rodando, o script o sobe sozinho. Útil para testar ou demonstrar o app de campo sem dispositivo
+físico.
 
 ### 6. (Opcional) Rodar o worker de indexação
 
@@ -229,7 +249,7 @@ Serviços do compose:
 - **Clean Architecture:** `domain` -> `application` -> `infrastructure`. UI e API Routes consomem use cases, nunca o banco direto.
 - **Acessibilidade:** WCAG 2.1 AA / e-MAG desde o primeiro componente. Skip link, foco visível, semântica, leitor de tela.
 - **Tom:** formal (pt-BR) em toda UI e docs voltados ao cliente.
-- **Sem autenticação no MVP:** a trilha `acesso_ficha` registra IP, user_agent e prefixo; `usuario_id` fica nulo.
+- **Autenticação obrigatória:** a trilha `acesso_ficha` registra `usuario_id`, IP, user_agent e prefixo. Registros com `usuario_id` nulo são anteriores à entrada do login (ADR-0004).
 - **Secrets:** `.env.local` gitignored. Nunca commitar.
 
 ---

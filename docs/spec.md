@@ -35,10 +35,10 @@ O sistema substitui essa operação manual por interface única de consulta, pre
 
 **Autenticação está ativa na Fase 1** (decisão antecipada em 23/04/2026 — ADR-0004; pivô para email + senha + cadastro self-service em 08/05/2026 — ADR-0006). Consequências:
 
-- Login obrigatório via email + senha (`signInWithPassword`); cadastro self-service em `/cadastrar` para avaliadores e técnicos. `nome` é capturado no cadastro e exibido na sidenav.
+- Login obrigatório via email + senha (`signInWithPassword`). O cadastro self-service do ADR-0006 foi posteriormente **desativado**: as contas são criadas pelo Admin ou Super Admin em `/admin/usuarios`, e `/cadastrar` apenas redireciona para `/login`. `nome` é capturado no cadastro da conta e exibido na sidenav.
 - Allowlist de domínio aplicada server-side antes de qualquer chamada ao Supabase Auth: `sp.gov.br`, `daee.sp.gov.br` + `AUTH_EXTRA_ALLOWED_EMAILS`. Em homologação, `AUTH_ALLOWED_EMAIL_DOMAINS=*` libera avaliadores externos; restaurar a lista institucional é pré-condição bloqueante para o *go-live*.
 - A trilha LGPD (`acesso_ficha`) registra `timestamp`, `ip`, `user_agent`, `prefixo_consultado` e `usuario_id` quando há sessão. A coluna permanece nullable apenas para registros pré-auth e cenários degradados sem sessão (mantida compatibilidade com schema original).
-- **Sem MFA e sem RBAC no MVP** (ADR-0004 §2.5/§2.6) — qualquer usuário autenticado tem o mesmo conjunto de ações. RBAC volta à pauta na Fase 2 se houver exigência contratual.
+- **Sem MFA** (ADR-0004 §2.5, reafirmado pelo ADR-0010). **Com RBAC:** três papéis (`super_admin`, `admin`, `user`) definem o que cada conta alcança, conforme ADR-0022, que supera a ausência de RBAC prevista no ADR-0004 §2.6.
 - O sistema pode ser exposto à internet pública (Vercel) com a auth ativa. Documentação operacional (Supabase com "Confirm email" desmarcado em homologação, restauração da allowlist em produção) é responsabilidade de Rodrigo (DevOps) + Marina (Documentação).
 
 ---
@@ -285,7 +285,7 @@ Registro imutável de visualização de ficha de posto por usuário autenticado.
   Categoria adicional `EXTENSAO_NAO_PDF` é reservada para casos futuros; no MVP, extensões diferentes de `.pdf` são ignoradas.
 - **RN-09 —** O *worker* nunca modifica, move ou remove arquivos do HD de rede.
 - **RN-10 —** A indexação pode ser executada de modo incremental (por diretório) ou total.
-- **RN-10.1 — Realidade da cobertura atual.** A observação oficial do cliente (22/04/2026) informa que os documentos recuperados representam **apenas 7,88% do total**. O alto volume de arquivos fora do padrão justifica, por si, o módulo de desconformidade (US-009). A política oficial é: **o sistema detecta e sugere, não corrige em lote**. A correção do dado-fonte cabe ao técnico SPÁguas com responsabilidade individual, auditada quando a Fase 2 introduzir autenticação.
+- **RN-10.1 — Realidade da cobertura atual.** A observação oficial do cliente (22/04/2026) informa que os documentos recuperados representam **apenas 7,88% do total**. O alto volume de arquivos fora do padrão justifica, por si, o módulo de desconformidade (US-009). A política oficial é: **o sistema detecta e sugere, não corrige em lote**. A correção do dado-fonte cabe ao técnico SPÁguas com responsabilidade individual, auditada pela trilha desde que a autenticação entrou na Fase 1 (ADR-0004 e ADR-0006).
 
 ### 4.2.2 Classificação de conformidade cadastral (prefixos e prefixo ANA)
 
@@ -480,7 +480,7 @@ Tamanho: M — PO responsável: André (Segurança) + Bruno (Engenharia) — **e
 - GWT-008.6 — **DADO** ambiente `NODE_ENV=development` com `DEV_BYPASS_AUTH_EMAIL` e `DEV_BYPASS_AUTH_USER_ID` (UUID válido) no `.env.local`, **QUANDO** a aplicação é executada, **ENTÃO** o middleware libera o gate e o `obterUsuarioAtual` retorna o usuário simulado; em produção, qualquer valor é ignorado.
 - GWT-008.7 — **DADO** produção, **QUANDO** o sistema é promovido para *go-live*, **ENTÃO** `AUTH_ALLOWED_EMAIL_DOMAINS` deve estar restrito à lista institucional (`sp.gov.br,daee.sp.gov.br`); o uso de wildcard `*` é restrito à homologação.
 
-**Fora do escopo do MVP (avaliar Fase 2):** MFA, RBAC (perfis leitor/curador), política de senha do DAEE, *trigger* bloqueante de imutabilidade do histórico de revisões.
+**Fora do escopo do MVP (avaliar Fase 2):** MFA, política de senha do DAEE, *trigger* bloqueante de imutabilidade do histórico de revisões. **RBAC saiu desta lista:** foi entregue com três papéis (ADR-0022).
 
 ### US-009 — Consultar desconformidades cadastrais
 
@@ -575,7 +575,7 @@ A feature só é considerada concluída quando, para cada tela relevante, os est
 ## 9. Perguntas em Aberto (a confirmar com o Rafael / cliente)
 
 1. ~~**Padrão do prefixo nos nomes de arquivo:** o regex `^([0-9][A-Z]-[0-9]{3})` cobre todos os casos reais do HD de rede?~~ **RESPONDIDO (22/04/2026 — documentação oficial do cliente):** o cliente forneceu o padrão oficial por pasta raiz (5 categorias), com regex específica por tipo de dado (ver 3.1.4) e padrão de nome de arquivo consolidado `{Prefixo} {CodDoc} {CodEnc} [Opcional] {AAAA MM DD}.pdf` (ver RN-06). A estratégia da v1.1 por `startswith` é descartada; o *worker* passa a usar parsing por regex + validação de existência do prefixo em `postos`.
-2. ~~**Identidade do usuário:** no MVP, como será feita a autenticação?~~ **RESPONDIDO (atualizado 08/05/2026):** autenticação foi antecipada para a Fase 1 em 23/04/2026 (ADR-0004) para destravar o deploy Vercel; método pivotou em 08/05/2026 (ADR-0006) para email + senha + cadastro self-service em `/cadastrar`, mantendo allowlist server-side e isolamento arquitetural. Trilha LGPD grava `usuario_id` quando há sessão; coluna permanece nullable apenas para compatibilidade com registros pré-auth e cenários degradados.
+2. ~~**Identidade do usuário:** no MVP, como será feita a autenticação?~~ **RESPONDIDO (atualizado 08/05/2026):** autenticação foi antecipada para a Fase 1 em 23/04/2026 (ADR-0004) para destravar o deploy Vercel; método pivotou em 08/05/2026 (ADR-0006) para email + senha + cadastro self-service em `/cadastrar`, mantendo allowlist server-side e isolamento arquitetural. Trilha LGPD grava `usuario_id` quando há sessão; coluna permanece nullable apenas para compatibilidade com registros pré-auth e cenários degradados. **Complemento posterior:** o autocadastro foi desativado (contas criadas em `/admin/usuarios`) e o RBAC de três papéis entrou em vigor (ADR-0022).
 3. **Território nacional para produção:** o contrato exige explicitamente hospedagem em território nacional? Data alvo para migração?
 4. **Política de retenção da trilha LGPD:** por quanto tempo manter os registros de acesso (12 meses? Indefinido?).
 5. **Variações de caminho do HD de rede:** há múltiplos volumes/servidores ou é um único caminho UNC raiz?
