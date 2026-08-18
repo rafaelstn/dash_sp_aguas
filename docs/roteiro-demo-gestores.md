@@ -65,9 +65,16 @@ limitação.
 
 ## 5. Monitor hidrológico (5 minutos)
 
-> **Faça isto antes da reunião, leva um minuto.** Abra o Monitor. Se aparecer o aviso amarelo "O
-> dado exibido não é do momento", clique em **"Atualizar agora a partir do SIBH"**, confirme, e
-> espere terminar. O mapa recarrega com o dado atual e o aviso some.
+> **Leia antes de demonstrar este módulo.** O dado do mapa é de hoje, mas a carga está
+> **incompleta**: cerca de 159 estações com transmissão nas últimas 24 horas, contra as
+> aproximadamente 1.957 que a fonte reporta. **Não cite números absolutos de estações online**, e
+> **não use o botão "Atualizar agora a partir do SIBH" na frente dos gestores**: em produção ele
+> esbarra no limite de 300 segundos da função e devolve erro. O motivo técnico está em
+> `docs/verificacao-2026-08-18.md` §3.0.3.
+>
+> Se o assunto vier à tona, a resposta honesta e que sustenta: a integração com o SIBH funciona e
+> está trazendo dado do dia; o que falta é a carga completa caber na janela de execução, e o caminho
+> técnico já está mapeado.
 >
 > Contexto: em 18/08/2026 a última sincronização era de **15/07/2026**, um mês atrás, e o painel
 > exibia o número de estações "online" daquela foto como se fosse o momento. A fonte do Estado

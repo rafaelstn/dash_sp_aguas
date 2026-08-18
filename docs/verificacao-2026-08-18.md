@@ -16,10 +16,21 @@ nesta rodada.
 local, ainda sem commit. Enquanto não forem publicadas, o ambiente de produção continua sem o aviso
 de dado antigo, sem o botão de atualizar e sem o filtro do mapa. Deploy dispara no push para `main`.
 
-**2. Atualizar o dado do Monitor (2 minutos).** Entrar no sistema com conta de Admin ou Super Admin,
-abrir **Monitor**, e se aparecer o aviso amarelo "O dado exibido não é do momento", clicar em
-**"Atualizar agora a partir do SIBH"** e confirmar. Em 18/08 a defasagem era de 34 dias. Se o aviso
-não aparecer, o dado já está em dia.
+**2. Sobre o dado do Monitor, leia antes de demonstrar.** O dado deixou de ter 34 dias: a
+transmissão mais recente agora é de hoje. Mas a carga **não completou**, e o motivo está no item
+3.0.3: a sincronização não cabe no tempo de uma função serverless, e puxá-la de fora esbarra no
+limite de conexões do pooler.
+
+Na prática, para a reunião:
+
+- O mapa mostra dado de hoje, porém **incompleto**: cerca de 159 estações com transmissão nas
+  últimas 24 horas, contra as aproximadamente 1.957 que a fonte reporta como ativas.
+- O aviso de idade na tela **não vai aparecer**, porque a leitura mais recente é recente. Isso é
+  correto do ponto de vista do aviso, e ao mesmo tempo esconde o fato de a carga estar parcial.
+- **Não cite números absolutos de estações online** na apresentação. O número exibido é real, mas é
+  menor que a rede efetivamente ativa.
+- O botão "Atualizar agora a partir do SIBH" existe e funciona, mas em produção ele bate no mesmo
+  teto de 300 segundos. Não o use na frente dos gestores.
 
 **3. Criar a variável `CRON_SECRET` na Vercel (5 minutos, uma vez). Ela não existe hoje.**
 
@@ -273,9 +284,35 @@ Somadas, as duas etapas não cabem em 300 segundos por uma margem larga. Isso n�
 operação sempre foi assim. Ela foi desenhada para disparo manual, onde ninguém cronometra, e como
 **nunca chegou a executar** (itens 3.0.2 e seção 0), o limite jamais apareceu.
 
-**O que foi feito para a reunião:** a carga completa foi executada por fora do serverless, chamando
-o mesmo endpoint a partir de uma instância local do aplicativo, que roda em Node comum e não tem
-esse limite, contra o mesmo banco de produção. Resolve o dado de hoje, não o agendamento de amanhã.
+**Tentativa de contornar por fora, e por que ela não é caminho.** A carga foi disparada a partir de
+uma instância local do aplicativo, que roda em Node comum e não tem o limite de 300 segundos, contra
+o mesmo banco de produção. Ela progrediu, mas foi interrompida por um limite diferente e mais grave:
+
+> `PostgresError (EMAXCONNSESSION): max clients reached in session mode, max clients are limited to
+> pool_size: 15`
+
+O pooler do Supabase aceita **15 conexões em modo sessão**, e o cliente do projeto abre até 5
+(`max: 5` em `src/infrastructure/db/client.ts`). Uma instância externa rodando a carga disputa esse
+mesmo teto com a produção. Em outras palavras, **puxar a carga de fora da infraestrutura pressiona o
+banco que atende os usuários**, e a operação foi interrompida assim que isso ficou visível. A
+verificação seguinte confirmou a produção saudável: `/api/health` respondeu `{"status":"ok","db":
+"ok"}` em três medições seguidas, e `/login` respondeu 200.
+
+Fica o registro para quem for resolver: **o gargalo não é só tempo de execução, é concorrência de
+conexões.** Qualquer paralelização precisa respeitar o teto de 15 do pooler, descontando o que a
+produção já consome, e a carga precisa rodar de dentro da infraestrutura, não de uma máquina
+externa.
+
+**Estado do dado depois das execuções parciais**, medido no banco:
+
+| Medida | Antes (15/07) | Agora |
+|--------|---------------|-------|
+| Transmissão mais recente | 2026-07-15 | 2026-08-18, no horário da última execução |
+| Estações com transmissão na última hora | 0 | 74 |
+| Estações com transmissão nas últimas 24h | 0 | 159 |
+
+O dado deixou de ter 34 dias, mas **a carga não completou**: a fonte reporta cerca de 1.957 estações
+ativas nas últimas 24 horas, contra as 159 que constam. O mapa mostra dado de hoje, e incompleto.
 
 **O que continua aberto, e precisa de decisão técnica:** o cron diário vai bater no mesmo teto. Três
 caminhos, do mais barato ao mais completo:
