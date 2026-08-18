@@ -6,12 +6,12 @@
     do browser, perfil isolado e DevTools abertos.
 
 .DESCRIPTION
-    Companion do start.ps1. Foco em testar o app movel no desktop sem
-    precisar de Android Studio nem dispositivo fisico.
+    Foco em testar o app movel no desktop sem precisar de Android Studio
+    nem dispositivo fisico.
 
     Etapas:
       1. Verifica se o Next esta rodando em alguma porta candidata.
-         Se nao estiver, dispara start.ps1 em background.
+         Se nao estiver, sobe 'npm run dev' em background.
       2. Aguarda /api/health responder (timeout 60s).
       3. Localiza Chrome (preferencial) ou Edge.
       4. Abre janela em modo --app com:
@@ -22,7 +22,8 @@
          - DevTools abertos por padrao (cancele com -NoDevTools)
 
     O script termina apos abrir a janela; o Chrome continua rodando.
-    Para fechar tudo: feche a janela do Chrome + ./stop.ps1 pro Next.
+    Para fechar tudo: feche a janela do Chrome e encerre o Next (o PID fica
+    em .run\next-dev.pid, ou .run\next-prod.pid no modo -Prod).
 
 .PARAMETER Path
     Rota a abrir dentro do app. Default: /app.
@@ -76,7 +77,7 @@
     Forca npm run pwa:build antes de iniciar prod.
 
 .NOTES
-    Companion: start.ps1 (sobe Next), stop.ps1 (mata Next), startApp.ps1.
+    Sobe o Next sozinho quando nao encontra um rodando (npm run dev).
     Perfil isolado: .run/chrome-profile (gitignored via .run/).
 #>
 
@@ -218,19 +219,24 @@ if ($Prod) {
 # --- Sobe Next dev se preciso (modo padrao) -----------------------------------
 if (-not $activePort) {
     if ($NoStart) {
-        Write-Err "Next nao esta rodando e -NoStart foi passado. Rode .\start.ps1 antes."
+        Write-Err "Next nao esta rodando e -NoStart foi passado. Rode 'npm run dev' antes."
         exit 1
     }
 
-    Write-Step "Next nao detectado. Iniciando via .\start.ps1 -NoBrowser..."
-    if (-not (Test-Path "$repoRoot\start.ps1")) {
-        Write-Err "start.ps1 nao encontrado em $repoRoot. Rode 'npm run dev' manualmente."
-        exit 1
+    # O start.ps1 foi removido no commit d706c39 (launchers locais). Subimos o
+    # Next dev direto, no mesmo padrao que o modo -Prod acima ja usa.
+    $portaDev = if ($Port) { $Port } else { 3000 }
+    Write-Step "Next nao detectado. Iniciando 'npm run dev' em :$portaDev em background..."
+    $dirRun = Join-Path $repoRoot '.run'
+    if (-not (Test-Path $dirRun)) {
+        New-Item -ItemType Directory -Path $dirRun -Force | Out-Null
     }
-
-    $startArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "$repoRoot\start.ps1")
-    if ($Port) { $startArgs += @('-Ports', $Port) }
-    Start-Process -FilePath 'powershell.exe' -ArgumentList $startArgs -WindowStyle Hidden | Out-Null
+    $logDev = Join-Path $repoRoot '.run\next.log'
+    $procDev = Start-Process -FilePath 'cmd.exe' `
+                             -ArgumentList @('/c', "npm run dev -- --port $portaDev > `"$logDev`" 2>&1") `
+                             -WorkingDirectory $repoRoot `
+                             -WindowStyle Hidden -PassThru
+    Set-Content -Path (Join-Path $repoRoot '.run\next-dev.pid') -Value $procDev.Id -Force
 
     Write-Step 'Aguardando Next ficar pronto (timeout 60s)...'
     $deadline = (Get-Date).AddSeconds(60)
@@ -246,7 +252,7 @@ if (-not $activePort) {
     }
 
     if (-not $activePort) {
-        Write-Err 'Next nao subiu em 60s. Verifique .run\next.log ou rode start.ps1 manualmente.'
+        Write-Err 'Next nao subiu em 60s. Verifique .run\next.log ou rode npm run dev manualmente.'
         exit 1
     }
     Write-Ok "Next pronto em http://localhost:$activePort"
@@ -347,5 +353,5 @@ Write-Host "  User-Agent  : $userAgent"
 Write-Host "  DevTools    : $(if ($DevTools) { 'aberto (-DevTools)' } else { 'fechado (use -DevTools para abrir)' })"
 Write-Host "  Perfil      : $profileDir (isolado do Chrome principal)"
 Write-Host ''
-Write-Host 'Para fechar: feche a janela do navegador e rode .\stop.ps1 para parar o Next.' -ForegroundColor DarkGray
+Write-Host 'Para fechar: feche a janela do navegador e encerre o Next (PID em .run\next-dev.pid).' -ForegroundColor DarkGray
 Write-Host 'No DevTools, use o Toggle Device Toolbar (Ctrl+Shift+M) para emular gestos touch.' -ForegroundColor DarkGray
