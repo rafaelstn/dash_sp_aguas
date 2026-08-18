@@ -21,13 +21,32 @@ abrir **Monitor**, e se aparecer o aviso amarelo "O dado exibido não é do mome
 **"Atualizar agora a partir do SIBH"** e confirmar. Em 18/08 a defasagem era de 34 dias. Se o aviso
 não aparecer, o dado já está em dia.
 
-**3. Conferir a variável `CRON_SECRET` no projeto da Vercel.** A sincronização do Monitor passou a
-rodar **uma vez por dia** pelo cron nativo da Vercel, declarado em `vercel.json` (09:00 UTC, que é
-06:00 em Brasília). A plataforma envia o cabeçalho de autorização sozinha, desde que a variável
-exista, com pelo menos 32 caracteres. Nada mais a configurar.
+**3. Criar a variável `CRON_SECRET` na Vercel (5 minutos, uma vez). Ela não existe hoje.**
 
-Vale conferir também os dois agendamentos que já existiam: eles **nunca executaram** por causa do
-defeito descrito no item 3.0.2, e o painel do provedor mostrava sucesso o tempo todo.
+Medido em produção, depois do deploy da correção do middleware: os três endpoints de agendamento
+respondem **500 `configuracao_invalida`**, que é exatamente o que o handler devolve quando
+`CRON_SECRET` está ausente ou tem menos de 32 caracteres. Antes da correção nem chegavam a esse
+ponto: eram redirecionados para o login (item 3.0.2).
+
+Ou seja, os agendamentos deste projeto **nunca tiveram como executar**, por duas razões empilhadas,
+e nenhuma delas apareceu em lugar nenhum.
+
+Como resolver, em Vercel → Settings → Environment Variables:
+
+```
+Nome:      CRON_SECRET
+Valor:     (32 bytes aleatórios, por exemplo: openssl rand -base64 32)
+Ambientes: Production e Preview, mesmo valor
+```
+
+Depois de salvar, é preciso um novo deploy para a variável valer. A verificação é direta: chamar
+`https://dash-sp-aguas.vercel.app/api/cron/sincronizar-monitor` sem cabeçalho deve passar a
+responder **401**, e não mais 500. A diferença importa: 500 significa "não configurado", 401
+significa "configurado e recusando quem não tem o segredo", que é o estado correto.
+
+A sincronização do Monitor roda **uma vez por dia** pelo cron nativo da Vercel, declarado em
+`vercel.json` (09:00 UTC, que é 06:00 em Brasília). A plataforma envia o cabeçalho de autorização
+sozinha assim que a variável existir.
 
 **4. Conferir a saúde antes de projetar a tela (10 segundos).** Abrir
 `https://dash-sp-aguas.vercel.app/api/health`. Tem que responder `{"status":"ok","db":"ok"}`.
@@ -219,6 +238,16 @@ sessão (os três agendamentos, o login, a verificação de saúde, os artefatos
 passar de jeito nenhum (as 20 rotas de página e API sensíveis, incluindo a sincronização manual, que
 continua exigindo aprovador). Provado removendo a liberação do cron e conferindo que os casos certos
 reprovam. Uma regra que decide o que é público não podia continuar sem teste.
+
+**Verificado em produção depois do deploy.** Os três endpoints deixaram de redirecionar e passaram a
+responder 500 `configuracao_invalida`, ou seja, chegam ao handler e recusam por falta de
+`CRON_SECRET`. Confirmado na mesma medição que `/api/monitor/sync` e `/painel` continuam devolvendo
+307 para quem não tem sessão: a liberação alcançou apenas o prefixo pretendido.
+
+**Havia uma segunda razão, empilhada com a primeira: `CRON_SECRET` nunca foi criada.** Mesmo que o
+middleware estivesse correto desde sempre, os jobs teriam falhado com 500. Duas barreiras
+independentes, nenhuma delas visível de fora, e um painel de provedor mostrando verde por cima das
+duas. O passo para criar a variável está na seção 0, item 3.
 
 **Atenção para depois:** as travas de triagem e o expurgo de LGPD nunca rodaram desde que foram
 criados. Vale conferir se há trava presa em `triagem_locks` e avaliar o passivo de retenção de dado
