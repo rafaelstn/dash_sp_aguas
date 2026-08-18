@@ -253,6 +253,46 @@ duas. O passo para criar a variável está na seção 0, item 3.
 criados. Vale conferir se há trava presa em `triagem_locks` e avaliar o passivo de retenção de dado
 pessoal na trilha, já que a rotina de expurgo não executou nenhuma vez.
 
+### 3.0.3 A sincronização não cabe no tempo de uma função serverless (aberto)
+
+Com o middleware corrigido e a `CRON_SECRET` criada, a sincronização foi disparada em produção pela
+primeira vez. Resultado: **HTTP 504, `FUNCTION_INVOCATION_TIMEOUT`, após 300 segundos.**
+
+Ela chegou a gravar: a última transmissão no banco saiu de 15/07 para o horário da execução, e 70
+estações passaram a constar com transmissão na última hora. Mas parou no meio, com 131 estações
+atualizadas de cerca de 1.957 que a fonte reporta como ativas nas últimas 24 horas.
+
+**Causa, lendo o código das duas etapas:**
+
+| Etapa | O que faz | Custo |
+|-------|-----------|-------|
+| `sincronizar-estacoes-pluviometricas` | Laço sequencial sobre as ~5.400 estações hidrológicas. Para cada uma, um `buscarPorPrefixo` e um `upsertPorSibhId` | Cerca de 10.800 idas ao banco, uma a uma, com a latência de rede até o Supabase |
+| `sincronizar-leituras-pluviometricas` | Laço sequencial sobre as ~1.900 estações automáticas. Para cada uma, uma chamada HTTP ao SIBH mais um upsert em lote | Cerca de 1.900 requisições externas em série |
+
+Somadas, as duas etapas não cabem em 300 segundos por uma margem larga. Isso não é regressão: a
+operação sempre foi assim. Ela foi desenhada para disparo manual, onde ninguém cronometra, e como
+**nunca chegou a executar** (itens 3.0.2 e seção 0), o limite jamais apareceu.
+
+**O que foi feito para a reunião:** a carga completa foi executada por fora do serverless, chamando
+o mesmo endpoint a partir de uma instância local do aplicativo, que roda em Node comum e não tem
+esse limite, contra o mesmo banco de produção. Resolve o dado de hoje, não o agendamento de amanhã.
+
+**O que continua aberto, e precisa de decisão técnica:** o cron diário vai bater no mesmo teto. Três
+caminhos, do mais barato ao mais completo:
+
+1. **Separar em dois jobs.** O mapa e o indicador de transmissão dependem apenas da etapa de
+   estações; as séries de leitura já têm busca sob demanda no próprio Monitor
+   (`obter-leituras-com-fallback`). Um job diário só de estações provavelmente cabe, e é o que
+   resolve o que o usuário enxerga. Medir antes de assumir.
+2. **Paralelizar com limite de concorrência** nas duas etapas, em vez de laço estritamente
+   sequencial. Ganho grande, e exige cuidado para não sobrecarregar o SIBH nem o pool do banco.
+3. **Processar em lotes com continuação**, guardando o ponto de parada entre execuções. É o que
+   escala de verdade, e é o mais trabalhoso.
+
+Enquanto nenhum dos três for feito, o agendamento vai gravar parte e ser interrompido. Vale notar
+que isso não corrompe nada: a operação é upsert idempotente, então uma execução parcial deixa o
+banco consistente, apenas incompleto.
+
 ### 3.0.1 Filtro de estações transmitindo no mapa (implementado)
 
 Pedido do Rafael durante a verificação: ao abrir o Monitor, o mapa aparece coberto de marcadores, e
