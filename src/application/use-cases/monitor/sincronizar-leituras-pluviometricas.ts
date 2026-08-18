@@ -32,6 +32,15 @@ export interface EstacaoAlvoLeitura {
   prefixo: string | null;
 }
 
+/**
+ * Quantas estações têm as leituras buscadas em paralelo.
+ *
+ * Casado com o `max` do cliente de banco (5) e com o teto de 15 sessões do
+ * pooler, que é compartilhado com quem está usando o sistema. Também limita a
+ * pressão sobre o SIBH, que é serviço do Estado e não nosso.
+ */
+const CONCORRENCIA_LEITURAS = 5;
+
 export interface ResumoSyncLeituras {
   /** Estações processadas (com prefixo, portanto consultáveis no SIBH). */
   estacoesProcessadas: number;
@@ -81,11 +90,22 @@ export async function sincronizarLeiturasPluviometricas(
     erros: [],
   };
 
-  for (const estacao of estacoes) {
+  // Processa em ondas do tamanho do pool de conexões. Estritamente em série
+  // eram cerca de 1.900 requisições ao SIBH uma após a outra, e a operação não
+  // cabia na janela de execução; tudo de uma vez derrubaria o banco e
+  // castigaria a fonte do Estado. Ver docs/verificacao-2026-08-18.md §3.0.3.
+  for (let i = 0; i < estacoes.length; i += CONCORRENCIA_LEITURAS) {
+    const onda = estacoes.slice(i, i + CONCORRENCIA_LEITURAS);
+    await Promise.all(onda.map((estacao) => processarUma(estacao)));
+  }
+
+  return resumo;
+
+  async function processarUma(estacao: EstacaoAlvoLeitura): Promise<void> {
     const prefixo = estacao.prefixo?.trim();
     if (!prefixo) {
       resumo.estacoesSemPrefixo += 1;
-      continue;
+      return;
     }
 
     try {
@@ -114,6 +134,4 @@ export async function sincronizarLeiturasPluviometricas(
       });
     }
   }
-
-  return resumo;
 }

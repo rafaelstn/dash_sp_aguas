@@ -38,6 +38,18 @@ function ehTipoHidrologico(tipo: EstacaoSibh['tipo']): tipo is TipoHidrologico {
   return TIPOS_HIDROLOGICOS.has(tipo as TipoHidrologico);
 }
 
+/**
+ * Quantas estações são gravadas em paralelo.
+ *
+ * Casado com o `max` do cliente de banco (`src/infrastructure/db/client.ts`),
+ * que hoje é 5. O pooler do Supabase aceita 15 sessões no total, e elas são
+ * compartilhadas com quem está usando o sistema: passar disso derruba o banco
+ * de produção com `max clients reached in session mode`, medido em 18/08/2026.
+ *
+ * Ao mexer no `max` do cliente, revisar este número junto.
+ */
+const CONCORRENCIA_UPSERT = 5;
+
 export interface ResumoSyncEstacoes {
   /**
    * Total de estações recebidas do SIBH após o filtro (os três tipos
@@ -83,16 +95,31 @@ export async function sincronizarEstacoesPluviometricas(
     erros: [],
   };
 
-  for (const estacao of hidrologicas) {
-    try {
-      await sincronizarUma(estacao, estacoesRepo, postosRepo, resumo);
-    } catch (e) {
-      // Tolera falha por estação: registra o motivo e segue o lote.
-      resumo.erros.push({
-        prefixo: estacao.prefixo,
-        motivo: e instanceof Error ? e.message : String(e),
-      });
-    }
+  // Vínculo ao catálogo em UMA consulta, e não uma por estação. Antes eram
+  // cerca de 5.400 idas ao banco só para descobrir o posto de cada prefixo, e
+  // isso sozinho já estourava a janela de execução.
+  const idsPorPrefixo = await postosRepo.mapaIdsPorPrefixo();
+
+  // Concorrência limitada: o cliente abre no máximo CONCORRENCIA_UPSERT
+  // conexões (`max` em db/client.ts) e o pooler do Supabase aceita 15 sessões
+  // no total, compartilhadas com quem está usando o sistema. Disparar tudo de
+  // uma vez derrubaria o banco de produção; manter estritamente em série não
+  // cabe no tempo. O meio é processar em ondas do tamanho do pool.
+  for (let i = 0; i < hidrologicas.length; i += CONCORRENCIA_UPSERT) {
+    const onda = hidrologicas.slice(i, i + CONCORRENCIA_UPSERT);
+    await Promise.all(
+      onda.map(async (estacao) => {
+        try {
+          await sincronizarUma(estacao, estacoesRepo, idsPorPrefixo, resumo);
+        } catch (e) {
+          // Tolera falha por estação: registra o motivo e segue o lote.
+          resumo.erros.push({
+            prefixo: estacao.prefixo,
+            motivo: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }),
+    );
   }
 
   return resumo;
@@ -101,7 +128,7 @@ export async function sincronizarEstacoesPluviometricas(
 async function sincronizarUma(
   estacao: EstacaoSibh,
   estacoesRepo: EstacoesPluviometricasRepository,
-  postosRepo: PostosRepository,
+  idsPorPrefixo: ReadonlyMap<string, string>,
   resumo: ResumoSyncEstacoes,
 ): Promise<void> {
   // Estação sem coordenada válida não pode ser persistida (lat/lng NOT NULL).
@@ -125,9 +152,8 @@ async function sincronizarUma(
     throw new Error(`tipo hidrológico não suportado: ${estacao.tipo}`);
   }
 
-  // Vínculo ao catálogo: se há posto com o mesmo prefixo, guarda o id dele.
-  const posto = await postosRepo.buscarPorPrefixo(estacao.prefixo);
-  const postoId = posto?.id ?? null;
+  // Vínculo ao catálogo: consulta em memória, o mapa já veio pronto.
+  const postoId = idsPorPrefixo.get(estacao.prefixo) ?? null;
 
   await estacoesRepo.upsertPorSibhId({
     // Chave natural do upsert: o id estável do SIBH.

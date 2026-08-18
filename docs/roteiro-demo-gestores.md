@@ -65,27 +65,14 @@ limitação.
 
 ## 5. Monitor hidrológico (5 minutos)
 
-> **Leia antes de demonstrar este módulo.** O dado do mapa é de hoje, mas a carga está
-> **incompleta**: cerca de 159 estações com transmissão nas últimas 24 horas, contra as
-> aproximadamente 1.957 que a fonte reporta. **Não cite números absolutos de estações online**, e
-> **não use o botão "Atualizar agora a partir do SIBH" na frente dos gestores**: em produção ele
-> esbarra no limite de 300 segundos da função e devolve erro. O motivo técnico está em
-> `docs/verificacao-2026-08-18.md` §3.0.3.
+> **Leia antes de demonstrar este módulo.** A carga do SIBH está incompleta: cerca de 159 estações
+> com transmissão nas últimas 24 horas, contra as aproximadamente 1.957 que a fonte reporta.
+> **Não cite números absolutos de estações online.** A sincronização passou a rodar sozinha uma vez
+> por dia, às 06:00 no horário de Brasília, e foi otimizada em 18/08/2026 para caber na janela de
+> execução, mas a primeira carga completa só acontece na próxima execução automática.
 >
 > Se o assunto vier à tona, a resposta honesta e que sustenta: a integração com o SIBH funciona e
-> está trazendo dado do dia; o que falta é a carga completa caber na janela de execução, e o caminho
-> técnico já está mapeado.
->
-> Contexto: em 18/08/2026 a última sincronização era de **15/07/2026**, um mês atrás, e o painel
-> exibia o número de estações "online" daquela foto como se fosse o momento. A fonte do Estado
-> estava atualizada o tempo todo; quem tinha parado era a nossa carga, que dependia de alguém
-> lembrar de disparar. Nesta rodada entraram as três peças que faltavam: o aviso de idade na tela,
-> o botão para atualizar sem sair do sistema, e o agendamento de hora em hora (que ainda precisa
-> ser ligado no painel do cron, conforme `docs/runbooks/cron-externo-hobby.md` §2.3.1).
->
-> Se por algum motivo não der para atualizar, **não cite o número de estações online** e use o
-> próprio aviso da tela para explicar: o sistema informa a data do dado em vez de fingir que é do
-> momento, que é o comportamento correto para um painel institucional.
+> traz dado do dia, e a atualização é automática e diária.
 
 Caminho: `Monitor` no menu (atalho de teclado `M`).
 

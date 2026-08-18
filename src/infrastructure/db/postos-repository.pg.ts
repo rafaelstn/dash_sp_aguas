@@ -177,6 +177,21 @@ export const postosRepository: PostosRepository = {
     }
   },
 
+  async mapaIdsPorPrefixo() {
+    try {
+      // Apenas as duas colunas necessárias: são milhares de linhas e quem
+      // consome quer só o vínculo, não a entidade inteira.
+      const linhas = await sql<{ prefixo: string; id: string }[]>`
+        SELECT prefixo, id FROM postos WHERE deleted_at IS NULL
+      `;
+      const mapa = new Map<string, string>();
+      for (const l of linhas) mapa.set(l.prefixo, l.id);
+      return mapa;
+    } catch (e) {
+      throw new FalhaRepositorio('mapaIdsPorPrefixo', e);
+    }
+  },
+
   async pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa> {
     const offset = (params.pagina - 1) * params.porPagina;
 

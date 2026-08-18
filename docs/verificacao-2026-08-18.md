@@ -16,21 +16,13 @@ nesta rodada.
 local, ainda sem commit. Enquanto não forem publicadas, o ambiente de produção continua sem o aviso
 de dado antigo, sem o botão de atualizar e sem o filtro do mapa. Deploy dispara no push para `main`.
 
-**2. Sobre o dado do Monitor, leia antes de demonstrar.** O dado deixou de ter 34 dias: a
-transmissão mais recente agora é de hoje. Mas a carga **não completou**, e o motivo está no item
-3.0.3: a sincronização não cabe no tempo de uma função serverless, e puxá-la de fora esbarra no
-limite de conexões do pooler.
+**2. Sobre o dado do Monitor, leia antes de demonstrar.** A carga do SIBH está **incompleta**:
+cerca de 159 estações com transmissão nas últimas 24 horas, contra as aproximadamente 1.957 que a
+fonte reporta como ativas. **Não cite números absolutos de estações online** na apresentação.
 
-Na prática, para a reunião:
-
-- O mapa mostra dado de hoje, porém **incompleto**: cerca de 159 estações com transmissão nas
-  últimas 24 horas, contra as aproximadamente 1.957 que a fonte reporta como ativas.
-- O aviso de idade na tela **não vai aparecer**, porque a leitura mais recente é recente. Isso é
-  correto do ponto de vista do aviso, e ao mesmo tempo esconde o fato de a carga estar parcial.
-- **Não cite números absolutos de estações online** na apresentação. O número exibido é real, mas é
-  menor que a rede efetivamente ativa.
-- O botão "Atualizar agora a partir do SIBH" existe e funciona, mas em produção ele bate no mesmo
-  teto de 300 segundos. Não o use na frente dos gestores.
+A sincronização roda sozinha uma vez por dia, às 09:00 UTC (06:00 em Brasília), e foi otimizada
+nesta rodada para caber na janela de execução (item 3.0.4). A primeira carga completa acontece na
+próxima execução automática.
 
 **3. Criar a variável `CRON_SECRET` na Vercel (5 minutos, uma vez). Ela não existe hoje.**
 
@@ -184,18 +176,14 @@ já implica transmissão recente na prática. O defeito é o dado parado, não a
 
 **O que foi feito nesta rodada.** O problema tinha três partes, e as três receberam tratamento:
 
-1. **A tela não sabia dizer a idade do que mostrava.** Entrou
-   `src/domain/monitor/frescor-dado.ts`, função pura com 12 casos de teste, e o Monitor passou a
-   exibir um aviso quando a leitura mais recente tem mais de 24 horas, com a data e a idade ("há 34
-   dias"). O contador também deixou de mentir: com a carga defasada, o rótulo muda de "online" para
-   "na última carga", porque o mesmo número deixa de ser uma afirmação sobre o presente.
-2. **Não havia como atualizar pelo sistema.** A sincronização só existia como endpoint, sem nenhuma
-   superfície: quem opera não tinha caminho para acioná-la. Entrou o botão "Atualizar agora a partir
-   do SIBH" dentro do próprio aviso, visível apenas para aprovador, com diálogo de confirmação
-   (a ação escreve no banco e chama serviço externo, então não dispara direto no clique) e recarga
-   do mapa ao concluir. O papel é resolvido no servidor e serve só para mostrar ou esconder a ação:
-   quem autoriza continua sendo a rota, que responde 403 para quem não é aprovador.
-3. **Nada garantia que voltaria a rodar.** Entrou `GET|POST /api/cron/sincronizar-monitor`, no mesmo
+1. **Aviso de idade na tela e botão de atualizar: feitos e depois REMOVIDOS.** Chegaram a existir
+   um aviso quando o dado passava de 36 horas e um botão "Atualizar agora a partir do SIBH" para
+   aprovador. Ambos saíram por decisão do Rafael em 18/08/2026, depois de ver em uso: o aviso
+   ocupava espaço demais numa tela institucional, e o botão, disparado em produção, devolvia 504
+   porque a operação não cabe na janela da função (item 3.0.3). A decisão foi manter a tela limpa e
+   deixar a atualização por conta do agendamento diário. O módulo de frescor e seus testes foram
+   removidos junto, para não deixar código sem uso.
+2. **Nada garantia que voltaria a rodar.** Entrou `GET|POST /api/cron/sincronizar-monitor`, no mesmo
    padrão dos dois crons existentes (segredo em cabeçalho comparado em tempo constante, rate limit
    por IP, resposta idêntica para segredo ausente e errado). A orquestração foi extraída para
    `sincronizarMonitor`, usada tanto pela rota manual quanto pelo cron, para não existirem duas
@@ -329,6 +317,27 @@ caminhos, do mais barato ao mais completo:
 Enquanto nenhum dos três for feito, o agendamento vai gravar parte e ser interrompido. Vale notar
 que isso não corrompe nada: a operação é upsert idempotente, então uma execução parcial deixa o
 banco consistente, apenas incompleto.
+
+### 3.0.4 Otimização da sincronização (feita)
+
+Depois de o 504 aparecer também para o usuário ao clicar no botão, as duas etapas foram otimizadas
+para caber na janela de execução, respeitando os dois tetos que o item 3.0.3 identificou.
+
+| Antes | Depois |
+|-------|--------|
+| Uma consulta `buscarPorPrefixo` por estação, cerca de 5.400 idas ao banco só para descobrir o vínculo com o catálogo | Uma única consulta `mapaIdsPorPrefixo`, e o vínculo resolvido em memória |
+| Upsert das estações estritamente em série | Ondas de 5 em paralelo |
+| Uma requisição ao SIBH por estação, em série, cerca de 1.900 | Ondas de 5 em paralelo |
+
+A concorrência é 5 de propósito, e está documentada nos dois arquivos: é o `max` do cliente de banco
+(`src/infrastructure/db/client.ts`), e o pooler aceita 15 sessões no total, compartilhadas com quem
+está usando o sistema. Passar disso é o que produziu o `max clients reached` descrito no 3.0.3.
+Também limita a pressão sobre o SIBH, que é serviço do Estado e não nosso.
+
+Isso elimina cerca de 5.400 consultas e divide o tempo restante por cinco. Não há garantia de que
+caiba nos 300 segundos na primeira execução completa, porque não foi possível medir a carga real sem
+pressionar o banco de produção: **a confirmação vem da próxima execução automática**, e o jeito de
+conferir é o log `cron.monitor_sync.sucesso` e a data de `MAX(ultima_transmissao)` no banco.
 
 ### 3.0.1 Filtro de estações transmitindo no mapa (implementado)
 

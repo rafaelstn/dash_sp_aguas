@@ -47,6 +47,12 @@ export const postosRepository: PostosRepository = {
     return achado ?? null;
   },
 
+  async mapaIdsPorPrefixo() {
+    const mapa = new Map<string, string>();
+    for (const p of POSTOS_FIXTURES) mapa.set(p.prefixo, p.id);
+    return mapa;
+  },
+
   // Mutações não suportadas em modo demo (fixtures são read-only)
   async atualizar() {
     throw new Error('Modo demo: edição de posto indisponível sem banco.');

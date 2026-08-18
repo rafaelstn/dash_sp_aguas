@@ -154,6 +154,16 @@ export interface ContextoAtorPosto {
 
 export interface PostosRepository {
   buscarPorPrefixo(prefixo: string): Promise<Posto | null>;
+  /**
+   * Mapa `prefixo -> id` de todos os postos ativos, numa única consulta.
+   *
+   * Existe para a sincronização do Monitor, que vincula milhares de estações ao
+   * catálogo. Chamando `buscarPorPrefixo` por estação eram cerca de 5.400 idas
+   * ao banco em série, e a operação não cabia na janela de execução (ver
+   * `docs/verificacao-2026-08-18.md` §3.0.3). Carregar o mapa de uma vez troca
+   * isso por uma consulta só.
+   */
+  mapaIdsPorPrefixo(): Promise<Map<string, string>>;
   pesquisar(params: ParametrosPesquisa): Promise<ResultadoPesquisa>;
 
   /**

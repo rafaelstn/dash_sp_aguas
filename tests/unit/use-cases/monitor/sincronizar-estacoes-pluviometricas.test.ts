@@ -78,6 +78,12 @@ function fakePostosRepo(prefixosComPosto: Record<string, string>): PostosReposit
       if (!id) return null;
       return { id, prefixo } as Posto;
     },
+    // O use case passou a carregar o vínculo de uma vez, em vez de consultar
+    // por estação: eram cerca de 5.400 idas ao banco em série, e isso sozinho
+    // já estourava a janela de execução.
+    async mapaIdsPorPrefixo() {
+      return new Map(Object.entries(prefixosComPosto));
+    },
     async pesquisar() {
       return { total: 0, itens: [] };
     },
