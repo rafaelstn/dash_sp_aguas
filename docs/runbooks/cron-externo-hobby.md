@@ -43,7 +43,7 @@ Migrar pra Vercel Cron nativo quando subir pra Pro (ver `docs/runbooks/vercel-cr
 
 - [ ] `CRON_SECRET` configurado em Vercel Project Settings → Environment Variables (Production + Preview, mesmo valor, ≥32 chars).
 - [ ] Endpoint `/api/cron/liberar-locks-expirados` deployado em produção e respondendo 200 quando chamado com header válido (testar manualmente antes — §6).
-- [ ] Domínio de produção conhecido. Placeholder atual: `spaguas-ficha-tecnica.vercel.app` `<<placeholder até confirmação Rafael>>`.
+- [x] Domínio de produção conhecido: **`dash-sp-aguas.vercel.app`** (confirmado em 18/08/2026 contra `/api/health`, que respondeu `{"status":"ok","db":"ok"}`). O placeholder anterior, `spaguas-ficha-tecnica.vercel.app`, nunca existiu como deployment.
 
 ### 2.2 Criar conta no cron-job.org
 
@@ -93,6 +93,59 @@ Failure tolerance:
   Retry on failure: 1
   Retry delay: 60s
 ```
+
+### 2.3.1 Segundo job: sincronizar o Monitor com o SIBH
+
+Acrescentado em 18/08/2026, depois que a verificação encontrou o mapa do Monitor exibindo dado de
+**34 dias atrás**. A sincronização existia apenas como disparo manual, dependia de um aprovador
+logado lembrar de executá-la, e ninguém executou entre 15/07 e 18/08. A fonte do Estado estava
+atualizada o tempo todo: quem parou foi a carga.
+
+```
+Dashboard → Jobs → Create cronjob
+
+Title:     SPAGUAS - sincronizar Monitor (SIBH)
+URL:       https://dash-sp-aguas.vercel.app/api/cron/sincronizar-monitor
+
+Schedule:  Every 1 hour
+           Cron expression: 0 * * * *
+           Timezone: UTC
+
+Request method: GET
+
+Headers:
+  Authorization: Bearer <valor de CRON_SECRET>
+  User-Agent:    cron-job.org/spaguas-sincronizar-monitor
+
+Timeout: 300s
+         (a sincronização percorre milhares de estações e busca leituras de 7
+          dias; é bem mais demorada que a liberação de locks)
+
+Notifications:
+  Notify on failure: yes
+  Notify on disabled: yes
+
+Failure tolerance:
+  Retry on failure: 1
+  Retry delay: 300s
+```
+
+**Por que 1 hora, e não 5 minutos.** As estações automáticas transmitem a cada 10 a 15 minutos, mas
+o mapa não precisa dessa granularidade, e cada execução varre o cadastro inteiro. A janela padrão de
+leituras é de 7 dias, então uma execução perdida é recuperada pela seguinte sem intervenção.
+
+**Idempotente:** a carga é upsert por prefixo mais gravação de leitura por chave. Rodar duas vezes
+não duplica nada.
+
+**Como saber se parou.** É o modo de falha que já aconteceu, e ele é silencioso: nada quebra, a tela
+simplesmente envelhece. Três verificações, da mais barata para a mais completa:
+
+1. Abrir o Monitor. Desde 18/08/2026 a própria tela avisa quando a leitura mais recente passa de 24
+   horas, com a data e a idade do dado.
+2. Conferir o log por `cron.monitor_sync.sucesso`, que é emitido a cada execução mesmo quando grava
+   zero linha, justamente para que silêncio signifique job parado e não job ocioso.
+3. No banco: `SELECT MAX(ultima_transmissao) FROM estacoes_pluviometricas;` deve ficar dentro de
+   poucas horas do momento atual.
 
 ### 2.4 Validar primeira execução
 

@@ -13,17 +13,20 @@ import {
   aplicarHeadersRateLimit,
   consumirRateLimit,
 } from '@/infrastructure/security/rate-limit';
-import { sincronizarEstacoesPluviometricas } from '@/application/use-cases/monitor/sincronizar-estacoes-pluviometricas';
-import { sincronizarLeiturasPluviometricas } from '@/application/use-cases/monitor/sincronizar-leituras-pluviometricas';
+import {
+  sincronizarMonitor,
+  DIAS_DEFAULT as DIAS_DEFAULT_UC,
+  DIAS_MAX as DIAS_MAX_UC,
+} from '@/application/use-cases/monitor/sincronizar-monitor';
 import { logger } from '@/infrastructure/logging/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Janela de leituras puxadas do SIBH. Default 7 dias cobre fim de semana e
-// atraso de transmissão; teto de 31 evita varredura histórica pesada.
-const DIAS_DEFAULT = 7;
-const DIAS_MAX = 31;
+// Janela de leituras puxadas do SIBH. Definida no use case para que a rota
+// manual e o agendamento validem contra o mesmo limite.
+const DIAS_DEFAULT = DIAS_DEFAULT_UC;
+const DIAS_MAX = DIAS_MAX_UC;
 
 const corpoSchema = z.object({
   dias: z.number().int().min(1).max(DIAS_MAX).optional(),
@@ -77,32 +80,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const estacoes = await sincronizarEstacoesPluviometricas(
-      sibhClient,
-      estacoesPluviometricasRepository,
-      postosRepository,
-    );
-
-    // Alvos das leituras: estações automáticas pluviométricas já persistidas
-    // (inclui as que acabaram de ser upsertadas). Filtra por `tipo` para não
-    // puxar leitura de estação manual cadastrada por operador numa fase futura,
-    // E por `tipoEstacao` porque a leitura aqui é chuva acumulada (mm), válida
-    // só para pluviométrica; fluviométrica e piezométrica medem nível (metros)
-    // e terão sincronização própria na Fase 2.
-    const persistidas = await estacoesPluviometricasRepository.listar({
-      tipo: 'automatico',
-      tipoEstacao: 'pluviometrico',
-    });
-
-    const ate = new Date();
-    const desde = new Date(ate.getTime() - dias * 24 * 60 * 60 * 1000);
-
-    const leituras = await sincronizarLeiturasPluviometricas(
-      sibhClient,
-      leiturasPluviometricasRepository,
-      persistidas.map((e) => ({ id: e.id, prefixo: e.prefixo })),
-      desde,
-      ate,
+    // A orquestração vive no use case para que o agendamento
+    // (`/api/cron/sincronizar-monitor`) execute exatamente o mesmo trabalho.
+    const { estacoes, leituras } = await sincronizarMonitor(
+      {
+        sibh: sibhClient,
+        estacoes: estacoesPluviometricasRepository,
+        leituras: leiturasPluviometricasRepository,
+        postos: postosRepository,
+      },
+      dias,
     );
 
     logger.info(
