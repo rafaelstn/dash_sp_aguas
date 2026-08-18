@@ -21,8 +21,13 @@ abrir **Monitor**, e se aparecer o aviso amarelo "O dado exibido não é do mome
 **"Atualizar agora a partir do SIBH"** e confirmar. Em 18/08 a defasagem era de 34 dias. Se o aviso
 não aparecer, o dado já está em dia.
 
-**3. Ligar o agendamento (10 minutos, uma vez).** Sem ele, o problema volta em algumas semanas sem
-ninguém perceber. Passo a passo em `docs/runbooks/cron-externo-hobby.md` §2.3.1.
+**3. Conferir a variável `CRON_SECRET` no projeto da Vercel.** A sincronização do Monitor passou a
+rodar **uma vez por dia** pelo cron nativo da Vercel, declarado em `vercel.json` (09:00 UTC, que é
+06:00 em Brasília). A plataforma envia o cabeçalho de autorização sozinha, desde que a variável
+exista, com pelo menos 32 caracteres. Nada mais a configurar.
+
+Vale conferir também os dois agendamentos que já existiam: eles **nunca executaram** por causa do
+defeito descrito no item 3.0.2, e o painel do provedor mostrava sucesso o tempo todo.
 
 **4. Conferir a saúde antes de projetar a tela (10 segundos).** Abrir
 `https://dash-sp-aguas.vercel.app/api/health`. Tem que responder `{"status":"ok","db":"ok"}`.
@@ -178,6 +183,46 @@ já implica transmissão recente na prática. O defeito é o dado parado, não a
 Detalhe correlato, de baixa gravidade: o SIBH devolve a data como `GMT+0000` mas o horário aparenta
 ser de Brasília, o que produz timestamps cerca de 1,2 hora no futuro. Não afeta o filtro nem a
 ordenação, mas vale corrigir na normalização.
+
+### 3.0.2 Nenhum agendamento funcionava em produção (achado pré-existente, corrigido)
+
+Encontrado ao verificar se o deploy da correção anterior tinha chegado. O teste era simples: a rota
+nova de agendamento deveria responder 401 (segredo inválido) em vez de 404. Respondeu **307**, e a
+rota de agendamento que já existia havia meses respondeu 307 também. Uma rota inexistente sob o
+mesmo prefixo respondeu 307 igualmente, o que mostrou que a resposta vinha antes do roteamento.
+
+**Causa.** O middleware protege tudo que não esteja na lista de rotas públicas, e `/api/cron/*` não
+estava. Toda chamada de agendamento era redirecionada para `/login` antes de chegar ao handler,
+com ou sem o cabeçalho `Authorization`.
+
+**Por que ninguém percebeu, e por que isso é o pior tipo de falha.** O serviço de cron segue o
+redirecionamento, recebe o 200 da página de login, e registra a execução como bem-sucedida. O painel
+do provedor mostra verde. O job nunca executou, e nada em lugar nenhum acusou.
+
+**Alcance:** os três agendamentos do projeto.
+
+| Job | O que deixou de acontecer |
+|-----|---------------------------|
+| `liberar-locks-expirados` | Travas de triagem expiradas nunca foram liberadas. Uma ficha abandonada por um aprovador fica presa indefinidamente, em vez de liberar após o TTL de 1 hora |
+| `anonimizar-trilha` | **O expurgo de dado pessoal da trilha de auditoria nunca rodou.** É obrigação de LGPD, e o job foi entregue em 28/07/2026 (commit `c6e6335`) |
+| `sincronizar-monitor` | Criado nesta rodada; teria nascido com o mesmo problema |
+
+**Feito:** o prefixo `/api/cron/` passou a ser tratado como público no middleware. Isso não abre
+nada: a proteção desses endpoints sempre foi o `CRON_SECRET` comparado em tempo constante dentro do
+handler, com rate limit por IP. Sem o segredo configurado o handler responde 500; com segredo errado
+responde 401, sem distinguir de ausente. O que o middleware fazia não era proteger, era impedir que
+quem sabe autenticar recebesse a requisição.
+
+A regra de rota pública foi extraída do middleware para `src/domain/auth/rotas-publicas.ts`, sem
+dependências, e ganhou 29 casos de teste cobrindo os dois lados: o que precisa ser servido sem
+sessão (os três agendamentos, o login, a verificação de saúde, os artefatos do PWA) e o que não pode
+passar de jeito nenhum (as 20 rotas de página e API sensíveis, incluindo a sincronização manual, que
+continua exigindo aprovador). Provado removendo a liberação do cron e conferindo que os casos certos
+reprovam. Uma regra que decide o que é público não podia continuar sem teste.
+
+**Atenção para depois:** as travas de triagem e o expurgo de LGPD nunca rodaram desde que foram
+criados. Vale conferir se há trava presa em `triagem_locks` e avaliar o passivo de retenção de dado
+pessoal na trilha, já que a rotina de expurgo não executou nenhuma vez.
 
 ### 3.0.1 Filtro de estações transmitindo no mapa (implementado)
 

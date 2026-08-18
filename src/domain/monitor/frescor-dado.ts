@@ -13,8 +13,17 @@
  * Pura, sem I/O, recebendo `agora` por parâmetro para ser testável.
  */
 
-/** Acima disso, o dado é tratado como defasado e a tela avisa. */
-export const HORAS_ATE_DEFASAR = 24;
+/**
+ * Acima disso, o dado é tratado como defasado e a tela avisa.
+ *
+ * O valor tem que ser MAIOR que o intervalo do agendamento, senão o aviso
+ * dispara no uso normal e vira ruído que ninguém lê. Hoje a sincronização roda
+ * uma vez por dia, então 24h de idade é o esperado e não é notícia; 36h dá meia
+ * janela de folga e só acusa quando uma execução foi realmente perdida.
+ *
+ * Ao mudar a cadência do cron, revisar este número junto.
+ */
+export const HORAS_ATE_DEFASAR = 36;
 
 export interface Frescor {
   /** Transmissão mais recente entre as estações, ou null se não houver nenhuma. */

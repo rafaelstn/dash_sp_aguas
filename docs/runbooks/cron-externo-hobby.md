@@ -94,45 +94,34 @@ Failure tolerance:
   Retry delay: 60s
 ```
 
-### 2.3.1 Segundo job: sincronizar o Monitor com o SIBH
+### 2.3.1 Sincronização do Monitor: usa o cron NATIVO da Vercel, não este serviço
 
-Acrescentado em 18/08/2026, depois que a verificação encontrou o mapa do Monitor exibindo dado de
+Acrescentada em 18/08/2026, depois que a verificação encontrou o mapa do Monitor exibindo dado de
 **34 dias atrás**. A sincronização existia apenas como disparo manual, dependia de um aprovador
 logado lembrar de executá-la, e ninguém executou entre 15/07 e 18/08. A fonte do Estado estava
 atualizada o tempo todo: quem parou foi a carga.
 
-```
-Dashboard → Jobs → Create cronjob
+**Este job não é configurado aqui.** Cadência definida pelo Rafael em 18/08/2026: **uma vez por
+dia**, o que cabe no limite do plano Hobby e dispensa provedor externo. Ele está declarado em
+`vercel.json`:
 
-Title:     SPAGUAS - sincronizar Monitor (SIBH)
-URL:       https://dash-sp-aguas.vercel.app/api/cron/sincronizar-monitor
-
-Schedule:  Every 1 hour
-           Cron expression: 0 * * * *
-           Timezone: UTC
-
-Request method: GET
-
-Headers:
-  Authorization: Bearer <valor de CRON_SECRET>
-  User-Agent:    cron-job.org/spaguas-sincronizar-monitor
-
-Timeout: 300s
-         (a sincronização percorre milhares de estações e busca leituras de 7
-          dias; é bem mais demorada que a liberação de locks)
-
-Notifications:
-  Notify on failure: yes
-  Notify on disabled: yes
-
-Failure tolerance:
-  Retry on failure: 1
-  Retry delay: 300s
+```json
+{
+  "crons": [
+    { "path": "/api/cron/sincronizar-monitor", "schedule": "0 9 * * *" }
+  ]
+}
 ```
 
-**Por que 1 hora, e não 5 minutos.** As estações automáticas transmitem a cada 10 a 15 minutos, mas
-o mapa não precisa dessa granularidade, e cada execução varre o cadastro inteiro. A janela padrão de
-leituras é de 7 dias, então uma execução perdida é recuperada pela seguinte sem intervenção.
+`0 9 * * *` é 09:00 UTC, ou seja, 06:00 no horário de Brasília: o dado chega fresco antes do
+expediente. A Vercel envia `Authorization: Bearer ${CRON_SECRET}` automaticamente quando a variável
+existe no projeto, então não há nada a configurar além dela.
+
+**Por que uma vez por dia basta.** A janela padrão de leituras é de 7 dias, então uma execução
+perdida é recuperada pela seguinte sem intervenção. Se um dia a operação precisar de granularidade
+maior, o caminho é mover este job para o cron-job.org, como o de liberação de locks, e **revisar
+junto** a constante `HORAS_ATE_DEFASAR` (`src/domain/monitor/frescor-dado.ts`), que hoje é 36 horas
+justamente para não acender aviso durante o intervalo normal de 24 horas entre cargas.
 
 **Idempotente:** a carga é upsert por prefixo mais gravação de leitura por chave. Rodar duas vezes
 não duplica nada.
@@ -140,12 +129,20 @@ não duplica nada.
 **Como saber se parou.** É o modo de falha que já aconteceu, e ele é silencioso: nada quebra, a tela
 simplesmente envelhece. Três verificações, da mais barata para a mais completa:
 
-1. Abrir o Monitor. Desde 18/08/2026 a própria tela avisa quando a leitura mais recente passa de 24
-   horas, com a data e a idade do dado.
-2. Conferir o log por `cron.monitor_sync.sucesso`, que é emitido a cada execução mesmo quando grava
-   zero linha, justamente para que silêncio signifique job parado e não job ocioso.
+1. Abrir o Monitor. Desde 18/08/2026 a própria tela avisa quando a leitura mais recente passa de 36
+   horas, com a data e a idade do dado, e oferece o botão de atualizar na hora.
+2. Conferir o log por `cron.monitor_sync.sucesso`, emitido a cada execução mesmo quando grava zero
+   linha, justamente para que silêncio signifique job parado e não job ocioso.
 3. No banco: `SELECT MAX(ultima_transmissao) FROM estacoes_pluviometricas;` deve ficar dentro de
-   poucas horas do momento atual.
+   pouco mais de um dia.
+
+> **Pré-condição descoberta em 18/08/2026, e que valia para TODOS os jobs.** O middleware
+> redirecionava `/api/cron/*` para `/login` com 307 antes de o handler ser alcançado. O serviço de
+> cron seguia o redirecionamento, recebia o 200 da página de login e marcava a execução como
+> bem-sucedida. Ou seja, os jobs deste runbook nunca chegaram a executar, e o painel do provedor
+> mostrava verde. Corrigido liberando o prefixo `/api/cron/` no `rotaPublica` do middleware: a
+> proteção real desses endpoints sempre foi o `CRON_SECRET` comparado em tempo constante dentro do
+> handler, nunca a sessão.
 
 ### 2.4 Validar primeira execução
 

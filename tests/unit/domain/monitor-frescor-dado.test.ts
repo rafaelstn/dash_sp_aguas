@@ -31,6 +31,21 @@ describe('calcularFrescor', () => {
     expect(r.defasado).toBe(true);
   });
 
+  it('não acusa uma carga diária normal, que é o uso esperado', () => {
+    // A sincronização roda 1x por dia, então 24h de idade é o normal e não pode
+    // acender aviso. Guarda contra alguém baixar o limiar para 24h ou menos e
+    // transformar a tela num alarme permanente, que ninguém lê na segunda vez.
+    expect(HORAS_ATE_DEFASAR).toBeGreaterThan(24);
+    const r = calcularFrescor([h(24)], AGORA);
+    expect(r.defasado).toBe(false);
+  });
+
+  it('acusa quando uma execução diária foi perdida', () => {
+    // Dois dias sem carga: aí sim é notícia.
+    const r = calcularFrescor([h(48)], AGORA);
+    expect(r.defasado).toBe(true);
+  });
+
   it('reproduz o caso real de 34 dias', () => {
     const r = calcularFrescor(['2026-07-15T15:20:00.000Z'], AGORA);
     expect(r.defasado).toBe(true);
