@@ -2,13 +2,13 @@
 
 | Campo | Valor |
 |-------|-------|
-| Owner | Rodrigo (DevOps) — bloqueado por confirmação de Rafael/cliente |
+| Owner | Rodrigo (DevOps). Deixou de estar bloqueado em 18/08/2026: o domínio ficou conhecido. |
 | Sprint origem | 1.S3 |
 | Pendência fechada (parcialmente) | `docs/seguranca/owasp-review-sprint-1.md` §A02 + §5 #7 |
 | Documento pai | `next.config.ts` (header HSTS) |
-| Status | **Não ativado**. Aguardando confirmação. |
-| Domínio assumido | `spaguas-ficha-tecnica.vercel.app` `<<placeholder até confirmação Rafael>>` |
-| Última revisão | 2026-05-08 |
+| Status | **Não ativado, e resolvido: não há mais o que aguardar.** O domínio de produção é subdomínio de `vercel.app`, cenário que a tabela do §3 já classifica como NÃO ATIVAR. Reabrir só se o órgão migrar para domínio próprio dedicado. |
+| Domínio de produção | **`dash-sp-aguas.vercel.app`** (confirmado em 18/08/2026; o placeholder `spaguas-ficha-tecnica.vercel.app` nunca existiu como deployment) |
+| Última revisão | 2026-08-18 |
 
 ---
 
@@ -49,7 +49,15 @@ Pré-requisitos absolutos antes de submeter:
 
 ## 3. O que precisa do Rafael / cliente
 
-**Pergunta-chave:** *qual é o domínio de produção da aplicação?*
+> **Respondido em 18/08/2026.** O domínio de produção é **`dash-sp-aguas.vercel.app`**,
+> verificado no ar (`/api/health` respondeu `{"status":"ok","db":"ok"}`). Ele cai na
+> primeira linha da tabela abaixo, subdomínio de `vercel.app`, cujo veredito já era
+> **NÃO ATIVAR**. A pendência se fecha pela decisão que já estava registrada aqui,
+> sem precisar de decisão nova. O que continua valendo para o cliente é a pergunta de
+> **hospedagem definitiva** (migração PRODESP, ADR-0015): se o sistema passar a
+> responder em domínio institucional ou próprio, esta análise é refeita.
+
+**Pergunta-chave (histórico):** *qual é o domínio de produção da aplicação?*
 
 Hipóteses:
 

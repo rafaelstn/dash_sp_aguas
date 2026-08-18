@@ -145,7 +145,7 @@ curl -X POST \
 # {"liberados":[],"quantidade":0,"duracaoMs":42}
 ```
 
-`<dominio-prod>` placeholder atual: `spaguas-ficha-tecnica.vercel.app` `<<placeholder até confirmação Rafael>>`.
+`<dominio-prod>` é **`dash-sp-aguas.vercel.app`** (confirmado em 18/08/2026). O placeholder anterior, `spaguas-ficha-tecnica.vercel.app`, nunca existiu como deployment.
 
 ### 5.2 Via painel Vercel — disparo on-demand (apenas Pro)
 
