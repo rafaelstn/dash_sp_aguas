@@ -17,6 +17,17 @@ export interface ValorFiltros {
   entidades: string[];
   /** Busca livre por nome OU prefixo (ID), case-insensitive. '' = sem busca. */
   busca: string;
+  /**
+   * Mostrar apenas estações transmitindo (regra `estacaoOnline` do domínio,
+   * calculada server-side e entregue no campo `online` de cada estação).
+   *
+   * Ligado por padrão: a rede tem milhares de estações e a maior parte não
+   * transmite, então o mapa sem este filtro abre como uma mancha de marcadores
+   * em que o que está no ar não se distingue do que está mudo. Quando ligado, a
+   * barra de contagem informa quantas ficaram ocultas e oferece ver todas, para
+   * que o filtro nunca faça a rede parecer menor do que é.
+   */
+  somenteOnline: boolean;
 }
 
 /**
@@ -32,6 +43,7 @@ export const FILTROS_INICIAIS: ValorFiltros = {
   tipoEstacao: 'pluviometrico',
   entidades: ['SP ÁGUAS'],
   busca: '',
+  somenteOnline: true,
 };
 
 interface FiltrosMonitorProps {
@@ -57,6 +69,7 @@ export function FiltrosMonitor({ valor, aoMudar, bacias }: FiltrosMonitorProps) 
   const idBusca = `${idBase}-busca`;
   const idBacia = `${idBase}-bacia`;
   const idTipo = `${idBase}-tipo`;
+  const idOnline = `${idBase}-online`;
 
   const classeSelect =
     'w-full appearance-none rounded border border-app-border-input bg-app-surface px-3 py-2 pr-8 text-sm text-app-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1 focus-visible:ring-offset-app-surface';
@@ -138,6 +151,22 @@ export function FiltrosMonitor({ valor, aoMudar, bacias }: FiltrosMonitorProps) 
           </select>
           <SetaSelect />
         </div>
+      </div>
+
+      {/* Transmissão. Fica no formulário, e não só como atalho na barra de
+          contagem, para o filtro ser encontrável por quem procura filtro e para
+          ser alcançável por teclado na ordem natural do formulário. */}
+      <div className="flex items-center sm:col-span-2 lg:col-span-1 lg:self-end lg:pb-2">
+        <input
+          id={idOnline}
+          type="checkbox"
+          checked={valor.somenteOnline}
+          onChange={(e) => aoMudar({ ...valor, somenteOnline: e.target.checked })}
+          className="h-4 w-4 rounded border-app-border-input text-gov-azul focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1"
+        />
+        <label htmlFor={idOnline} className="ml-2 text-sm font-medium text-app-fg">
+          Somente estações transmitindo
+        </label>
       </div>
     </div>
   );

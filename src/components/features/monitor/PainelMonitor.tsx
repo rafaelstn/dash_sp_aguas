@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Map as MapIcon, List, SlidersHorizontal, CloudRain } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { FiltrosMonitor, FILTROS_INICIAIS, type ValorFiltros } from './FiltrosMonitor';
@@ -12,6 +13,7 @@ import { ListaEstacoes } from './ListaEstacoes';
 import { entidadeDaEstacao, LEGENDA_ENTIDADES } from './paleta-monitor';
 import { useComparacao } from './useComparacao';
 import { CestaComparacao } from './CestaComparacao';
+import { calcularFrescor, descreverIdade } from '@/domain/monitor/frescor-dado';
 import type { Estacao, RespostaEstacoes } from './tipos';
 
 // Mapa carregado só no cliente: Leaflet depende de window. O fallback mostra
@@ -56,8 +58,21 @@ type EstadoCarga =
 // todas as <tr> de uma vez pesa no DOM; acima do teto pedimos refinar o filtro.
 const TETO_LISTA = 500;
 
-export function PainelMonitor() {
+export interface PainelMonitorProps {
+  /**
+   * Mostra a ação de sincronizar com o SIBH. Resolvido no servidor pelo papel
+   * do usuário. É só conveniência de tela: `POST /api/monitor/sync` exige
+   * aprovador e responde 403 para quem não é, independentemente disto.
+   */
+  podeSincronizar?: boolean;
+}
+
+export function PainelMonitor({ podeSincronizar = false }: PainelMonitorProps) {
   const [carga, setCarga] = useState<EstadoCarga>({ status: 'carregando' });
+  const [confirmandoSync, setConfirmandoSync] = useState(false);
+  const [resultadoSync, setResultadoSync] = useState<string | null>(null);
+  // Incrementa para forçar nova busca das estações depois de sincronizar.
+  const [recarga, setRecarga] = useState(0);
   const [filtros, setFiltros] = useState<ValorFiltros>(FILTROS_INICIAIS);
   const [visao, setVisao] = useState<'mapa' | 'lista'>('mapa');
   const [filtrosAbertosMobile, setFiltrosAbertosMobile] = useState(false);
@@ -110,6 +125,39 @@ export function PainelMonitor() {
       ativo = false;
       controlador.abort();
     };
+  }, [recarga]);
+
+  /**
+   * Dispara a sincronização com o SIBH e recarrega o mapa.
+   *
+   * A sincronização é sob demanda nesta fase: sem alguém acionar, o mapa
+   * continua exibindo a última carga por tempo indeterminado (em 18/08/2026 a
+   * defasagem chegou a 34 dias). A ação existia apenas como endpoint, sem
+   * nenhum lugar na interface, então quem opera o sistema não tinha como
+   * atualizar o dado.
+   *
+   * Erros sobem para o ConfirmDialog, que os exibe e mantém o modal aberto.
+   */
+  const sincronizar = useCallback(async () => {
+    const resp = await fetch('/api/monitor/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ dias: 7 }),
+    });
+
+    if (!resp.ok) {
+      if (resp.status === 403) {
+        throw new Error('A sua conta não tem papel de aprovador para sincronizar.');
+      }
+      if (resp.status === 429) {
+        throw new Error('Sincronização pedida há pouco tempo. Aguarde para repetir.');
+      }
+      throw new Error(`Falha ao sincronizar com o SIBH (HTTP ${resp.status}).`);
+    }
+
+    setConfirmandoSync(false);
+    setResultadoSync('Sincronização concluída. O mapa foi recarregado.');
+    setRecarga((n) => n + 1);
   }, []);
 
   // Memoizado: referência estável quando a carga não muda, pra não invalidar
@@ -156,7 +204,15 @@ export function PainelMonitor() {
     [entidadesDisponiveis.length],
   );
 
-  const filtradas = useMemo(() => {
+  /**
+   * Estações que passam por todos os filtros EXCETO o de transmissão.
+   *
+   * Fica separado de propósito: é a partir dele que sabemos quantas estações o
+   * filtro "somente transmitindo" está escondendo. Sem esse número, o filtro
+   * faria a rede parecer menor do que é, que é justamente o que não pode
+   * acontecer numa tela institucional.
+   */
+  const noEscopo = useMemo(() => {
     const termo = filtros.busca.trim().toLocaleLowerCase('pt-BR');
     const filtraEntidade = filtros.entidades.length > 0;
     return todas.filter((e) => {
@@ -174,6 +230,26 @@ export function PainelMonitor() {
       return true;
     });
   }, [todas, filtros]);
+
+  const filtradas = useMemo(
+    () => (filtros.somenteOnline ? noEscopo.filter((e) => e.online) : noEscopo),
+    [noEscopo, filtros.somenteOnline],
+  );
+
+  /**
+   * Idade do dado exibido. A sincronização com o SIBH é sob demanda nesta fase,
+   * e dado velho é visualmente idêntico a dado novo: sem este aviso, a tela
+   * afirmaria que N estações estão transmitindo agora quando o retrato pode ter
+   * semanas. Calculado sobre TODAS as estações, não sobre as filtradas, porque
+   * é propriedade da carga e não do recorte que o usuário escolheu.
+   *
+   * Fica aqui, antes de qualquer retorno antecipado, porque hook não pode ser
+   * chamado condicionalmente.
+   */
+  const frescor = useMemo(
+    () => calcularFrescor(todas.map((e) => e.ultimaTransmissao), new Date()),
+    [todas],
+  );
 
   if (carga.status === 'erro') {
     return (
@@ -194,6 +270,12 @@ export function PainelMonitor() {
   // atual (tipo, entidade, busca, UGRHI), pois é derivado de `filtradas`.
   const online = filtradas.filter((e) => e.online).length;
 
+  // Quantas o filtro de transmissão está escondendo dentro do escopo atual.
+  const ocultasSemTransmissao = filtros.somenteOnline
+    ? noEscopo.length - filtradas.length
+    : 0;
+
+
   return (
     <div
       className={[
@@ -202,6 +284,75 @@ export function PainelMonitor() {
         comparacao.total > 0 ? 'pb-28 sm:pb-24' : '',
       ].join(' ')}
     >
+      {/* Idade do dado. Só aparece quando há defasagem: em operação normal a
+          tela não deve gastar espaço dizendo que está tudo em dia. Quando
+          aparece, diz a data e a idade, porque "desatualizado" sozinho não
+          permite a ninguém julgar se aquilo ainda serve. */}
+      {carga.status === 'ok' && frescor.defasado ? (
+        <Alerta tipo="aviso" titulo="O dado exibido não é do momento">
+          {frescor.maisRecente ? (
+            <>
+              A leitura mais recente é de{' '}
+              <strong className="tabular">
+                {frescor.maisRecente.toLocaleString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </strong>{' '}
+              ({descreverIdade(frescor.idadeHoras)}). A sincronização com o SIBH é executada sob
+              demanda nesta fase, então o mapa reflete a última carga, e não o instante atual.
+            </>
+          ) : (
+            <>
+              Nenhuma estação tem registro de transmissão nesta carga. O mapa mostra o cadastro das
+              estações, sem leitura associada.
+            </>
+          )}
+          {podeSincronizar ? (
+            <p className="mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  // Limpa o resultado da execução anterior ao abrir de novo:
+                  // sem isso, um sucesso antigo continuaria na tela ao lado do
+                  // erro de uma tentativa nova.
+                  setResultadoSync(null);
+                  setConfirmandoSync(true);
+                }}
+                className="rounded px-2 py-1 text-sm font-semibold text-gov-azul underline underline-offset-2 hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+              >
+                Atualizar agora a partir do SIBH
+              </button>
+            </p>
+          ) : null}
+        </Alerta>
+      ) : null}
+
+      {resultadoSync ? (
+        <Alerta tipo="sucesso" titulo="Dados atualizados">
+          {resultadoSync}
+        </Alerta>
+      ) : null}
+
+      {/* A confirmação existe porque a ação escreve no banco e chama um serviço
+          externo: nunca dispara direto no clique. */}
+      <ConfirmDialog
+        aberto={confirmandoSync}
+        titulo="Atualizar os dados do Monitor"
+        descricao={
+          <>
+            Busca no SIBH o cadastro das estações e as leituras dos últimos 7 dias, e grava o
+            resultado. Pode levar alguns minutos e não interrompe quem estiver usando o sistema.
+          </>
+        }
+        rotuloConfirmar="Atualizar"
+        aoConfirmar={sincronizar}
+        aoCancelar={() => setConfirmandoSync(false)}
+      />
+
       {/* Barra de controle: contagem + alternância de visão + filtros (mobile) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
@@ -227,8 +378,51 @@ export function PainelMonitor() {
                 <span className="font-semibold tabular text-app-fg">
                   {online.toLocaleString('pt-BR')}
                 </span>
-                <span>online</span>
+                {/* "online" só se sustenta com dado do momento. Com a carga
+                    defasada, o mesmo número é um retrato antigo, e o rótulo
+                    precisa dizer isso em vez de afirmar o presente. */}
+                <span>{frescor.defasado ? 'na última carga' : 'online'}</span>
               </span>
+              {/* O filtro de transmissão nunca esconde em silêncio: diz quantas
+                  ficaram de fora e oferece ver a rede inteira num clique. Sem
+                  isto, o mapa faria a rede parecer menor do que é. */}
+              {ocultasSemTransmissao > 0 ? (
+                <>
+                  <span aria-hidden="true" className="text-app-fg-subtle">
+                    ·
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="tabular">
+                      {ocultasSemTransmissao.toLocaleString('pt-BR')} sem transmissão
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFiltros((prev) => ({ ...prev, somenteOnline: false }))
+                      }
+                      className="rounded px-1.5 py-0.5 font-semibold text-gov-azul underline underline-offset-2 hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                    >
+                      mostrar todas
+                    </button>
+                  </span>
+                </>
+              ) : null}
+              {!filtros.somenteOnline ? (
+                <>
+                  <span aria-hidden="true" className="text-app-fg-subtle">
+                    ·
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFiltros((prev) => ({ ...prev, somenteOnline: true }))
+                    }
+                    className="rounded px-1.5 py-0.5 font-semibold text-gov-azul underline underline-offset-2 hover:bg-app-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul"
+                  >
+                    ver só as que transmitem
+                  </button>
+                </>
+              ) : null}
             </>
           ) : null}
         </div>
