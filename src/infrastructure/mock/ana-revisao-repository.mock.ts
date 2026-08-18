@@ -270,8 +270,44 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
     return null;
   },
 
-  async aceitarMatch() {
-    throw new Error('Mock: aceitar match nao implementado.');
+  /**
+   * Espelha o adapter PG: vincula a estação ao posto sugerido, marca a revisão
+   * como manual e registra o evento. O PG faz as duas escritas numa transação
+   * (postos.prefixo_ana e ana_revisao_estacao); aqui o estado é in-memory,
+   * então a atomicidade não se aplica, mas o efeito visível na tela é o mesmo.
+   */
+  async aceitarMatch(params, ator) {
+    const idx = estado.estacoes.findIndex((e) => e.id === params.estacaoId);
+    if (idx === -1) {
+      throw new Error(`estacao ${params.estacaoId} nao encontrada`);
+    }
+    const atual = estado.estacoes[idx]!;
+    if (!transicaoPermitida(atual.status, 'revisada')) {
+      throw new Error(`transicao invalida ${atual.status} -> revisada`);
+    }
+
+    const agora = new Date();
+    estado.estacoes[idx] = {
+      ...atual,
+      postoId: params.postoIdSugerido,
+      matchTipo: 'manual',
+      status: 'revisada',
+      revisadoEm: agora,
+      atualizadoEm: agora,
+    };
+
+    estado.eventos.push({
+      estacaoId: params.estacaoId,
+      evento: 'revisada',
+      atorId: ator.usuarioId,
+      valoresAntes: { status: atual.status, postoId: atual.postoId },
+      valoresDepois: {
+        status: 'revisada',
+        posto_id: params.postoIdSugerido,
+        posto_prefixo: params.prefixoSugerido,
+      },
+      ocorreuEm: agora,
+    });
   },
 };
 
