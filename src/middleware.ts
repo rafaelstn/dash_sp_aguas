@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { bypassAuthAtivo } from '@/infrastructure/auth/dev-bypass';
 import { validarReturnToInterno } from '@/infrastructure/auth/return-to';
+import { rotaPublica } from '@/domain/auth/rotas-publicas';
 
 /**
  * Gera o cabeçalho Content-Security-Policy desta requisição usando um nonce
@@ -99,35 +100,6 @@ function aplicarNoCacheAutenticado(response: NextResponse) {
  *      para não quebrar o fluxo de desenvolvimento. Em produção, env.ts já
  *      garante que as vars de Supabase existem.
  */
-
-const ROTAS_PUBLICAS = new Set([
-  '/login',
-  // Autocadastro público foi DESATIVADO: contas são criadas pelo Admin/Super
-  // na gestão de usuários (/admin/usuarios). A rota /cadastrar não é mais
-  // pública (a própria página redireciona para /login).
-  '/auth/callback',
-  '/auth/sair',
-  '/api/health',
-  // Artefatos do PWA: manifest e service worker precisam ser servidos
-  // antes de qualquer auth-check (o browser busca o manifest sem cookie
-  // em alguns cenários e o SW é registrado em /app/* antes do login).
-  '/manifest.json',
-  '/manifest.webmanifest',
-  '/sw.js',
-  '/apple-touch-icon.png',
-]);
-
-function rotaPublica(pathname: string): boolean {
-  if (ROTAS_PUBLICAS.has(pathname)) return true;
-  if (pathname.startsWith('/_next/')) return true;
-  if (pathname.startsWith('/favicon')) return true;
-  if (pathname.startsWith('/robots')) return true;
-  // Ícones do PWA são públicos por natureza.
-  if (pathname.startsWith('/icons/')) return true;
-  // Workbox e arquivos auxiliares do Serwist (fallback se algum chegar aqui).
-  if (pathname.startsWith('/workbox-')) return true;
-  return false;
-}
 
 export async function middleware(request: NextRequest) {
   const nonce = gerarNonce();
