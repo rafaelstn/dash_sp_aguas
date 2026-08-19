@@ -44,10 +44,18 @@ function criar(): Sql {
 
 function obter(): Sql {
   if (globalThis.__pg_singleton__) return globalThis.__pg_singleton__;
+  // O singleton vale em TODO ambiente, produção inclusive. Guardá-lo só fora
+  // de produção fazia cada toque no Proxy abaixo (cada acesso de propriedade e
+  // cada execução de query) instanciar um `postgres()` novo, com `max: 5` e
+  // sem `.end()`: medido em 19/08/2026, 5 clientes por requisição simulada e
+  // 15 em três, contra 1 em development. Como cada query saía de um cliente
+  // recém-criado, cada uma abria conexão nova que só fechava por
+  // `idle_timeout` (20 s), contra um pooler que aceita 15 sessões.
+  //
+  // `criar()` joga em modo demo ANTES desta linha, então a falha não envenena
+  // o globalThis e o import continua sem efeito colateral.
   const instancia = criar();
-  if (process.env.NODE_ENV !== 'production') {
-    globalThis.__pg_singleton__ = instancia;
-  }
+  globalThis.__pg_singleton__ = instancia;
   return instancia;
 }
 
