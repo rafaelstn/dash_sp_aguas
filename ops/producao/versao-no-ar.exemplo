@@ -4,13 +4,13 @@
 # Destino no servidor:  /opt/spaguas-dmo/.env
 # (o mesmo diretorio onde fica o docker-compose.prod.yml)
 #
-# POR QUE ESTE ARQUIVO EXISTE SEPARADO DO OUTRO:
-# o Compose so resolve `${...}` de dentro do docker-compose.prod.yml a partir do
-# `.env` do diretorio do projeto e do ambiente do shell. Variavel declarada em
-# `env_file` chega ao CONTAINER, e nao ao Compose: tentando com um arquivo so, o
-# erro que sai e "required variable IMAGEM_TAG is missing a value" (medido em
-# 27/08/2026). Como a tag da imagem e a porta sao usadas para MONTAR o servico,
-# elas tem que morar aqui.
+# POR QUE ESTE ARQUIVO EXISTE SEPARADO DOS OUTROS:
+# o Compose so resolve as variaveis de dentro do docker-compose.prod.yml a
+# partir do `.env` do diretorio do projeto e do ambiente do terminal. Variavel
+# declarada em `env_file` chega ao CONTAINER, e nao ao Compose: tentando com um
+# arquivo so, o erro que sai e "required variable IMAGEM_TAG is missing a value"
+# (medido em 27/08/2026). Como a tag das imagens e a porta sao usadas para
+# MONTAR os servicos, elas tem que morar aqui.
 #
 # O ganho de tabela dessa separacao: o arquivo que muda a cada entrega e a cada
 # rollback e justamente o que NAO tem segredo nenhum.
@@ -18,16 +18,22 @@
 # Permissao: 0644 root:root serve. Nao ha segredo aqui.
 # =============================================================================
 
-# Tag de commit da imagem carregada por `docker load`. SEMPRE sha-xxxxxxx.
+# Tag de commit das imagens carregadas por `docker load`. SEMPRE sha-xxxxxxx.
 # `latest` e proibido: esta linha e o que torna o rollback possivel.
 #
 # Entrega:  trocar por sha-<novo>       + docker compose up -d
 # Rollback: trocar por sha-<anterior>   + docker compose up -d --force-recreate
+#
+# ATENCAO: esta UNICA tag vale para a aplicacao E para as migrations, de
+# proposito. E ela que impede a aplicacao de um commit rodar com o esquema de
+# outro. Nao separar em duas variaveis sem decisao registrada.
 IMAGEM_TAG=
 
-# Nome da imagem. So muda se o repositorio de imagem mudar.
+# Nomes das imagens. So mudam se o repositorio de imagem mudar.
 IMAGEM_NOME=spaguas/dashboard
+MIGRATE_NOME=spaguas/migrate
 
 # Porta em 127.0.0.1 onde o Nginx do orgao faz proxy_pass. Precisa bater com o
-# `proxy_pass http://127.0.0.1:3000` do bloco de Nginx.
+# proxy_pass do bloco de Nginx. O BANCO nao tem porta aqui porque nao publica
+# nenhuma: quem fala com ele esta dentro da rede do compose.
 APP_PORT=3000

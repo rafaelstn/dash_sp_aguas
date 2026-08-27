@@ -2,91 +2,257 @@
 # SP Aguas - DMO | orquestracao de PRODUCAO (servidor do orgao, sem internet)
 # =============================================================================
 # Este arquivo NAO substitui o `docker-compose.yml`, que continua servindo para
-# avaliacao local (sobe Postgres proprio, migrate e workers). Aqui sobe APENAS a
-# aplicacao, porque no servidor do orgao:
+# avaliacao local. Aqui sobem TRES servicos, nesta ordem:
 #
-#   1. O banco e do orgao (SQL Server 2022 em 10.20.40.62), fora deste compose.
-#   2. Quem responde ao mundo e o Nginx do orgao, ja instalado no mesmo host,
-#      com o certificado de dmo.spaguas.sp.gov.br. Este container publica so em
-#      127.0.0.1 e recebe trafego por proxy_pass (ver docs/runbooks/entrega-
-#      imagem-sem-internet.md, secao "Nginx").
-#   3. O host NAO tem saida para a internet: nao existe `docker pull` nem
-#      `docker build` la. A imagem entra por `docker load` de um arquivo. Por
-#      isso este arquivo NAO tem secao `build:` de proposito: se alguem rodar
-#      `docker compose -f docker-compose.prod.yml up` sem a imagem carregada, o
-#      erro tem que ser "imagem nao encontrada", e nunca uma tentativa de build.
+#   db       PostgreSQL + PostGIS, o banco DA APLICACAO. Decisao do Rafael em
+#            27/08/2026: ele roda como container na propria VPS do orgao, e o
+#            Supabase sai de cena por completo. PostGIS porque o sistema usa
+#            funcao geoespacial na divergencia geografica (ADR-0013).
+#   migrate  aplica o shim de compatibilidade e as migrations, e ENCERRA.
+#   app      o dashboard Next.js.
+#
+# O banco nasce VAZIO. Nao ha importacao, copia nem espelho de dado nenhum: o
+# cadastro de postos e as medicoes passam a vir do SQL Server do orgao por
+# leitura ao vivo (ADR-0023), e este banco guarda so o que e SO NOSSO (fichas de
+# visita, triagem, desconformidades, revisoes, estoque, arquivos indexados,
+# auditoria, favoritos, diagramas, fotos).
+#
+# O que continua valendo do desenho anterior:
+#
+#   1. Quem responde ao mundo e o Nginx do orgao, no mesmo host, com o
+#      certificado de dmo.spaguas.sp.gov.br. So a aplicacao publica porta, e so
+#      em 127.0.0.1. O BANCO NAO PUBLICA PORTA NENHUMA: quem precisa falar com
+#      ele esta dentro desta rede.
+#   2. O host NAO tem saida para a internet: nao existe `docker pull` nem
+#      `docker build` la. As imagens entram por `docker load` de arquivo. Por
+#      isso este arquivo NAO tem secao `build:` em servico nenhum, de proposito:
+#      rodando sem as imagens carregadas, o erro tem que ser "imagem nao
+#      encontrada", e nunca uma tentativa de build que vai falhar no meio.
 #
 # Uso no servidor:
 #   docker compose -f docker-compose.prod.yml up -d
 #   docker compose -f docker-compose.prod.yml ps
 #   docker compose -f docker-compose.prod.yml logs -f --tail=100
 #
-# SAO DOIS ARQUIVOS DE AMBIENTE, e a diferenca entre eles nao e organizacao, e
-# mecanica do Compose (medido em 27/08/2026, tentando com um so):
+# ATENCAO DEPOIS DE REINICIAR O HOST: a ordem entre os servicos vale no `up`, e
+# nao na politica de reinicio do Docker. Depois de um reboot, rodar `up -d` de
+# novo em vez de confiar no `restart`, para que a aplicacao so suba com o banco
+# saudavel e as migrations conferidas.
 #
-#   /opt/spaguas-dmo/.env        lido pelo COMPOSE para resolver `${...}` DENTRO
-#                                deste arquivo (a tag da imagem e a porta). O
-#                                Compose so interpola a partir do `.env` do
-#                                diretorio do projeto e do ambiente do shell:
-#                                variavel declarada em `env_file` NAO serve para
-#                                isso, e o erro que sai e "required variable
-#                                IMAGEM_TAG is missing a value". Nao tem segredo.
-#                                Modelo: ops/producao/versao-no-ar.exemplo
+# -----------------------------------------------------------------------------
+# SAO TRES ARQUIVOS DE AMBIENTE, e a divisao nao e organizacao: e mecanica do
+# Compose mais separacao de segredo (medido em 27/08/2026, tentando com um so).
 #
-#   /etc/spaguas-dmo/app.env     lido pelo `env_file` abaixo e entregue AO
-#                                CONTAINER em tempo de execucao. E aqui que
-#                                moram os segredos. root:docker, 0640.
-#                                Modelo: ops/producao/ambiente-producao.exemplo
+#   /opt/spaguas-dmo/.env       lido pelo COMPOSE para resolver as chaves entre
+#                               chaves DENTRO deste arquivo. O Compose so
+#                               interpola a partir do `.env` do diretorio do
+#                               projeto e do ambiente do terminal: variavel
+#                               declarada em `env_file` NAO serve para isso, e o
+#                               erro que sai e "required variable IMAGEM_TAG is
+#                               missing a value". NAO TEM SEGREDO, e e o unico
+#                               que muda a cada entrega e a cada rollback.
+#                               Modelo: ops/producao/versao-no-ar.exemplo
 #
-# Nenhum dos dois entra no git (o .gitignore cobre `.env*` e `*.env`) nem na
-# imagem (o .dockerignore cobre `.env*`). A separacao tem um ganho de tabela: o
-# arquivo que muda a cada entrega e a cada rollback e o SEM segredo.
+#   /etc/spaguas-dmo/db.env     credencial do banco. Lido pelo `db` (que a usa
+#                               para CRIAR o banco na primeira subida) e pelo
+#                               `migrate`. root:docker, 0640.
+#                               Modelo: ops/producao/banco.exemplo
+#
+#   /etc/spaguas-dmo/app.env    ambiente da aplicacao, inclusive a DATABASE_URL
+#                               ja montada. root:docker, 0640.
+#                               Modelo: ops/producao/ambiente-producao.exemplo
+#
+# A senha do Postgres aparece em DOIS desses arquivos (crua no db.env, dentro da
+# DATABASE_URL no app.env), e essa e a unica duplicacao do desenho. Ela existe
+# porque a alternativa seria montar a DATABASE_URL aqui por interpolacao, o que
+# obrigaria a senha a morar no arquivo SEM segredo, que e justamente o que muda
+# a toda entrega. Divergencia entre as duas copias se confere sem imprimir valor
+# nenhum, comparando resumo criptografico (runbook, secao 6.1).
+#
+# Nenhum dos tres entra no git (o .gitignore cobre `.env*` e `*.env`) nem nas
+# imagens (o .dockerignore cobre `.env*`).
+# -----------------------------------------------------------------------------
 #
 # PROIBIDO neste host: `docker system prune -a`. O host roda o Portainer do
-# orgao e imagens paradas de rollback nosso. Limpeza e sempre por nome
+# orgao e as imagens paradas que sao o nosso rollback. Limpeza e sempre por nome
 # (`docker image rm spaguas/dashboard:sha-xxxxxxx`), nunca por varredura.
 # =============================================================================
 
 name: spaguas-dmo
 
 services:
+  # ===========================================================================
+  # BANCO | PostgreSQL 16 + PostGIS 3.4
+  # ===========================================================================
+  db:
+    # Mesma imagem do compose de avaliacao, de proposito: o que roda em
+    # producao e o que foi exercitado aqui. PostGIS e requisito, nao enfeite
+    # (ADR-0013, divergencia geografica).
+    image: postgis/postgis:16-3.4-alpine
+    container_name: spaguas-dmo-db
+    restart: unless-stopped
+    networks:
+      - spaguas-dmo
+
+    # NENHUMA PORTA PUBLICADA, e isto e decisao, nao esquecimento.
+    # O compose de avaliacao publica em 127.0.0.1:5432 para o DBA alcancar com
+    # psql. No servidor do orgao isso deixa de ser necessario e passa a ser
+    # risco: quem precisa falar com o banco (a aplicacao e o migrate) esta
+    # DENTRO desta rede e o alcanca pelo nome `db`. Quem precisar de psql entra
+    # por `docker compose exec db psql`, que passa pelo controle de acesso da
+    # maquina em vez de por uma porta aberta.
+
+    env_file:
+      - /etc/spaguas-dmo/db.env
+    environment:
+      # Mesma escolha de fuso da aplicacao. Trocar aqui muda como carimbo de
+      # tempo sem fuso e interpretado, e e decisao de aplicacao com regressao.
+      TZ: UTC
+
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+    # Memoria compartilhada. O default do Docker e 64 MB, e o Postgres a usa
+    # para ordenacao e juncao em paralelo: com o default, consulta grande falha
+    # com "could not resize shared memory segment", que e erro de infra
+    # disfarcado de erro de consulta.
+    shm_size: 256m
+
+    # Limites. Host medido: 8 vCPU, 9,6 GB de RAM, 890 MB em uso, com o
+    # Portainer do orgao no mesmo lugar.
+    #   memory 2G: folgado para o volume de dado previsto, que e pequeno (so o
+    #     que e nosso; posto e medicao vem do SQL Server por leitura ao vivo).
+    #     O teto existe para que um plano de consulta ruim nao leve a maquina
+    #     junto, e para que o OOM killer do host nunca precise escolher vitima.
+    #   cpus 2.0: mesma fatia da aplicacao. Somando os dois, 4 das 8 vCPU e
+    #     3,5 GB dos 9,6 GB ficam comprometidos no pior caso, o que deixa a
+    #     metade da maquina livre para o host e para o Portainer.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+          pids: 256
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+    # Rotacao de log tambem aqui. O log do Postgres nao carrega dado pessoal em
+    # operacao normal, mas carrega TEXTO DE CONSULTA quando algo falha, e
+    # consulta com parametro pode conter e-mail. Mesmo teto de 50 MB.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      # `pg_isready` responde "aceita conexao", que e o que o migrate e a
+      # aplicacao precisam saber. O cifrao dobrado escapa a interpolacao do
+      # Compose: quem tem que expandir a variavel e o shell DENTRO do container,
+      # que le o env_file, e nao o Compose aqui fora.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB} -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+
+    labels:
+      br.gov.sp.spaguas.sistema: "dmo-banco"
+      br.gov.sp.spaguas.ambiente: "producao"
+      br.gov.sp.spaguas.responsavel: "DamaTech Solutions"
+
+  # ===========================================================================
+  # MIGRATE | aplica shim + migrations e ENCERRA (roda uma vez por subida)
+  # ===========================================================================
+  migrate:
+    # Imagem propria, com a MESMA tag de commit da aplicacao. Ela existe para
+    # que o SQL viaje junto do codigo: no compose de avaliacao o `migrate` monta
+    # ./db e ./supabase/migrations do disco, e num servidor sem internet isso
+    # obrigaria a transportar um segundo pacote de arquivos e a manter os dois
+    # em sincronia na mao. Imagem com a mesma tag elimina a possibilidade de
+    # rodar a aplicacao de um commit com as migrations de outro.
+    # Construida a partir de ops/producao/Dockerfile.migrate, sobre a MESMA
+    # imagem do servico `db`, entao o acrescimo em disco e so o dos arquivos SQL.
+    image: ${MIGRATE_NOME:-spaguas/migrate}:${IMAGEM_TAG:?defina IMAGEM_TAG com a tag de commit, no formato sha-xxxxxxx}
+    container_name: spaguas-dmo-migrate
+    # `no`: e trabalho de uma vez so. Com `unless-stopped` ele reaplicaria as
+    # migrations a cada reinicio do host, o que so nao vira desastre porque elas
+    # sao idempotentes; nao e motivo para deixar assim.
+    restart: "no"
+    networks:
+      - spaguas-dmo
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - /etc/spaguas-dmo/db.env
+    environment:
+      # O migrate.sh monta a conexao a partir das PG* quando DATABASE_URL nao
+      # esta definida, e o host padrao dele ja e `db`, que e o nome do servico
+      # acima. Por isso a credencial da APLICACAO nao precisa entrar aqui.
+      TZ: UTC
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+          pids: 128
+    labels:
+      br.gov.sp.spaguas.sistema: "dmo-migrate"
+      br.gov.sp.spaguas.ambiente: "producao"
+
+  # ===========================================================================
+  # APLICACAO | dashboard Next.js (standalone)
+  # ===========================================================================
   app:
     # Tag de commit, sempre. `latest` e proibido em producao: sem ela o rollback
     # nao tem para onde apontar e ninguem sabe qual codigo esta no ar.
     # IMAGEM_TAG vem de /opt/spaguas-dmo/.env (NAO do env_file, ver cabecalho) e
-    # e OBRIGATORIA: o `:?` faz o compose RECUSAR subir sem ela, em vez de
-    # assumir um default em silencio. Trocar esta variavel e subir de novo e o
-    # procedimento de entrega, e tambem o de rollback.
+    # e OBRIGATORIA: o sinal de interrogacao faz o Compose RECUSAR subir sem
+    # ela, em vez de assumir um default em silencio. Trocar esta variavel e
+    # subir de novo e o procedimento de entrega, e tambem o de rollback.
     image: ${IMAGEM_NOME:-spaguas/dashboard}:${IMAGEM_TAG:?defina IMAGEM_TAG com a tag de commit, no formato sha-xxxxxxx}
     container_name: spaguas-dmo-app
     restart: unless-stopped
-
-    # -------------------------------------------------------------------------
-    # Rede: bridge propria do projeto. O host ja tem as tres redes padrao e o
-    # Portainer; deixar a aplicacao na `bridge` default a poria no mesmo dominio
-    # de camada 2 de qualquer container futuro do orgao.
-    # -------------------------------------------------------------------------
     networks:
       - spaguas-dmo
 
-    # -------------------------------------------------------------------------
+    # A ordem de subida esta aqui, e nao num script: o banco precisa estar
+    # SAUDAVEL, e o migrate precisa ter encerrado COM SUCESSO, antes de a
+    # aplicacao existir. Sem a segunda condicao, a aplicacao sobe contra um
+    # banco sem tabela e responde erro em tudo, com log que parece defeito de
+    # codigo.
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
     # Publicacao APENAS em loopback. Quem termina TLS e responde ao mundo e o
     # Nginx do orgao (porta 443), no mesmo host. Sem o `127.0.0.1:` o Docker
     # publica em 0.0.0.0 e escreve a regra direto no iptables, o que passa POR
     # CIMA do firewall do host: a aplicacao ficaria acessivel em HTTP puro pela
     # rede interna, sem certificado e sem os cabecalhos que o Nginx acrescenta.
-    # -------------------------------------------------------------------------
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
 
-    # -------------------------------------------------------------------------
-    # Ambiente. Tudo que e segredo mora no arquivo; aqui so o que e publico e
-    # precisa ser lido por quem opera.
+    # Ambiente. Segredo so no arquivo; aqui, o que e publico e precisa ser lido
+    # por quem opera.
     #
     # ATENCAO OPERACIONAL: quem tem acesso ao Portainer LE o ambiente do
     # container na interface, inclusive DATABASE_URL. O arquivo com 0640 protege
     # o disco, nao o painel. Ver o pedido ao orgao no runbook.
-    # -------------------------------------------------------------------------
     env_file:
       - /etc/spaguas-dmo/app.env
     environment:
@@ -102,27 +268,18 @@ services:
       PORT: 3000
       NEXT_TELEMETRY_DISABLED: 1
 
-    # -------------------------------------------------------------------------
-    # Limites de recurso. Host medido: 8 vCPU, 9,6 GB de RAM, 890 MB em uso,
-    # rodando tambem o Portainer do orgao.
-    #
-    # memory 1536M: o processo Node do Next standalone fica na casa de 250 a
-    #   400 MB em regime; 1,5 GB cobre pico de exportacao (exceljs monta a
-    #   planilha em memoria) com folga e ainda deixa ~8 GB para o host e para o
-    #   Portainer. Sem limite, um vazamento nosso derruba o Portainer do cliente
-    #   junto, e quem apanha primeiro e o OOM killer do host escolhendo a vitima.
-    # cpus 2.0: um quarto da maquina. O Next e single-thread no laco principal;
-    #   2 vCPU cobrem o laco mais o pool de libuv (I/O, compressao, PDF) sem
-    #   deixar a aplicacao monopolizar as 8.
-    # reservations: piso garantido para o container nao ser espremido por um
-    #   vizinho futuro no mesmo host.
-    # -------------------------------------------------------------------------
-    # pids: teto de processos. Contem fork bomb e denuncia vazamento de
-    #   subprocesso (a rota de ficha tenta spawnar o indexer Python, ver runbook).
-    #   Fica DENTRO de `deploy.resources.limits`, e nao como `pids_limit` no topo
-    #   do servico: com os dois escritos, esta versao do Compose recusa o arquivo
-    #   inteiro com "can't set distinct values on 'pids_limit' and
-    #   'deploy.resources.limits.pids'" (medido em 27/08/2026).
+    # Limites de recurso. Ver a justificativa de dimensionamento no servico `db`.
+    #   memory 1536M: o processo Node do Next standalone fica na casa de 250 a
+    #     400 MB em regime; 1,5 GB cobre pico de exportacao (exceljs monta a
+    #     planilha em memoria) com folga.
+    #   cpus 2.0: o Next e single-thread no laco principal; 2 vCPU cobrem o laco
+    #     mais o pool de libuv (I/O, compressao) sem monopolizar as 8.
+    #   pids: contem fork bomb e denuncia vazamento de subprocesso (a rota de
+    #     ficha tenta spawnar o indexer Python, ver nota no runbook). Fica DENTRO
+    #     de `deploy.resources.limits`, e nao como `pids_limit` no topo do
+    #     servico: com os dois escritos, esta versao do Compose recusa o arquivo
+    #     inteiro, reclamando de valor distinto entre as duas formas de dizer a
+    #     mesma coisa (medido em 27/08/2026).
     deploy:
       resources:
         limits:
@@ -133,20 +290,17 @@ services:
           cpus: "0.25"
           memory: 512M
 
-    # -------------------------------------------------------------------------
     # Rotacao de log. O log da aplicacao carrega e-mail de usuario por politica
     # do projeto (trilha de auditoria), e QUALQUER pessoa com Portainer le esse
     # log. Sem rotacao, o json-file cresce ate encher os 22 GB livres do disco e
     # derruba o host inteiro, levando o Portainer do orgao junto.
     #   10m x 5 = 50 MB de teto por container, medida conhecida e auditavel.
-    # -------------------------------------------------------------------------
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "5"
 
-    # -------------------------------------------------------------------------
     # Hardening. O Dockerfile ja roda como `nextjs` (uid 1001), non-root; o que
     # esta aqui e o que o Dockerfile nao consegue garantir sozinho.
     #
@@ -161,7 +315,6 @@ services:
     # tmpfs com noexec/nosuid: mesmo escrevendo, nao executa.
     #   mode=1777 e obrigatorio porque o processo roda como uid 1001 e o tmpfs
     #   nasce root; sem o modo, o Next quebra no primeiro write com EACCES.
-    # -------------------------------------------------------------------------
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -170,20 +323,15 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m,mode=1777
       - /app/.next/cache:rw,noexec,nosuid,size=256m,mode=1777
-    # PID 1 que reaproveita zumbi. O `node server.js` nao colhe filho orfao, e a
-    # rota de ficha spawna subprocesso.
+    # PID 1 que colhe zumbi. O `node server.js` nao colhe filho orfao, e a rota
+    # de ficha spawna subprocesso.
     init: true
 
-    # -------------------------------------------------------------------------
     # Healthcheck. Repetido aqui, e nao so herdado do Dockerfile, porque quem
-    # opera le o compose e precisa saber o que "healthy" significa neste sistema:
-    # /api/health faz `SELECT 1` no banco do orgao. Ou seja, o healthcheck NAO
-    # mede so "o Node subiu", mede tambem o elo com 10.20.40.62. Container
-    # unhealthy com log de `health.db.falha` e problema de rede ou credencial de
-    # banco, nao de aplicacao.
-    # start_period 60s: o primeiro boot valida ambiente e abre pool; 40s do
-    # Dockerfile e apertado num host com disco compartilhado.
-    # -------------------------------------------------------------------------
+    # opera le o compose e precisa saber o que "healthy" significa neste
+    # sistema: /api/health faz `SELECT 1` no banco. Container unhealthy com log
+    # de `health.db.falha` e problema de banco ou de rede, nao de aplicacao.
+    # start_period 60s: o primeiro boot valida ambiente e abre o pool.
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 30s
@@ -196,7 +344,22 @@ services:
       br.gov.sp.spaguas.ambiente: "producao"
       br.gov.sp.spaguas.responsavel: "DamaTech Solutions"
 
+volumes:
+  # Volume nomeado, e nao mapeamento de pasta do host: o Docker cuida da
+  # permissao (o Postgres do container roda com uid proprio) e o volume aparece
+  # com nome legivel no Portainer e no `docker volume ls`.
+  #
+  # ESTE VOLUME E O SISTEMA. A imagem se reconstroi em minutos; o que esta aqui,
+  # nao. Ele precisa entrar na rotina de backup da maquina, e backup so conta
+  # como backup depois de uma restauracao testada (runbook, secoes 7.3 e 10.8).
+  pg_data:
+    name: spaguas-dmo-pg-data
+
 networks:
+  # Bridge propria do projeto. O host ja tem as tres redes padrao e o Portainer;
+  # deixar estes servicos na `bridge` default os poria no mesmo dominio de
+  # camada 2 de qualquer container futuro do orgao, e o banco, que nao publica
+  # porta, ficaria alcancavel por eles assim mesmo.
   spaguas-dmo:
     name: spaguas-dmo
     driver: bridge

@@ -1,0 +1,52 @@
+# =============================================================================
+# MODELO da credencial do BANCO da aplicacao.
+# =============================================================================
+# Destino no servidor:  /etc/spaguas-dmo/db.env
+#
+# Lido por DOIS servicos do docker-compose.prod.yml:
+#   db       usa estes valores para CRIAR o banco e o papel na PRIMEIRA subida
+#   migrate  usa os mesmos para aplicar o shim e as migrations
+#
+# Este arquivo NAO tem valor preenchido, de proposito: modelo com valor de
+# aparencia legitima e o que sobe para producao quando alguem copia e esquece.
+#
+# Preparar o destino no servidor:
+#   sudo install -d -m 0750 -o root -g docker /etc/spaguas-dmo
+#   sudo install -m 0640 -o root -g docker /dev/null /etc/spaguas-dmo/db.env
+#   sudo stat -c "%a %U:%G %n" /etc/spaguas-dmo/db.env   # espera: 640 root:docker
+# =============================================================================
+
+POSTGRES_DB=spaguas
+POSTGRES_USER=spaguas
+
+# A senha NASCE AQUI e e NOSSA: nao vem do orgao, nao vem de fornecedor, nao e
+# reaproveitada de outro sistema. Gerar NO SERVIDOR, no momento da instalacao:
+#
+#   openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
+#
+# O `tr` existe por um motivo pratico: a senha tambem viaja DENTRO da
+# DATABASE_URL em /etc/spaguas-dmo/app.env, e caractere reservado de URL
+# (arroba, dois-pontos, barra, mais) quebra a leitura da string de conexao de um
+# jeito que aparece como "senha errada" e manda procurar no lugar errado.
+POSTGRES_PASSWORD=
+
+# -----------------------------------------------------------------------------
+# DEPOIS DE PREENCHER: a mesma senha precisa estar dentro da DATABASE_URL do
+# app.env. Conferir SEM imprimir valor nenhum, comparando resumo criptografico:
+#
+#   a=$(sudo sed -n "s/^POSTGRES_PASSWORD=//p" /etc/spaguas-dmo/db.env | sha256sum)
+#   b=$(sudo sed -n "s#^DATABASE_URL=postgresql://[^:]*:\([^@]*\)@.*#\1#p" /etc/spaguas-dmo/app.env | sha256sum)
+#   [ "$a" = "$b" ] && echo "conferem" || echo "DIVERGEM"
+#
+# O sintoma de divergencia e o container da aplicacao subir saudavel por fora e
+# o /api/health responder degradado, o que parece problema de rede.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# TROCAR A SENHA DEPOIS DA PRIMEIRA SUBIDA NAO E EDITAR ESTE ARQUIVO.
+# As variaveis POSTGRES_* so tem efeito quando o volume esta VAZIO: e o
+# entrypoint da imagem que as usa para inicializar o cluster. Com o volume ja
+# criado, editar aqui nao muda nada no banco e passa a MENTIR sobre a senha
+# real. Rotacao se faz por ALTER ROLE dentro do banco, e depois se acerta este
+# arquivo e a DATABASE_URL do app.env, nessa ordem.
+# -----------------------------------------------------------------------------

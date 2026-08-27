@@ -1,17 +1,17 @@
-# Runbook: entrega da imagem no servidor do órgão (sem internet)
+# Runbook: entrega no servidor do órgão (sem internet)
 
-**Sistema:** SP Águas - DMO (dashboard Next.js)
+**Sistema:** SP Águas - DMO (dashboard Next.js + PostgreSQL próprio)
 **Servidor:** `10.199.43.27`, `dmo.spaguas.sp.gov.br`, Ubuntu 24.04.1 em VM VMware
 **Escrito em:** 27/08/2026
 **Estado:** preparação. **Nenhum passo deste runbook foi executado no servidor.**
 Ordem do Rafael em 27/08: preparar o container, não fazer o deploy.
 
-Cada afirmação abaixo está marcada como **MEDIDO** (existe comando e saída por
-trás) ou **HIPÓTESE** (raciocínio ainda não confirmado no ambiente real).
+Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trás) ou
+**HIPÓTESE** (raciocínio ainda não confirmado no ambiente real).
 
 ---
 
-## 1. Por que existe um runbook diferente do normal
+## 1. Por que este runbook é diferente do normal
 
 **MEDIDO:** o servidor não tem saída para a internet. O DNS não resolve nome
 externo nenhum (`github.com`, `registry-1.docker.io`, nem o próprio
@@ -25,13 +25,29 @@ Isso elimina, de uma vez, todo o caminho normal de entrega:
 | `docker build` no servidor | `npm ci` baixa 698 pacotes do registro público |
 | `docker pull` de um registro | não alcança `ghcr.io` nem `docker.io` |
 | Runner do GitHub publicando a imagem | o servidor não busca o que foi publicado |
-| Renovação automática do certificado | não alcança a API do Let's Encrypt (seção 8) |
+| Renovação automática do certificado | não alcança a API do Let's Encrypt (seção 10.2) |
 
-Sobra um caminho: **construir aqui, transportar o arquivo, carregar lá.**
+Sobra um caminho: **construir aqui, transportar o arquivo, carregar lá.** E
+isso vale inclusive para a imagem do PostgreSQL: ela também não pode ser baixada
+no servidor, então viaja no mesmo pacote.
 
-**MEDIDO:** a imagem base `node:20-alpine` também não pode ser baixada no
-servidor. Por isso o que viaja é a imagem final inteira (`docker save`), e não um
-Dockerfile: o `save` carrega todas as camadas, inclusive a base.
+### O que sobe no servidor
+
+Decisão do Rafael em **27/08/2026**: o PostgreSQL da aplicação roda como
+**container na própria máquina do órgão**, e o Supabase sai de cena por completo.
+São três serviços, definidos em `docker-compose.prod.yml`:
+
+| Serviço | Imagem | Papel |
+|---|---|---|
+| `db` | `postgis/postgis:16-3.4-alpine` | banco da aplicação. PostGIS é requisito (ADR-0013) |
+| `migrate` | `spaguas/migrate:sha-<commit>` | aplica o shim e as migrations, e encerra |
+| `app` | `spaguas/dashboard:sha-<commit>` | o dashboard |
+
+**O banco nasce vazio.** Não há importação, cópia nem espelho de dado nenhum. O
+cadastro de postos e as medições passam a vir do SQL Server do órgão por leitura
+ao vivo (ADR-0023); este banco guarda só o que é **só nosso**: fichas de visita,
+triagem e aprovação, desconformidades, revisões, estoque, arquivos indexados,
+trilha de auditoria, favoritos, diagramas e fotos.
 
 ---
 
@@ -41,15 +57,14 @@ Dockerfile: o `save` carrega todas as camadas, inclusive a base.
 
    ```bash
    git status --porcelain     # tem que sair vazio
-   git rev-parse --short HEAD # anote: esta é a TAG
+   git rev-parse --short HEAD # anote: esta é a TAG das duas imagens
    ```
 
 2. Ter as variáveis de build decididas. Três delas são embutidas no pacote do
    navegador e **não** podem ser trocadas depois sem reconstruir a imagem:
 
    - `NEXT_PUBLIC_APP_URL` = `https://dmo.spaguas.sp.gov.br`
-   - `NEXT_PUBLIC_SUPABASE_URL` (ver bloqueio 9.2)
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (ver bloqueio 9.2)
+   - as duas variáveis da camada de identidade (ver bloqueio 9.2)
 
 3. Construir num computador com internet. **Nunca** construir a partir do disco
    de rede: a instalação de dependências em SMB não conclui. Exportar a árvore
@@ -59,33 +74,45 @@ Dockerfile: o `save` carrega todas as camadas, inclusive a base.
    mkdir -p /c/tmp/dmo-build && git archive HEAD | tar -x -C /c/tmp/dmo-build
    ```
 
-   Usar `git archive` e não copiar a pasta tem uma razão de segurança: ele
+   Usar `git archive` em vez de copiar a pasta tem uma razão de segurança: ele
    entrega só o que está versionado, então `.env.local` e afins não têm como
    entrar no contexto de build nem por acidente.
 
 ---
 
-## 3. Construir a imagem
+## 3. Construir as duas imagens
+
+As duas levam **a mesma tag de commit**, e isso não é estética: é o que impede a
+aplicação de um commit rodar com as migrations de outro.
 
 ```bash
 cd /c/tmp/dmo-build
 SHA=$(git -C "<repositorio>" rev-parse --short HEAD)
 
+# 1. Aplicação
 DOCKER_BUILDKIT=1 docker build \
   --build-arg NEXT_PUBLIC_APP_URL=https://dmo.spaguas.sp.gov.br \
   --build-arg NEXT_PUBLIC_SUPABASE_URL="<valor decidido>" \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="<valor decidido>" \
   -t spaguas/dashboard:sha-$SHA .
+
+# 2. Migrations (o SQL viaja junto do código)
+DOCKER_BUILDKIT=1 docker build \
+  -f ops/producao/Dockerfile.migrate \
+  -t spaguas/migrate:sha-$SHA .
+
+# 3. Garantir que a imagem do banco está no disco local para viajar junto
+docker pull postgis/postgis:16-3.4-alpine
 ```
 
 **A tag é sempre `sha-<commit>`.** `latest` é proibido em produção, e o motivo é
 prático antes de ser doutrinário: com `latest`, o rollback não tem para onde
 apontar e ninguém consegue dizer qual código está no ar.
 
-### Conferir a imagem antes de transportar
+### Conferir antes de transportar
 
 Três verificações que custam segundos e evitam levar defeito para dentro do
-órgão. Todas **MEDIDAS** em 27/08/2026 na imagem de teste:
+órgão. Todas **MEDIDAS** em 27/08/2026:
 
 ```bash
 # 1. Nenhum segredo e nenhuma variável de build sobrou na imagem final.
@@ -107,53 +134,88 @@ docker run --rm --entrypoint sh spaguas/dashboard:sha-$SHA -c 'ls -a /app | grep
 ## 4. Empacotar e medir o que trafega
 
 ```bash
-docker save spaguas/dashboard:sha-$SHA | gzip -6 -c > dmo-sha-$SHA.tar.gz
+docker save \
+  spaguas/dashboard:sha-$SHA \
+  spaguas/migrate:sha-$SHA \
+  postgis/postgis:16-3.4-alpine \
+  | gzip -6 -c > dmo-sha-$SHA.tar.gz
+
 ls -l dmo-sha-$SHA.tar.gz
 ```
 
-**MEDIDO em 27/08/2026**, na imagem construída a partir de `34417b7`:
+**MEDIDO em 27/08/2026**, a partir de `34417b7`:
 
 | Grandeza | Valor |
 |---|---|
-| Tamanho descompactado (`docker images`) | **315 MB** |
-| `docker save ... \| gzip -6 -c \| wc -c` (o que viaja) | **74.778.495 bytes, ou 71,3 MiB** |
+| `spaguas/dashboard` descompactada (`docker images`) | 315 MB |
+| `spaguas/migrate` descompactada (`docker images`) | 627 MB |
+| `postgis/postgis:16-3.4-alpine` descompactada | 627 MB |
+| **Pacote compactado com as três, que é o que viaja** | **235.892.386 bytes, ou 225 MiB** |
+| Só a aplicação, para comparação | 74.778.495 bytes, ou 71,3 MiB |
 
-O primeiro número é o que o `docker images` mostra, e ele **não** mede o que
-trafega: é a soma das camadas já expandidas. Aqui a diferença entre os dois é um
-fator de **4,2**. Usar o número errado infla a estimativa e leva a decisão errada
-sobre o meio de transporte, que é a única coisa em jogo neste ponto. O número que
-vale para combinar o transporte com o órgão é o segundo: **cerca de 71 MiB por
-versão**, que cabe em qualquer canal, inclusive anexo de sistema interno.
+### Três números diferentes que respondem três perguntas diferentes
+
+Esta é a parte do runbook que mais engana, então vai escrita com os números ao
+lado.
+
+**1. O que o `docker images` mostra não é o que ocupa.** As três referências
+somam 1.569 MB nos rótulos, e não ocupam isso. `docker system df -v` mostra por
+quê:
+
+```
+REPOSITORY          TAG            SIZE     SHARED SIZE   UNIQUE SIZE
+spaguas/dashboard   sha-34417b7    315MB    0B            314.7MB
+spaguas/migrate     sha-34417b7    627MB    626.7MB       416.2kB
+```
+
+A imagem de migrations é construída **sobre a mesma base do banco**, então no
+disco do servidor ela custa **416 kB**, e não 627 MB. Foi por isso que ela foi
+feita assim.
+
+**2. O que ocupa no disco não é o que trafega.** `docker save` **não** deduplica
+contra o que já existe no destino: ele empacota a cadeia inteira de camadas de
+cada imagem citada. Medido: o pacote com as três referências e o pacote com
+apenas `dashboard` mais `migrate` dão praticamente o mesmo tamanho
+(235.892.386 contra 235.886.243 bytes), porque a base do PostGIS vai junto de
+qualquer jeito, esteja ela no destino ou não.
+
+**Consequência prática, e ela é boa:** não adianta tentar economizar deixando a
+imagem do PostGIS de fora nas entregas seguintes. O pacote de toda entrega fica
+em torno de **225 MiB**, o que é irrelevante para um arquivo transferido dentro
+da rede do órgão, e o preço disso é a impossibilidade de rodar as migrations de
+um commit contra o código de outro. Barato pelo que compra.
+
+**3. O único jeito de saber o incremento real é medir na hora.** **HIPÓTESE até
+a segunda entrega:** a partir dela, duas tags consecutivas da aplicação
+compartilham a base, as dependências e o usuário do sistema, e só a camada com o
+resultado do build muda. Medir com `docker system df -v` no dia e registrar aqui.
 
 ### Consumo em disco no servidor, contra os 22 GB livres
 
 **MEDIDO** no servidor: disco de 26 GB, **22 GB livres**, uma imagem
 (`portainer/portainer-ce:lts`, 188 MB), um volume, um container.
 
-Durante o `docker load` convivem no disco, ao mesmo tempo:
-
 | Item | Espaço |
 |---|---|
-| Arquivo `.tar.gz` transportado | 71 MiB |
-| Camadas expandidas da versão nova | 315 MB |
-| Camadas da versão anterior (mantida para rollback) | ver nota abaixo |
+| Arquivo `.tar.gz` transportado (apagável depois do `load`) | 225 MiB |
+| Imagens da primeira versão, já deduplicadas | cerca de 940 MB |
+| Volume do banco, recém-migrado e **vazio de dado** | **110,3 MB** (MEDIDO) |
+| Cada versão adicional da aplicação, mantida para rollback | ver nota 3 acima |
 
-**Nota que muda a conta, e para melhor:** a partir da segunda entrega, duas tags
-consecutivas compartilham quase todas as camadas. Só a camada com o resultado do
-build muda; a base `node:20-alpine`, a instalação de dependências e o usuário do
-sistema são reaproveitados por identidade de conteúdo. O acréscimo real da
-segunda versão no disco é a diferença, não o total. **HIPÓTESE até a segunda
-entrega ser feita:** medir na hora com `docker system df -v` e registrar aqui.
+Os 110 MB do volume vazio são quase todos o catálogo do PostgreSQL e as
+extensões do PostGIS, não dado nosso. Como o cadastro de postos e as medições
+não moram aqui, o crescimento esperado é lento. **HIPÓTESE:** acompanhar por
+`docker system df -v` no primeiro mês e registrar a curva real.
 
-Mesmo pela conta pessimista (todas as versões somando o total), a política de
-manter **3 versões** cabe com folga nos 22 GB.
+Mesmo pela conta pessimista, a política de manter **3 versões** cabe com folga
+nos 22 GB.
 
 ---
 
 ## 5. Transportar
 
-**PENDENTE DE DEFINIÇÃO PELO ÓRGÃO.** Está no pedido formal (seção 10, item 5).
-As opções, em ordem de preferência:
+**PENDENTE DE DEFINIÇÃO PELO ÓRGÃO.** Está no pedido formal (seção 10.5). As
+opções, em ordem de preferência:
 
 1. Compartilhamento de arquivos interno alcançável pelo servidor (`scp` a partir
    de uma máquina da rede do órgão que tenha o arquivo).
@@ -172,90 +234,147 @@ sha256sum dmo-sha-$SHA.tar.gz
 
 ---
 
-## 6. Carregar e subir no servidor
+## 6. Instalar e subir no servidor
 
-### 6.1 São dois arquivos de ambiente, e a divisão não é organização
+### 6.1 São três arquivos de ambiente, e a divisão não é organização
 
-**MEDIDO em 27/08/2026**, tentando fazer com um só: o Compose resolve `${...}` de
-dentro do `docker-compose.prod.yml` a partir do `.env` do diretório do projeto e
-do ambiente do terminal. Variável declarada em `env_file` vai para o
+**MEDIDO em 27/08/2026**, tentando fazer com um só: o Compose resolve as
+variáveis de dentro do `docker-compose.prod.yml` a partir do `.env` do diretório
+do projeto e do ambiente do terminal. Variável declarada em `env_file` vai para o
 **container**, e não para o **Compose**. Com a tag da imagem no `env_file`, o
 comando morre com `required variable IMAGEM_TAG is missing a value`.
 
 | Arquivo | Quem lê | O que tem | Permissão |
 |---|---|---|---|
-| `/opt/spaguas-dmo/.env` | o Compose, para montar o serviço | `IMAGEM_TAG`, `IMAGEM_NOME`, `APP_PORT` | 0644 root:root |
-| `/etc/spaguas-dmo/app.env` | o container, em execução | banco, identidade, `CRON_SECRET` | 0640 root:docker |
+| `/opt/spaguas-dmo/.env` | o Compose, para montar os serviços | `IMAGEM_TAG`, `IMAGEM_NOME`, `MIGRATE_NOME`, `APP_PORT` | 0644 root:root |
+| `/etc/spaguas-dmo/db.env` | os serviços `db` e `migrate` | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | 0640 root:docker |
+| `/etc/spaguas-dmo/app.env` | o serviço `app` | `DATABASE_URL`, identidade, `CRON_SECRET` | 0640 root:docker |
 
 O ganho de tabela: o arquivo que muda a cada entrega e a cada rollback é
-justamente o que **não** tem segredo nenhum. Modelos em
-`ops/producao/versao-no-ar.exemplo` e `ops/producao/ambiente-producao.exemplo`.
+justamente o que **não** tem segredo nenhum. Modelos em `ops/producao/`.
 
 Preparar uma única vez, no servidor:
 
 ```bash
 sudo install -d -m 0755 /opt/spaguas-dmo
 sudo install -d -m 0750 -o root -g docker /etc/spaguas-dmo
+sudo install -m 0640 -o root -g docker /dev/null /etc/spaguas-dmo/db.env
 sudo install -m 0640 -o root -g docker /dev/null /etc/spaguas-dmo/app.env
-sudo stat -c '%a %U:%G %n' /etc/spaguas-dmo/app.env   # espera: 640 root:docker
+sudo stat -c '%a %U:%G %n' /etc/spaguas-dmo/*.env   # espera: 640 root:docker
 ```
+
+**A senha do Postgres nasce aqui e é nossa.** Ela não vem do órgão nem de
+fornecedor nenhum. Gerar no servidor, no momento da instalação:
+
+```bash
+openssl rand -base64 32 | tr -d '=+/' | cut -c1-32
+```
+
+O `tr` existe por um motivo prático: a mesma senha viaja **dentro** da
+`DATABASE_URL` do `app.env`, e caractere reservado de URL (arroba, dois-pontos,
+barra, mais) quebra a leitura da string de conexão de um jeito que aparece como
+"senha errada" e manda procurar no lugar errado.
+
+Essa duplicação é a única do desenho, e se confere **sem imprimir valor nenhum**,
+comparando resumo criptográfico:
+
+```bash
+a=$(sudo sed -n 's/^POSTGRES_PASSWORD=//p' /etc/spaguas-dmo/db.env | sha256sum)
+b=$(sudo sed -n 's#^DATABASE_URL=postgresql://[^:]*:\([^@]*\)@.*#\1#p' /etc/spaguas-dmo/app.env | sha256sum)
+[ "$a" = "$b" ] && echo "conferem" || echo "DIVERGEM"
+```
+
+O sintoma de divergência é o container da aplicação subir bem por fora e o
+`/api/health` responder `degraded`, o que parece problema de rede.
+
+> **Trocar a senha depois da primeira subida não é editar o arquivo.** As
+> variáveis `POSTGRES_*` só têm efeito com o volume **vazio**: é o entrypoint da
+> imagem que as usa para inicializar o cluster. Com o volume já criado, editar o
+> arquivo não muda nada no banco e passa a mentir sobre a senha real. Rotação se
+> faz por `ALTER ROLE` dentro do banco, e só depois se acertam os dois arquivos.
 
 ### 6.2 Carregar e subir
 
 ```bash
-# 1. Carregar a imagem
+# 1. Carregar as imagens (as três de uma vez, do mesmo arquivo)
 docker load -i dmo-sha-$SHA.tar.gz
-docker images spaguas/dashboard   # confirmar que a tag sha-$SHA apareceu
+docker images | grep -E 'spaguas/(dashboard|migrate)|postgis'
 
-# 2. Apontar a versão. Esta é a única linha que muda entre uma entrega e outra,
-#    e ela mora no arquivo SEM segredo (ver seção 6.1).
+# 2. Apontar a versão. Esta é a única linha que muda entre uma entrega e outra.
 sudo sed -i "s/^IMAGEM_TAG=.*/IMAGEM_TAG=sha-$SHA/" /opt/spaguas-dmo/.env
 sudo grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env
 
-# 3. Subir
+# 3. Subir. A ordem está no compose, não em script:
+#    banco saudável -> migrations com sucesso -> aplicação.
 cd /opt/spaguas-dmo
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-### Conferir que subiu de verdade
+> **Depois de reiniciar o host, rodar `up -d` de novo.** A ordem entre serviços
+> vale no `up`, e não na política de reinício do Docker: num reboot o Docker
+> levanta os containers sem reavaliar as condições, e a aplicação pode subir
+> antes de o banco aceitar conexão.
+
+### 6.3 Conferir que subiu de verdade
 
 Exit code de `up -d` diz que o Docker aceitou o pedido, e não que o sistema está
 no ar. O que responde é o efeito:
 
 ```bash
-# a. Estado e saúde. Esperar "healthy", não "running".
-docker compose -f docker-compose.prod.yml ps
+# a. Estado dos três. Esperar db e app "healthy", e migrate "Exited (0)".
+docker compose -f docker-compose.prod.yml ps -a
 
-# b. A porta está publicada SÓ em loopback. A saída tem que começar com
-#    127.0.0.1 e NUNCA com 0.0.0.0.
-docker compose -f docker-compose.prod.yml port app 3000
-ss -ltnp | grep ':3000'
+# b. As migrations aplicaram, e aplicaram TODAS.
+docker compose -f docker-compose.prod.yml logs migrate | tail -5
+#    a última linha tem que ser "[migrate] concluído."
+docker inspect spaguas-dmo-migrate --format '{{.State.ExitCode}}'
+#    espera: 0
 
-# c. A aplicação responde, e o healthcheck também mede o banco do órgão.
-curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/health
+# c. O banco tem o esquema, e o PostGIS está instalado.
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U spaguas -d spaguas -tAc \
+  "select count(*) from information_schema.tables where table_schema='public'"
+#    espera: 40   (medido em 27/08/2026, a partir de 34417b7)
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U spaguas -d spaguas -tAc "select extversion from pg_extension where extname='postgis'"
+#    espera: 3.4.3
+
+# d. O banco NÃO publica porta nenhuma no host, e a aplicação só em loopback.
+docker inspect spaguas-dmo-db  --format '{{.NetworkSettings.Ports}}'
+#    espera: map[5432/tcp:[]]        <- lista vazia = nada publicado
+docker inspect spaguas-dmo-app --format '{{.NetworkSettings.Ports}}'
+#    espera: map[3000/tcp:[{127.0.0.1 3000}]]
+ss -ltnp | grep -E ':(3000|5432)'
+#    a 5432 NÃO pode aparecer
+
+# e. A aplicação responde, e o healthcheck também mede o banco.
 curl -sS http://127.0.0.1:3000/api/health
-#    {"status":"ok","db":"ok"}       -> aplicação e banco de pé
+#    {"status":"ok","db":"ok"}         -> aplicação e banco de pé
 #    {"status":"degraded","db":"erro"} -> aplicação de pé, banco inalcançável
-#                                         (rede ou credencial, não código)
+#                                         (senha divergente ou rede, não código)
 
-# d. Os limites de recurso foram aplicados de fato.
+# f. Os limites foram aplicados de fato, nos dois containers.
+docker inspect spaguas-dmo-db --format \
+  'db  mem={{.HostConfig.Memory}} cpu={{.HostConfig.NanoCpus}} pids={{.HostConfig.PidsLimit}} shm={{.HostConfig.ShmSize}}'
+#    db  mem=2147483648 cpu=2000000000 pids=256 shm=268435456
 docker inspect spaguas-dmo-app --format \
-  'mem={{.HostConfig.Memory}} cpu={{.HostConfig.NanoCpus}} ro={{.HostConfig.ReadonlyRootfs}} pids={{.HostConfig.PidsLimit}}'
-#    mem=1610612736  cpu=2000000000  ro=true  pids=256
+  'app mem={{.HostConfig.Memory}} cpu={{.HostConfig.NanoCpus}} ro={{.HostConfig.ReadonlyRootfs}} pids={{.HostConfig.PidsLimit}}'
+#    app mem=1610612736 cpu=2000000000 ro=true pids=256
 #    mem=0 significa SEM LIMITE: o compose não aplicou, e isso precisa ser
 #    resolvido antes de considerar entregue.
 
-# e. A rotação de log está valendo.
-docker inspect spaguas-dmo-app --format '{{.HostConfig.LogConfig}}'
-#    espera: json-file com max-size 10m e max-file 5
+# g. A rotação de log está valendo nos dois.
+docker inspect spaguas-dmo-db spaguas-dmo-app --format '{{.Name}} {{.HostConfig.LogConfig}}'
 
-# f. Pela borda, já com o Nginx configurado.
+# h. Pela borda, já com o Nginx configurado.
 curl -sSI https://dmo.spaguas.sp.gov.br/ | head -20
 ```
 
 ---
 
 ## 7. Rollback
+
+### 7.1 Sem mudança de esquema: trivial
 
 O rollback deste sistema **não reconstrói nada e não baixa nada**, que é
 exatamente o que se quer num servidor sem internet: ele aponta para uma tag que
@@ -268,32 +387,94 @@ docker images spaguas/dashboard --format '{{.Tag}}\t{{.CreatedAt}}'
 # 2. Apontar a anterior
 sudo sed -i "s/^IMAGEM_TAG=.*/IMAGEM_TAG=sha-<anterior>/" /opt/spaguas-dmo/.env
 
-# 3. Recriar o container com ela
+# 3. Recriar com ela
 cd /opt/spaguas-dmo
 docker compose -f docker-compose.prod.yml up -d --force-recreate
 
-# 4. Conferir pelo efeito (mesma lista da seção 6)
-docker compose -f docker-compose.prod.yml ps
-curl -sS http://127.0.0.1:3000/api/health
+# 4. Conferir pelo efeito (mesma lista da seção 6.3)
 ```
 
 **Tempo esperado: menos de um minuto**, porque nada é transferido. **HIPÓTESE
 até ser cronometrado no servidor.**
 
-### O que o rollback NÃO desfaz
+Note que o passo 2 troca a tag das **duas** imagens de uma vez, então o serviço
+`migrate` volta a rodar com o SQL daquele commit. Como as migrations são
+idempotentes, reaplicá-las é seguro. O que elas **não** fazem é desfazer.
 
-Ele volta o **código**. Ele não volta o **banco**. Se a versão que está saindo
-aplicou alteração de esquema, voltar a imagem deixa código antigo falando com
-esquema novo. Toda entrega que mexer no banco precisa dizer, por escrito e antes
-de subir, como se desfaz a parte do banco. Sem essa frase escrita, a entrega não
-sobe.
+### 7.2 Com mudança de esquema: não é trivial, e precisa estar escrito antes
 
-### Política de retenção de imagem
+**Voltar a imagem volta o código. Não volta o banco.** Se a versão que está
+saindo aplicou alteração de esquema, apontar a tag anterior deixa código antigo
+falando com esquema novo, e o resultado depende inteiramente do tipo da
+alteração:
 
-Manter as **3 últimas** tags. Ao remover, remover **pelo nome**:
+| Tipo de alteração | O que acontece no rollback |
+|---|---|
+| Coluna nova anulável, tabela nova, índice novo | código antigo ignora e funciona |
+| Coluna renomeada ou removida | código antigo quebra em toda consulta que a cita |
+| Coluna com restrição nova (`NOT NULL`, `CHECK`) | código antigo grava valor recusado |
+| Tipo de coluna alterado | comportamento imprevisível, inclusive corrupção silenciosa |
+
+**A regra, e ela vale antes do primeiro deploy:**
+
+> **Toda entrega que mexer no banco só sobe com a frase de volta escrita.** Antes
+> do `up -d`, tem que existir, no registro da entrega, a resposta a duas
+> perguntas: *o código anterior funciona com este esquema novo?* e, se não
+> funcionar, *qual é o SQL que desfaz, e ele foi executado num banco de teste?*
+> Sem essas duas respostas por escrito, a entrega não sobe.
+
+O caminho que evita o problema quase sempre, e que já é o padrão da casa, é
+alteração em duas etapas: primeiro adicionar coluna anulável e passar a
+preencher, depois, numa entrega seguinte, impor a restrição e remover o antigo.
+Entre as duas, as duas versões do código convivem com o mesmo esquema, e o
+rollback volta a ser trivial.
+
+**Quando não houver saída,** o rollback deixa de ser "trocar a tag" e passa a
+ser: parar a aplicação, restaurar o banco do backup mais recente anterior à
+migração, apontar a tag anterior, subir. Isso **perde** o que foi gravado entre o
+backup e a parada, e por isso precisa ser decisão consciente com o órgão, e não
+improviso de plantão.
+
+### 7.3 Backup: o que torna tudo isso possível
+
+O rollback de código é barato porque a imagem antiga está no disco. **O rollback
+de dado só existe se houver backup, e backup só conta como backup depois de uma
+restauração testada.** Sem um restore que funcionou, o que existe é um arquivo
+com nome de backup.
+
+Gerar um dump antes de qualquer entrega que mexa no banco:
 
 ```bash
-docker image rm spaguas/dashboard:sha-<antiga>
+cd /opt/spaguas-dmo
+docker compose -f docker-compose.prod.yml exec -T db \
+  pg_dump -U spaguas -d spaguas --format=custom \
+  > /var/backups/spaguas-dmo/antes-de-sha-$SHA.dump
+```
+
+**E o aviso que não pode faltar:** este arquivo está no **mesmo disco da VM**.
+Se a VM se perder, ele se perde junto, e ele não é backup de nada. O backup de
+verdade é o da infraestrutura do órgão, sobre o volume `spaguas-dmo-pg-data`, e
+**isso está no pedido formal, seção 10.8**, porque não depende de nós.
+
+Restauração, que é o que valida o backup:
+
+```bash
+# Contra um banco de teste, NUNCA contra o de produção como primeiro exercício.
+docker compose -f docker-compose.prod.yml exec -T db \
+  pg_restore -U spaguas -d spaguas_restore_teste --clean --if-exists \
+  < /var/backups/spaguas-dmo/antes-de-sha-$SHA.dump
+```
+
+**Registrar a data do último restore testado neste runbook.** Backup cuja
+restauração nunca foi exercitada é a forma mais cara de falsa segurança que
+existe em operação.
+
+### 7.4 Política de retenção de imagem
+
+Manter as **3 últimas** tags de cada imagem. Ao remover, remover **pelo nome**:
+
+```bash
+docker image rm spaguas/dashboard:sha-<antiga> spaguas/migrate:sha-<antiga>
 ```
 
 > **`docker system prune -a` é PROIBIDO neste servidor.**
@@ -304,6 +485,10 @@ docker image rm spaguas/dashboard:sha-<antiga>
 > (`portainer/portainer-ce:lts`, 188 MB) é do órgão, e num servidor sem internet
 > **nada disso pode ser baixado de novo**: apagar é definitivo. Num servidor
 > compartilhado, apagar imagem é decisão, nunca rotina.
+>
+> Pior ainda: `docker volume prune` e `docker system prune --volumes` alcançam o
+> volume do banco. **O volume `spaguas-dmo-pg-data` é o sistema.** A imagem se
+> reconstrói em minutos; o que está no volume, não.
 >
 > Quando faltar espaço, a limpeza é por nome, e a medição vem antes:
 > `docker system df -v` diz onde o espaço está antes de qualquer remoção.
@@ -323,134 +508,96 @@ origem, `proxy_cache off`, `client_max_body_size 12m` e os tempos.
 
 ---
 
-## 9. Bloqueios: o que impede o deploy hoje
+## 9. Bloqueios: o que ainda impede o deploy
 
-Estes itens não são detalhe de configuração. **Nenhum deles se resolve neste
-runbook**, e enquanto qualquer um estiver de pé o sistema não sobe no servidor,
-por mais correto que o container esteja.
+### 9.1 Banco: **RESOLVIDO em 27/08/2026**
 
-### 9.1 O banco: onde roda o PostgreSQL da aplicação
+Decisão do Rafael: PostgreSQL como container na própria máquina, Supabase fora.
+Está implementado no `docker-compose.prod.yml` e **exercitado de ponta a ponta**
+nesta máquina (seção 11.4). Este item deixa de ser bloqueio.
 
-> **Atualizado no mesmo dia, e a atualização muda o problema.** Enquanto esta
-> preparação era feita, o ADR-0023 (*Camada de leitura sobre o SQL Server do
-> órgão*, status **Proposto**, autoria do Bruno) foi escrito em paralelo neste
-> repositório. Ele registra a instrução do proprietário: *"a ideia não é refazer
-> o banco, é começar a transmitir o banco deles, então o nosso nem mexe, só
-> adapta o sistema para aceitar a tabela nova."*
->
-> Ou seja, o SQL Server de `10.20.40.62` entra como **origem de leitura**, e o
-> **PostgreSQL continua sendo o banco da aplicação**. `DATABASE_URL` segue sendo
-> uma string de conexão PostgreSQL, e a preocupação abaixo deixa de ser
-> "reescrever a camada de dados" e vira outra, menor e ainda em aberto:
->
-> **onde roda esse PostgreSQL, do ponto de vista deste servidor?** O
-> `docker-compose.prod.yml` sobe só a aplicação, por ordem do Rafael. Se o
-> PostgreSQL tiver de morar no mesmo servidor, ele precisa de decisão própria
-> (serviço no compose ou pilha separada), com volume, backup e **restauração
-> testada**, porque backup só conta como backup depois de um restore que
-> funcionou. Se for fornecido pelo órgão, entra no pedido da seção 10.3 junto do
-> SQL Server. Enquanto isso não for respondido, a aplicação não tem para onde
-> apontar `DATABASE_URL`, e é isso que a impede de subir.
->
-> Consequências de infraestrutura que o ADR-0023 traz e que precisam entrar aqui
-> quando ele for aceito: uma **segunda** variável de conexão, para o SQL Server;
-> a liberação de rede a partir da ponte do Docker até `10.20.40.62:1433` (seção
-> 10.3); e uma **dependência nova** no `package.json` para falar com o SQL
-> Server, o que obriga a reconstruir a imagem aqui, com internet, já que o
-> servidor não instala pacote nenhum.
->
-> O restante desta seção fica registrado porque continua sendo verdade sobre o
-> código, e é o que explica por que apontar `DATABASE_URL` para a porta 1433
-> nunca foi opção.
-
-**MEDIDO no código:**
+Fica registrado por que apontar `DATABASE_URL` para o SQL Server nunca foi
+opção, porque a pergunta volta:
 
 - A aplicação fala com o banco pelo pacote `postgres` (postgres.js), fixado em
-  `3.4.9` no `package.json`. Esse cliente implementa o protocolo de rede do
-  PostgreSQL, e só ele.
-- Existem **25** repositórios `.pg.ts` escritos em SQL do PostgreSQL. Contagem
-  de construções que o SQL Server não aceita na mesma forma: `RETURNING` em 15
-  arquivos, conversão por `::` em 22, `ON CONFLICT` em 7, `jsonb` em 5, `ILIKE`
-  em 4, função `ST_` do PostGIS em 1.
-- São **65** migrações em `supabase/migrations/`, das quais **27** usam recurso
-  exclusivo do PostgreSQL (PostGIS, `jsonb`, RLS, `gen_random_uuid`).
+  `3.4.9`. Esse cliente implementa o protocolo de rede do PostgreSQL, e só ele.
+- São **25** repositórios `.pg.ts` em SQL do PostgreSQL. Construções que o SQL
+  Server não aceita na mesma forma: `RETURNING` em 15 arquivos, conversão por
+  `::` em 22, `ON CONFLICT` em 7, `jsonb` em 5, `ILIKE` em 4, `ST_` em 1.
+- São **65** migrações, das quais **27** usam recurso exclusivo do PostgreSQL.
 
-**Conclusão:** `DATABASE_URL` apontada para `10.20.40.62:1433` não conecta, e não
-é questão de porta nem de string: é outro protocolo de rede e outro dialeto de
-SQL. O caminho do ADR-0023 (SQL Server como origem de leitura, PostgreSQL
-mantido) evita exatamente esse custo.
+O SQL Server entra como **origem de leitura** (ADR-0023), com conexão separada.
+Quando essa camada for implementada, entram aqui: uma segunda variável de
+conexão, a liberação de rede a partir da ponte do Docker até `10.20.40.62:1433`
+(seção 10.3), e uma **dependência nova** no `package.json`, que obriga a
+reconstruir a imagem aqui, com internet.
 
-**A pergunta que sobra, e que é de infraestrutura:** de onde vem o PostgreSQL da
-aplicação neste servidor. As duas respostas possíveis são o órgão fornecer, o que
-está alinhado com a pilha institucional que a `rules/governo` registra
-(PostgreSQL/PostGIS) e com o que o ADR-0015 assumiu, ou subirmos um em container
-no próprio servidor, com volume, backup e restauração testada. **Decisão do
-Rafael com o órgão, não escolha nossa.** Ela precisa vir antes de o container ir
-para o servidor, porque é ela que dá valor a `DATABASE_URL`.
+### 9.2 Identidade: **ainda bloqueia**
 
-### 9.2 A identidade: autenticação depende de um endereço inalcançável
+O Supabase saiu por ordem do Rafael, e pelo ADR-0023 a autenticação passa a ser
+contra o `UsuariosIdentity` do órgão, com o `auth.users` local recebendo o mesmo
+identificador. **O código ainda não sabe disso**, e é isso que impede a subida.
 
-> O ADR-0023, escrito em paralelo, se propõe a resolver a pendência de identidade
-> do ADR-0015 §3 e a revisar os ADR-0004 e 0006. **Enquanto ele estiver como
-> *Proposto*, o que vale para a preparação é o que está no código hoje**, e é
-> isso que esta seção descreve. Quando a identidade for decidida, o efeito sobre
-> a infraestrutura é o da tabela abaixo, mais uma reconstrução da imagem, porque
-> duas destas variáveis ficam gravadas no pacote em tempo de build.
+**MEDIDO no código de hoje:**
 
-**MEDIDO no código:** o `env.ts` (linhas 55-59) **recusa subir em produção** sem
-`NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`. O
-`src/middleware.ts` chama `supabase.auth.getUser()` **a cada requisição** que
-passa pelo gate, contra `*.supabase.co`. A política de segurança da própria
-aplicação libera `connect-src ... https://*.supabase.co` (linha 35).
+- `env.ts`, linhas 55-59: **recusa subir em produção** sem
+  `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- `src/middleware.ts`, linhas 125-126: chama `supabase.auth.getUser()` **a cada
+  requisição** que passa pelo gate.
+- `src/middleware.ts`, linha 35: a política de segurança ainda libera
+  `connect-src ... https://*.supabase.co`.
 
 **MEDIDO no servidor:** `*.supabase.co` não resolve e não é alcançável.
 
-Preencher as duas variáveis com valor de faz de conta não contorna: a chamada de
-rede continua sendo feita e nunca completa, então **toda navegação** fica presa
-até o tempo limite. E há um agravante que só aparece depois: por serem lidas por
-nome literal no middleware, o Next **grava** o valor no pacote em tempo de build.
-Um valor errado embutido não se corrige por variável de ambiente, só
-reconstruindo a imagem.
+Preencher as duas com valor de faz de conta não contorna: a chamada continua
+sendo feita e nunca completa, então **toda navegação** fica presa até o tempo
+limite. E há um agravante que só aparece depois: por serem lidas por nome
+literal no middleware, o Next **grava** o valor no pacote em tempo de build. Um
+valor errado embutido não se corrige por variável de ambiente, só reconstruindo
+a imagem.
 
-O que precisa mudar no `src/infrastructure/config/env.ts` quando a identidade for
-decidida (**apontado, não alterado**, conforme o limite desta tarefa):
+O que precisa mudar (**apontado, não alterado**, conforme o limite desta tarefa):
 
-| Hoje | O que muda |
+| Arquivo e linha | O que muda |
 |---|---|
-| Linhas 16-17: `NEXT_PUBLIC_SUPABASE_URL` e `..._ANON_KEY` no esquema | trocar pelas variáveis da nova camada de identidade |
-| Linhas 46-48: `isAuthEnabled` derivado das duas | derivar da nova camada |
-| Linhas 55-59: fail-fast exigindo as duas em produção | manter o fail-fast, apontando para as novas. A regra é boa e precisa continuar valendo: sistema de governo não pode subir com o portão aberto |
-| Linha 19: `SUPABASE_SERVICE_ROLE_KEY` (upload da foto) | o armazenamento de arquivo também sai do Supabase, e vira disco do servidor ou serviço do órgão |
+| `env.ts` 16-17 | trocar as duas variáveis do Supabase pelas da nova identidade |
+| `env.ts` 19 | `SUPABASE_SERVICE_ROLE_KEY` sai: o armazenamento de foto também deixa de ser Supabase |
+| `env.ts` 46-48 | `isAuthEnabled` passa a derivar da nova camada |
+| `env.ts` 55-59 | **manter o fail-fast**, apontando para as novas. A regra é boa: sistema de governo não pode subir com o portão aberto |
+| `middleware.ts` 35 | retirar `https://*.supabase.co` da política |
+| `middleware.ts` 125-126 | trocar a verificação de sessão |
+| `auth/supabase-server.ts`, `auth/supabase-admin.ts`, `storage/foto-posto-storage.ts` | os três adaptadores que importam `@supabase/*` |
 
-Fora do `env.ts`, no mesmo movimento: `src/middleware.ts` linha 35 (retirar
-`https://*.supabase.co` da política) e os três adaptadores que importam
-`@supabase/*` (`auth/supabase-server.ts`, `auth/supabase-admin.ts`,
-`storage/foto-posto-storage.ts`).
+**Consequência de infraestrutura que precisa ser dita:** o armazenamento da foto
+de capa hoje é o Supabase Storage. Sem ele, a foto precisa de destino, e o
+destino natural aqui é um volume do Docker, o que significa **um segundo volume
+para entrar no backup**. Isso entra no pedido da seção 10.8 quando a decisão for
+tomada.
 
 ### 9.3 Duas funcionalidades que o container não entrega
 
-Achados durante a preparação, **MEDIDOS no código**, que não impedem o deploy mas
-não podem ser descobertos pelo usuário:
+**MEDIDOS no código.** Não impedem o deploy, mas não podem ser descobertos pelo
+usuário:
 
 - **Ficha de posto com indexação sob demanda.** `lazy-indexer.ts` executa
-  `python -m ops.indexer.indexar_posto` como subprocesso. A imagem final é
-  `node:20-alpine`: **não tem Python e não tem a pasta `ops/`**. A chamada falha
-  dentro do container. Decidir se o indexador vira um segundo container, se roda
-  como tarefa do host, ou se a funcionalidade sai do escopo desta entrega.
+  `python -m ops.indexer.indexar_posto` como subprocesso. A imagem da aplicação
+  é `node:20-alpine`: **não tem Python e não tem a pasta `ops/`**. A chamada
+  falha dentro do container. Decidir se o indexador vira um quarto serviço, se
+  roda como tarefa do host, ou se sai do escopo desta entrega.
 - **Relatório em PDF.** `pdf-relatorio.ts` procura um navegador sem interface
   (`CHROME_BIN`, `/usr/bin/chromium`). A imagem não tem nenhum. A rota devolve
-  `RenderizadorPdfIndisponivel`. Acrescentar Chromium à imagem custa em torno de
-  150 MB e precisa ser decisão consciente, não efeito colateral.
+  `RenderizadorPdfIndisponivel`. Acrescentar Chromium custa em torno de 150 MB e
+  precisa ser decisão consciente, não efeito colateral.
 
 ### 9.4 As rotinas não têm quem as chame
 
 **MEDIDO:** existem três rotas em `/api/cron/*`, entre elas
-`anonimizar-trilha`, que é o que cumpre o prazo de retenção da trilha de
-auditoria (LGPD). Hoje elas eram chamadas por agendador externo. **Sem internet,
-ninguém as chama.** Se subir assim, a anonimização simplesmente não acontece, em
-silêncio, e a documentação de entrega afirma uma retenção que não ocorre.
+`anonimizar-trilha`, que cumpre o prazo de retenção da trilha de auditoria
+(LGPD). Hoje elas eram chamadas por agendador externo. **Sem internet, ninguém
+as chama.** Se subir assim, a anonimização não acontece, em silêncio, e a
+documentação de entrega afirma uma retenção que não ocorre.
 
-Definir o chamador antes de subir: tarefa agendada no próprio host, com `curl`
+Definir o chamador antes de subir. Tarefa agendada no próprio host, com `curl`
 para `127.0.0.1:3000` e o cabeçalho de `CRON_SECRET`, é o caminho mais simples e
 não depende de nada externo.
 
@@ -458,7 +605,7 @@ não depende de nada externo.
 
 ## 10. Pedido formal ao órgão
 
-Enviado pela Paula, em tom institucional. Sete itens.
+Enviado pela Paula, em tom institucional. Nove itens.
 
 ### 10.1 Reinicialização pendente e atualizações
 
@@ -478,7 +625,7 @@ agora custa minutos e não afeta ninguém.
 ### 10.2 Certificado: a renovação vai falhar em 23/10, e o site cai em 22/11
 
 Este é o achado mais silencioso da preparação, porque **nada quebra hoje** e o
-sistema de monitoramento do órgão não tem como perceber.
+monitoramento do órgão não tem como perceber.
 
 **MEDIDO:** certificado Let's Encrypt válido até **22/11/2026**; renovador
 configurado com `authenticator = nginx`; `snap.certbot.renew.timer` **ativo**; e
@@ -496,19 +643,19 @@ o servidor **sem saída para a internet**.
    perguntar, porque muda o leque de opções.)
 3. O renovador tenta quando faltam **30 dias ou menos**. A partir de
    **23/10/2026**, portanto, ele passa a tentar **duas vezes por dia** e a
-   **falhar duas vezes por dia**, no primeiro passo, sem nunca chegar ao desafio.
+   **falhar duas vezes por dia**, no primeiro passo, sem chegar ao desafio.
 4. Em **22/11/2026** o certificado vence.
 
 **Por que isso não é "o navegador mostra um aviso":** a aplicação envia
 `Strict-Transport-Security: max-age=63072000; includeSubDomains`
 (`next.config.ts`, linhas 104-107), ou seja, dois anos. Todo navegador que já
 visitou o endereço guardou essa instrução e, com o certificado vencido, **recusa
-a conexão sem oferecer a opção de prosseguir**. O sistema fica inacessível para
-quem mais o usa, que é justamente quem já visitou. Não é degradação: é queda.
+a conexão sem oferecer a opção de prosseguir**. O sistema fica inacessível
+justamente para quem mais o usa. Não é degradação: é queda.
 
-**HIPÓTESE que vale perguntar:** o certificado atual foi emitido em algum momento,
-o que significa que ou a máquina já teve saída para a internet, ou a emissão foi
-feita em outro contexto. Saber qual dos dois muda a solução.
+**HIPÓTESE que vale perguntar:** o certificado atual foi emitido em algum
+momento, o que significa que ou a máquina já teve saída para a internet, ou a
+emissão foi feita em outro contexto. Saber qual dos dois muda a solução.
 
 **Solicitar a definição de um destes caminhos, com prazo de decisão até
 30/09/2026** (para deixar três semanas de folga antes da primeira falha):
@@ -519,30 +666,23 @@ feita em outro contexto. Saber qual dos dois muda a solução.
 2. **Emissão fora do servidor e instalação manual.** Funciona, e obriga alguém a
    repetir o procedimento a cada 90 dias, com data marcada em calendário. Serve
    como ponte, não como solução.
-3. **Liberar a saída para a API do Let's Encrypt.** Resolve o passo 1 acima, mas
-   não resolve o passo 2 se o site não for acessível de fora; e a API responde em
+3. **Liberar a saída para a API do Let's Encrypt.** Resolve o passo 1, mas não
+   resolve o passo 2 se o site não for acessível de fora; e a API responde em
    muitos endereços diferentes, o que torna frágil qualquer liberação por IP.
 
 Enquanto não houver decisão, deixar o cronômetro de renovação ligado só produz
-falha silenciosa duas vezes ao dia. Se o caminho 1 ou 2 for escolhido, o
-cronômetro deve ser desligado no mesmo movimento, para não gerar ruído.
+falha silenciosa duas vezes ao dia. Escolhido o caminho 1 ou 2, o cronômetro
+deve ser desligado no mesmo movimento, para não gerar ruído.
 
-### 10.3 Banco: liberação de rede e origem do PostgreSQL
+### 10.3 Liberação de rede até o SQL Server
 
 **MEDIDO:** a porta 1433 de `10.20.40.62` responde a partir do servidor.
 
-Dois pedidos, e o segundo é o que trava a entrega:
-
-1. **Confirmar que a liberação vale também para tráfego originado de dentro de um
-   container Docker**, que sai por outra interface e outra faixa de endereços,
-   diferentes das do host. Regra de firewall escrita para o endereço do host não
-   cobre a ponte do Docker automaticamente, e o sintoma disso é a aplicação subir
-   normalmente e o `/api/health` responder `degraded` sem nenhuma explicação
-   legível, o que manda procurar defeito em código.
-2. **Definir de onde vem o PostgreSQL da aplicação** (seção 9.1): fornecido pelo
-   órgão, com endereço, porta e credencial, ou hospedado por nós no mesmo
-   servidor. Se for a segunda, precisa vir junto a definição de onde ficam os
-   dados, quem faz o backup e onde a restauração é testada.
+Confirmar que a liberação vale também para tráfego **originado de dentro de um
+container Docker**, que sai por outra interface e outra faixa de endereços,
+diferentes das do host. Regra de firewall escrita para o endereço do host não
+cobre a ponte do Docker automaticamente, e o sintoma disso é a leitura do
+cadastro falhar sem explicação legível, o que manda procurar defeito em código.
 
 ### 10.4 Portainer publicado em todas as interfaces
 
@@ -555,21 +695,22 @@ fechado. O painel dá controle total sobre os containers da máquina.
 
 Solicitar avaliação da equipe de segurança do órgão, com duas opções: restringir
 o acesso na borda, ou publicar em `127.0.0.1` e alcançar por túnel. **Este ponto
-é do órgão, não nosso: apontamos porque medimos.** Vale registrar que o nosso
-container publica em `127.0.0.1` justamente para não repetir isso.
+é do órgão, não nosso: apontamos porque medimos.** Vale registrar que os nossos
+containers publicam em `127.0.0.1`, e o banco não publica nada, justamente para
+não repetir isso.
 
 ### 10.5 Canal de transporte da imagem
 
-Sem internet, cada nova versão do sistema é um arquivo que precisa chegar ao
-servidor. Definir o canal oficial, quem tem acesso e como se registra a
-passagem. Sem isso definido, cada entrega vira improviso, e improviso em servidor
-de governo é o que produz o acesso não rastreado.
+Sem internet, cada nova versão do sistema é um arquivo de cerca de 225 MiB que
+precisa chegar ao servidor. Definir o canal oficial, quem tem acesso e como se
+registra a passagem. Sem isso definido, cada entrega vira improviso, e improviso
+em servidor de governo é o que produz o acesso não rastreado.
 
 ### 10.6 Quem enxerga as variáveis de ambiente
 
-O arquivo `/etc/spaguas-dmo/app.env` fica com dono `root` e permissão restrita.
+Os arquivos em `/etc/spaguas-dmo/` ficam com dono `root` e permissão restrita.
 Isso protege o disco. **Não protege o painel:** qualquer conta com acesso ao
-Portainer lê o ambiente do container pela interface, inclusive a string de
+Portainer lê o ambiente dos containers pela interface, inclusive a string de
 conexão do banco.
 
 Solicitar a lista de contas com acesso ao Portainer e confirmar que ela é
@@ -578,20 +719,75 @@ compatível com quem pode ver credencial de banco de sistema de governo.
 ### 10.7 Registro de log com dado pessoal
 
 O log da aplicação carrega endereço de e-mail de usuário, por exigência da
-trilha de auditoria. O log do container é legível por quem tem Portainer. A
+trilha de auditoria. O log dos containers é legível por quem tem Portainer. A
 rotação está limitada a 50 MB por container no `docker-compose.prod.yml`.
 
 Informar ao órgão, e confirmar se existe exigência de coleta desse log por
 ferramenta institucional. Sem internet, o envio para coletor externo está
 desligado (`LOG_DRAIN_URL` vazia), e essa é a configuração correta aqui.
 
+### 10.8 Backup dos volumes: a pergunta que decide se o dado sobrevive
+
+**Este item nasce da decisão de 27/08/2026** de hospedar o banco na máquina do
+órgão, e é a contrapartida dela.
+
+O sistema passa a ter estado nessa VM, no volume Docker
+**`spaguas-dmo-pg-data`**. Nele ficam fichas de visita, triagem e aprovação,
+desconformidades, revisões, estoque, arquivos indexados, favoritos, diagramas e
+a **trilha de auditoria**. Nada disso existe em outro lugar: não é cópia do SQL
+Server do órgão nem de sistema nenhum. **Se esse volume se perder, o dado se
+perdeu.**
+
+E, sem saída para a internet, **dump gravado no próprio disco não é backup**: se
+a VM se perder, o dump vai junto. Ele serve para desfazer uma migração, e não
+para sobreviver a um desastre. As duas coisas costumam ser confundidas, e é a
+segunda que exige o órgão.
+
+**Perguntas, e são exatamente estas três:**
+
+1. Os **volumes Docker** dessa máquina entram na rotina de backup da PRODESP, ou
+   a rotina cobre apenas a imagem da VM? (São coisas diferentes: cópia de VM
+   pega o volume junto, mas o ponto de restauração é a máquina inteira.)
+2. Qual a **periodicidade** e qual a **retenção**?
+3. Qual o procedimento de **restauração**, e podemos exercitá-lo uma vez, em
+   ambiente de teste, antes de o sistema entrar em produção?
+
+A terceira não é zelo excessivo: **backup só conta como backup depois de um
+restore testado.** Enquanto ninguém restaurou, o que existe é um arquivo com
+nome de backup, e a hora de descobrir que ele não presta não pode ser a hora do
+incidente.
+
+Se a resposta for que os volumes **não** entram na rotina, isso precisa voltar
+como decisão para o Rafael, porque muda o desenho: seria preciso um destino de
+cópia fora daquela VM, e isso o órgão tem que fornecer.
+
+### 10.9 Aval por escrito para hospedar dado de cidadão na máquina do órgão
+
+Com o banco na infraestrutura do órgão, o dado pessoal tratado pelo sistema passa
+a residir em equipamento **deles**, sob administração **nossa**. Essa divisão
+precisa estar **acordada por escrito**, e não presumida: ela define quem responde
+pelo quê perante a LGPD, e é requisito de projeto de governo, não formalidade.
+
+Confirmar por escrito, antes do primeiro deploy:
+
+- **Ciência e aval** de que o sistema hospeda banco com dado pessoal naquela VM.
+- **Quem é o controlador e quem é o operador** do tratamento, nos termos da LGPD.
+  (Nossa leitura, a confirmar com o órgão: o órgão é o controlador, e a DamaTech
+  opera. Isso muda quem responde ao titular e quem responde por incidente.)
+- **Classificação dos dados** segundo a política do órgão (público, restrito,
+  confidencial), que é o que define exigência de cifragem e de retenção.
+- **Prazo de retenção da trilha de auditoria**, que hoje está configurável e sem
+  valor decidido (seção 9.4). O art. 16, I da LGPD sustenta a guarda para
+  cumprimento de obrigação legal, mas o prazo é decisão do órgão.
+- **A quem comunicar** em caso de incidente de segurança, com nome e canal.
+
 ---
 
 ## 11. Evidência da preparação (27/08/2026)
 
 Nada disto foi executado no servidor do órgão. Tudo foi medido na máquina de
-desenvolvimento, com o Docker Engine 29.6.2 e o Compose v5.3.1 locais, contra a
-imagem construída a partir de `34417b7`.
+desenvolvimento, com Docker Engine 29.6.2 e Compose v5.3.1 locais, contra as
+imagens construídas a partir de `34417b7`.
 
 ### 11.1 O `docker build` estava quebrado por dois motivos, e os dois foram corrigidos
 
@@ -605,8 +801,7 @@ Module not found: Can't resolve '../../../../data/colunas-ana.json'
 O `.dockerignore` excluía `data/` inteiro. Só que `data/colunas-ana.json` não é
 dado de carga: é **fonte**, importada por caminho relativo por um caso de uso, e
 o empacotador precisa dela para compilar. Corrigido com uma exceção nomeada
-(`!data/colunas-ana.json`), mantendo o resto de `data/` fora da imagem, que é
-onde estão os CSV de carga e as amostras.
+(`!data/colunas-ana.json`), mantendo o resto de `data/` fora da imagem.
 
 **Segunda reprovação, exatamente onde a hipótese apontava:**
 
@@ -629,9 +824,6 @@ estágio de build, mais a declaração dos dois `ARG` de identidade que o
 existir `ARG` correspondente. Justificativa completa nos comentários do próprio
 `Dockerfile`.
 
-Resultado depois das duas correções: **build verde**, imagem
-`spaguas/dashboard:sha-34417b7` gerada.
-
 ### 11.2 A imagem final não carrega segredo nem roda como root
 
 ```
@@ -647,57 +839,90 @@ PORT=3000
 $ docker image inspect ... --format '{{.Config.User}}'
 nextjs
 
-$ docker run --rm --entrypoint sh ... -c 'ls -a /app | grep -c "^\.env" || true'
+$ docker run --rm --entrypoint sh ... -c 'ls -a /app | grep -c "^\.env"'
 0
 ```
 
 O `DATABASE_URL` de fachada do estágio de build **não** aparece na imagem final,
-que é o que prova que ele não vaza para produção. Nenhum arquivo de ambiente
-entrou.
+que é o que prova que ele não vaza para produção.
 
 ### 11.3 O compose foi exercitado, e o exercício achou dois defeitos meus
 
 Os dois só apareceram porque o arquivo foi executado, e não apenas escrito:
 
 1. `IMAGEM_TAG` estava no `env_file`, e o Compose não interpola a partir dele.
-   Corrigido pela divisão em dois arquivos (seção 6.1).
+   Corrigido pela divisão em arquivos separados (seção 6.1).
 2. `pids_limit` no topo do serviço, junto de `deploy.resources.limits`, faz esta
-   versão do Compose recusar o projeto inteiro:
-   `can't set distinct values on 'pids_limit' and 'deploy.resources.limits.pids'`.
-   Corrigido movendo o teto para dentro de `deploy.resources.limits.pids`.
+   versão do Compose recusar o projeto inteiro, reclamando de valor distinto
+   entre as duas formas de dizer a mesma coisa. Corrigido movendo o teto para
+   dentro de `deploy.resources.limits.pids`.
 
-Com o arquivo corrigido, subindo o container de teste com um banco inexistente
-só para medir a forma:
+### 11.4 A pilha completa subiu, na ordem certa, com o banco vazio
 
-```
-$ docker inspect spaguas-dmo-app --format 'mem={{.HostConfig.Memory}} cpu={{.HostConfig.NanoCpus}} ro={{.HostConfig.ReadonlyRootfs}} pids={{.HostConfig.PidsLimit}} ...'
-mem=1610612736 cpu=2000000000 ro=true pids=256
-nnp=[no-new-privileges:true] capdrop=[ALL]
-log=map[Config:map[max-file:5 max-size:10m] Type:json-file] init=true
-
-$ docker compose -f docker-compose.prod.yml port app 3000
-127.0.0.1:39300
-```
-
-Ou seja: limite de memória, limite de CPU, raiz somente leitura, teto de
-processos, sem elevação de privilégio, sem capacidade de núcleo, rotação de log
-e publicação restrita a loopback **estão valendo de fato**, e não apenas
-escritos. Os dois `docker compose config` (com e sem interpolação) passam.
-
-E a aplicação sobe com a raiz somente leitura, o que prova que os dois pontos de
-escrita mapeados em memória bastam:
+Este é o exercício que vale mais que todos os anteriores, porque mede o sistema
+e não uma peça dele. Volume criado do zero, exatamente como acontecerá no
+servidor:
 
 ```
-spaguas-dmo-app  |  ✓ Ready in 265ms
-spaguas-dmo-app  | {"ts":"...","severidade":"error","evento":"health.db.falha",
-                    "motivo":"connect ECONNREFUSED 127.0.0.1:5432","codigo":"ECONNREFUSED"}
+$ docker compose -f docker-compose.prod.yml up -d
+ Volume spaguas-dmo-pg-data Created
+ Container spaguas-dmo-db Started
+ Container spaguas-dmo-db Waiting
+ Container spaguas-dmo-db Healthy          <- a ordem é do compose, não de script
+ Container spaguas-dmo-migrate Started
+ Container spaguas-dmo-migrate Waiting
+ Container spaguas-dmo-migrate Exited      <- encerrou antes de a aplicação nascer
+ Container spaguas-dmo-app Started
+
+$ docker compose -f docker-compose.prod.yml ps -a
+app      Up 19 seconds (healthy)
+db       Up 36 seconds (healthy)
+migrate  Exited (0) 19 seconds ago
+
+$ docker compose logs migrate | tail -2
+[migrate]   -> 0065_estoque_conferencia_itens_contado_por.sql
+[migrate] concluído.
+
+$ docker compose logs migrate | grep -ciE "error|erro|fatal|falha"
+0
 ```
 
-O erro de banco é o esperado: o teste não tinha banco. O que importa é que ele
-sai como **log estruturado em JSON**, com evento nomeado, que é o formato que o
-órgão consegue coletar.
+As **65 migrações** e o shim de compatibilidade aplicaram num PostGIS recém
+criado, sem um único erro. O resultado no banco:
 
-O container e a rede de teste foram removidos ao fim (`docker compose down`).
+```
+tabelas em public = 40
+tabelas em auth   = 1        (o shim, que é a casca que as chaves estrangeiras exigem)
+extensão postgis  = 3.4.3
+```
+
+E a aplicação conversa com ele de verdade, o que só se prova pelo endpoint que
+executa consulta:
+
+```
+$ curl -sS http://127.0.0.1:39300/api/health
+{"status":"ok","db":"ok"}
+```
+
+Isolamento e limites, conferidos no efeito e não no arquivo:
+
+```
+$ docker inspect spaguas-dmo-db  --format '{{.NetworkSettings.Ports}}'
+map[5432/tcp:[]]                     <- lista vazia: o banco NÃO publica porta
+$ docker inspect spaguas-dmo-app --format '{{.NetworkSettings.Ports}}'
+map[3000/tcp:[{127.0.0.1 39300}]]    <- só loopback
+
+db   mem=2147483648 cpu=2000000000 pids=256 shm=268435456 nnp=[no-new-privileges:true]
+app  mem=1610612736 cpu=2000000000 pids=256 ro=true capdrop=[ALL] init=true
+     log=json-file max-size 10m max-file 5
+```
+
+A aplicação sobe com a raiz somente leitura, o que prova que os dois pontos de
+escrita mapeados em memória bastam (`✓ Ready in 265ms`).
+
+Ao fim, `docker compose down -v` removeu os containers, a rede e o volume de
+teste. As imagens construídas com valores de identidade de fachada foram
+removidas de propósito, para que ninguém as embarque por engano.
 
 ---
 
@@ -705,13 +930,19 @@ O container e a rede de teste foram removidos ao fim (`docker compose down`).
 
 | | |
 |---|---|
-| Imagem | `spaguas/dashboard:sha-<commit>` |
-| Compose de produção | `docker-compose.prod.yml` (só a aplicação) |
+| Imagens | `spaguas/dashboard:sha-<commit>` e `spaguas/migrate:sha-<commit>`, mesma tag |
+| Banco | `postgis/postgis:16-3.4-alpine`, container na própria máquina |
+| Compose de produção | `docker-compose.prod.yml` (db, migrate, app) |
 | Versão no ar | `/opt/spaguas-dmo/.env`, modelo em `ops/producao/versao-no-ar.exemplo` |
-| Ambiente (segredos) | `/etc/spaguas-dmo/app.env`, modelo em `ops/producao/ambiente-producao.exemplo` |
-| Porta | `127.0.0.1:3000`, nunca `0.0.0.0` |
+| Credencial do banco | `/etc/spaguas-dmo/db.env`, modelo em `ops/producao/banco.exemplo` |
+| Ambiente da aplicação | `/etc/spaguas-dmo/app.env`, modelo em `ops/producao/ambiente-producao.exemplo` |
+| Ordem de subida | banco saudável, migrations com sucesso, aplicação |
+| Portas | app em `127.0.0.1:3000`; **banco não publica nada** |
 | Nginx | `ops/producao/nginx-dmo.spaguas.sp.gov.br.conf` |
 | Saúde | `curl http://127.0.0.1:3000/api/health` |
-| Rollback | trocar `IMAGEM_TAG` e `up -d --force-recreate` |
+| Rollback de código | trocar `IMAGEM_TAG` e `up -d --force-recreate` |
+| Rollback com esquema | só sobe com a frase de volta escrita (seção 7.2) |
+| Estado a preservar | volume `spaguas-dmo-pg-data` |
+| Pacote por entrega | cerca de 225 MiB |
 | Retenção de imagem | 3 versões, removidas **por nome** |
-| Proibido | `docker system prune -a`, tag `latest`, publicar em `0.0.0.0` |
+| Proibido | `docker system prune -a`, `docker volume prune`, tag `latest`, publicar em `0.0.0.0` |

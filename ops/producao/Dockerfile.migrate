@@ -1,0 +1,45 @@
+# syntax=docker/dockerfile:1.7
+#
+# SP Aguas - DMO | imagem do passo de MIGRATIONS.
+#
+# POR QUE ESTA IMAGEM EXISTE:
+# no compose de avaliacao, o servico `migrate` monta ./db e ./supabase/migrations
+# do disco do desenvolvedor. Num servidor SEM INTERNET isso obrigaria a
+# transportar um segundo pacote de arquivos junto de cada versao e a manter os
+# dois em sincronia na mao, e o dia em que eles divergirem a aplicacao roda com
+# o esquema de outro commit, sem nada acusar. Empacotar o SQL numa imagem com a
+# MESMA tag de commit da aplicacao elimina essa classe inteira de erro.
+#
+# POR QUE A BASE E A MESMA DO SERVICO `db`:
+# `postgis/postgis:16-3.4-alpine` ja carrega o psql e ja vai estar no disco do
+# servidor por causa do banco. Como as camadas sao identificadas por conteudo,
+# esta imagem NAO paga a base de novo NO DISCO. Medido em 27/08/2026:
+#
+#   docker system df -v
+#   spaguas/migrate   SIZE 627MB   SHARED 626.7MB   UNIQUE 416.2kB
+#
+# Ou seja, no disco do servidor ela custa 416 kB. Usar `postgres:16-alpine`
+# custaria uma base inteira a mais para guardar.
+#
+# O QUE ESSA CONTA NAO COBRE, e vale escrito porque e a armadilha do costume:
+# `docker save` NAO deduplica contra o que ja existe no destino. Ele empacota a
+# cadeia inteira de camadas da imagem citada, entao o arquivo transportado
+# carrega a base do PostGIS toda vez, e o pacote de uma entrega fica em torno de
+# 225 MiB em vez dos 71 MiB da aplicacao sozinha. Barato no disco, caro no
+# transporte, e sao numeros diferentes que respondem perguntas diferentes.
+#
+# Build (na maquina com internet, a partir da RAIZ do repositorio):
+#   docker build -f ops/producao/Dockerfile.migrate -t spaguas/migrate:sha-xxxxxxx .
+
+FROM postgis/postgis:16-3.4-alpine
+
+# O shim de compatibilidade e o script. O migrate.sh aplica primeiro o shim e
+# depois cada arquivo de /migrations em ordem alfabetica, com ON_ERROR_STOP.
+COPY db/ /db/
+
+# As migrations. Copiadas para o mesmo ponto onde o compose de avaliacao as
+# monta, para que o migrate.sh nao precise saber se esta num caso ou no outro.
+COPY supabase/migrations/ /migrations/
+
+# Sem CMD proprio: quem manda e o entrypoint, igual ao compose de avaliacao.
+ENTRYPOINT ["sh", "/db/migrate.sh"]
