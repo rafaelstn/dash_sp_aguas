@@ -1,0 +1,115 @@
+# =============================================================================
+# MODELO do arquivo de ambiente de PRODUCAO (servidor do orgao).
+# =============================================================================
+# Copiar para o servidor como /etc/spaguas-dmo/app.env e preencher LA.
+#
+# O nome deste modelo nao termina em `.env` de proposito, para que o arquivo
+# REAL (`app.env`) continue coberto pelo `.gitignore` (`.env*` e `*.env`) sem
+# excecao nenhuma. Excecao em regra de segredo e o que deixa segredo escapar.
+#
+# Este modelo NAO tem nenhum valor preenchido, tambem de proposito: modelo com
+# valor de aparencia legitima e o que sobe para producao quando alguem copia e
+# esquece de preencher.
+#
+# Preparar o destino no servidor:
+#   sudo install -d -m 0750 -o root -g docker /etc/spaguas-dmo
+#   sudo install -m 0640 -o root -g docker /dev/null /etc/spaguas-dmo/app.env
+#   sudo stat -c '%a %U:%G %n' /etc/spaguas-dmo/app.env   # espera: 640 root:docker
+#
+# ATENCAO: quem tem acesso ao Portainer LE estas variaveis na aba de ambiente do
+# container, inclusive a string de conexao do banco. Permissao de arquivo
+# protege o disco, nao o painel. Ver o pedido ao orgao no runbook.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. O que NAO vai neste arquivo
+# -----------------------------------------------------------------------------
+# IMAGEM_TAG, IMAGEM_NOME e APP_PORT NAO ficam aqui. Elas sao usadas pelo
+# Compose para montar o servico, e o Compose nao le `env_file` para isso: elas
+# moram em /opt/spaguas-dmo/.env (modelo em ops/producao/versao-no-ar.exemplo).
+# Posta-las aqui produz "required variable IMAGEM_TAG is missing a value"
+# (medido em 27/08/2026).
+
+# -----------------------------------------------------------------------------
+# 2. Banco de dados
+#    Fail-fast: sem esta variavel a aplicacao RECUSA subir em producao
+#    (src/infrastructure/config/env.ts, linhas 50-54).
+# -----------------------------------------------------------------------------
+# PENDENCIA DE ARQUITETURA, NAO DE PREENCHIMENTO: a aplicacao fala com o banco
+# pelo cliente `postgres` (postgres.js), que so entende o protocolo de rede do
+# PostgreSQL. O SQL Server 2022 de 10.20.40.62 nao responde a esse protocolo.
+# Enquanto a camada de dados nao for decidida, esta variavel nao tem valor
+# valido. Detalhe no runbook, secao "Bloqueios".
+#
+# Usar ENDERECO IP, nunca nome de host: o servidor nao resolve DNS externo.
+DATABASE_URL=
+
+# -----------------------------------------------------------------------------
+# 3. Identidade e autenticacao
+# -----------------------------------------------------------------------------
+# PENDENCIA DE ARQUITETURA: as duas abaixo sao fail-fast em producao (env.ts,
+# linhas 55-59) e apontam para *.supabase.co, que o servidor NAO alcanca.
+# Preenche-las com valor qualquer nao resolve: o middleware chama o Supabase a
+# cada requisicao, e a navegacao inteira passa a depender de uma chamada de rede
+# que nunca completa. Trocar a camada de identidade e pre-requisito do deploy.
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# Chave de servico (so servidor), usada para gravar foto de capa no Storage.
+# Mesma pendencia: o Storage e do Supabase e o servidor nao o alcanca.
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Dominios institucionais autorizados, separados por virgula. O coringa `*` e
+# RECUSADO em producao pelo env.ts (linhas 67-73).
+AUTH_ALLOWED_EMAIL_DOMAINS=sp.gov.br,daee.sp.gov.br
+# Enderecos individuais fora da lista de dominios (consultor, por exemplo), CSV.
+AUTH_EXTRA_ALLOWED_EMAILS=
+
+# -----------------------------------------------------------------------------
+# 4. Rotas de rotina (/api/cron/*)
+# -----------------------------------------------------------------------------
+# Segredo do cabecalho que autoriza as rotinas (comparado por tempo constante).
+# Gerar NO SERVIDOR, nunca aqui:  openssl rand -base64 32
+#
+# Sem internet nao existe agendador externo chamando estas rotas. Quem passa a
+# chamar precisa ser decidido (cron do host com curl em 127.0.0.1, ou agendador
+# do orgao). Sem chamador, a anonimizacao da trilha (retencao LGPD) NAO ocorre.
+CRON_SECRET=
+
+# Dias de retencao antes de anonimizar a trilha de auditoria. Vazio usa o
+# default do codigo. Prazo a confirmar com o orgao (art. 16, I da LGPD).
+TRILHA_RETENCAO_DIAS=
+
+# -----------------------------------------------------------------------------
+# 5. Endereco publico (ATENCAO: tambem e argumento de BUILD)
+# -----------------------------------------------------------------------------
+# NEXT_PUBLIC_APP_URL e embutida no pacote do navegador em tempo de BUILD.
+# Definir so aqui NAO muda o que o navegador recebe: o valor real tem que ir no
+# `--build-arg` na hora de construir a imagem (ver runbook). Fica no arquivo
+# porque o servidor tambem a le em tempo de execucao.
+NEXT_PUBLIC_APP_URL=https://dmo.spaguas.sp.gov.br
+
+# -----------------------------------------------------------------------------
+# 6. Observabilidade
+# -----------------------------------------------------------------------------
+# Coletor de log externo por HTTP. DEIXAR VAZIO neste servidor: nao ha saida
+# para a internet, e cada tentativa custa um timeout de 2 s por evento. O log
+# fica no json-file do Docker, com a rotacao definida no compose.
+LOG_DRAIN_URL=
+LOG_DRAIN_TOKEN=
+LOG_DRAIN_MIN_SEVERITY=
+
+# -----------------------------------------------------------------------------
+# 7. NUNCA definir em producao
+# -----------------------------------------------------------------------------
+# Listadas aqui para que apareca em revisao se alguem as acrescentar:
+#
+#   DEV_BYPASS_AUTH_EMAIL      pula a autenticacao inteira
+#   DEV_BYPASS_AUTH_USER_ID    idem
+#   DEV_PAPEL_USUARIO          forca o papel do usuario (RBAC, ADR-0022)
+#   DEV_APROVADOR_USUARIO_ID   forca o aprovador da triagem
+#   SPAGUAS_PWA_FORCE_ENABLE   so existe para depuracao local do PWA
+#
+# Conferir no servidor antes de subir:
+#   sudo grep -cE '^(DEV_|SPAGUAS_PWA_FORCE_ENABLE)' /etc/spaguas-dmo/app.env
+#   # espera: 0

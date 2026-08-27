@@ -36,6 +36,14 @@ ops/**/__pycache__
 # Docs, scripts de dev e dados locais
 docs
 data
+# Excecao: `data/colunas-ana.json` NAO e dado local, e FONTE. O caso de uso
+# `src/application/use-cases/inventario-ana/exportar.ts` o importa por caminho
+# relativo, entao o webpack precisa dele em tempo de compilacao. Sem esta linha
+# o `docker build` morre com "Module not found: Can't resolve
+# '../../../../data/colunas-ana.json'" (medido em 27/08/2026, build inteiro
+# reprovado). O resto de `data/` continua fora: sao CSV de carga e amostras,
+# que nao vao para a imagem.
+!data/colunas-ana.json
 supabase/.branches
 supabase/.temp
 *.log

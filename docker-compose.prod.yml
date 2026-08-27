@@ -1,0 +1,202 @@
+# =============================================================================
+# SP Aguas - DMO | orquestracao de PRODUCAO (servidor do orgao, sem internet)
+# =============================================================================
+# Este arquivo NAO substitui o `docker-compose.yml`, que continua servindo para
+# avaliacao local (sobe Postgres proprio, migrate e workers). Aqui sobe APENAS a
+# aplicacao, porque no servidor do orgao:
+#
+#   1. O banco e do orgao (SQL Server 2022 em 10.20.40.62), fora deste compose.
+#   2. Quem responde ao mundo e o Nginx do orgao, ja instalado no mesmo host,
+#      com o certificado de dmo.spaguas.sp.gov.br. Este container publica so em
+#      127.0.0.1 e recebe trafego por proxy_pass (ver docs/runbooks/entrega-
+#      imagem-sem-internet.md, secao "Nginx").
+#   3. O host NAO tem saida para a internet: nao existe `docker pull` nem
+#      `docker build` la. A imagem entra por `docker load` de um arquivo. Por
+#      isso este arquivo NAO tem secao `build:` de proposito: se alguem rodar
+#      `docker compose -f docker-compose.prod.yml up` sem a imagem carregada, o
+#      erro tem que ser "imagem nao encontrada", e nunca uma tentativa de build.
+#
+# Uso no servidor:
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml ps
+#   docker compose -f docker-compose.prod.yml logs -f --tail=100
+#
+# SAO DOIS ARQUIVOS DE AMBIENTE, e a diferenca entre eles nao e organizacao, e
+# mecanica do Compose (medido em 27/08/2026, tentando com um so):
+#
+#   /opt/spaguas-dmo/.env        lido pelo COMPOSE para resolver `${...}` DENTRO
+#                                deste arquivo (a tag da imagem e a porta). O
+#                                Compose so interpola a partir do `.env` do
+#                                diretorio do projeto e do ambiente do shell:
+#                                variavel declarada em `env_file` NAO serve para
+#                                isso, e o erro que sai e "required variable
+#                                IMAGEM_TAG is missing a value". Nao tem segredo.
+#                                Modelo: ops/producao/versao-no-ar.exemplo
+#
+#   /etc/spaguas-dmo/app.env     lido pelo `env_file` abaixo e entregue AO
+#                                CONTAINER em tempo de execucao. E aqui que
+#                                moram os segredos. root:docker, 0640.
+#                                Modelo: ops/producao/ambiente-producao.exemplo
+#
+# Nenhum dos dois entra no git (o .gitignore cobre `.env*` e `*.env`) nem na
+# imagem (o .dockerignore cobre `.env*`). A separacao tem um ganho de tabela: o
+# arquivo que muda a cada entrega e a cada rollback e o SEM segredo.
+#
+# PROIBIDO neste host: `docker system prune -a`. O host roda o Portainer do
+# orgao e imagens paradas de rollback nosso. Limpeza e sempre por nome
+# (`docker image rm spaguas/dashboard:sha-xxxxxxx`), nunca por varredura.
+# =============================================================================
+
+name: spaguas-dmo
+
+services:
+  app:
+    # Tag de commit, sempre. `latest` e proibido em producao: sem ela o rollback
+    # nao tem para onde apontar e ninguem sabe qual codigo esta no ar.
+    # IMAGEM_TAG vem de /opt/spaguas-dmo/.env (NAO do env_file, ver cabecalho) e
+    # e OBRIGATORIA: o `:?` faz o compose RECUSAR subir sem ela, em vez de
+    # assumir um default em silencio. Trocar esta variavel e subir de novo e o
+    # procedimento de entrega, e tambem o de rollback.
+    image: ${IMAGEM_NOME:-spaguas/dashboard}:${IMAGEM_TAG:?defina IMAGEM_TAG com a tag de commit, no formato sha-xxxxxxx}
+    container_name: spaguas-dmo-app
+    restart: unless-stopped
+
+    # -------------------------------------------------------------------------
+    # Rede: bridge propria do projeto. O host ja tem as tres redes padrao e o
+    # Portainer; deixar a aplicacao na `bridge` default a poria no mesmo dominio
+    # de camada 2 de qualquer container futuro do orgao.
+    # -------------------------------------------------------------------------
+    networks:
+      - spaguas-dmo
+
+    # -------------------------------------------------------------------------
+    # Publicacao APENAS em loopback. Quem termina TLS e responde ao mundo e o
+    # Nginx do orgao (porta 443), no mesmo host. Sem o `127.0.0.1:` o Docker
+    # publica em 0.0.0.0 e escreve a regra direto no iptables, o que passa POR
+    # CIMA do firewall do host: a aplicacao ficaria acessivel em HTTP puro pela
+    # rede interna, sem certificado e sem os cabecalhos que o Nginx acrescenta.
+    # -------------------------------------------------------------------------
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+
+    # -------------------------------------------------------------------------
+    # Ambiente. Tudo que e segredo mora no arquivo; aqui so o que e publico e
+    # precisa ser lido por quem opera.
+    #
+    # ATENCAO OPERACIONAL: quem tem acesso ao Portainer LE o ambiente do
+    # container na interface, inclusive DATABASE_URL. O arquivo com 0640 protege
+    # o disco, nao o painel. Ver o pedido ao orgao no runbook.
+    # -------------------------------------------------------------------------
+    env_file:
+      - /etc/spaguas-dmo/app.env
+    environment:
+      NODE_ENV: production
+      # Fuso: mantido em UTC de proposito, que e como a aplicacao roda hoje em
+      # producao. Trocar para America/Sao_Paulo muda a renderizacao de data no
+      # servidor e e decisao de aplicacao com regressao do Thiago, nao de infra.
+      TZ: UTC
+      # O server standalone precisa escutar em 0.0.0.0 DENTRO do container
+      # (o default e localhost e nem o publish do Docker alcanca). A exposicao
+      # ao mundo continua barrada pelo bind em 127.0.0.1 acima.
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: 1
+
+    # -------------------------------------------------------------------------
+    # Limites de recurso. Host medido: 8 vCPU, 9,6 GB de RAM, 890 MB em uso,
+    # rodando tambem o Portainer do orgao.
+    #
+    # memory 1536M: o processo Node do Next standalone fica na casa de 250 a
+    #   400 MB em regime; 1,5 GB cobre pico de exportacao (exceljs monta a
+    #   planilha em memoria) com folga e ainda deixa ~8 GB para o host e para o
+    #   Portainer. Sem limite, um vazamento nosso derruba o Portainer do cliente
+    #   junto, e quem apanha primeiro e o OOM killer do host escolhendo a vitima.
+    # cpus 2.0: um quarto da maquina. O Next e single-thread no laco principal;
+    #   2 vCPU cobrem o laco mais o pool de libuv (I/O, compressao, PDF) sem
+    #   deixar a aplicacao monopolizar as 8.
+    # reservations: piso garantido para o container nao ser espremido por um
+    #   vizinho futuro no mesmo host.
+    # -------------------------------------------------------------------------
+    # pids: teto de processos. Contem fork bomb e denuncia vazamento de
+    #   subprocesso (a rota de ficha tenta spawnar o indexer Python, ver runbook).
+    #   Fica DENTRO de `deploy.resources.limits`, e nao como `pids_limit` no topo
+    #   do servico: com os dois escritos, esta versao do Compose recusa o arquivo
+    #   inteiro com "can't set distinct values on 'pids_limit' and
+    #   'deploy.resources.limits.pids'" (medido em 27/08/2026).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1536M
+          pids: 256
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+    # -------------------------------------------------------------------------
+    # Rotacao de log. O log da aplicacao carrega e-mail de usuario por politica
+    # do projeto (trilha de auditoria), e QUALQUER pessoa com Portainer le esse
+    # log. Sem rotacao, o json-file cresce ate encher os 22 GB livres do disco e
+    # derruba o host inteiro, levando o Portainer do orgao junto.
+    #   10m x 5 = 50 MB de teto por container, medida conhecida e auditavel.
+    # -------------------------------------------------------------------------
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    # -------------------------------------------------------------------------
+    # Hardening. O Dockerfile ja roda como `nextjs` (uid 1001), non-root; o que
+    # esta aqui e o que o Dockerfile nao consegue garantir sozinho.
+    #
+    # no-new-privileges: nenhum processo do container ganha privilegio por
+    #   binario setuid, nem que alguem consiga executar codigo dentro dele.
+    # cap_drop ALL: a aplicacao nao precisa de capability nenhuma do kernel.
+    #   Ela escuta na 3000, que e porta alta, entao nem NET_BIND_SERVICE.
+    # read_only: raiz do container imutavel. O standalone do Next so precisa
+    #   escrever em /tmp e no cache de fetch; os dois viram tmpfs, que morre no
+    #   restart. Efeito pratico: um upload malicioso nao consegue deixar arquivo
+    #   no container, e a imagem no disco continua igual a que foi carregada.
+    # tmpfs com noexec/nosuid: mesmo escrevendo, nao executa.
+    #   mode=1777 e obrigatorio porque o processo roda como uid 1001 e o tmpfs
+    #   nasce root; sem o modo, o Next quebra no primeiro write com EACCES.
+    # -------------------------------------------------------------------------
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+      - /app/.next/cache:rw,noexec,nosuid,size=256m,mode=1777
+    # PID 1 que reaproveita zumbi. O `node server.js` nao colhe filho orfao, e a
+    # rota de ficha spawna subprocesso.
+    init: true
+
+    # -------------------------------------------------------------------------
+    # Healthcheck. Repetido aqui, e nao so herdado do Dockerfile, porque quem
+    # opera le o compose e precisa saber o que "healthy" significa neste sistema:
+    # /api/health faz `SELECT 1` no banco do orgao. Ou seja, o healthcheck NAO
+    # mede so "o Node subiu", mede tambem o elo com 10.20.40.62. Container
+    # unhealthy com log de `health.db.falha` e problema de rede ou credencial de
+    # banco, nao de aplicacao.
+    # start_period 60s: o primeiro boot valida ambiente e abre pool; 40s do
+    # Dockerfile e apertado num host com disco compartilhado.
+    # -------------------------------------------------------------------------
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+    labels:
+      br.gov.sp.spaguas.sistema: "dmo-dashboard"
+      br.gov.sp.spaguas.ambiente: "producao"
+      br.gov.sp.spaguas.responsavel: "DamaTech Solutions"
+
+networks:
+  spaguas-dmo:
+    name: spaguas-dmo
+    driver: bridge
