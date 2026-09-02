@@ -5,6 +5,7 @@ import { FormularioFichaMobile } from '@/components/mobile/FormularioFichaMobile
 import { SCHEMAS_FICHA } from '@/domain/fichas/schemas';
 import { CODIGOS_TIPO_DOCUMENTO } from '@/domain/tipo-documento';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 
 /**
@@ -61,8 +62,15 @@ export default async function NovaFichaPage({
     redirect(`/login?returnTo=/app/postos/${encodeURIComponent(prefixo)}/fichas/nova/${codigoNumero}`);
   }
 
-  const tecnicoNomeSugerido =
-    usuario.nome ?? usuario.email.split('@')[0] ?? 'técnico';
+  const semIdentidade = usuario.id === USUARIO_SEM_IDENTIDADE.id;
+  // Sem identificação, o campo nasce VAZIO. Pré-preencher com o nome do
+  // usuário institucional gravaria "Acesso sem identificação" no lugar do
+  // autor, ou seja, a ausência de identidade viraria a identidade do
+  // registro, que é exatamente o contrário do que a ficha precisa neste
+  // estado: aqui o nome digitado é a única autoria que vai existir.
+  const tecnicoNomeSugerido = semIdentidade
+    ? ''
+    : usuario.nome ?? usuario.email.split('@')[0] ?? 'técnico';
 
   return (
     <>
@@ -77,6 +85,7 @@ export default async function NovaFichaPage({
           prefixo={prefixo}
           usuarioId={usuario.id}
           tecnicoNomeSugerido={tecnicoNomeSugerido}
+          semIdentidade={semIdentidade}
         />
       </div>
     </>

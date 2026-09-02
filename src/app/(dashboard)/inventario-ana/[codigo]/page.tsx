@@ -7,6 +7,11 @@ import {
   postosRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
+import {
+  mensagemAcessoRestrito,
+  tituloAcessoRestrito,
+} from '@/domain/auth/mensagem-acesso-restrito';
 import { Alerta } from '@/components/ui/Alerta';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
 import { BadgeStatus } from '@/components/features/inventario-ana/BadgeStatus';
@@ -33,8 +38,11 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
   const ehAprovador = await papeisRepository.ehAprovador(usuario.id);
   if (!ehAprovador) {
     return (
-      <Alerta tipo="aviso" titulo="Acesso restrito">
-        Acesso restrito ao papel de aprovador.
+      <Alerta
+        tipo="aviso"
+        titulo={tituloAcessoRestrito(usuario.id === USUARIO_SEM_IDENTIDADE.id)}
+      >
+        {mensagemAcessoRestrito(usuario.id === USUARIO_SEM_IDENTIDADE.id)}
       </Alerta>
     );
   }

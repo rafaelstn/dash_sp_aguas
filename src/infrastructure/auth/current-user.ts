@@ -2,6 +2,10 @@ import 'server-only';
 
 import { criarClienteSupabaseServer } from './supabase-server';
 import { obterUsuarioBypassDev } from './dev-bypass';
+import {
+  acessoSemIdentidadeAtivo,
+  USUARIO_SEM_IDENTIDADE,
+} from './acesso-sem-identidade';
 
 export interface UsuarioAutenticado {
   id: string;
@@ -23,6 +27,13 @@ export interface UsuarioAutenticado {
  * consultar Supabase — ver infrastructure/auth/dev-bypass.ts.
  */
 export async function obterUsuarioAtual(): Promise<UsuarioAutenticado | null> {
+  // Janela sem identidade (entrega PRODESP, sem internet e sem API de login do
+  // órgão). Vem antes de tudo porque neste modo não existe sessão para ler: a
+  // atribuição é fixa e declarada. Ver acesso-sem-identidade.ts.
+  if (acessoSemIdentidadeAtivo()) {
+    return { ...USUARIO_SEM_IDENTIDADE };
+  }
+
   const bypass = obterUsuarioBypassDev();
   if (bypass) {
     return { id: bypass.id, email: bypass.email, nome: null };

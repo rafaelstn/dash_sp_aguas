@@ -15,6 +15,11 @@ import {
   rotuloTipoDocumento,
 } from '@/domain/tipo-documento';
 import { UsuarioNaoEhAprovador } from '@/domain/errors';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
+import {
+  mensagemAcessoRestrito,
+  tituloAcessoRestrito,
+} from '@/domain/auth/mensagem-acesso-restrito';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
 import { Paginador } from '@/components/ui/Paginador';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -213,9 +218,11 @@ async function Lista({ filtros }: { filtros: FiltrosResolvidos }) {
   } catch (e) {
     if (e instanceof UsuarioNaoEhAprovador) {
       return (
-        <Alerta tipo="aviso" titulo="Acesso restrito">
-          Acesso restrito ao papel de aprovador. Solicite ao gestor a
-          atribuição do papel para revisar fichas em triagem.
+        <Alerta
+          tipo="aviso"
+          titulo={tituloAcessoRestrito(usuario?.id === USUARIO_SEM_IDENTIDADE.id)}
+        >
+          {mensagemAcessoRestrito(usuario?.id === USUARIO_SEM_IDENTIDADE.id)}
         </Alerta>
       );
     }

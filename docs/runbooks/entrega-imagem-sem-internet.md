@@ -532,13 +532,37 @@ conexão, a liberação de rede a partir da ponte do Docker até `10.20.40.62:14
 (seção 10.3), e uma **dependência nova** no `package.json`, que obriga a
 reconstruir a imagem aqui, com internet.
 
-### 9.2 Identidade: **ainda bloqueia**
+### 9.2 Identidade: **destravado em 02/09/2026 pela janela sem identidade**
+
+> **Este bloqueio caiu.** A aplicação sobe no servidor do órgão com
+> `ACESSO_SEM_IDENTIDADE=sim`, mais motivo e data de revisão, declarados em
+> `/etc/spaguas-dmo/app.env` (modelo: `ops/producao/ambiente-producao.exemplo`,
+> seção 3.1). Decisão e consequências no **ADR-0024**.
+>
+> Enquanto a janela vale, o sistema roda **sem autenticação**: toda requisição é
+> atribuída a um usuário institucional único, com papel `user` (menor
+> privilégio), e ninguém se identifica. O que isso expõe está no ADR-0024 §4 e
+> precisa ser aceito por escrito pelo órgão.
+>
+> **As três variáveis são lidas em tempo de execução**, medido com o mesmo
+> `BUILD_ID`: sem elas a rota privada responde 503, com elas responde 200. Ou
+> seja, **religar a autenticação não exige reconstruir a imagem**, que era a
+> parte cara deste problema numa máquina sem internet.
+>
+> Nesta mesma mudança foi fechado um **fail-open que já existia**: o middleware
+> liberava tudo quando as variáveis do Supabase estavam ausentes, e o comentário
+> prometia que `env.ts` bloquearia, o que era falso (`env.ts` não é importado
+> pelo middleware). Como `NEXT_PUBLIC_*` é gravada em tempo de build, uma imagem
+> construída sem os `--build-arg` servia o sistema inteiro sem autenticação, de
+> dentro da imagem, sem correção possível por variável de ambiente. Hoje isso
+> responde **503**.
 
 O Supabase saiu por ordem do Rafael, e pelo ADR-0023 a autenticação passa a ser
 contra o `UsuariosIdentity` do órgão, com o `auth.users` local recebendo o mesmo
-identificador. **O código ainda não sabe disso**, e é isso que impede a subida.
+identificador. O diagnóstico abaixo é o original e **a tabela de trabalho
+continua valendo para a identidade definitiva**, que é o que substitui a janela.
 
-**MEDIDO no código de hoje:**
+**MEDIDO no código de então. Os dois primeiros itens mudaram em 02/09/2026:**
 
 - `env.ts`, linhas 55-59: **recusa subir em produção** sem
   `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.

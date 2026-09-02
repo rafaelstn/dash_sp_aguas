@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  configuracaoAcessoSemIdentidade,
+  janelaVencida,
+} from '@/infrastructure/auth/acesso-sem-identidade';
 
 /**
  * Validação das variáveis de ambiente usadas pelo servidor (API Routes).
@@ -52,9 +56,39 @@ export function getEnv(): Env {
       'DATABASE_URL é obrigatória em produção. Modo demo só funciona em development/test.',
     );
   }
-  if (!isAuthEnabled && data.NODE_ENV === 'production') {
+  // Janela sem identidade (entrega PRODESP). A chamada vem antes de qualquer
+  // decisão que dependa dela porque ela também é o fail-fast de motivo e data:
+  // sem isso o modo subiria sem justificativa escrita.
+  const configSemIdentidade = configuracaoAcessoSemIdentidade();
+  const semIdentidade = configSemIdentidade !== null;
+
+  // Os dois modos são mutuamente exclusivos, e isto é o que impede a
+  // configuração do servidor do órgão de ser copiada para um ambiente que
+  // alcança a internet. Sem esta recusa, um `.env` com as duas coisas subiria
+  // exposto e sem autenticação, e ninguém perceberia: o sistema funcionaria.
+  if (semIdentidade && isAuthEnabled) {
     throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY são obrigatórias em produção (ver ADR-0004).',
+      'ACESSO_SEM_IDENTIDADE=sim não convive com NEXT_PUBLIC_SUPABASE_URL/ANON_KEY configuradas. ' +
+        'A janela sem identidade existe para o servidor do órgão, que não alcança o Supabase. ' +
+        'Se este ambiente tem autenticação disponível, remova ACESSO_SEM_IDENTIDADE; ' +
+        'se é o servidor do órgão, remova as variáveis do Supabase.',
+    );
+  }
+
+  // Janela vencida: registra alto e NÃO derruba. Ver `janelaVencida`.
+  if (configSemIdentidade && janelaVencida(configSemIdentidade)) {
+    console.error(
+      '[acesso-sem-identidade] JANELA VENCIDA. O sistema está sem autenticação desde antes de ' +
+        `${configSemIdentidade.revisarEm}, data em que a suspensão deveria ter sido reavaliada. ` +
+        `Motivo registrado: ${configSemIdentidade.motivo}`,
+    );
+  }
+
+  if (!isAuthEnabled && !semIdentidade && data.NODE_ENV === 'production') {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY são obrigatórias em produção (ver ADR-0004). ' +
+        'No servidor do órgão, que não tem internet e portanto não alcança o Supabase, o modo previsto é ' +
+        'ACESSO_SEM_IDENTIDADE=sim (ver infrastructure/auth/acesso-sem-identidade.ts).',
     );
   }
 

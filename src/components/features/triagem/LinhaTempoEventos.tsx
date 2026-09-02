@@ -2,6 +2,7 @@ import type {
   EventoTriagem,
   TipoEventoTriagem,
 } from '@/domain/triagem-evento';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { formatarDataHora } from '@/lib/format';
 
 const ROTULO_EVENTO: Record<TipoEventoTriagem, string> = {
@@ -63,7 +64,14 @@ export function LinhaTempoEventos({ eventos }: LinhaTempoEventosProps) {
           </p>
           <p className="mt-0.5 text-2xs text-app-fg-muted tabular">
             {formatarDataHora(e.ocorreuEm)}
-            {e.atorId ? (
+            {/* O fragmento de UUID só faz sentido quando distingue pessoas.
+                Com o usuário institucional ele é constante, e oito caracteres
+                repetidos em todos os eventos parecem um identificador
+                resolvível: quem lê a trilha sai procurando quem é "00000000".
+                A ausência de identidade se declara com palavra. */}
+            {e.atorId === USUARIO_SEM_IDENTIDADE.id ? (
+              <span> · responsável não identificado</span>
+            ) : e.atorId ? (
               <span className="mono"> · responsável {e.atorId.slice(0, 8)}</span>
             ) : null}
           </p>

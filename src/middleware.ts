@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { bypassAuthAtivo } from '@/infrastructure/auth/dev-bypass';
+import { acessoSemIdentidadeAtivo } from '@/infrastructure/auth/acesso-sem-identidade';
 import { validarReturnToInterno } from '@/infrastructure/auth/return-to';
 import { rotaPublica } from '@/domain/auth/rotas-publicas';
 
@@ -105,9 +106,20 @@ export async function middleware(request: NextRequest) {
   const nonce = gerarNonce();
   const requestHeaders = requestHeadersComNonce(request, nonce);
 
-  // Dev: bypass completo da autenticação quando DEV_BYPASS_AUTH_EMAIL está
-  // setada (ver infrastructure/auth/dev-bypass.ts). Guarda NODE_ENV interna.
-  if (bypassAuthAtivo()) {
+  // Dois modos em que não há sessão para conferir, e o gate de rota sai do
+  // caminho. São diferentes e não se confundem:
+  //
+  //   bypassAuthAtivo()          dev local, preso a NODE_ENV=development
+  //                              (infrastructure/auth/dev-bypass.ts).
+  //   acessoSemIdentidadeAtivo() PRODUÇÃO no servidor do órgão, que não tem
+  //                              internet e portanto não alcança o Supabase,
+  //                              enquanto a API de login do órgão não chega
+  //                              (infrastructure/auth/acesso-sem-identidade.ts).
+  //
+  // Nos dois, `/login` desvia para a raiz: a tela existe, continua no
+  // repositório e volta a ser o caminho de entrada assim que o modo sair, mas
+  // não tem função enquanto não há o que autenticar.
+  if (bypassAuthAtivo() || acessoSemIdentidadeAtivo()) {
     if (request.nextUrl.pathname === '/login') {
       const homeUrl = request.nextUrl.clone();
       homeUrl.pathname = '/';
@@ -125,8 +137,33 @@ export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Dev local sem Supabase: libera (env.ts bloqueia em produção).
+  // Sem as variáveis do Supabase não há como conferir sessão nenhuma. O que
+  // acontece a partir daqui depende do ambiente, e a diferença é a fronteira
+  // entre conveniência de desenvolvimento e portão aberto em produção.
+  //
+  // O comentário que estava aqui dizia "Dev local sem Supabase: libera (env.ts
+  // bloqueia em produção)" e a segunda metade era falsa: `env.ts` nunca é
+  // importado por este arquivo, então nada bloqueava. Como `NEXT_PUBLIC_*` é
+  // substituída em tempo de BUILD, uma imagem construída sem os `--build-arg`
+  // correspondentes compilava este desvio com `undefined` e servia o sistema
+  // inteiro sem autenticação, de dentro da imagem, sem correção possível por
+  // variável de ambiente no servidor.
+  //
+  // Em produção isto passa a ser erro de configuração declarado, e não um
+  // portão que se abre em silêncio. Rota pública segue servida para que o
+  // healthcheck do container continue respondendo e o diagnóstico seja
+  // possível.
   if (!url || !anon) {
+    if (process.env.NODE_ENV === 'production' && !rotaPublica(request.nextUrl.pathname)) {
+      const recusa = new NextResponse(
+        'Configuração de identidade ausente. O sistema não sobe sem autenticação ' +
+          'configurada (NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY) ' +
+          'nem sem a janela declarada ACESSO_SEM_IDENTIDADE=sim.',
+        { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } },
+      );
+      aplicarNoCacheAutenticado(recusa);
+      return recusa;
+    }
     const resp = NextResponse.next({ request: { headers: requestHeaders } });
     aplicarCspResponse(resp, nonce);
     aplicarNoCacheAutenticado(resp);

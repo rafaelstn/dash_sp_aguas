@@ -1,3 +1,4 @@
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { HeaderMobile } from '@/components/mobile/HeaderMobile';
 
@@ -6,9 +7,62 @@ import { HeaderMobile } from '@/components/mobile/HeaderMobile';
  *
  * O botão "Instalar app" canônico vive no `<InstallPWAPrompt>` (renderizado
  * no layout). Aqui mantemos só identidade + logout, mantendo a tela enxuta.
+ *
+ * Sem identificação, a lista Nome / E-mail sai inteira e "Encerrar sessão"
+ * some (não há sessão para encerrar, e link que não desconecta é defeito
+ * silencioso). É a tela do app que responde "quem sou eu neste sistema", pelo
+ * mesmo motivo de `/perfil` no painel web.
  */
 export default async function PerfilPage() {
   const usuario = await obterUsuarioAtual();
+  const semIdentidade = usuario?.id === USUARIO_SEM_IDENTIDADE.id;
+
+  if (semIdentidade) {
+    return (
+      <>
+        <HeaderMobile titulo="Acesso ao sistema" />
+        <div className="px-safe mx-auto w-full max-w-content space-y-4 py-5">
+          <section
+            aria-labelledby="acesso-titulo"
+            className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
+          >
+            <h2
+              id="acesso-titulo"
+              className="text-sm font-semibold text-app-fg"
+            >
+              Acesso sem identificação
+            </h2>
+            <p className="mt-2 text-sm text-app-fg-muted">
+              Esta instalação opera sem autenticação. As ações não são
+              atribuídas a um usuário.
+            </p>
+            {/* Escopada em consulta a ficha de propósito: é o registro medido.
+                Afirmar "todas as ações" seria prometer além do que existe. */}
+            <p className="mt-2 text-sm text-app-fg-muted">
+              As consultas a ficha continuam registradas com data, hora e
+              endereço de rede do equipamento.
+            </p>
+          </section>
+
+          <section
+            aria-labelledby="autoria-titulo"
+            className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
+          >
+            <h2
+              id="autoria-titulo"
+              className="text-sm font-semibold text-app-fg"
+            >
+              Autoria da ficha
+            </h2>
+            <p className="mt-2 text-sm text-app-fg-muted">
+              O nome informado no preenchimento é a única identificação
+              registrada na ficha.
+            </p>
+          </section>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

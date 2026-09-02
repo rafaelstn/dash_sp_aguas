@@ -9,6 +9,11 @@ import { Alerta } from '@/components/ui/Alerta';
 import { FormularioEditarPosto } from '@/components/features/postos/FormularioEditarPosto';
 import { HistoricoPostoEventos } from '@/components/features/postos/HistoricoPostoEventos';
 import { logger } from '@/infrastructure/logging/logger';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
+import {
+  mensagemAcessoRestrito,
+  tituloAcessoRestrito,
+} from '@/domain/auth/mensagem-acesso-restrito';
 import type { Posto } from '@/domain/posto';
 
 export const dynamic = 'force-dynamic';
@@ -29,8 +34,11 @@ export default async function EditarPostoPage({ params }: PageProps) {
   const ehAprovador = await papeisRepository.ehAprovador(usuario.id);
   if (!ehAprovador) {
     return (
-      <Alerta tipo="aviso" titulo="Acesso restrito">
-        Acesso restrito ao papel de aprovador. Solicite ao gestor.
+      <Alerta
+        tipo="aviso"
+        titulo={tituloAcessoRestrito(usuario.id === USUARIO_SEM_IDENTIDADE.id)}
+      >
+        {mensagemAcessoRestrito(usuario.id === USUARIO_SEM_IDENTIDADE.id)}
       </Alerta>
     );
   }

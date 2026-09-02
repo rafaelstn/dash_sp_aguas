@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { CardTipoFicha } from '@/components/mobile/CardTipoFicha';
 import { HeaderMobile } from '@/components/mobile/HeaderMobile';
@@ -35,20 +36,35 @@ export default async function MobileHomePage() {
   if (!usuario) {
     redirect('/login?returnTo=/app');
   }
+  const semIdentidade = usuario.id === USUARIO_SEM_IDENTIDADE.id;
   const nome = usuario.nome ?? usuario.email?.split('@')[0] ?? 'técnico';
 
   return (
     <>
+      {/*
+        Sem identificação, o marcador viaja no `subtitulo` que este header já
+        tinha, e não numa faixa própria: em celular no campo a altura é o
+        recurso mais escasso, e faixa acrescentada aqui é a primeira coisa que
+        o técnico aprende a ignorar. Zero pixel novo, mesma linha.
+
+        "Sair" some junto. Sem sessão ele não desconecta nada e ainda levaria a
+        `/login`, que não faz nada: seria um botão que mente, e botão que mente
+        é defeito de segurança, não de acabamento.
+      */}
       <HeaderMobile
         titulo="Selecionar tipo de ficha"
-        subtitulo={`Sessão de ${nome}`}
+        subtitulo={
+          semIdentidade ? 'Sessão sem identificação' : `Sessão de ${nome}`
+        }
         acaoDireita={
-          <a
-            href="/auth/sair?returnTo=/app"
-            className="min-h-[44px] rounded px-2 py-2 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
-          >
-            Sair
-          </a>
+          semIdentidade ? undefined : (
+            <a
+              href="/auth/sair?returnTo=/app"
+              className="min-h-[44px] rounded px-2 py-2 text-xs font-medium text-gov-azul hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+            >
+              Sair
+            </a>
+          )
         }
       />
 

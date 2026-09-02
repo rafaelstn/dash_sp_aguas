@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { HeaderMobile } from '@/components/mobile/HeaderMobile';
 import { FormularioFichaMobile } from '@/components/mobile/FormularioFichaMobile';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { triagemRepository } from '@/infrastructure/repositories';
 import { SCHEMAS_FICHA } from '@/domain/fichas/schemas';
@@ -82,11 +83,17 @@ export default async function ReenviarFichaPage({
     );
   }
 
-  const tecnicoNomeSugerido =
-    ficha.tecnicoNome ||
-    usuario.nome ||
-    usuario.email.split('@')[0] ||
-    'técnico';
+  const semIdentidade = usuario.id === USUARIO_SEM_IDENTIDADE.id;
+  // O nome que veio da ficha original CONTINUA valendo mesmo sem
+  // identificação: ele foi digitado por quem preencheu e é a autoria real do
+  // registro. O que cai é só o encadeamento para a sessão, que aqui
+  // devolveria "Acesso sem identificação" no lugar do autor.
+  const tecnicoNomeSugerido = semIdentidade
+    ? ficha.tecnicoNome || ''
+    : ficha.tecnicoNome ||
+      usuario.nome ||
+      usuario.email.split('@')[0] ||
+      'técnico';
 
   return (
     <>
@@ -101,6 +108,7 @@ export default async function ReenviarFichaPage({
           prefixo={prefixo}
           usuarioId={usuario.id}
           tecnicoNomeSugerido={tecnicoNomeSugerido}
+          semIdentidade={semIdentidade}
           fichaOrigemId={ficha.id}
           motivoDevolucao={ficha.motivoDecisao}
           dadosIniciais={ficha.dados}

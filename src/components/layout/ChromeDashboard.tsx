@@ -4,10 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { AvisoSemIdentidade } from './AvisoSemIdentidade';
 import { ItemSidenav } from './ItemSidenav';
 import { MenuMobile } from './MenuMobile';
 import { MenuUsuario } from './MenuUsuario';
 import type { ItemNav } from './nav-itens';
+// Fonte canônica no domínio, e não a reexportação de conveniência da
+// infraestrutura: este é um Client Component, e o módulo de infraestrutura lê
+// `process.env`, o que não tem por que viajar no bundle do navegador.
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import type { UsuarioAutenticado } from '@/infrastructure/auth/current-user';
 
 interface Props {
@@ -29,8 +34,16 @@ const CHAVE_COLAPSO = 'spaguas:sidenav-colapsado';
  * alinhada à altura do header, formando uma linha divisória contínua. O
  * header passa a ser barra de ferramentas: gatilho de colapso à esquerda
  * e menu do usuário à direita (único lugar onde nome/e-mail aparecem).
+ *
+ * Quando o sistema opera sem verificar identidade, o mesmo slot do usuário
+ * passa a exibir o selo "Sem identificação" e a coluna de conteúdo ganha a
+ * faixa `AvisoSemIdentidade` acima do header. O estado é derivado do usuário
+ * que chegou por prop, e não de uma leitura própria de variável de ambiente:
+ * assim a interface segue exatamente o que `current-user` decidiu, sem risco
+ * de as duas fontes divergirem.
  */
 export function ChromeDashboard({ itens, usuario, children }: Props) {
+  const semIdentidade = usuario?.id === USUARIO_SEM_IDENTIDADE.id;
   // Inicia expandido no SSR e no 1º paint pra não piscar; lê a preferência
   // salva logo após montar. Evita divergência de hidratação.
   const [colapsado, setColapsado] = useState(false);
@@ -165,6 +178,12 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Fora da barra lateral de propósito: aqui a faixa rola para fora e o
+            header sticky assume o topo, então ela não rouba área de trabalho.
+            No root layout ela empurraria a lateral `lg:h-screen` para baixo e
+            cortaria o gatilho de recolher do rodapé dela. */}
+        {semIdentidade ? <AvisoSemIdentidade /> : null}
+
         <header className="sticky top-0 z-30 h-header border-b border-app-border-subtle bg-app-surface">
           <div className="flex h-full items-center gap-3 px-4">
             {/* Mobile: hamburger do drawer (o gatilho de colapso do desktop
@@ -183,7 +202,11 @@ export function ChromeDashboard({ itens, usuario, children }: Props) {
 
             <div className="ml-auto flex items-center gap-3">
               {usuario ? (
-                <MenuUsuario nome={usuario.nome} email={usuario.email} />
+                <MenuUsuario
+                  nome={usuario.nome}
+                  email={usuario.email}
+                  semIdentidade={semIdentidade}
+                />
               ) : (
                 <a
                   href="/login"

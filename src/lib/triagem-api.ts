@@ -10,6 +10,7 @@
  * em `src/app/api/triagem/*` e `ops/testing/triagem-flow.http`.
  */
 
+import { mensagemAcessoRestrito } from '@/domain/auth/mensagem-acesso-restrito';
 import type { FichaTriagem } from '@/domain/triagem';
 import type { EventoTriagem } from '@/domain/triagem-evento';
 
@@ -319,7 +320,13 @@ export function mensagemErroTriagem(erro: ErroTriagemAPI): string {
       return 'Ficha de triagem não localizada. É possível que tenha sido removida ou que o identificador esteja incorreto.';
 
     case 'sem_papel_aprovador':
-      return 'Acesso restrito ao papel de aprovador. Solicite ao gestor a atribuição do papel para concluir esta operação.';
+      // Fonte única do texto (domain/auth/mensagem-acesso-restrito). Aqui é
+      // sempre a variante padrão: este mapeamento roda no navegador e não
+      // enxerga a janela sem identidade. Na prática ela não é alcançável
+      // durante a janela, porque a tela de triagem recusa antes de qualquer
+      // chamada. Se a API passar a ser chamada de outro lugar, este é o ponto
+      // que precisa receber a variante correta.
+      return mensagemAcessoRestrito(false);
 
     case 'estado_invalido':
       return 'A ficha já foi decidida. Recarregue a página para visualizar a situação atual.';

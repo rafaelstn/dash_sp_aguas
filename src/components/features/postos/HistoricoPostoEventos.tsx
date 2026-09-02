@@ -1,5 +1,29 @@
 import 'server-only';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { postosRepository } from '@/infrastructure/repositories';
+
+/**
+ * Quem aparece como autor do evento, em três estados e não em dois.
+ *
+ * O par `atorEmail ?? 'Automação'` só distinguia "tem e-mail" de "não tem", e
+ * isso quebra aqui por dois caminhos independentes:
+ *
+ *  - Antes da linha do usuário institucional em `auth.users`, a subquery de
+ *    `postos-repository.pg.ts` devolvia NULL para ação HUMANA, e a trilha
+ *    afirmava automação onde houve uma pessoa. Trilha que mente é pior que
+ *    trilha ausente.
+ *  - Com a linha provisionada, ela devolve `acesso-sem-identidade@dmo.local`,
+ *    e endereço técnico cru numa tela de governo é ruído: quem lê não tem como
+ *    saber que aquilo não é uma caixa de e-mail de alguém.
+ *
+ * O terceiro estado resolve os dois com uma frase legível.
+ */
+function autorDoEvento(atorEmail: string | null): string {
+  if (atorEmail === USUARIO_SEM_IDENTIDADE.email) {
+    return 'Acesso sem identificação';
+  }
+  return atorEmail ?? 'Automação (sem ator humano)';
+}
 
 const ROTULOS_EVENTO: Record<string, string> = {
   criado: 'Criado',
@@ -114,7 +138,7 @@ export async function HistoricoPostoEventos({ postoId }: Props) {
                 </time>
               </div>
               <p className="mt-0.5 text-2xs text-app-fg-muted">
-                {e.atorEmail ?? 'Automação (sem ator humano)'}
+                {autorDoEvento(e.atorEmail)}
                 {e.origemEvento ? <> · origem: {e.origemEvento}</> : null}
               </p>
               {resumo ? (

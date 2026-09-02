@@ -39,6 +39,15 @@ interface FormularioFichaMobileProps {
   dadosIniciais?: Record<string, unknown>;
   /** Pré-preenchimento de cabeçalho (re-envio). */
   cabecalhoInicial?: Partial<CabecalhoRascunho>;
+  /**
+   * Sessão sem identificação (ver
+   * `infrastructure/auth/acesso-sem-identidade.ts`). Só muda o texto de apoio
+   * do campo "Nome do técnico", e a frase é condicional porque só é verdadeira
+   * neste estado: com autenticação ligada a ficha também carrega o
+   * `tecnicoId` da sessão, então o nome digitado NÃO seria a única
+   * identificação do registro.
+   */
+  semIdentidade?: boolean;
 }
 
 /**
@@ -67,6 +76,7 @@ export function FormularioFichaMobile({
   motivoDevolucao,
   dadosIniciais,
   cabecalhoInicial,
+  semIdentidade = false,
 }: FormularioFichaMobileProps) {
   const formId = useId();
 
@@ -340,11 +350,29 @@ export function FormularioFichaMobile({
               value={rascunho.cabecalho.tecnicoNome}
               onChange={(e) => setCabecalho('tecnicoNome', e.target.value)}
               aria-invalid={erros['__tecnicoNome'] ? true : undefined}
-              aria-describedby={erros['__tecnicoNome'] ? `${formId}-tecnicoNome-erro` : undefined}
+              // Apoio e erro entram JUNTOS quando ambos existem: descrever só
+              // o erro faria o leitor de tela perder a frase que explica o
+              // peso do campo, e é ela que muda o cuidado ao preencher.
+              aria-describedby={
+                [
+                  semIdentidade ? `${formId}-tecnicoNome-apoio` : null,
+                  erros['__tecnicoNome'] ? `${formId}-tecnicoNome-erro` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
               className={`mt-1 block w-full min-h-[44px] rounded border bg-app-surface px-3 text-md text-app-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul ${
                 erros['__tecnicoNome'] ? 'border-red-500' : 'border-app-border focus:border-gov-azul'
               }`}
             />
+            {semIdentidade ? (
+              <p
+                id={`${formId}-tecnicoNome-apoio`}
+                className="mt-1 text-xs text-app-fg-muted"
+              >
+                Única identificação registrada nesta ficha.
+              </p>
+            ) : null}
             {erros['__tecnicoNome'] ? (
               <p id={`${formId}-tecnicoNome-erro`} role="alert" className="mt-1 text-xs font-medium text-red-700">
                 {erros['__tecnicoNome']}

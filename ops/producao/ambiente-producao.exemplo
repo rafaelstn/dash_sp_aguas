@@ -60,16 +60,70 @@ DATABASE_URL=
 # ADR-0023, a autenticacao passa a ser contra o UsuariosIdentity do orgao, com o
 # auth.users local recebendo o mesmo identificador.
 #
-# PENDENCIA DE APLICACAO, e ela impede a subida ate ser resolvida: o env.ts
-# ainda EXIGE NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY em
-# producao (linhas 55-59), e o middleware ainda chama o Supabase a cada
-# requisicao (linhas 125-126). Enquanto essas linhas existirem, a aplicacao ou
-# recusa subir, ou sobe e trava toda navegacao numa chamada de rede que nunca
-# completa. A correcao e de codigo, esta apontada na secao 9.2 do runbook, e NAO
-# se contorna por variavel de ambiente: as duas sao gravadas no pacote em tempo
-# de build, entao trocar de identidade exige RECONSTRUIR a imagem.
+# A PENDENCIA QUE ESTAVA AQUI FOI RESOLVIDA EM 02/09/2026, e o registro fica
+# porque ela descrevia com precisao o que travava a entrega: o env.ts EXIGIA
+# NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY em producao, entao a
+# aplicacao nao subia neste servidor. Medido antes de corrigir, com o banco no
+# ar e a DATABASE_URL preenchida: `npm run build` saiu com codigo 1 e a mensagem
+# "NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY sao obrigatorias em
+# producao". Nao era o login que atrapalhava: o processo morria antes da tela.
 #
-# As variaveis da nova camada de identidade entram aqui quando forem definidas.
+# A saida e a JANELA SEM IDENTIDADE, abaixo. Enquanto ela vale, toda requisicao
+# e atribuida a um unico usuario institucional, e ninguem se identifica.
+#
+# E ela NAO depende de reconstruir a imagem, ao contrario do que a versao
+# anterior deste texto supunha: as tres variaveis abaixo nao levam o prefixo
+# NEXT_PUBLIC_ de proposito, e por isso sao lidas em tempo de EXECUCAO,
+# inclusive dentro do middleware. Medido em 02/09/2026 com o MESMO artefato
+# (BUILD_ID identico), so trocando o ambiente: sem a variavel, rota privada
+# responde 503; com ela, responde 200. Consequencia pratica: religar a
+# autenticacao quando a API do orgao chegar e editar este arquivo e reiniciar o
+# container, sem construir imagem nova, que e o que nao se consegue fazer numa
+# maquina sem internet.
+
+# -----------------------------------------------------------------------------
+# 3.1 JANELA SEM IDENTIDADE (o sistema roda SEM autenticacao)
+# -----------------------------------------------------------------------------
+# LEIA ANTES DE PREENCHER. Com estas variaveis ativas, qualquer pessoa que
+# alcance este servidor pela rede usa o sistema sem se identificar, e a trilha
+# de auditoria registra sempre o mesmo ator. Isto e um estado excecional
+# declarado, acordado com o orgao, e nao um ajuste de configuracao.
+#
+# O que a janela NAO libera, e a contencao e deliberada: nao existe linha em
+# `usuarios_papeis` para o usuario institucional, entao o papel cai em `user`
+# (menor privilegio) e as operacoes privilegiadas se recusam sozinhas. Medido em
+# 02/09/2026 com a aplicacao no ar: /api/triagem responde 403,
+# /api/admin/usuarios responde 403, e a leitura (/api/estoque/saldos) responde
+# 200. NAO conceda papel a este usuario sem decisao escrita do proprietario:
+# fazer isso troca "qualquer um na rede consulta" por "qualquer um na rede
+# aprova ficha e administra usuarios".
+#
+# Fail-closed: so a palavra `sim`, exata, liga a janela. `true`, `1` e `yes` NAO
+# ligam, de proposito, para que ninguem a abra por reflexo de digitacao.
+#
+# Nao convive com Supabase: se as variaveis do Supabase estiverem preenchidas
+# junto com esta, a aplicacao RECUSA subir. E o que impede esta configuracao de
+# ser copiada para um ambiente que alcanca a internet.
+ACESSO_SEM_IDENTIDADE=sim
+
+# Por que a autenticacao esta suspensa. Minimo de 10 caracteres, e a aplicacao
+# recusa subir sem isto: suspensao sem justificativa escrita e como uma
+# suspensao temporaria vira permanente.
+ACESSO_SEM_IDENTIDADE_MOTIVO=Servidor do orgao sem saida para a internet, e a API de login do orgao ainda nao foi fornecida.
+
+# Data (AAAA-MM-DD) em que a suspensao deve ser reavaliada com o orgao. Combinar
+# o prazo real na entrega, este valor e apenas um ponto de partida.
+#
+# Passada a data, a aplicacao CONTINUA no ar e registra alerta severo a cada
+# subida. Ela nao derruba o sistema de proposito: este servidor nao tem internet
+# e ninguem nosso o alcanca depressa, entao recusar o boot transformaria um
+# lembrete nosso em indisponibilidade do orgao. Quem reprova e a nossa cadeia de
+# testes, onde a quebra e barata e chega a quem pode agir.
+ACESSO_SEM_IDENTIDADE_REVISAR_EM=2026-12-01
+
+# As variaveis da camada de identidade definitiva entram aqui quando o orgao
+# fornecer a API. Ao liga-la, REMOVER as tres acima: a estrutura de
+# autenticacao continua inteira no codigo e volta a valer sozinha.
 
 # Dominios institucionais autorizados, separados por virgula. O coringa asterisco
 # e RECUSADO em producao pelo env.ts (linhas 67-73), porque libera autocadastro

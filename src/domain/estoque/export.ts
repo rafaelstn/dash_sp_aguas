@@ -7,6 +7,7 @@
  * daqui; assim a logica de rotulo/linha e testavel sem gerar binario.
  */
 
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import type { Estado } from './estado';
 import type { Status } from './status-unidade';
 import type { UnidadeFisica } from './local';
@@ -152,6 +153,11 @@ export function rotuloItem(m: MovimentacaoExport): string {
  */
 export function rotuloOperador(id: string, identidade: IdentidadeUsuario | undefined): string {
   if (id === UUID_SISTEMA_IMPORT) return 'Importação';
+  // Janela sem identidade (PRODESP): este id RESOLVE para um e-mail real em
+  // auth.users, então sem o desvio a planilha e a trilha exibiriam
+  // "acesso-sem-identidade@dmo.local" na coluna Operador. Endereço técnico ali
+  // é pior que a frase, porque parece uma conta de pessoa.
+  if (id === USUARIO_SEM_IDENTIDADE.id) return USUARIO_SEM_IDENTIDADE.nome;
   const nome = identidade?.nome?.trim();
   if (nome) return nome;
   const email = identidade?.email?.trim();
