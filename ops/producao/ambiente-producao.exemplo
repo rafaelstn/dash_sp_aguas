@@ -158,10 +158,54 @@ TRILHA_RETENCAO_DIAS=
 NEXT_PUBLIC_APP_URL=https://dmo.spaguas.sp.gov.br
 
 # -----------------------------------------------------------------------------
+# 5.1 SAIDA PARA A INTERNET: o proxy corporativo do orgao
+# -----------------------------------------------------------------------------
+# A rede do orgao nao deixa o servidor sair direto para a internet. Toda saida
+# passa por um proxy corporativo, e o firewall autoriza pelo IP DELE, que e
+# fixo e conhecido. O container nao tem IP autorizado e nao precisa ter: quem
+# fala com a internet e o proxy.
+#
+# POR QUE ISTO NAO E "so definir a variavel", e o que custou descobrir:
+# o `fetch` nativo do Node NAO le HTTP_PROXY por conta propria (o axios le, e e
+# por isso que o exemplo do desenvolvedor do orgao funciona la e nao aqui).
+# Medido em 02/09/2026 com um proxy local que conta conexoes:
+#
+#   node 20.20.2                            0 conexoes  -> foi direto
+#   node 24.20.0 sem a opcao                0 conexoes  -> foi direto
+#   node 24.20.0 + NODE_USE_ENV_PROXY=1     1 conexao   -> usou o proxy
+#
+# Por isso a imagem passou para node:24-alpine e ja carrega
+# NODE_USE_ENV_PROXY=1 (Dockerfile). Nao e preciso repetir a variavel aqui.
+#
+# Sem isso, a chamada sai direto, o firewall engole o pacote, e a requisicao
+# fica pendurada ate estourar o tempo limite de 15 s, sem erro que explique o
+# que houve. O sintoma parece defeito de codigo e nao e.
+#
+# Formato: http://<host-do-proxy>:<porta>. Se o proxy exigir autenticacao,
+# ela vai embutida (http://usuario:senha@host:porta) e ESTE ARQUIVO passa a
+# conter segredo, o que ja e o caso da DATABASE_URL: permissao 0640, root:docker.
+HTTP_PROXY=
+HTTPS_PROXY=
+
+# O QUE NAO PODE PASSAR PELO PROXY. Esta lista nao e detalhe de organizacao: o
+# que ficar de fora dela sai da maquina para pedir um endereco que so existe
+# dentro dela, e falha de um jeito confuso.
+#   localhost, 127.0.0.1  chamadas do proprio processo
+#   db                    nome do servico do Postgres na rede do Compose
+#   10.20.40.62           SQL Server do orgao (ADR-0023), que e INTERNO
+#   dmo.spaguas...        o proprio dominio deste sistema
+NO_PROXY=localhost,127.0.0.1,::1,db,10.20.40.62,dmo.spaguas.sp.gov.br
+
+# -----------------------------------------------------------------------------
 # 6. Observabilidade
 # -----------------------------------------------------------------------------
-# Coletor de log externo por HTTP. DEIXAR VAZIO neste servidor: nao ha saida
-# para a internet, e cada tentativa custa um tempo de espera de 2 s por evento.
+# Coletor de log externo por HTTP. DEIXAR VAZIO neste servidor. O motivo mudou
+# em 02/09/2026: existe saida para a internet, pelo proxy da secao 5.1, entao
+# nao e mais verdade que ela seja impossivel. Continua vazio por escolha, e a
+# escolha e melhor que antes: mandar log de um sistema de governo para coletor
+# externo teria de passar por decisao de dado do orgao, e cada tentativa que
+# falha custa 2 s de espera por evento. O log fica no json-file do Docker, com
+# a rotacao definida no compose.
 # O log fica no json-file do Docker, com a rotacao definida no compose.
 LOG_DRAIN_URL=
 LOG_DRAIN_TOKEN=

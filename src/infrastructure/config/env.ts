@@ -11,13 +11,39 @@ import {
  * DATABASE_URL é opcional: quando vazia/ausente, o app entra em MODO DEMO
  * (fixtures em memória). Modo demo é bloqueado em produção.
  */
+/**
+ * Trata string vazia como variável ausente.
+ *
+ * O caso concreto vem do Docker: `ENV X=$ARG` com o argumento não informado
+ * define `X=''`, e não deixa `X` ausente. Para o zod isso é a diferença entre
+ * cair no `.optional()` e ser levado ao validador de formato, que reprova.
+ */
+function vazioComoAusente<T extends z.ZodTypeAny>(esquema: T) {
+  return z.preprocess((v) => (v === '' ? undefined : v), esquema);
+}
+
 const schema = z.object({
   DATABASE_URL: z.string().optional().default(''),
-  NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
+  // Mesmo tratamento do Supabase abaixo: `.default()` cobre ausente, não vazio,
+  // e vazio chegaria ao validador de URL e reprovaria o boot.
+  NEXT_PUBLIC_APP_URL: vazioComoAusente(
+    z.string().url().default('http://localhost:3000'),
+  ),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
   // Supabase Auth (desvio autorizado da US-008 para Fase 1 — ver ADR-0004)
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  //
+  // `vazioComoAusente` não é preciosismo: `ENV X=$ARG` no Dockerfile, com o
+  // ARG não informado, define a variável como STRING VAZIA, e não a deixa
+  // ausente. `.optional()` cobre `undefined` e não cobre `''`, então o zod
+  // levava `''` para o validador de URL e reprovava com "Invalid url",
+  // derrubando a construção da imagem inteira em "Collecting page data".
+  //
+  // Medido em 02/09/2026: `docker build` sem os `--build-arg` do Supabase
+  // falhava assim. Como o Supabase saiu da entrega, ninguém mais passa esses
+  // argumentos, ou seja, o caminho quebrado virou o caminho normal. Não
+  // aparecia no build local porque ali a variável de fato não existe.
+  NEXT_PUBLIC_SUPABASE_URL: vazioComoAusente(z.string().url().optional()),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   // Service role (server-only): usada para upload no Storage (foto de capa).
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),

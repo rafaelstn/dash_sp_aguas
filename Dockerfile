@@ -6,11 +6,28 @@
 #
 # Build:  docker build -t spaguas/dashboard .
 # (o compose já faz isso; este Dockerfile é referenciado por docker-compose.yml)
+#
+# ---------------------------------------------------------------------------
+# A VERSÃO DO NODE NÃO PODE VOLTAR PARA A 20, e o motivo não é preferência.
+# ---------------------------------------------------------------------------
+# A rede do órgão só deixa sair pela internet através de um proxy corporativo,
+# e o `fetch` nativo do Node NÃO lê HTTP_PROXY/HTTPS_PROXY do ambiente por
+# conta própria (diferente do axios, que lê). Medido em 02/09/2026 com um
+# proxy local que conta conexões recebidas:
+#
+#   node:20-alpine (v20.20.2)                        0 conexões  -> foi direto
+#   node:24-alpine (v24.20.0) sem a opção            0 conexões  -> foi direto
+#   node:24-alpine + NODE_USE_ENV_PROXY=1            1 conexão   -> usou o proxy
+#
+# "Foi direto" no servidor do órgão significa que o firewall engole o pacote e
+# a chamada fica pendurada até estourar o tempo limite, sem erro que diga o que
+# houve. Voltar para a 20 devolve exatamente esse sintoma, e ele é caro de
+# diagnosticar porque parece defeito de código.
 
 # ---------------------------------------------------------------------------
 # Estágio 1 — dependências (cache estável: só reinstala quando lockfile muda)
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 # libc6-compat: o Next/sharp espera glibc; no Alpine é preciso o shim.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
@@ -20,7 +37,7 @@ RUN npm ci --no-audit --no-fund
 # ---------------------------------------------------------------------------
 # Estágio 2 — build (gera .next/standalone com DOCKER_BUILD=1)
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
@@ -79,12 +96,31 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
 # imagem construível.
 ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
 
+# Identidade: mesma mecânica da DATABASE_URL acima, e pelo mesmo motivo.
+#
+# A etapa "Collecting page data" avalia `getEnv()` com NODE_ENV=production, e
+# ali a aplicação exige OU as duas variáveis do Supabase, OU a janela sem
+# identidade declarada (ADR-0024). Como o Supabase saiu, sem isto o build para
+# com "NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY são
+# obrigatórias em produção", e a imagem não se constrói.
+#
+# Seguro pelos mesmos três motivos da DATABASE_URL, e o segundo é o que mais
+# importa: NENHUMA das três leva o prefixo NEXT_PUBLIC_, então não são gravadas
+# em pacote nenhum, são lidas em tempo de execução, e o estágio `runner` parte
+# de uma imagem nova que não herda estas. Quem decide a janela em produção é o
+# /etc/spaguas-dmo/app.env, nunca a imagem. Conferir na imagem pronta, e este
+# comando precisa devolver VAZIO:
+#   docker image inspect <imagem> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep ACESSO_SEM_IDENTIDADE
+ENV ACESSO_SEM_IDENTIDADE=sim
+ENV ACESSO_SEM_IDENTIDADE_MOTIVO="Valor de fachada, valido apenas durante o build da imagem."
+ENV ACESSO_SEM_IDENTIDADE_REVISAR_EM=2099-12-31
+
 RUN npm run build
 
 # ---------------------------------------------------------------------------
 # Estágio 3 — runtime (mínimo, non-root, somente o standalone)
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -93,6 +129,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # de fora do container (default 'localhost' só responde dentro dele).
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+# Faz o `fetch` nativo respeitar HTTP_PROXY / HTTPS_PROXY / NO_PROXY (ver o
+# bloco no topo deste arquivo). Fica ligado NA IMAGEM de propósito: se
+# dependesse de alguém lembrar de escrevê-la no app.env, o esquecimento não
+# produziria erro nenhum, só requisições que somem. Sem HTTP_PROXY definido
+# ela não tem efeito, então é inofensiva em ambiente sem proxy.
+ENV NODE_USE_ENV_PROXY=1
 
 # Usuário sem privilégio (defesa em profundidade — exigência de hardening gov).
 RUN addgroup --system --gid 1001 nodejs \

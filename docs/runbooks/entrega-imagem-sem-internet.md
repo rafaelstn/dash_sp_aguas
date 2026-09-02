@@ -13,10 +13,29 @@ Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trá
 
 ## 1. Por que este runbook é diferente do normal
 
-**MEDIDO:** o servidor não tem saída para a internet. O DNS não resolve nome
-externo nenhum (`github.com`, `registry-1.docker.io`, nem o próprio
+**MEDIDO:** o servidor não tem saída **direta** para a internet. O DNS não
+resolve nome externo nenhum (`github.com`, `registry-1.docker.io`, nem o próprio
 `apps.spaguas.sp.gov.br`) e a saída TCP direta para `1.1.1.1:443` está
-bloqueada. Não há proxy corporativo configurado.
+bloqueada.
+
+> **Corrigido em 02/09/2026.** A frase original terminava com "não há proxy
+> corporativo configurado", e ela era verdadeira sobre a MÁQUINA e falsa sobre a
+> REDE. O desenvolvedor do órgão informou que **existe um proxy corporativo**, e
+> que é por ele que tudo sai: o firewall autoriza pelo IP do proxy, que é fixo,
+> e não pelo IP de quem chama. O que medimos foi a ausência de rota direta e a
+> ausência de proxy configurado naquele host, e disso concluímos que não havia
+> proxy, o que não se seguia.
+>
+> Configuração da aplicação: seção 5.1 de `ops/producao/ambiente-producao.exemplo`.
+> Não basta definir `HTTP_PROXY`: o `fetch` nativo do Node não lê essa variável,
+> e foi por isso que a imagem passou para `node:24-alpine` com
+> `NODE_USE_ENV_PROXY=1`. A medição está no topo do `Dockerfile`.
+>
+> **Isto reabre uma pergunta desta seção, e ela ainda não está respondida:** se o
+> proxy libera acesso aos registros de imagem (`ghcr.io`, `docker.io`) e ao
+> registro do npm, parte do caminho de entrega por arquivo abaixo deixa de ser
+> obrigatória. Enquanto o órgão não responder, **o caminho por arquivo continua
+> valendo**, porque ele funciona nos dois cenários.
 
 Isso elimina, de uma vez, todo o caminho normal de entrega:
 
