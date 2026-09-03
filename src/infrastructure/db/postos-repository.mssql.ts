@@ -514,6 +514,53 @@ function escaparLike(valor: string): string {
   return valor.replace(/[\\%_[\]]/g, (c) => `\\${c}`);
 }
 
+/**
+ * Ordenação da página: quem começa pelo termo digitado vem primeiro, e o
+ * desempate continua sendo o prefixo.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * POR QUE ISTO EXISTE, MEDIDO EM 03/09/2026
+ * ─────────────────────────────────────────────────────────────────────────
+ * A correção do roteamento da busca (ver `pareceCodigoDePosto`, no use case)
+ * mandou para a busca TEXTUAL os 93 prefixos ativos que são só letras, porque
+ * a forma deles é igual à de uma palavra. Nada se perdeu na CONTAGEM, e mesmo
+ * assim havia perda de verdade na TELA: digitar `PE`, que é um prefixo real,
+ * passava a devolver 1.294 linhas ordenadas por prefixo, e o posto `PE` caía
+ * fora das cem primeiras. Achável e enterrado é indistinguível de sumido para
+ * quem está olhando.
+ *
+ * O caso que denuncia isto está em
+ * `tests/integration/postos-busca-frequencia-mssql.test.ts`, e foi ele que
+ * pegou a regressão antes de ela sair daqui.
+ *
+ * Duas propriedades que a expressão precisa ter, e tem:
+ *   - a ordem continua TOTAL (desempate por `p.Prefixo`), senão a paginação
+ *     repetiria e omitiria linha entre páginas, que é defeito silencioso;
+ *   - termo com espaço não recebe tratamento: `%` não casa prefixo com espaço
+ *     no meio, o `CASE` daria 1 para todo mundo e a ordenação seria a mesma.
+ *     Nesse caso a expressão nem entra, e a consulta fica idêntica à anterior.
+ */
+function montarOrdenacao(termo: string | undefined): {
+  ordenacao: string;
+  parametros: ParametroMssql[];
+} {
+  const t = (termo ?? '').trim();
+  if (t.length === 0 || /\s/.test(t)) {
+    return { ordenacao: 'p.Prefixo', parametros: [] };
+  }
+  return {
+    ordenacao: `CASE WHEN p.Prefixo ${CI_AI} LIKE @ordemInicio ESCAPE '\\' THEN 0 ELSE 1 END,
+             p.Prefixo`,
+    parametros: [
+      {
+        nome: 'ordemInicio',
+        tipo: TiposMssql.texto,
+        valor: `${escaparLike(t.toUpperCase())}%`,
+      },
+    ],
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Adaptador
 // ─────────────────────────────────────────────────────────────────────────
@@ -575,15 +622,17 @@ export const postosRepository: PostosRepository = {
         { nome: 'limite', tipo: TiposMssql.inteiro, valor: params.porPagina },
       ];
 
+      const { ordenacao, parametros: paramsOrdem } = montarOrdenacao(params.termo);
+
       // Duas consultas com o MESMO `FROM` e o MESMO `WHERE`. O `OUTER APPLY`
       // com `TOP 1` garante 1 linha por posto, então a contagem não infla.
       const [pagina, contagem] = await Promise.all([
         consultarMssql<LinhaPostoMssql>(
           `SELECT ${COLUNAS_POSTO} ${FROM_POSTOS}
             WHERE ${filtro.where}
-            ORDER BY p.Prefixo
+            ORDER BY ${ordenacao}
             OFFSET @offset ROWS FETCH NEXT @limite ROWS ONLY`,
-          [...filtro.parametros, ...paginacao],
+          [...filtro.parametros, ...paramsOrdem, ...paginacao],
         ),
         consultarMssql<{ Total: number }>(
           `SELECT Total = COUNT(*) ${FROM_POSTOS} WHERE ${filtro.where}`,
