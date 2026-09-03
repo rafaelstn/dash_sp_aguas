@@ -19,6 +19,7 @@ import {
   checarCache,
   dispararWorkerBackground,
   dispararWorkerSync,
+  IndexadorIndisponivelError,
   tentarLock,
   WorkerTimeoutError,
 } from '@/infrastructure/indexer/lazy-indexer';
@@ -57,6 +58,12 @@ export async function GET(
   try {
     const status = await checarCache(prefixo);
 
+    // Ambiente sem indexador (imagem de produção não tem Python, seção 9.3 do
+    // runbook): degrada e serve a ficha SEM a varredura de arquivos, em vez de
+    // derrubar a ficha inteira. Só a ausência do interpretador entra aqui;
+    // falha real do indexador continua subindo.
+    let indexadorAusente = false;
+
     if (status !== 'fresh') {
       const lock = await tentarLock(prefixo, async () => {
         try {
@@ -66,9 +73,25 @@ export async function GET(
             const jobId = dispararWorkerBackground(prefixo);
             return { tipo: 'timeout' as const, jobId };
           }
+          if (e instanceof IndexadorIndisponivelError) {
+            indexadorAusente = true;
+            return { tipo: 'sem-indexador' as const };
+          }
           throw e;
         }
       });
+
+      // Sem indexador no ambiente: a ficha continua, sem varredura de arquivos.
+      // Registrado como aviso, e não em silêncio: indexação que não acontece e
+      // não avisa é a mesma categoria de defeito que o projeto já recusa na
+      // escrita.
+      if (indexadorAusente) {
+        logger.warn(
+          'indexador.indisponivel',
+          { prefixo },
+          'Indexador ausente neste ambiente: ficha servida sem varredura de arquivos',
+        );
+      }
 
       // Lock ocupado: alguém já está reindexando. Serve o que tiver.
       // Se status era 'miss', devolve 202 pra frontend mostrar loader.

@@ -208,7 +208,10 @@ export async function dispararWorkerSync(
     proc.on('error', (err) => {
       clearTimeout(timer);
       if (killTimer) clearTimeout(killTimer);
-      reject(err);
+      // Interpretador ausente é ambiente, não falha do indexador. Sem esta
+      // distinção o `ENOENT` sobe pelo mesmo caminho de um erro real e derruba
+      // a ficha inteira do posto. Ver `IndexadorIndisponivelError`.
+      reject(ehIndexadorAusente(err) ? new IndexadorIndisponivelError(prefixo, err) : err);
     });
   });
 }
@@ -240,4 +243,48 @@ export class WorkerTimeoutError extends Error {
     super(`Indexação de ${prefixo} estourou budget síncrono`);
     this.name = 'WorkerTimeoutError';
   }
+}
+
+/**
+ * O indexador não existe NESTE ambiente, o que é diferente de ele ter falhado.
+ *
+ * A imagem de produção é `node:24-alpine`: não tem Python e não carrega a pasta
+ * `ops/`, então `spawn('python')` devolve `ENOENT`. Isso está registrado como
+ * pendência de escopo na seção 9.3 do runbook `entrega-imagem-sem-internet.md`,
+ * e continua em aberto se o indexador vira um quarto serviço, roda como tarefa
+ * do host, ou sai desta entrega.
+ *
+ * Enquanto a decisão não vem, o que NÃO pode acontecer é uma funcionalidade
+ * acessória derrubar a principal. Sem este erro tipado, o `ENOENT` subia pelo
+ * mesmo caminho de uma falha real e **a ficha inteira do posto respondia HTTP
+ * 500**. Medido em produção em 03/09/2026, com `Error: spawn python ENOENT` no
+ * log: o defeito estava lá desde a subida e não aparecia porque o banco estava
+ * vazio e não havia ficha para abrir.
+ *
+ * Distinguir os dois casos é o ponto: ausência do ambiente degrada com aviso e
+ * a ficha é servida sem a varredura de arquivos; falha real do indexador
+ * continua subindo como erro.
+ */
+export class IndexadorIndisponivelError extends Error {
+  constructor(
+    public readonly prefixo: string,
+    public readonly causa: unknown,
+  ) {
+    super(
+      `Indexador indisponível neste ambiente (${PYTHON_BIN} não encontrado). ` +
+        `A ficha de ${prefixo} é servida sem a varredura de arquivos.`,
+    );
+    this.name = 'IndexadorIndisponivelError';
+  }
+}
+
+/**
+ * `true` quando o erro é o interpretador ausente, e não uma falha do indexador.
+ * `ENOENT` de `spawn` é o sinal do sistema operacional para "programa não
+ * existe", e é exatamente o que acontece numa imagem sem Python. `EACCES` cobre
+ * o caso vizinho, em que o arquivo existe e não é executável.
+ */
+export function ehIndexadorAusente(erro: unknown): boolean {
+  const codigo = (erro as { code?: unknown } | null)?.code;
+  return codigo === 'ENOENT' || codigo === 'EACCES';
 }
