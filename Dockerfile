@@ -115,6 +115,24 @@ ENV ACESSO_SEM_IDENTIDADE=sim
 ENV ACESSO_SEM_IDENTIDADE_MOTIVO="Valor de fachada, valido apenas durante o build da imagem."
 ENV ACESSO_SEM_IDENTIDADE_REVISAR_EM=2099-12-31
 
+# Origem do cadastro: mesma mecânica das duas fachadas acima, e pelo mesmo
+# motivo. Desde 03/09/2026 o `env.ts` recusa produção sem estas quatro, porque
+# sem elas a aplicação lê o PostgreSQL vazio e a busca de postos responde sem
+# resultado em vez de dar erro. A checagem também roda em "Collecting page
+# data", então sem as fachadas a IMAGEM não se constrói.
+#
+# Seguro porque nenhuma conexão é aberta durante o build (o cliente do SQL
+# Server é criado na primeira consulta, não na carga do módulo), porque nenhuma
+# leva prefixo NEXT_PUBLIC_ e portanto não é gravada em pacote nenhum, e porque
+# o estágio `runner` parte de imagem nova e não as herda. Quem decide a origem
+# em produção é o /etc/spaguas-dmo/app.env. Conferir na imagem pronta, e este
+# comando precisa devolver VAZIO:
+#   docker image inspect <imagem> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep SQLSERVER
+ENV SQLSERVER_HOST=127.0.0.1
+ENV SQLSERVER_USUARIO=build
+ENV SQLSERVER_SENHA=build
+ENV SQLSERVER_BANCO=build
+
 RUN npm run build
 
 # ---------------------------------------------------------------------------
