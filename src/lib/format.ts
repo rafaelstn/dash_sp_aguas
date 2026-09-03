@@ -19,6 +19,33 @@ export function formatarValor(valor: unknown): string {
   return String(valor);
 }
 
+const FORMATADOR_MEDIDA = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 3,
+});
+
+/**
+ * Número que representa uma MEDIDA, em pt-BR: `2830.45` vira `2.830,45`.
+ *
+ * Existe separado de `formatarValor` de propósito, e a razão é que formatar
+ * todo número quebraria dois casos reais desta ficha:
+ *
+ *   - ANO. `operacaoInicioAno` 1941 viraria `1.941`, que está errado.
+ *   - COORDENADA. Latitude e longitude são lidas por convenção técnica com
+ *     ponto decimal, e o separador de milhar não se aplica (nunca passam
+ *     de 180).
+ *
+ * Ou seja, "todo número da tela é medida" é falso, e por isso a escolha é do
+ * chamador, e não do formatador. Use apenas em grandeza física com unidade:
+ * altimetria, área, distância, volume.
+ */
+export function formatarMedida(valor: unknown): string {
+  if (typeof valor !== 'number' || !Number.isFinite(valor)) {
+    return formatarValor(valor);
+  }
+  return FORMATADOR_MEDIDA.format(valor);
+}
+
 const FORMATADOR_BYTES = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 export function formatarTamanho(bytes: number): string {

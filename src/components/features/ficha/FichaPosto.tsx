@@ -8,11 +8,19 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Posto } from '@/domain/posto';
-import { formatarValor } from '@/lib/format';
+import { formatarMedida, formatarValor } from '@/lib/format';
 
 interface Linha {
   rotulo: string;
   valor: unknown;
+  /**
+   * `medida` formata o número em pt-BR (`2830.45` vira `2.830,45`).
+   *
+   * A escolha é da LINHA, e não do formatador, porque nem todo número desta
+   * ficha é medida: ano com separador de milhar viraria `1.941`, e coordenada
+   * é lida por convenção técnica com ponto decimal. Ver `formatarMedida`.
+   */
+  formato?: 'medida';
 }
 
 interface Secao {
@@ -69,7 +77,7 @@ function montarSecoes(p: Posto): Secao[] {
         { rotulo: 'Município (alternativo)', valor: p.municipioAlt },
         { rotulo: 'Latitude', valor: p.latitude },
         { rotulo: 'Longitude', valor: p.longitude },
-        { rotulo: 'Altimetria (m)', valor: p.altimetria },
+        { rotulo: 'Altimetria (m)', valor: p.altimetria, formato: 'medida' },
       ],
     },
     {
@@ -81,7 +89,7 @@ function montarSecoes(p: Posto): Secao[] {
         { rotulo: 'Sub-UGRHI', valor: p.subUgrhiNome },
         { rotulo: 'Número sub-UGRHI', valor: p.subUgrhiNumero },
         { rotulo: 'Aquífero', valor: p.aquifero },
-        { rotulo: 'Área (km²)', valor: p.areaKm2 },
+        { rotulo: 'Área (km²)', valor: p.areaKm2, formato: 'medida' },
       ],
     },
     {
@@ -326,7 +334,11 @@ export function FichaPosto({ posto }: { posto: Posto }) {
                 {secao.linhas.map((linha) => (
                   <div key={linha.rotulo} className="flex flex-col">
                     <dt className="text-sm text-app-fg-muted">{linha.rotulo}</dt>
-                    <dd className="text-app-fg">{formatarValor(linha.valor)}</dd>
+                    <dd className="text-app-fg">
+                      {linha.formato === 'medida'
+                        ? formatarMedida(linha.valor)
+                        : formatarValor(linha.valor)}
+                    </dd>
                   </div>
                 ))}
               </dl>
