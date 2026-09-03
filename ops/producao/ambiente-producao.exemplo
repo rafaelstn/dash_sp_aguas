@@ -54,6 +54,45 @@
 DATABASE_URL=
 
 # -----------------------------------------------------------------------------
+# 2.1 SQL SERVER DO ORGAO (Dbfch) -- o cadastro de posto vem daqui, AO VIVO
+# -----------------------------------------------------------------------------
+# ADR-0023, e a instrucao do proprietario: "nao quero bancos intermediarios,
+# tudo que vamos ler na tela tem que ser diretamente do banco original".
+#
+# Preenchidas as cinco variaveis abaixo, a busca de posto e a ficha tecnica
+# passam a ler `Dbfch.dbo.Postos` diretamente, sem copia, sem espelho e sem
+# cache. O PostgreSQL da secao 2 continua guardando o que e SO NOSSO.
+#
+# ESQUECER ESTA SECAO NAO PRODUZ ERRO, e por isso ela esta escrita em voz alta:
+# sem as variaveis, a aplicacao cai no adaptador PostgreSQL, cuja tabela
+# `postos` esta VAZIA (0 linhas, medido em 02/09/2026). O sintoma e a busca nao
+# retornar nada, que e exatamente o defeito que esta entrega existe para
+# corrigir, e ele nao aparece em log nenhum.
+#
+# Alcance: e endereco INTERNO do orgao, ja listado no NO_PROXY da secao 5.1.
+# Medido em 02/09/2026 de dentro do container: 10.20.40.62:1433 responde. Se a
+# rede interna nao alcancar, o sintoma e TIMEOUT, e nao erro de credencial:
+# vale ler a mensagem antes de procurar senha trocada.
+#
+# O acesso concedido pelo orgao e SOMENTE LEITURA, e a aplicacao trata isso como
+# invariante, e nao como convencao: toda consulta passa por uma barreira que
+# recusa verbo de escrita ANTES de sair do processo, e a edicao de cadastro de
+# posto responde HTTP 501 ate a API de escrita do orgao existir.
+SQLSERVER_HOST=
+SQLSERVER_PORTA=1433
+SQLSERVER_USUARIO=
+SQLSERVER_SENHA=
+SQLSERVER_BANCO=
+
+# Criptografia do transporte TDS. O driver liga por padrao, e a instancia do
+# orgao esta em rede interna, sem certificado emitido por autoridade que o Node
+# reconheca: com o padrao ligado a conexao falha no aperto de mao, com mensagem
+# de certificado, que manda procurar no lugar errado. Manter como abaixo ate o
+# orgao publicar o certificado no container.
+SQLSERVER_ENCRYPT=nao
+SQLSERVER_TRUST_CERT=sim
+
+# -----------------------------------------------------------------------------
 # 3. Identidade e autenticacao
 # -----------------------------------------------------------------------------
 # O SUPABASE SAIU. Ordem do Rafael em 27/08/2026: "esquece o supabase". Pelo

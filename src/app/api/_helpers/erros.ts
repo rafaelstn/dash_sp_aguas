@@ -34,6 +34,7 @@ import {
   ConferenciaFechada,
   ConferenciaNaoConcluida,
   EscopoConferenciaEmAberto,
+  EscritaIndisponivel,
 } from '@/domain/errors';
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { logger } from '@/infrastructure/logging/logger';
@@ -260,6 +261,24 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
         prefixo: erro.prefixo,
       },
       { status: 202 },
+    );
+  }
+
+  // ── 501 Not Implemented (origem somente leitura) ─────────────────────────
+  // ADR-0023: o cadastro de posto passa a ser lido do SQL Server do órgão, e o
+  // nosso acesso é somente leitura. Enquanto a API de escrita deles não
+  // existir, a operação não tem para onde ir. 501, e não 403 nem 409: não é
+  // permissão do usuário nem conflito de estado, é funcionalidade que este
+  // backend não implementa contra esta origem.
+  if (erro instanceof EscritaIndisponivel) {
+    return NextResponse.json(
+      {
+        erro: 'escrita_indisponivel',
+        mensagem: erro.message,
+        operacao: erro.operacao,
+        origem: erro.origem,
+      },
+      { status: 501 },
     );
   }
 

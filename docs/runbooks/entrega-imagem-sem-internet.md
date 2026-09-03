@@ -624,7 +624,9 @@ usuário:
 
 - **Ficha de posto com indexação sob demanda.** `lazy-indexer.ts` executa
   `python -m ops.indexer.indexar_posto` como subprocesso. A imagem da aplicação
-  é `node:20-alpine`: **não tem Python e não tem a pasta `ops/`**. A chamada
+  é `node:24-alpine` (era `node:20-alpine` até 02/09/2026, ver ADR-0025):
+  **não tem Python e não tem a pasta `ops/`**, e a troca de versão não muda
+  isso. A chamada
   falha dentro do container. Decidir se o indexador vira um quarto serviço, se
   roda como tarefa do host, ou se sai do escopo desta entrega.
 - **Relatório em PDF.** `pdf-relatorio.ts` procura um navegador sem interface

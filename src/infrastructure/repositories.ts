@@ -4,6 +4,10 @@ import { getEnv } from './config/env';
 
 // Implementações PostgreSQL (padrão em produção/banco real).
 import { postosRepository as postosPg } from './db/postos-repository.pg';
+// Cadastro de posto lido AO VIVO do SQL Server do órgão (ADR-0023).
+import { postosRepository as postosMssql } from './db/postos-repository.mssql';
+import { facetasRepository as facetasMssql } from './db/facetas-repository.mssql';
+import { mssqlConfigurado } from './db/mssql-client';
 import { arquivosRepository as arquivosPg } from './db/arquivos-repository.pg';
 import { auditoriaRepository as auditoriaPg } from './db/auditoria-repository.pg';
 import { desconformidadesRepository as desconformidadesPg } from './db/desconformidades-repository.pg';
@@ -65,7 +69,36 @@ import { usuariosIdentidadeRepository as usuariosIdentidadeMock } from './mock/u
  */
 const demo = getEnv().isDemoMode;
 
-export const postosRepository = demo ? postosMock : postosPg;
+/**
+ * Origem do CADASTRO de posto (ADR-0023).
+ *
+ * Configurou `SQLSERVER_*`? O cadastro é lido AO VIVO do `Dbfch`, o banco do
+ * órgão, sem cópia, sem banco intermediário e sem cache. É a instrução do
+ * proprietário: "tudo que vamos ler na tela tem que ser diretamente do banco
+ * original".
+ *
+ * O modo demo continua vencendo, e isso é deliberado: quem sobe a aplicação
+ * sem banco quer as fixtures, e não uma conexão contra a produção do órgão.
+ *
+ * O adaptador PostgreSQL fica como está, e some quando o novo passar. Vale
+ * lembrar que ele NÃO é equivalente hoje: a tabela `postos` do nosso banco
+ * está vazia (0 linhas em 02/09/2026), então cair nele significa tela vazia.
+ *
+ * Só o cadastro de POSTO troca de origem. Os outros repositórios continuam no
+ * nosso PostgreSQL, sem uma linha alterada (ADR-0023 §2.1: dezenove dos vinte
+ * e cinco adaptadores nunca tocam em `postos`).
+ */
+export const origemDoCadastroDePostos: 'mock' | 'dbfch' | 'postgres' = demo
+  ? 'mock'
+  : mssqlConfigurado()
+    ? 'dbfch'
+    : 'postgres';
+
+export const postosRepository = demo
+  ? postosMock
+  : mssqlConfigurado()
+    ? postosMssql
+    : postosPg;
 export const arquivosRepository = demo ? arquivosMock : arquivosPg;
 export const auditoriaRepository = demo ? auditoriaMock : auditoriaPg;
 export const desconformidadesRepository = demo
@@ -74,7 +107,15 @@ export const desconformidadesRepository = demo
 export const revisoesRepository = demo ? revisoesMock : revisoesPg;
 export const favoritosRepository = demo ? favoritosMock : favoritosPg;
 export const postosFotosRepository = demo ? postosFotosMock : postosFotosPg;
-export const facetasRepository = demo ? facetasMock : facetasPg;
+// As facetas agregam o MESMO cadastro que a busca filtra, então elas seguem a
+// origem do posto. Deixá-las no PostgreSQL enquanto a busca lê o órgão daria
+// uma tela que acha posto e não oferece filtro nenhum, sem erro em lugar
+// nenhum: a tabela `postos` do nosso banco está vazia.
+export const facetasRepository = demo
+  ? facetasMock
+  : mssqlConfigurado()
+    ? facetasMssql
+    : facetasPg;
 export const fichasVisitaRepository = demo ? fichasVisitaMock : fichasVisitaPg;
 export const triagemRepository = demo ? triagemMock : triagemPg;
 export const papeisRepository = demo ? papeisMock : papeisPg;

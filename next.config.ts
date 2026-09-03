@@ -64,8 +64,27 @@ const nextConfig: NextConfig = {
   ...(process.env.DOCKER_BUILD === '1' ? { output: 'standalone' as const } : {}),
   // Esconde o indicator flutuante do Next.js em dev (canto inferior esquerdo).
   devIndicators: false,
-  // O cliente postgres.js roda apenas no servidor; evita bundling acidental no navegador.
-  serverExternalPackages: ['postgres'],
+  // Drivers de banco: rodam APENAS no servidor, e ficam fora do bundle.
+  //
+  // `postgres` já estava aqui pelo motivo óbvio (evitar bundling acidental no
+  // navegador). `mssql` e `tedious` entram por um motivo diferente, e ele foi
+  // MEDIDO em 02/09/2026 com dois builds `DOCKER_BUILD=1`, comparando o que
+  // sobra em `.next/standalone/node_modules`:
+  //
+  //   com a declaração:  mssql PRESENTE (25 arquivos), tedious PRESENTE (121)
+  //   sem a declaração:  mssql AUSENTE,                tedious AUSENTE
+  //
+  // E o que torna isto perigoso é o resto da medição: **os dois builds saíram
+  // com código 0 e ZERO aviso de webpack.** Não há "Critical dependency", não
+  // há "Module not found", não há nada. O container subiria, passaria no
+  // healthcheck (que só faz `SELECT 1` no Postgres) e morreria com
+  // "Cannot find module 'mssql'" na PRIMEIRA busca de posto, dentro do
+  // servidor do órgão, que não tem internet e onde ninguém nosso chega
+  // depressa para instalar pacote.
+  //
+  // Ou seja, sem esta linha o build mente por omissão. Guarda de declaração em
+  // `tests/unit/drivers-externos-do-bundle.test.ts`.
+  serverExternalPackages: ['postgres', 'mssql', 'tedious'],
   // typedRoutes desabilitado: Turbopack (Next 15.5) ainda não suporta.
   // Reativar quando o Turbopack estabilizar; até lá, o typecheck normal do tsc
   // cobre os href <Link> suficientemente.

@@ -70,6 +70,35 @@ export class EmailJaCadastrado extends Error {
   }
 }
 
+/**
+ * Operação de escrita que a origem de dados vigente não aceita.
+ *
+ * Nasce da ADR-0023: o cadastro de posto passa a ser lido AO VIVO do SQL
+ * Server do órgão (`Dbfch`), e o nosso acesso àquele banco é **somente
+ * leitura**, por determinação do órgão. Enquanto não existir a API de escrita
+ * deles (ADR-0023 §11.2), editar, criar, remover ou restaurar posto não tem
+ * para onde ir.
+ *
+ * O erro é tipado e visível de propósito: deixar o método sem efeito e sem
+ * aviso seria a pior categoria de defeito deste projeto, porque o usuário
+ * salvaria a ficha, veria sucesso, e nada teria mudado.
+ *
+ * Tradução padrão: HTTP 501 Not Implemented.
+ */
+export class EscritaIndisponivel extends Error {
+  constructor(
+    public readonly operacao: string,
+    public readonly origem: string,
+  ) {
+    super(
+      `A operação "${operacao}" não está disponível: o cadastro de postos é lido ` +
+        `de ${origem} em modo somente leitura. A alteração precisa ser feita no ` +
+        'sistema do órgão.',
+    );
+    this.name = 'EscritaIndisponivel';
+  }
+}
+
 export class FalhaRepositorio extends Error {
   constructor(operacao: string, causa: unknown) {
     super(`Falha no repositório (${operacao}): ${String(causa)}`);
