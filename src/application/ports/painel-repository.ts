@@ -110,3 +110,72 @@ export interface PainelRepository {
   rankingMantenedores(limite?: number): Promise<RankingMantenedor[]>;
   atividadeRecente(): Promise<AtividadeRecente>;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AS DUAS METADES DO PAINEL
+ *
+ * Desde o ADR-0023 o painel não tem uma origem só. O CADASTRO de posto mora no
+ * SQL Server do órgão (`Dbfch`) e o que é NOSSO (arquivos indexados, órfãos,
+ * trilha de acesso, lotes de indexação) mora no nosso PostgreSQL. O ADR proíbe
+ * junção entre os dois armazenamentos, então cada número é resolvido inteiro na
+ * origem que o possui e a ARITMÉTICA que cruza os dois lados acontece em
+ * TypeScript, no compositor (`painel-repository.composto.ts`).
+ *
+ * As duas portas abaixo existem para que essa divisão seja um CONTRATO, e não
+ * uma convenção: nenhum adaptador consegue implementar metade da outra sem que
+ * isso apareça no tipo. `PainelRepository` continua intacto, e por isso a
+ * página do painel não muda uma linha.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Contagens que só a origem do cadastro sabe responder. */
+export interface ResumoCadastroPostos {
+  totalPostos: number;
+  postosComCoordenadas: number;
+  postosComTelemetria: number;
+  /**
+   * Postos com prefixo ou código ANA fora do padrão.
+   *
+   * Fica na metade CADASTRAL, e não na nossa, porque é derivação pura do
+   * prefixo do posto: quem muda de origem leva a derivação junto. Adaptador
+   * cuja origem não sabe classificar devolve zero e escreve o motivo.
+   */
+  desconformidadesPostos: number;
+}
+
+/**
+ * A metade CADASTRAL do painel: tudo que se responde lendo a origem do
+ * cadastro de posto, e nada além disso.
+ */
+export interface PainelCadastroRepository {
+  /**
+   * A origem registra a data de criação da linha de posto?
+   *
+   * Governa as séries de "total de postos" e "postos sem arquivo": as duas são
+   * cumulativas sobre a POPULAÇÃO de postos, então sem data de criação elas não
+   * existem. `Dbfch` não tem coluna de criação nem de atualização (ADR §10.7).
+   *
+   * É propriedade declarada do adaptador, e não parâmetro de fiação, porque
+   * fiação errada é silenciosa: o sintoma seria um sparkline de uma população
+   * desenhado embaixo do número de outra, e nada quebraria.
+   */
+  readonly temHistoricoDeCadastro: boolean;
+  resumoCadastro(): Promise<ResumoCadastroPostos>;
+  distribuicaoPorTipo(): Promise<DistribuicaoTipo[]>;
+  rankingUGRHI(): Promise<RankingUGRHI[]>;
+  classesDesconformidade(): Promise<ClasseDesconformidade[]>;
+  statusOperacional(): Promise<StatusOperacional>;
+  rankingMantenedores(limite?: number): Promise<RankingMantenedor[]>;
+}
+
+/** A metade NOSSA: indexação de arquivo, órfãos e trilha, sempre no PostgreSQL. */
+export interface PainelOperacaoRepository {
+  /** Postos distintos que já têm ao menos um arquivo indexado. */
+  postosComArquivos(): Promise<number>;
+  arquivosOrfaos(): Promise<number>;
+  /**
+   * As três séries temporais. O compositor descarta as duas cadastrais quando
+   * o cadastro vem de origem sem histórico — ver `temHistoricoDeCadastro`.
+   */
+  tendencias(): Promise<ResumoPendencias['tendencias']>;
+  atividadeRecente(): Promise<AtividadeRecente>;
+}

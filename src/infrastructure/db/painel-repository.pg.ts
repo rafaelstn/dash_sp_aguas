@@ -4,14 +4,18 @@ import type {
   AtividadeRecente,
   ClasseDesconformidade,
   DistribuicaoTipo,
+  PainelCadastroRepository,
+  PainelOperacaoRepository,
   PainelRepository,
   RankingMantenedor,
   RankingUGRHI,
+  ResumoCadastroPostos,
   ResumoPendencias,
   StatusOperacional,
   TendenciaKPI,
 } from '@/application/ports/painel-repository';
 import { sql } from './client';
+import { comporPainelRepository } from './painel-repository.composto';
 
 /** Quantos pontos mensais a série do sparkline traz (inclui o mês corrente). */
 const MESES_SERIE = 6;
@@ -21,6 +25,23 @@ const MESES_SERIE = 6;
  * `@/application/ports/painel-repository`). Consultas somente-leitura,
  * cacheadas em memória por 60 segundos (painel é visualizado; não precisa
  * de live).
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * ESTE ARQUIVO PASSOU A EXPORTAR AS DUAS METADES (03/09/2026)
+ * ─────────────────────────────────────────────────────────────────────────
+ * Desde o ADR-0023 o cadastro de posto pode vir do `Dbfch`, e o painel deixou
+ * de ter origem única. Para não existirem duas implementações do mesmo SQL, o
+ * corte foi feito AQUI: `painelCadastroRepositoryPg` responde o que depende da
+ * tabela `postos` e `painelOperacaoRepositoryPg` responde o que é só nosso.
+ * O `painelRepository` desta origem é a composição das duas, então o caminho
+ * 100% PostgreSQL continua com o mesmo comportamento observável de antes.
+ *
+ * VALE LEMBRAR O ESTADO MEDIDO EM 03/09/2026, porque ele explica por que este
+ * adaptador não é mais o caminho de produção: a tabela `postos` do container de
+ * produção tem 0 linhas, e a instância legada do Supabase tem 2.483 linhas
+ * todas com o MESMO `created_at` (carga única de 23/06/2026) contra 5.790
+ * postos ativos no `Dbfch`. Ou seja, este adaptador hoje responde zero ou
+ * responde um número velho, e o segundo é pior, porque parece resposta.
  */
 
 const TTL_MS = 60_000;
@@ -106,27 +127,59 @@ export function montarTendencia(serie: number[]): TendenciaKPI | undefined {
   };
 }
 
-export const painelRepository: PainelRepository = {
-  async resumoPendencias(): Promise<ResumoPendencias> {
-    return memoize('resumo', async () => {
+/**
+ * As duas contagens da metade NOSSA vêm numa consulta só, e são memoizadas
+ * juntas: as portas são dois métodos porque significam duas coisas, e não
+ * porque valha duas idas ao banco.
+ */
+async function contagensDeArquivos(): Promise<{
+  postosComArquivos: number;
+  arquivosOrfaos: number;
+}> {
+  return memoize('operacao_arquivos', async () => {
+    try {
+      const rows = await sql<{ com_arquivos: string; orfaos: string }[]>`
+        SELECT
+          (SELECT COUNT(DISTINCT prefixo) FROM arquivos_indexados)::text AS com_arquivos,
+          (SELECT COUNT(*) FROM arquivos_orfaos)::text AS orfaos
+      `;
+      const r = rows[0];
+      if (!r) throw new Error('Contagem de arquivos sem linhas');
+      return {
+        postosComArquivos: Number(r.com_arquivos),
+        arquivosOrfaos: Number(r.orfaos),
+      };
+    } catch (e) {
+      throw new FalhaRepositorio('painel.contagensDeArquivos', e);
+    }
+  });
+}
+
+/**
+ * A metade CADASTRAL lida do NOSSO PostgreSQL. É o caminho de reserva: vale
+ * quando o `Dbfch` não está configurado neste ambiente, e em modo de teste.
+ */
+export const painelCadastroRepositoryPg: PainelCadastroRepository = {
+  // `postos.created_at` existe nesta origem, então as séries cumulativas sobre
+  // a população de postos são legítimas aqui.
+  temHistoricoDeCadastro: true,
+
+  async resumoCadastro(): Promise<ResumoCadastroPostos> {
+    return memoize('resumo_cadastro', async () => {
       try {
         const rows = await sql<
           {
             total: string;
-            com_arquivos: string;
             com_coord: string;
             com_telem: string;
             desconformes: string;
-            orfaos: string;
           }[]
         >`
           SELECT
             p.total,
             p.com_coord,
             p.com_telem,
-            (SELECT COUNT(DISTINCT prefixo) FROM arquivos_indexados)::text AS com_arquivos,
-            (SELECT COUNT(DISTINCT prefixo) FROM v_postos_desconformes)::text AS desconformes,
-            (SELECT COUNT(*) FROM arquivos_orfaos)::text AS orfaos
+            (SELECT COUNT(DISTINCT prefixo) FROM v_postos_desconformes)::text AS desconformes
           FROM (
             SELECT
               COUNT(*)::text AS total,
@@ -140,24 +193,15 @@ export const painelRepository: PainelRepository = {
           ) p
         `;
         const r = rows[0];
-        if (!r) throw new Error('Resumo de pendências sem linhas');
-        const totalPostos = Number(r.total);
-        const postosComArquivos = Number(r.com_arquivos);
-        const postosComCoordenadas = Number(r.com_coord);
-        const tendencias = await serieTendencias();
+        if (!r) throw new Error('Resumo de cadastro sem linhas');
         return {
-          totalPostos,
-          postosComArquivos,
-          postosSemArquivos: totalPostos - postosComArquivos,
-          postosComCoordenadas,
-          postosSemCoordenadas: totalPostos - postosComCoordenadas,
+          totalPostos: Number(r.total),
+          postosComCoordenadas: Number(r.com_coord),
           postosComTelemetria: Number(r.com_telem),
           desconformidadesPostos: Number(r.desconformes),
-          arquivosOrfaos: Number(r.orfaos),
-          tendencias,
         };
       } catch (e) {
-        throw new FalhaRepositorio('painel.resumoPendencias', e);
+        throw new FalhaRepositorio('painel.resumoCadastro', e);
       }
     });
   },
@@ -324,6 +368,25 @@ export const painelRepository: PainelRepository = {
       }
     });
   },
+};
+
+/**
+ * A metade NOSSA. Não tem caminho alternativo: arquivo indexado, órfão, lote de
+ * indexação e trilha de acesso são nossos em qualquer configuração, e continuam
+ * no PostgreSQL mesmo quando o cadastro vem do `Dbfch`.
+ */
+export const painelOperacaoRepositoryPg: PainelOperacaoRepository = {
+  async postosComArquivos(): Promise<number> {
+    return (await contagensDeArquivos()).postosComArquivos;
+  },
+
+  async arquivosOrfaos(): Promise<number> {
+    return (await contagensDeArquivos()).arquivosOrfaos;
+  },
+
+  async tendencias(): Promise<ResumoPendencias['tendencias']> {
+    return memoize('tendencias', serieTendencias);
+  },
 
   async atividadeRecente(): Promise<AtividadeRecente> {
     return memoize('atividade', async () => {
@@ -362,3 +425,13 @@ export const painelRepository: PainelRepository = {
     });
   },
 };
+
+/**
+ * O painel 100% PostgreSQL, que é a composição das duas metades acima. O
+ * comportamento observável é o mesmo de antes do corte; o que mudou é que o
+ * SQL de cada metade passou a existir uma vez só, e não duas.
+ */
+export const painelRepository: PainelRepository = comporPainelRepository(
+  painelCadastroRepositoryPg,
+  painelOperacaoRepositoryPg,
+);

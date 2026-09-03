@@ -141,9 +141,33 @@ Varredura em `src/infrastructure/db/*.pg.ts` procurando referência à tabela
 | **Os outros 19 adaptadores** | **0** | 3.665 |
 
 **Dezenove dos vinte e cinco adaptadores nunca tocam em `postos`.** Estoque
-inteiro, arquivos, fichas de visita, desconformidades, revisões, favoritos,
-auditoria, diagramas, fotos, papéis, leituras e estações pluviométricas continuam
-lendo o nosso PostgreSQL, sem uma linha alterada.
+inteiro, arquivos, fichas de visita, revisões, favoritos, auditoria, diagramas,
+fotos, papéis, leituras e estações pluviométricas continuam lendo o nosso
+PostgreSQL, sem uma linha alterada.
+
+> **CORREÇÃO de 03/09/2026: `desconformidades` estava nesta lista e não podia
+> estar.** `desconformidades-repository.pg.ts` lê a view `v_postos_desconformes`,
+> que é `FROM postos`. A contagem acima procurou `postos` em posição de `FROM` e
+> `JOIN` dentro dos adaptadores, e **uma view esconde a dependência de qualquer
+> varredura que olhe só o texto do adaptador**: o nome da tabela está na
+> definição da view, não na consulta que a lê.
+>
+> A consequência estava invisível e é concreta: com o cadastro vindo do órgão e
+> a nossa tabela `postos` em 0 linhas, **a tela `/desconformidades` também está
+> zerada em produção**, e este documento afirmava que ela não estaria.
+>
+> Ao medir dependência de tabela, incluir as VIEWS:
+> `information_schema.view_table_usage` responde o que o `grep` no adaptador não
+> alcança. Aqui, a diferença entre dezenove e dezoito é uma tela inteira.
+>
+> **O que fazer com o módulo é decisão de produto, e não tradução técnica.** A
+> régua atual de desconformidade, traduzida para o `Dbfch` e medida contra os
+> 5.790 postos, classificaria **3.084 como `outlier_prefixo` e 61 como
+> `suspeita_troca_letra_digito`, ou seja 54% da rede como cadastro irregular**. A
+> maior família recusada são os códigos numéricos de oito dígitos (`01947000`,
+> `02043005`), que no cadastro do órgão são prefixo legítimo de posto
+> pluviométrico. A régua descrevia a planilha de origem, e não o banco oficial:
+> portá-la mecanicamente publicaria alarme falso em mais da metade da rede.
 
 Isto é consequência direta da instrução do proprietário, e confirma que ela é
 tecnicamente sólida: o que muda de origem é **o domínio cadastral de posto**, e

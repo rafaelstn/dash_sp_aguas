@@ -19,7 +19,12 @@ import { fichasVisitaRepository as fichasVisitaPg } from './db/fichas-visita-rep
 import { triagemRepository as triagemPg } from './db/triagem-repository.pg';
 import { papeisRepository as papeisPg } from './db/papeis-repository.pg';
 import { anaRevisaoRepository as anaRevisaoPg } from './db/ana-revisao-repository.pg';
-import { painelRepository as painelPg } from './db/painel-repository.pg';
+import {
+  painelRepository as painelPg,
+  painelOperacaoRepositoryPg,
+} from './db/painel-repository.pg';
+import { painelCadastroRepositoryMssql } from './db/painel-cadastro-repository.mssql';
+import { comporPainelRepository } from './db/painel-repository.composto';
 import { diagramasRepository as diagramasPg } from './db/diagramas-repository.pg';
 import { inventarioAnaExportRepository as inventarioAnaExportPg } from './db/inventario-ana-export-repository.pg';
 import { estacoesPluviometricasRepository as estacoesPluviometricasPg } from './db/estacoes-pluviometricas-repository.pg';
@@ -122,9 +127,29 @@ export const papeisRepository = demo ? papeisMock : papeisPg;
 
 // ana-revisao e painel seguem o mesmo padrão dos demais: mock dedicado em
 // mock/*.mock.ts. O mock de ana-revisao é in-memory (sem lote/estação em
-// demo, devolve estado vazio); o de painel devolve agregação zerada.
+// demo, devolve estado vazio); o de painel devolve números determinísticos de
+// demonstração nos KPIs e listas vazias nos rankings (não "agregação zerada",
+// que era o que esta linha dizia e o arquivo nunca fez).
 export const anaRevisaoRepository = demo ? anaRevisaoMock : anaRevisaoPg;
-export const painelRepository = demo ? painelMock : painelPg;
+
+/**
+ * O painel segue a origem do posto pela metade CADASTRAL, e continua no nosso
+ * PostgreSQL pela metade que é nossa (arquivos indexados, órfãos e trilha).
+ *
+ * Deixá-lo inteiro no PostgreSQL enquanto a busca lê o órgão dava a tela que o
+ * Rafael viu: painel zerado (0 linhas em `postos` no container de produção) ou,
+ * pior, painel com o número velho da carga de 23/06/2026 (2.483 postos) ao lado
+ * de uma busca que acha 5.790. Nenhum dos dois quebra nada.
+ *
+ * A junção entre os dois armazenamentos continua proibida (ADR-0023): cada
+ * metade resolve inteira na sua origem e o compositor faz a aritmética em
+ * TypeScript, sem SQL que enxergue os dois lados.
+ */
+export const painelRepository = demo
+  ? painelMock
+  : mssqlConfigurado()
+    ? comporPainelRepository(painelCadastroRepositoryMssql, painelOperacaoRepositoryPg)
+    : painelPg;
 export const diagramasRepository = demo ? diagramasMock : diagramasPg;
 export const inventarioAnaExportRepository = demo
   ? inventarioAnaExportMock
