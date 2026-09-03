@@ -9,10 +9,13 @@ export interface FacetasPostos {
   bacias: Array<{ nome: string; total: number }>;
   tiposPosto: Array<{ codigo: string; total: number }>;
   /**
-   * Mantenedores — combinação dos campos `mantenedor` e `btl` (que do ponto
-   * de vista do usuário representam a mesma coisa: o responsável pelo posto).
-   * Total conta postos distintos para evitar dobrar quando os dois campos
-   * têm o mesmo valor no mesmo registro.
+   * Mantenedores — o campo `mantenedor` (no `Dbfch`, a entidade OPERADORA).
+   *
+   * Combinava também `btl` até 03/09/2026, quando aquele campo saiu do domínio
+   * por não ter origem no banco do órgão. Toda faceta oferecida precisa devolver
+   * resultado na busca, e `pesquisar` não casa mais `btl`: continuar listando
+   * esses valores criaria opção clicável que devolve zero. Total conta postos
+   * distintos.
    */
   mantenedores: Array<{ nome: string; total: number }>;
 }

@@ -203,7 +203,11 @@ export const painelRepository: PainelRepository = {
   async rankingMantenedores(limite = 15): Promise<RankingMantenedor[]> {
     return memoize(`mantenedores:${limite}`, async () => {
       try {
-        // UNION ALL combina mantenedor + btl, COUNT(DISTINCT id) deduplica.
+        // Só `mantenedor`. Combinava com `btl` num `UNION ALL` até 03/09/2026,
+        // e o campo saiu do domínio por não ter origem no `Dbfch`. Continuar
+        // somando `btl` aqui faria o ranking do painel discordar da lista de
+        // filtros e da busca, que já não conhecem esse valor: o gestor veria um
+        // mantenedor no pódio e não conseguiria filtrar por ele.
         // Cruza com a heurística de status operacional pra contar ativos.
         const rows = await sql<
           { nome: string; total: string; ativos: string }[]
@@ -211,9 +215,6 @@ export const painelRepository: PainelRepository = {
           WITH mantenedor_unificado AS (
             SELECT id, mantenedor AS valor, operacao_fim_ano FROM postos
              WHERE mantenedor IS NOT NULL AND mantenedor <> ''
-            UNION ALL
-            SELECT id, btl AS valor, operacao_fim_ano FROM postos
-             WHERE btl IS NOT NULL AND btl <> ''
           )
           SELECT valor AS nome,
                  COUNT(DISTINCT id)::text AS total,

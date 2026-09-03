@@ -11,7 +11,6 @@ import {
   MapPinOff,
   Power,
   PowerOff,
-  Radio,
 } from 'lucide-react';
 import {
   anaRevisaoRepository,
@@ -248,10 +247,6 @@ export default async function PaginaPainel() {
     resumo.totalPostos === 0
       ? 0
       : (resumo.postosComArquivos / resumo.totalPostos) * 100;
-  const taxaTelem =
-    resumo.totalPostos === 0
-      ? 0
-      : (resumo.postosComTelemetria / resumo.totalPostos) * 100;
 
   const classesPrefixo = classes
     .filter((c) => c.tipo === 'prefixo')
@@ -357,7 +352,23 @@ export default async function PaginaPainel() {
         >
           Panorama da rede
         </h2>
-        <div className="grid gap-3 lg:grid-cols-3">
+        {/*
+          Dois indicadores, então a grade para em 2 colunas: com
+          `lg:grid-cols-3` sobraria um terço vazio na linha.
+
+          O terceiro era "Telemetria ativa". O campo `telemetrico` EXISTE e
+          tem dado real (149 postos), e a ficha e a busca voltaram a mostrá-lo.
+          O que não existe é a origem deste painel: ele lê o
+          `painel-repository.pg`, ou seja, o PostgreSQL, que está com zero
+          linhas em `postos` desde que o cadastro migrou para o SQL Server do
+          órgão. O cartão exibiria "0,0% · 0 postos transmitindo" com
+          severidade de alerta, e o gestor lê isso como número operacional.
+
+          Vale para o painel inteiro, e não só para este cartão: todos os
+          números daqui estão zerados até o painel migrar de origem. O cartão
+          volta junto com a migração, e não antes.
+        */}
+        <div className="grid gap-3 sm:grid-cols-2">
           <CardKPI
             titulo="Total de postos"
             valor={resumo.totalPostos}
@@ -375,14 +386,6 @@ export default async function PaginaPainel() {
             contexto={`${resumo.postosComCoordenadas.toLocaleString('pt-BR')} com coordenadas`}
             severidade="sucesso"
             icone={FileCheck}
-            formatarValor={false}
-          />
-          <CardKPI
-            titulo="Telemetria ativa"
-            valor={`${taxaTelem.toFixed(1)}%`}
-            contexto={`${resumo.postosComTelemetria.toLocaleString('pt-BR')} postos transmitindo`}
-            severidade={taxaTelem >= 20 ? 'sucesso' : 'media'}
-            icone={Radio}
             formatarValor={false}
           />
         </div>

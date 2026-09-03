@@ -44,7 +44,6 @@ export function montarMarkdownRelatorioPosto(
     linhaTabela('Tipo de posto', valor(posto.tipoPosto)),
     linhaTabela('Mantenedor', valor(posto.mantenedor)),
     linhaTabela('Proprietário', valor(posto.proprietario)),
-    linhaTabela('Rede', valor(posto.rede)),
   ].join('\n');
 
   const localizacao = [
@@ -58,13 +57,14 @@ export function montarMarkdownRelatorioPosto(
     linhaTabela('Aquífero', valor(posto.aquifero)),
   ].join('\n');
 
+  // `Status PCD` e `Última transmissão` saíram em 03/09/2026: eram ESTADO da
+  // telemetria, e o `Dbfch` cadastra EQUIPAMENTO, não estado. As duas linhas
+  // que ficam vêm do vínculo de aparelho ativo e são preenchidas de verdade.
   const operacao = [
     linhaTabela('Início de operação', valor(posto.operacaoInicioAno)),
     linhaTabela('Fim de operação', valor(posto.operacaoFimAno)),
-    linhaTabela('Status PCD', valor(posto.statusPcd)),
     linhaTabela('Telemétrico', valor(posto.telemetrico)),
     linhaTabela('Convencional', valor(posto.convencional)),
-    linhaTabela('Última transmissão', valor(posto.ultimaTransmissao)),
   ].join('\n');
 
   const medicoesAna = [
@@ -78,10 +78,6 @@ export function montarMarkdownRelatorioPosto(
     linhaTabela('Pluviômetro', periodo(posto.anaPluviometroInicio, posto.anaPluviometroFim)),
     linhaTabela('Telemetria', periodo(posto.anaTelemetriaInicio, posto.anaTelemetriaFim)),
   ].join('\n');
-
-  const observacoes = posto.observacoes?.trim()
-    ? `\n## Observações\n\n${posto.observacoes.trim()}\n`
-    : '';
 
   return `# Relatório do posto ${valor(posto.prefixo)}
 
@@ -112,5 +108,5 @@ ${operacao}
 | Medição | Período |
 | --- | --- |
 ${medicoesAna}
-${observacoes}`;
+`;
 }

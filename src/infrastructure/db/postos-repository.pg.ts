@@ -34,26 +34,14 @@ type LinhaPosto = {
   ugrhi_numero: string | null;
   sub_ugrhi_nome: string | null;
   sub_ugrhi_numero: string | null;
-  rede: string | null;
   proprietario: string | null;
   tipo_posto: string | null;
   area_km2: string | null;
-  btl: string | null;
-  cia_ambiental: string | null;
-  cobacia: string | null;
-  observacoes: string | null;
-  tempo_transmissao: string | null;
-  status_pcd: string | null;
-  ultima_transmissao: string | null;
   convencional: string | null;
   logger_eqp: string | null;
   telemetrico: string | null;
   nivel: string | null;
   vazao: string | null;
-  ficha_inspecao: string | null;
-  ultima_data_fi: string | null;
-  ficha_descritiva: string | null;
-  ultima_atualizacao_fd: string | null;
   aquifero: string | null;
   altimetria: string | null;
   ana_escala_inicio: Date | null;
@@ -97,26 +85,14 @@ function mapear(linha: LinhaPosto): Posto {
     ugrhiNumero: linha.ugrhi_numero,
     subUgrhiNome: linha.sub_ugrhi_nome,
     subUgrhiNumero: linha.sub_ugrhi_numero,
-    rede: linha.rede,
     proprietario: linha.proprietario,
     tipoPosto: linha.tipo_posto,
     areaKm2: linha.area_km2 !== null ? Number(linha.area_km2) : null,
-    btl: linha.btl,
-    ciaAmbiental: linha.cia_ambiental,
-    cobacia: linha.cobacia,
-    observacoes: linha.observacoes,
-    tempoTransmissao: linha.tempo_transmissao,
-    statusPcd: linha.status_pcd,
-    ultimaTransmissao: linha.ultima_transmissao,
     convencional: linha.convencional,
     loggerEqp: linha.logger_eqp,
     telemetrico: linha.telemetrico,
     nivel: linha.nivel,
     vazao: linha.vazao,
-    fichaInspecao: linha.ficha_inspecao,
-    ultimaDataFi: linha.ultima_data_fi,
-    fichaDescritiva: linha.ficha_descritiva,
-    ultimaAtualizacaoFd: linha.ultima_atualizacao_fd,
     aquifero: linha.aquifero,
     altimetria: linha.altimetria !== null ? Number(linha.altimetria) : null,
     anaEscalaInicio: isoDate(linha.ana_escala_inicio),
@@ -148,11 +124,9 @@ function colunas() {
     operacao_inicio_ano, operacao_fim_ano, latitude, longitude,
     municipio, municipio_alt, bacia_hidrografica,
     ugrhi_nome, ugrhi_numero, sub_ugrhi_nome, sub_ugrhi_numero,
-    rede, proprietario, tipo_posto, area_km2, btl, cia_ambiental,
-    cobacia, observacoes, tempo_transmissao, status_pcd,
-    ultima_transmissao, convencional, logger_eqp, telemetrico,
-    nivel, vazao, ficha_inspecao, ultima_data_fi, ficha_descritiva,
-    ultima_atualizacao_fd, aquifero, altimetria,
+    proprietario, tipo_posto, area_km2,
+    convencional, logger_eqp, telemetrico, nivel, vazao,
+    aquifero, altimetria,
     ana_escala_inicio, ana_escala_fim,
     ana_descarga_liquida_inicio, ana_descarga_liquida_fim,
     ana_sedimentos_inicio, ana_sedimentos_fim,
@@ -222,12 +196,6 @@ export const postosRepository: PostosRepository = {
     const condTipo = params.tipoPosto
       ? sql`AND tipo_posto = ${params.tipoPosto}`
       : sql``;
-    const condFD = params.temFichaDescritiva
-      ? sql`AND ficha_descritiva IS NOT NULL AND ficha_descritiva <> ''`
-      : sql``;
-    const condFI = params.temFichaInspecao
-      ? sql`AND ficha_inspecao IS NOT NULL AND ficha_inspecao <> ''`
-      : sql``;
     const condTelem = params.temTelemetrico
       ? sql`AND telemetrico IS NOT NULL AND telemetrico <> ''`
       : sql``;
@@ -240,10 +208,12 @@ export const postosRepository: PostosRepository = {
           )`
         : sql``;
 
-    // Mantenedor — match em mantenedor OU btl. Os dois campos representam
-    // a mesma noção do ponto de vista do usuário (responsável pelo posto).
+    // Mantenedor — match em `mantenedor`. Casava também em `btl` até 03/09/2026,
+    // quando o campo saiu do domínio por não ter origem no `Dbfch`. O adaptador
+    // do SQL Server nunca casou `btl`, então esta linha era uma divergência
+    // silenciosa: a mesma faceta filtrava diferente conforme a origem ligada.
     const condMantenedor = params.mantenedor
-      ? sql`AND (mantenedor = ${params.mantenedor} OR btl = ${params.mantenedor})`
+      ? sql`AND mantenedor = ${params.mantenedor}`
       : sql``;
 
     // Status operacional — heurística de recência (ADR pendente, ver
@@ -290,8 +260,6 @@ export const postosRepository: PostosRepository = {
            ${condMantenedor}
            ${condStatus}
            ${condCoord}
-           ${condFD}
-           ${condFI}
            ${condTelem}
            ${condFavoritos}
            ORDER BY prefixo
@@ -309,8 +277,6 @@ export const postosRepository: PostosRepository = {
            ${condMantenedor}
            ${condStatus}
            ${condCoord}
-           ${condFD}
-           ${condFI}
            ${condTelem}
            ${condFavoritos}
         `,
@@ -446,11 +412,9 @@ export const postosRepository: PostosRepository = {
             operacao_inicio_ano, operacao_fim_ano, latitude, longitude,
             municipio, municipio_alt, bacia_hidrografica,
             ugrhi_nome, ugrhi_numero, sub_ugrhi_nome, sub_ugrhi_numero,
-            rede, proprietario, tipo_posto, area_km2, btl, cia_ambiental,
-            cobacia, observacoes, tempo_transmissao, status_pcd,
-            ultima_transmissao, convencional, logger_eqp, telemetrico,
-            nivel, vazao, ficha_inspecao, ultima_data_fi, ficha_descritiva,
-            ultima_atualizacao_fd, aquifero, altimetria,
+            proprietario, tipo_posto, area_km2,
+            convencional, logger_eqp, telemetrico, nivel, vazao,
+            aquifero, altimetria,
             ana_escala_inicio, ana_escala_fim,
             ana_descarga_liquida_inicio, ana_descarga_liquida_fim,
             ana_sedimentos_inicio, ana_sedimentos_fim,
@@ -474,26 +438,14 @@ export const postosRepository: PostosRepository = {
             ${dados.ugrhiNumero ?? null},
             ${dados.subUgrhiNome ?? null},
             ${dados.subUgrhiNumero ?? null},
-            ${dados.rede ?? null},
             ${dados.proprietario ?? null},
             ${dados.tipoPosto ?? null},
             ${dados.areaKm2 ?? null},
-            ${dados.btl ?? null},
-            ${dados.ciaAmbiental ?? null},
-            ${dados.cobacia ?? null},
-            ${dados.observacoes ?? null},
-            ${dados.tempoTransmissao ?? null},
-            ${dados.statusPcd ?? null},
-            ${dados.ultimaTransmissao ?? null},
             ${dados.convencional ?? null},
             ${dados.loggerEqp ?? null},
             ${dados.telemetrico ?? null},
             ${dados.nivel ?? null},
             ${dados.vazao ?? null},
-            ${dados.fichaInspecao ?? null},
-            ${dados.ultimaDataFi ?? null},
-            ${dados.fichaDescritiva ?? null},
-            ${dados.ultimaAtualizacaoFd ?? null},
             ${dados.aquifero ?? null},
             ${dados.altimetria ?? null},
             ${dados.anaEscalaInicio ?? null}::date,
@@ -667,26 +619,14 @@ const MAP_CAMELCASE_SNAKE: Record<string, string> = {
   ugrhiNumero: 'ugrhi_numero',
   subUgrhiNome: 'sub_ugrhi_nome',
   subUgrhiNumero: 'sub_ugrhi_numero',
-  rede: 'rede',
   proprietario: 'proprietario',
   tipoPosto: 'tipo_posto',
   areaKm2: 'area_km2',
-  btl: 'btl',
-  ciaAmbiental: 'cia_ambiental',
-  cobacia: 'cobacia',
-  observacoes: 'observacoes',
-  tempoTransmissao: 'tempo_transmissao',
-  statusPcd: 'status_pcd',
-  ultimaTransmissao: 'ultima_transmissao',
   convencional: 'convencional',
   loggerEqp: 'logger_eqp',
   telemetrico: 'telemetrico',
   nivel: 'nivel',
   vazao: 'vazao',
-  fichaInspecao: 'ficha_inspecao',
-  ultimaDataFi: 'ultima_data_fi',
-  fichaDescritiva: 'ficha_descritiva',
-  ultimaAtualizacaoFd: 'ultima_atualizacao_fd',
   aquifero: 'aquifero',
   altimetria: 'altimetria',
   anaEscalaInicio: 'ana_escala_inicio',

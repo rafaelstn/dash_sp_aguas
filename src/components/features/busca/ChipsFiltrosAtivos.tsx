@@ -23,8 +23,6 @@ const RÓTULOS: Record<string, string> = {
   tipo: 'Tipo',
   mantenedor: 'Mantenedor',
   status: 'Status',
-  tem_fd: 'Com Ficha Descritiva',
-  tem_fi: 'Com Ficha de Inspeção',
   tem_telem: 'Com telemetria',
   favoritos: 'Apenas favoritos',
 };
@@ -40,7 +38,8 @@ function extrair(params: URLSearchParams, mostrarFavoritos: boolean): ChipSpec[]
     if (chave === 'favoritos' && !mostrarFavoritos) continue;
     const valor = params.get(chave);
     if (!valor) continue;
-    const isBoolean = ['tem_fd', 'tem_fi', 'tem_telem', 'favoritos'].includes(chave);
+    // Chip de booleano mostra só o rótulo ("Com telemetria"), sem ": 1".
+    const isBoolean = ['tem_telem', 'favoritos'].includes(chave);
     // Status traduz "ativo"/"desativado" pra rótulos legíveis (Ativo/Desativado).
     const valorExibido =
       chave === 'status' ? (STATUS_LABEL[valor] ?? valor) : valor;

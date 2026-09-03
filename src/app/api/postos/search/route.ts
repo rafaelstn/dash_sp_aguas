@@ -31,8 +31,10 @@ export async function GET(request: NextRequest) {
   const municipio = sp.get('municipio') ?? undefined;
   const baciaHidrografica = sp.get('bacia') ?? undefined;
   const tipoPosto = sp.get('tipo') ?? undefined;
-  const temFichaDescritiva = bool(sp.get('tem_fd'));
-  const temFichaInspecao = bool(sp.get('tem_fi'));
+  // `tem_fd` e `tem_fi` saíram em 03/09/2026 com os campos que liam, que não
+  // têm origem no `Dbfch`. Quem mandar os parâmetros antigos recebe a busca sem
+  // eles, e não uma lista vazia: parâmetro desconhecido nunca restringiu nada
+  // nesta rota, e passar a restringir agora seria mudar a resposta em silêncio.
   const temTelemetrico = bool(sp.get('tem_telem'));
   const apenasFavoritos = bool(sp.get('favoritos'));
 
@@ -45,8 +47,6 @@ export async function GET(request: NextRequest) {
       municipio,
       baciaHidrografica,
       tipoPosto,
-      temFichaDescritiva,
-      temFichaInspecao,
       temTelemetrico,
       apenasFavoritos,
       usuarioId: usuario?.id ?? null,

@@ -29,8 +29,6 @@ export interface ValoresFiltros {
   status?: 'ativo' | 'desativado';
   lat?: string;
   lng?: string;
-  tem_fd?: boolean;
-  tem_fi?: boolean;
   tem_telem?: boolean;
   favoritos?: boolean;
 }
@@ -165,6 +163,31 @@ export function PainelFiltros({
           </select>
         </label>
 
+        {/*
+          Telemetria é característica do POSTO (ele tem ou não aparelho
+          telemétrico ativo), então mora junto dos outros filtros de dado do
+          posto, e não num grupo à parte. Antes ela era a terceira caixa de um
+          `fieldset` chamado "Com cadastro de:", ao lado de Ficha Descritiva e
+          Ficha de Inspeção; com as duas fora, aquele rótulo deixou de
+          descrever o que sobrou, porque aparelho instalado não é "cadastro
+          de" nada. O grupo não volta.
+
+          O rótulo diz "Somente" de propósito: "Telemetria" sozinho num
+          checkbox é ambíguo (mostrar a coluna? filtrar por ela?).
+        */}
+        <div className="sm:col-span-2">
+          <label className="inline-flex items-center gap-2 text-sm text-gov-texto">
+            <input
+              type="checkbox"
+              name="tem_telem"
+              value="1"
+              defaultChecked={Boolean(valores.tem_telem)}
+              className="w-4 h-4 accent-gov-azul"
+            />
+            Somente postos com telemetria
+          </label>
+        </div>
+
         <fieldset className="flex flex-col gap-1 sm:col-span-2">
           <legend className="text-sm font-medium text-gov-texto">
             Coordenada (latitude e longitude)
@@ -195,41 +218,21 @@ export function PainelFiltros({
         </fieldset>
       </div>
 
-      <fieldset className="grid gap-2 sm:grid-cols-2">
-        <legend className="text-sm font-medium text-gov-texto mb-1">
-          Com cadastro de:
-        </legend>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="tem_fd"
-            value="1"
-            defaultChecked={Boolean(valores.tem_fd)}
-            className="w-4 h-4 accent-gov-azul"
-          />
-          Ficha Descritiva
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="tem_fi"
-            value="1"
-            defaultChecked={Boolean(valores.tem_fi)}
-            className="w-4 h-4 accent-gov-azul"
-          />
-          Ficha de Inspeção
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            name="tem_telem"
-            value="1"
-            defaultChecked={Boolean(valores.tem_telem)}
-            className="w-4 h-4 accent-gov-azul"
-          />
-          Telemetria
-        </label>
-        {mostrarFavoritos ? (
+      {/*
+        O grupo "Com cadastro de:" tinha quatro caixas e não existe mais. Duas
+        (Ficha Descritiva e Ficha de Inspeção) filtravam por colunas que não
+        existem no cadastro do órgão: marcar qualquer uma esvaziava a lista, e
+        quem usa lê isso como "não há posto com ficha", não como filtro
+        quebrado. A terceira, Telemetria, subiu para o grid acima, junto dos
+        outros filtros de dado do posto.
+
+        A quarta, "Apenas meus favoritos", fica aqui embaixo porque é a única
+        que não filtra por dado do posto: filtra pela relação do usuário com
+        ele. A linha divisória é essa leitura, e é também por isso que ela não
+        volta para dentro de um agrupamento com a telemetria.
+      */}
+      {mostrarFavoritos ? (
+        <div className="border-t border-gov-borda pt-3">
           <label className="inline-flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -240,8 +243,8 @@ export function PainelFiltros({
             />
             Apenas meus favoritos
           </label>
-        ) : null}
-      </fieldset>
+        </div>
+      ) : null}
 
       {/* preserva o termo de busca atual ao aplicar filtros */}
       <input type="hidden" name="q" value={valores.q ?? ''} />

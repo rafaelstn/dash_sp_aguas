@@ -24,39 +24,6 @@ export interface ListaResultadosProps {
   hrefPagina?: (pagina: number) => string;
 }
 
-/**
- * Pílula mini para indicadores de cadastro do posto (FD / FI / TEL).
- *
- * `nomeCompleto` alimenta tanto o `title` (tooltip nativo no hover) quanto
- * o `aria-label` (anunciado por leitor de tela). A sigla curta cabe na
- * tabela densa; o tooltip explica pra quem ainda não decorou as siglas.
- */
-function PilulaIndicador({
-  rotulo,
-  nomeCompleto,
-  ativo,
-}: {
-  rotulo: string;
-  nomeCompleto: string;
-  ativo: boolean;
-}) {
-  const descricao = `${nomeCompleto} — ${ativo ? 'sim' : 'não'}`;
-  return (
-    <span
-      aria-label={descricao}
-      title={descricao}
-      className={[
-        'mono inline-flex h-5 min-w-[2rem] cursor-help items-center justify-center rounded border px-1.5 text-2xs font-semibold',
-        ativo
-          ? 'border-gov-azul/30 bg-gov-azul-claro text-gov-azul'
-          : 'border-app-border-subtle bg-app-surface-2 text-app-fg-subtle',
-      ].join(' ')}
-    >
-      {rotulo}
-    </span>
-  );
-}
-
 export function ListaResultados({
   itens,
   total,
@@ -117,29 +84,42 @@ export function ListaResultados({
         <span className="text-app-fg-muted">{formatarValor(p.tipoPosto)}</span>
       ),
     },
+    // A coluna era "Cadastro", com três pílulas de sigla (FD / FI / TEL).
+    // Duas saíram: `fichaDescritiva` e `fichaInspecao` não existem no cadastro
+    // do órgão e renderizariam "não" em todas as linhas, o que numa tabela é
+    // lido como fato sobre o posto, e não como ausência de dado.
+    //
+    // `telemetrico` ficou, porque tem dado real (149 postos). Com um indicador
+    // só, a sigla perdeu a razão de existir: ela comprimia três rótulos num
+    // espaço apertado, e agora o cabeçalho já diz "Telemetria" por extenso,
+    // então "TEL" na célula seria a mesma palavra duas vezes. A célula passa a
+    // responder a pergunta que o cabeçalho faz: "Sim" ou travessão.
+    //
+    // Só o SIM ganha peso visual. O atributo aparece em 2,6% da base, e pílula
+    // cinza nas outras 97,4% seria ruído em cima da linha inteira; o travessão
+    // mantém a coluna legível e faz o punhado de postos telemétricos saltar.
+    // A ausência continua anunciada por leitor de tela, porque célula muda é
+    // ambígua para quem não vê o padrão da coluna.
     {
-      chave: 'indicadores',
-      cabecalho: 'Cadastro',
-      largura: '140px',
-      render: (p) => (
-        <div className="flex items-center gap-1">
-          <PilulaIndicador
-            rotulo="FD"
-            nomeCompleto="Ficha Descritiva"
-            ativo={Boolean(p.fichaDescritiva)}
-          />
-          <PilulaIndicador
-            rotulo="FI"
-            nomeCompleto="Ficha de Inspeção"
-            ativo={Boolean(p.fichaInspecao)}
-          />
-          <PilulaIndicador
-            rotulo="TEL"
-            nomeCompleto="Telemetria"
-            ativo={Boolean(p.telemetrico)}
-          />
-        </div>
-      ),
+      chave: 'telemetria',
+      cabecalho: 'Telemetria',
+      largura: '12ch',
+      render: (p) =>
+        (p.telemetrico ?? '').trim().length > 0 ? (
+          <span
+            title="Telemetria — sim"
+            className="inline-flex h-5 items-center justify-center rounded border border-gov-azul/30 bg-gov-azul-claro px-2 text-2xs font-semibold text-gov-azul"
+          >
+            Sim
+          </span>
+        ) : (
+          <>
+            <span aria-hidden="true" className="text-app-fg-subtle">
+              —
+            </span>
+            <span className="sr-only">Telemetria — não</span>
+          </>
+        ),
     },
     {
       chave: 'favorito',

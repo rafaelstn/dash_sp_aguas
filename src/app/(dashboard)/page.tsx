@@ -35,8 +35,6 @@ interface PageProps {
     status?: string;
     lat?: string;
     lng?: string;
-    tem_fd?: string;
-    tem_fi?: string;
     tem_telem?: string;
     favoritos?: string;
   }>;
@@ -57,8 +55,6 @@ async function Resultados(props: {
    *  o href de paginação preservando os params originais. */
   latRaw?: string;
   lngRaw?: string;
-  temFd: boolean;
-  temFi: boolean;
   temTelem: boolean;
   apenasFavoritos: boolean;
 }) {
@@ -75,8 +71,6 @@ async function Resultados(props: {
       status: props.status,
       latitude: props.latitude,
       longitude: props.longitude,
-      temFichaDescritiva: props.temFd,
-      temFichaInspecao: props.temFi,
       temTelemetrico: props.temTelem,
       apenasFavoritos: props.apenasFavoritos,
       usuarioId: usuario?.id ?? null,
@@ -109,8 +103,6 @@ async function Resultados(props: {
       if (props.status) params.set('status', props.status);
       if (props.latRaw) params.set('lat', props.latRaw);
       if (props.lngRaw) params.set('lng', props.lngRaw);
-      if (props.temFd) params.set('tem_fd', '1');
-      if (props.temFi) params.set('tem_fi', '1');
       if (props.temTelem) params.set('tem_telem', '1');
       if (props.apenasFavoritos) params.set('favoritos', '1');
       if (n > 1) params.set('pagina', String(n));
@@ -245,8 +237,6 @@ export default async function Home({ searchParams }: PageProps) {
   const longitude =
     Number.isFinite(lngNum) && Math.abs(lngNum) <= 180 ? lngNum : undefined;
 
-  const temFd = sp.tem_fd === '1';
-  const temFi = sp.tem_fi === '1';
   const temTelem = sp.tem_telem === '1';
   const apenasFavoritos = sp.favoritos === '1';
 
@@ -261,8 +251,6 @@ export default async function Home({ searchParams }: PageProps) {
     Boolean(mantenedor) ||
     Boolean(status) ||
     temCoord ||
-    temFd ||
-    temFi ||
     temTelem ||
     apenasFavoritos;
 
@@ -380,8 +368,6 @@ export default async function Home({ searchParams }: PageProps) {
               status,
               lat: sp.lat,
               lng: sp.lng,
-              tem_fd: temFd,
-              tem_fi: temFi,
               tem_telem: temTelem,
               favoritos: apenasFavoritos,
             }}
@@ -405,8 +391,6 @@ export default async function Home({ searchParams }: PageProps) {
             longitude={longitude}
             latRaw={sp.lat}
             lngRaw={sp.lng}
-            temFd={temFd}
-            temFi={temFi}
             temTelem={temTelem}
             apenasFavoritos={apenasFavoritos}
           />

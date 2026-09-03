@@ -20,13 +20,10 @@ interface FormState {
   ugrhiNome: string;
   ugrhiNumero: string;
   subUgrhiNome: string;
-  rede: string;
   proprietario: string;
   tipoPosto: string;
   areaKm2: string;
-  btl: string;
   mantenedor: string;
-  observacoes: string;
   aquifero: string;
   operacaoInicioAno: string;
   operacaoFimAno: string;
@@ -57,13 +54,10 @@ function paraForm(p: Posto): FormState {
     ugrhiNome: p.ugrhiNome ?? '',
     ugrhiNumero: p.ugrhiNumero ?? '',
     subUgrhiNome: p.subUgrhiNome ?? '',
-    rede: p.rede ?? '',
     proprietario: p.proprietario ?? '',
     tipoPosto: p.tipoPosto ?? '',
     areaKm2: p.areaKm2 !== null ? String(p.areaKm2) : '',
-    btl: p.btl ?? '',
     mantenedor: p.mantenedor ?? '',
-    observacoes: p.observacoes ?? '',
     aquifero: p.aquifero ?? '',
     operacaoInicioAno: p.operacaoInicioAno !== null ? String(p.operacaoInicioAno) : '',
     operacaoFimAno: p.operacaoFimAno !== null ? String(p.operacaoFimAno) : '',
@@ -201,11 +195,17 @@ export function FormularioEditarPosto({ posto }: Props) {
         <Campo label="Área de drenagem (km²)" valor={form.areaKm2} onChange={(v) => set('areaKm2', v)} inputMode="decimal" />
       </Secao>
 
+      {/*
+        "Rede" e "Batalhão (BTL)" saíram daqui, e "Observações livres" saiu
+        inteira logo abaixo: as três colunas não existem no cadastro do órgão.
+        Campo de escrita órfão é pior que campo de leitura órfão, porque o
+        formulário confirmava "Salvo. 1 campo(s) atualizado(s)." para um dado
+        que não tem onde ficar. Em cadastro público, mensagem de sucesso sobre
+        gravação que não acontece é o defeito mais caro da tela.
+      */}
       <Secao titulo="Operação">
         <Campo label="Ano início de operação" valor={form.operacaoInicioAno} onChange={(v) => set('operacaoInicioAno', v)} inputMode="numeric" />
         <Campo label="Ano fim de operação" valor={form.operacaoFimAno} onChange={(v) => set('operacaoFimAno', v)} inputMode="numeric" />
-        <Campo label="Rede" valor={form.rede} onChange={(v) => set('rede', v)} />
-        <Campo label="Batalhão (BTL)" valor={form.btl} onChange={(v) => set('btl', v)} />
       </Secao>
 
       <Secao titulo="Datas de medição ANA (Meta I.6)">
@@ -221,21 +221,6 @@ export function FormularioEditarPosto({ posto }: Props) {
         <Campo label="Pluviômetro — fim" valor={form.anaPluviometroFim} onChange={(v) => set('anaPluviometroFim', v)} type="date" />
         <Campo label="Telemetria — início" valor={form.anaTelemetriaInicio} onChange={(v) => set('anaTelemetriaInicio', v)} type="date" />
         <Campo label="Telemetria — fim" valor={form.anaTelemetriaFim} onChange={(v) => set('anaTelemetriaFim', v)} type="date" />
-      </Secao>
-
-      <Secao titulo="Observações">
-        <div className="sm:col-span-2">
-          <label className="block text-xs">
-            <span className="mb-0.5 block font-medium text-app-fg-muted">Observações livres</span>
-            <textarea
-              value={form.observacoes}
-              onChange={(e) => set('observacoes', e.target.value)}
-              rows={4}
-              maxLength={2000}
-              className="block w-full rounded border border-app-border-subtle bg-app-surface px-2 py-1.5 text-sm"
-            />
-          </label>
-        </div>
       </Secao>
 
       <div className="flex flex-wrap gap-2">

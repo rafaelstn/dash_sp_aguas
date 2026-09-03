@@ -13,8 +13,6 @@ export interface EntradaBuscarPostos {
   latitude?: number;
   longitude?: number;
   // Booleans
-  temFichaDescritiva?: boolean;
-  temFichaInspecao?: boolean;
   temTelemetrico?: boolean;
   apenasFavoritos?: boolean;
   // Contexto
@@ -60,8 +58,6 @@ export async function buscarPostos(
       entrada.mantenedor ||
       entrada.status ||
       temCoord ||
-      entrada.temFichaDescritiva ||
-      entrada.temFichaInspecao ||
       entrada.temTelemetrico ||
       entrada.apenasFavoritos,
   );
@@ -96,8 +92,6 @@ export async function buscarPostos(
     status: entrada.status,
     latitude: temCoord ? entrada.latitude : undefined,
     longitude: temCoord ? entrada.longitude : undefined,
-    temFichaDescritiva: entrada.temFichaDescritiva,
-    temFichaInspecao: entrada.temFichaInspecao,
     temTelemetrico: entrada.temTelemetrico,
     apenasFavoritos: entrada.apenasFavoritos,
     usuarioId: entrada.usuarioId,

@@ -52,9 +52,10 @@ interface LinhaCodigo {
  * Toda leitura filtra `p.Excluido = 0`, e a barreira de `consultarMssql` recusa
  * a consulta se alguma das cinco esquecer.
  *
- * `mantenedores` sai só de `Entidades` pela operadora: o campo `btl` do nosso
- * cadastro não tem origem em `Dbfch` (ADR §10.5), então o `UNION ALL` do
- * adaptador PostgreSQL não tem segunda metade aqui.
+ * `mantenedores` sai só de `Entidades` pela operadora. Era uma divergência
+ * contra o adaptador PostgreSQL, que somava `btl` num `UNION ALL`: desde
+ * 03/09/2026 `btl` saiu do domínio por não ter origem em `Dbfch`, e os dois
+ * adaptadores passaram a oferecer o mesmo conjunto de mantenedores.
  */
 const SQL_FACETAS = `
   SELECT numero = ${UGRHI_NUMERO},

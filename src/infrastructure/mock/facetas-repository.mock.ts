@@ -45,8 +45,10 @@ export const facetasRepository: FacetasRepository = {
       tiposMap.set(p.tipoPosto, (tiposMap.get(p.tipoPosto) ?? 0) + 1);
     }
 
-    // Mantenedores: combina mantenedor + btl, conta posto distinto pra
-    // não duplicar quando os dois campos têm o mesmo valor no mesmo registro.
+    // Mantenedores: só `mantenedor`. Combinava com `btl` até 03/09/2026, e
+    // manter os dois depois que o campo saiu ofereceria, na lista de facetas,
+    // um valor que o filtro não casa mais: opção clicável que devolve zero.
+    // A contagem é por posto distinto pra não duplicar registro.
     const mantenedoresMap = new Map<string, Set<string>>();
     function adicionar(valor: string | null, postoId: string) {
       if (!valor) return;
@@ -59,7 +61,6 @@ export const facetasRepository: FacetasRepository = {
     }
     for (const p of POSTOS_FIXTURES) {
       adicionar(p.mantenedor, p.id);
-      adicionar(p.btl, p.id);
     }
 
     return {

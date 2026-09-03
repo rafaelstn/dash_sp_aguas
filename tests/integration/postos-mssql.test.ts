@@ -218,12 +218,15 @@ rodar('a porta não mudou: a forma da resposta é a mesma do contrato', () => {
     expect(extras).toEqual([]);
   });
 
-  it('os campos sem origem em Dbfch vêm nulos, e não ausentes nem inventados', async () => {
+  it('os doze campos sem origem em Dbfch não voltam nem como chave nula', async () => {
+    // Este caso mediu, até 03/09/2026, que os doze vinham `null` em vez de
+    // ausentes. Eles saíram do domínio naquele dia, e o caso passou a medir o
+    // sucessor da mesma pergunta: chave que a origem nunca preenche não deve
+    // reaparecer. É a guarda que impede alguém de "reconectar" `Grupos` a
+    // `rede` ou `Historicos` a `observacoes` sem passar pela decisão.
     const posto = await (await repo()).buscarPorPrefixo(ANCORA.prefixo);
-    // ADR §10.5. Vir `null` é diferente de vir ausente: a tela distingue
-    // "não temos esse dado" de "a chave sumiu do objeto".
-    for (const campo of [
-      'municipioAlt',
+    const chaves = Object.keys(posto!);
+    const ressuscitados = [
       'rede',
       'btl',
       'ciaAmbiental',
@@ -233,11 +236,34 @@ rodar('a porta não mudou: a forma da resposta é a mesma do contrato', () => {
       'statusPcd',
       'ultimaTransmissao',
       'fichaInspecao',
+      'ultimaDataFi',
       'fichaDescritiva',
-    ] as const) {
-      expect(Object.hasOwn(posto!, campo)).toBe(true);
-      expect(posto![campo]).toBeNull();
-    }
+      'ultimaAtualizacaoFd',
+    ].filter((c) => chaves.includes(c));
+    expect(ressuscitados).toEqual([]);
+
+    // `municipioAlt` continua no contrato e continua sem origem, e por isso
+    // continua provando a distinção original: `null` é "o órgão não informou",
+    // e ausente seria "o sistema não busca". O que decide entre remover e
+    // manter nulo não é a taxa de preenchimento: é existir origem.
+    expect(Object.hasOwn(posto!, 'municipioAlt')).toBe(true);
+    expect(posto!.municipioAlt).toBeNull();
+  });
+
+  it('telemetrico NÃO saiu, porque é derivado e tem origem de verdade', async () => {
+    // Escrito junto da remoção dos doze, e o motivo é que ele quase foi junto.
+    // `telemetrico` não aparece em `sys.columns` (não é coluna, é derivado de
+    // `AparelhoPostos` x `Aparelhos`) e preenche 2,6% da base, então some de
+    // qualquer amostra pequena. Os dois sinais que sugeriam removê-lo são os
+    // mesmos de `aquifero`, que também ficou. Este caso existe para que a
+    // próxima varredura por campo vazio esbarre no fato, e não na impressão.
+    const r = await (await repo()).pesquisar({
+      temTelemetrico: true,
+      pagina: 1,
+      porPagina: 5,
+    });
+    expect(r.total).toBe(POSTOS_TELEMETRICOS);
+    expect(r.itens.every((i) => i.telemetrico !== null)).toBe(true);
   });
 });
 

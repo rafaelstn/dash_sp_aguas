@@ -297,35 +297,18 @@ function mapear(linha: LinhaPostoMssql, instrumentacao: Instrumentacao): Posto {
     ugrhiNumero: linha.UgrhiNumero !== null ? String(linha.UgrhiNumero) : null,
     subUgrhiNome: texto(linha.SubUgrhiNome),
     subUgrhiNumero: formatarSubUgrhi(numero(linha.SubUgrhiCodigo)),
-    // `Grupos` foi avaliado como origem de `rede` e REJEITADO: os valores são
-    // grupos de trabalho ad hoc ("TRABALHO - CLAUDIO - NAO APAGAR"), com nome
-    // de pessoa no rótulo. Não é classificação de domínio (ADR §10.6).
-    rede: null,
     proprietario: texto(linha.Proprietario),
     tipoPosto: texto(linha.TipoPosto),
     areaKm2: numero(linha.AreaDrenagem),
-    btl: null,
-    ciaAmbiental: null,
-    cobacia: null,
-    // `Historicos` foi avaliado como origem de `observacoes` e REJEITADO: é
-    // histórico DATADO de eventos, não atributo de cadastro (ADR §10.6).
-    observacoes: null,
-    // Equipamento não é estado: saber que o posto tem um pluviômetro
-    // telemétrico instalado não diz se ele está transmitindo. Os três campos
-    // de ESTADO da telemetria não têm origem em `Dbfch` (ADR §10.6, ressalva C).
-    tempoTransmissao: null,
-    statusPcd: null,
-    ultimaTransmissao: null,
+    // Os doze campos que ficavam aqui devolvendo `null` fixo saíram do domínio
+    // em 03/09/2026 (ver o cabeçalho de `domain/posto.ts`). O motivo da recusa
+    // de cada candidato está preservado lá, porque é ele que impede alguém de
+    // "reconectar" `Grupos` a `rede` ou `Historicos` a `observacoes` amanhã.
     convencional: instrumentacao.convencional,
     loggerEqp: instrumentacao.loggerEqp,
     telemetrico: instrumentacao.telemetrico,
     nivel: instrumentacao.nivel,
     vazao: instrumentacao.vazao,
-    // Indexação documental é nossa e está fora do escopo do ADR (§0).
-    fichaInspecao: null,
-    ultimaDataFi: null,
-    fichaDescritiva: null,
-    ultimaAtualizacaoFd: null,
     aquifero: texto(linha.UnidadeAquifera),
     altimetria: numero(linha.Altitude),
     // Os 12 campos de data da ANA são nossos (migration 0031) e não existem
@@ -463,9 +446,9 @@ function montarFiltro(
   }
 
   if (params.mantenedor) {
-    // No PostgreSQL o filtro casa `mantenedor` OU `btl`, porque os dois
-    // representam "responsável pelo posto". `btl` não tem origem em `Dbfch`
-    // (§10.5), então sobra a entidade operadora.
+    // A entidade OPERADORA é o "responsável pelo posto" do `Dbfch`. O adaptador
+    // PostgreSQL casava `mantenedor` OU `btl`, e desde que `btl` saiu do domínio
+    // (03/09/2026) os dois filtram pela mesma regra.
     f.add(`oper.Nome ${CI_AI} = ${f.param(TiposMssql.texto, params.mantenedor)}`);
   }
 
@@ -500,20 +483,6 @@ function montarFiltro(
         WHERE ap.PostoId = p.Id AND ap.Excluido = 0 AND a.Excluido = 0
           AND ap.DataDesativacao IS NULL
           AND a.Designacao IN (${marcadores}))`);
-  }
-
-  if (params.temFichaDescritiva || params.temFichaInspecao) {
-    // Estes dois campos não existem em `Dbfch` (ADR §10.5): a varredura das 157
-    // tabelas por `Ficha`, `Inspec` e `Descritiv` não achou origem. Como o
-    // adaptador devolve os dois sempre nulos, "só quem tem ficha" é o conjunto
-    // vazio, e a resposta é CONSISTENTE com o que a ficha mostra.
-    //
-    // A alternativa seria ignorar o filtro em silêncio, e aí a tela devolveria
-    // 5.790 postos para quem pediu "só os que têm ficha", todos exibindo ficha
-    // vazia. Resultado errado que parece certo é pior que resultado vazio.
-    // Item para o cliente: este filtro deve sair da tela enquanto a origem for
-    // o banco do órgão.
-    return null;
   }
 
   if (params.apenasFavoritos) {

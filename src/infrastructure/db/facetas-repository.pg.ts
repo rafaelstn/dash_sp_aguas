@@ -54,20 +54,21 @@ export const facetasRepository: FacetasRepository = {
            GROUP BY tipo_posto
            ORDER BY tipo_posto
         `,
-        // Mantenedores — UNION ALL de mantenedor + btl. COUNT(DISTINCT id)
-        // evita dobrar quando os dois campos têm o mesmo valor no mesmo
-        // registro (cenário comum em postos da Polícia Ambiental).
+        // Mantenedores — só `mantenedor`.
+        //
+        // Era um `UNION ALL` com `btl` até 03/09/2026, quando `btl` saiu do
+        // domínio por não ter origem no `Dbfch`. A coluna ainda existe nesta
+        // tabela e continuaria respondendo, e é justamente por isso que ela
+        // precisava sair daqui: `pesquisar` deixou de casar `btl`, então cada
+        // valor vindo dele viraria uma opção clicável da lista de filtros que
+        // devolve zero resultado. Faceta que não filtra nada é pior que faceta
+        // ausente, porque parece que a busca é que está errada.
         sql<{ nome: string; total: string }[]>`
-          SELECT valor AS nome, COUNT(DISTINCT id)::text AS total
-            FROM (
-              SELECT id, mantenedor AS valor FROM postos
-               WHERE mantenedor IS NOT NULL AND mantenedor <> ''
-              UNION ALL
-              SELECT id, btl AS valor FROM postos
-               WHERE btl IS NOT NULL AND btl <> ''
-            ) u
-           GROUP BY valor
-           ORDER BY valor
+          SELECT mantenedor AS nome, COUNT(DISTINCT id)::text AS total
+            FROM postos
+           WHERE mantenedor IS NOT NULL AND mantenedor <> ''
+           GROUP BY mantenedor
+           ORDER BY mantenedor
         `,
       ]);
 

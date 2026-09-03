@@ -15,9 +15,14 @@ export interface ParametrosPesquisa {
   baciaHidrografica?: string;
   tipoPosto?: string;
   /**
-   * Mantenedor — match exato em mantenedor OU btl. Os dois campos do schema
-   * representam "responsável pelo posto" na visão do usuário (Polícia
-   * Ambiental costuma estar em btl, DAEE/CETESB em mantenedor).
+   * Mantenedor — match exato em `mantenedor`.
+   *
+   * Casava também em `btl` enquanto a origem era a planilha, onde os dois
+   * representavam "responsável pelo posto". `btl` saiu junto com os demais
+   * campos sem origem no `Dbfch` (03/09/2026), e isso encerrou uma divergência
+   * silenciosa: o adaptador PostgreSQL casava os dois campos e o do SQL Server
+   * só a entidade operadora, então a mesma faceta filtrava diferente conforme
+   * a origem ligada.
    */
   mantenedor?: string;
   /**
@@ -42,9 +47,15 @@ export interface ParametrosPesquisa {
   latitude?: number;
   longitude?: number;
 
-  // Checkbox de presença no cadastro
-  temFichaDescritiva?: boolean;
-  temFichaInspecao?: boolean;
+  /**
+   * Só postos com aparelho TELEMÉTRICO ativo.
+   *
+   * Sobrevivente dos três checkboxes de presença: `temFichaDescritiva` e
+   * `temFichaInspecao` saíram em 03/09/2026 junto com os campos que liam, que
+   * não têm origem no `Dbfch`. Este continua porque tem: o filtro resolve por
+   * `EXISTS` sobre `AparelhoPostos`, devolve 149 postos e é exercitado contra o
+   * banco real.
+   */
   temTelemetrico?: boolean;
 
   // Apenas favoritos do usuário autenticado; exige usuarioId
@@ -94,26 +105,14 @@ export type CamposEditaveisPosto = Partial<{
   ugrhiNumero: string | null;
   subUgrhiNome: string | null;
   subUgrhiNumero: string | null;
-  rede: string | null;
   proprietario: string | null;
   tipoPosto: string | null;
   areaKm2: number | null;
-  btl: string | null;
-  ciaAmbiental: string | null;
-  cobacia: string | null;
-  observacoes: string | null;
-  tempoTransmissao: string | null;
-  statusPcd: string | null;
-  ultimaTransmissao: string | null;
   convencional: string | null;
   loggerEqp: string | null;
   telemetrico: string | null;
   nivel: string | null;
   vazao: string | null;
-  fichaInspecao: string | null;
-  ultimaDataFi: string | null;
-  fichaDescritiva: string | null;
-  ultimaAtualizacaoFd: string | null;
   aquifero: string | null;
   altimetria: number | null;
   anaEscalaInicio: string | null;

@@ -88,9 +88,12 @@ export interface StatusOperacional {
 }
 
 /**
- * Mantenedor — combinação de `mantenedor` + `btl` (mesma lógica das
- * facetas de busca). Total conta postos distintos pra evitar dobrar
- * quando os dois campos têm o mesmo valor no mesmo registro.
+ * Mantenedor — o campo `mantenedor`, mesma regra das facetas de busca.
+ *
+ * Somava `btl` até 03/09/2026, quando o campo saiu do domínio. Manter o ranking
+ * alinhado com a busca não é cosmético: mantenedor que aparece no pódio e não
+ * existe na lista de filtros é um beco sem saída para quem lê o painel.
+ * Total conta postos distintos.
  */
 export interface RankingMantenedor {
   nome: string;
