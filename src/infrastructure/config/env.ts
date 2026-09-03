@@ -82,6 +82,39 @@ export function getEnv(): Env {
       'DATABASE_URL é obrigatória em produção. Modo demo só funciona em development/test.',
     );
   }
+
+  // Cadastro de posto: a origem em produção é o SQL Server do órgão (ADR-0023),
+  // e esquecer estas variáveis NÃO produzia erro nenhum.
+  //
+  // O modo de falhar era o pior possível, e custou uma sessão inteira para ser
+  // achado: sem elas a aplicação cai no adaptador PostgreSQL, cuja tabela
+  // `postos` tem 0 linhas em produção (o banco nasce vazio por desenho, porque
+  // posto e medição vêm do órgão ao vivo). O sintoma é a busca não retornar
+  // nada, que é indistinguível de "não há posto com esse nome", e não aparece
+  // em log nenhum. Um erro de configuração se disfarçava de resultado.
+  //
+  // Falha aqui, no boot, com a lista do que falta. Fora de produção não exige
+  // nada: a bancada roda com o PostgreSQL local de propósito.
+  if (data.NODE_ENV === 'production') {
+    const obrigatoriasDoOrgao = [
+      'SQLSERVER_HOST',
+      'SQLSERVER_USUARIO',
+      'SQLSERVER_SENHA',
+      'SQLSERVER_BANCO',
+    ] as const;
+    const ausentes = obrigatoriasDoOrgao.filter(
+      (chave) => !process.env[chave]?.trim(),
+    );
+    if (ausentes.length > 0) {
+      throw new Error(
+        `Cadastro de posto sem origem em produção: falta ${ausentes.join(', ')}. ` +
+          'Sem estas variáveis a aplicação lê o PostgreSQL, que está vazio, e a ' +
+          'busca de postos responde sem resultado em vez de dar erro. ' +
+          'Preencher em /etc/spaguas-dmo/app.env (seção 2.1 do modelo em ' +
+          'ops/producao/ambiente-producao.exemplo).',
+      );
+    }
+  }
   // Janela sem identidade (entrega PRODESP). A chamada vem antes de qualquer
   // decisão que dependa dela porque ela também é o fail-fast de motivo e data:
   // sem isso o modo subiria sem justificativa escrita.

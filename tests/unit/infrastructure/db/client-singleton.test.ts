@@ -43,6 +43,14 @@ const BASE = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-sintetica-para-guard',
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
   AUTH_ALLOWED_EMAIL_DOMAINS: 'sp.gov.br',
+  // Sintéticas, como as demais deste arquivo: nenhuma conexão é aberta aqui.
+  // Existem porque a origem do cadastro virou exigência de produção em
+  // 03/09/2026 e a checagem roda antes do que este arquivo mede, então sem
+  // elas os casos de `production` falhariam com a mensagem errada.
+  SQLSERVER_HOST: '127.0.0.1',
+  SQLSERVER_USUARIO: 'guard',
+  SQLSERVER_SENHA: 'guard',
+  SQLSERVER_BANCO: 'guard',
 } as const;
 
 function stubAll(vars: Record<string, string>): void {

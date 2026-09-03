@@ -13,6 +13,15 @@ const BASE_PROD = {
   DATABASE_URL: 'postgres://u:p@h:5432/db',
   NEXT_PUBLIC_SUPABASE_URL: 'https://proj.supabase.co',
   NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-key',
+  // A origem do cadastro virou exigência de produção em 03/09/2026: sem ela a
+  // aplicação lê o PostgreSQL vazio e a busca responde sem resultado em vez de
+  // dar erro (ver `env-cadastro-sem-origem.test.ts`). Como aquela checagem roda
+  // ANTES das que este arquivo mede, sem estas quatro cada caso daqui falharia
+  // com a mensagem errada, e não com a sua.
+  SQLSERVER_HOST: '10.0.0.1',
+  SQLSERVER_USUARIO: 'leitura',
+  SQLSERVER_SENHA: 'senha',
+  SQLSERVER_BANCO: 'Dbfch',
 } as const;
 
 function stubAll(vars: Record<string, string>): void {
