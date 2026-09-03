@@ -646,6 +646,41 @@ Definir o chamador antes de subir. Tarefa agendada no próprio host, com `curl`
 para `127.0.0.1:3000` e o cabeçalho de `CRON_SECRET`, é o caminho mais simples e
 não depende de nada externo.
 
+> **RESOLVIDO em 03/09/2026.** As três rotinas rodam como timers do `systemd`,
+> instalados e verificados no servidor. Configuração e comandos de conferência
+> em `ops/producao/systemd-rotinas.md`; o chamador é
+> `ops/producao/spaguas-cron.sh`, em `/usr/local/bin/`.
+>
+> | rotina | cadência | estado na instalação |
+> |---|---|---|
+> | `spaguas-anonimizar-trilha` | diária, 03:10 | executada, HTTP 200 |
+> | `spaguas-liberar-locks` | a cada 5 min | executada |
+> | `spaguas-sincronizar-monitor` | de hora em hora | executada, 378 s |
+>
+> **`systemd` e não `cron`, por um motivo prático:** rotina que passa a falhar
+> aparece em `systemctl --failed` e a saída fica no `journalctl`. Com `cron`,
+> um erro diário seria invisível, que é a mesma família do problema que esta
+> seção descreve. O chamador trata código diferente de 2xx como falha da
+> unidade, de propósito.
+>
+> **Duas coisas medidas na instalação, e as duas custam se forem esquecidas:**
+>
+> 1. **O `CRON_SECRET` parecia preenchido e estava vazio.** Os arquivos de
+>    ambiente foram para o servidor com CRLF, e o valor do segredo era só o
+>    `\r`. O Docker remove o `\r` ao ler o `env_file`, então a aplicação nunca
+>    reclamou; quem lê o arquivo direto no host, como o chamador, via 1
+>    caractere. Ver a nota no topo de `ops/producao/ambiente-producao.exemplo`.
+> 2. **A sincronização do Monitor leva 378 s** (5.415 estações, 540 mil
+>    medições), e falhava com o limite inicial de 300 s mesmo funcionando.
+>
+> **PENDÊNCIA ABERTA, e ela é do módulo Monitor:** a sincronização responde
+> HTTP 200 com **2.714 erros no corpo**. `estacoes_pluviometricas` tem chave
+> estrangeira para `postos` no PostgreSQL, que está **vazia** desde que o
+> cadastro passou a vir do órgão ao vivo (ADR-0023), e `vinculadasAposto` é
+> zero. Metade das estações não é gravada. A rotina "funciona" para o systemd e
+> entrega metade do efeito, que é a definição de sinal positivo falso. Corrigir
+> junto com a migração do Monitor.
+
 ---
 
 ## 10. Pedido formal ao órgão

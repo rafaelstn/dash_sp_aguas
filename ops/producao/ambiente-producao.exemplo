@@ -11,6 +11,16 @@
 # modelo com valor de aparencia legitima e o que sobe para producao quando
 # alguem copia e esquece de preencher.
 #
+# TERMINACAO DE LINHA: LF, e conferir depois de copiar do Windows.
+# Em 03/09/2026 este arquivo foi para o servidor com CRLF nas 63 linhas, e o
+# efeito foi silencioso: o Docker REMOVE o \r ao ler o env_file, entao a
+# aplicacao funcionou normalmente e nada denunciou. O que quebrou foi quem le o
+# arquivo direto no host, como o chamador das rotinas: `CRON_SECRET=` vazio
+# passou a valer 1 caractere (o proprio \r), e ate a conferencia por "esta
+# preenchido?" foi enganada por ele.
+#   grep -c $'\r' /etc/spaguas-dmo/app.env   # espera: 0
+#   sed -i 's/\r$//' /etc/spaguas-dmo/app.env
+#
 # Preparar o destino no servidor:
 #   sudo install -d -m 0750 -o root -g docker /etc/spaguas-dmo
 #   sudo install -m 0640 -o root -g docker /dev/null /etc/spaguas-dmo/app.env
