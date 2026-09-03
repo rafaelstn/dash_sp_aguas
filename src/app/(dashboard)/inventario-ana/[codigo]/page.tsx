@@ -12,6 +12,7 @@ import {
   mensagemAcessoRestrito,
   tituloAcessoRestrito,
 } from '@/domain/auth/mensagem-acesso-restrito';
+import { formatarMedida } from '@/lib/format';
 import { Alerta } from '@/components/ui/Alerta';
 import { BadgeDivergencia } from '@/components/features/inventario-ana/BadgeDivergencia';
 import { BadgeStatus } from '@/components/features/inventario-ana/BadgeStatus';
@@ -167,7 +168,11 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
                 {estacao.municipioNome}
                 {estacao.distanciaMunicipioDeclaradoM !== null ? (
                   <span className="ml-2 text-2xs text-app-fg-subtle">
-                    ({(estacao.distanciaMunicipioDeclaradoM / 1000).toFixed(1)} km da fronteira)
+                    (
+                    {formatarMedida(
+                      Number((estacao.distanciaMunicipioDeclaradoM / 1000).toFixed(1)),
+                    )}{' '}
+                    km da fronteira)
                   </span>
                 ) : null}
               </dd>

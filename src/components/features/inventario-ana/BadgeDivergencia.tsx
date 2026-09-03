@@ -1,4 +1,5 @@
 import type { DivergenciaMunicipio } from '@/domain/ana-revisao';
+import { formatarMedida } from '@/lib/format';
 
 interface Props {
   divergencia: DivergenciaMunicipio | null;
@@ -27,7 +28,7 @@ export function BadgeDivergencia({ divergencia, distanciaM }: Props) {
   const classe = CORES[divergencia];
   const titulo =
     distanciaM !== null && distanciaM !== undefined && divergencia !== 'ok'
-      ? `${rotulo}: ${(distanciaM / 1000).toFixed(1)} km da fronteira`
+      ? `${rotulo}: ${formatarMedida(Number((distanciaM / 1000).toFixed(1)))} km da fronteira`
       : rotulo;
   return (
     <span

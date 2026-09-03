@@ -1,3 +1,5 @@
+import { formatarPercentual } from '@/lib/format';
+
 /**
  * Barra horizontal usada em rankings e distribuições. CSS puro, zero deps.
  *
@@ -29,7 +31,7 @@ export function BarraProgresso({
   const pct = total === 0 ? 0 : Math.min(100, (valor / total) * 100);
   const texto =
     formatoValor === 'percentual'
-      ? `${pct.toFixed(1)}%`
+      ? formatarPercentual(pct)
       : `${valor.toLocaleString('pt-BR')} / ${total.toLocaleString('pt-BR')}`;
 
   const altura = tamanho === 'sm' ? 'h-1.5' : 'h-2';

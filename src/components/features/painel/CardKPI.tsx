@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, TrendingUp, TrendingDown, Minus, type LucideIcon } from 'lucide-react';
 import { calcularDelta, rotuloDelta } from '@/lib/delta';
+import { ehNaoApurado, type ValorKPI } from '@/lib/painel-apuracao';
 import { Sparkline } from './Sparkline';
 
 export type SeveridadeKPI = 'critica' | 'alta' | 'media' | 'info' | 'sucesso';
@@ -15,8 +16,19 @@ const ROTULOS_SEVERIDADE: Record<SeveridadeKPI, string> = {
 
 export interface CardKPIProps {
   titulo: string;
-  valor: number | string;
-  /** Texto contextual curto (ex: "de 2.483 postos"). */
+  /**
+   * O número, o texto já formatado, ou `naoApurado(motivo)` quando a origem
+   * não tem como responder este indicador. Ver `@/lib/painel-apuracao`.
+   */
+  valor: ValorKPI;
+  /**
+   * Texto contextual curto (ex: "de 2.483 postos").
+   *
+   * IGNORADO no estado não apurado, e de propósito: o contexto sempre fala do
+   * número ("100,0% da rede não indexada"), então mantê-lo ao lado de um
+   * indicador sem número seria reintroduzir a afirmação que o estado existe
+   * para desfazer. Quem manda ali é o motivo.
+   */
   contexto?: string;
   href?: string;
   rotuloAcao?: string;
@@ -72,6 +84,25 @@ const estilos: Record<SeveridadeKPI, { borda: string; icone: string; fundoIcone:
   },
 };
 
+/**
+ * Estado não apurado: neutro por decisão, não por falta de cor disponível.
+ *
+ * Vermelho e verde são as duas leituras erradas de um indicador sem medição
+ * ("está péssimo" e "está resolvido"), então a faixa perde a cor e ganha o
+ * tracejado, que é a convenção de "aqui não há dado", legível também em
+ * escala de cinza e para quem não distingue as duas cores.
+ */
+const ESTILO_NAO_APURADO = {
+  // `border-strong` e não `border-default`: tracejado claro demais some ao lado
+  // das faixas sólidas de 4px dos cartões vizinhos, e o estado deixaria de ser
+  // percebido como estado. O que carrega a informação continua sendo o TEXTO
+  // ("Não apurado" mais o motivo), então a faixa é reforço, e não o único sinal
+  // (WCAG 1.4.1).
+  borda: 'border-l-4 border-dashed border-l-app-border-strong',
+  icone: 'text-app-fg-subtle',
+  fundoIcone: 'bg-app-surface-2',
+};
+
 export function CardKPI({
   titulo,
   valor,
@@ -86,14 +117,28 @@ export function CardKPI({
   serie,
   sentidoPositivo = 'maior',
 }: CardKPIProps) {
-  const est = estilos[severidade];
-  const valorFormatado =
-    typeof valor === 'number' && formatarValor
+  const semApuracao = ehNaoApurado(valor) ? valor : null;
+
+  /*
+   * O estado não apurado ANULA ação, delta e série, e isso é guarda, não
+   * cortesia: link ("Rodar worker"), seta de variação e sparkline são, os três,
+   * afirmações sobre um número que não existe. Anular aqui, e não no chamador,
+   * porque o chamador é quem esquece.
+   */
+  const destino = semApuracao ? undefined : href;
+  const serieVisivel = semApuracao ? undefined : serie;
+
+  const est = semApuracao ? ESTILO_NAO_APURADO : estilos[severidade];
+  const valorFormatado = ehNaoApurado(valor)
+    ? null
+    : typeof valor === 'number' && formatarValor
       ? valor.toLocaleString('pt-BR')
       : valor;
 
   const delta =
-    typeof valor === 'number' && typeof valorAnterior === 'number'
+    !ehNaoApurado(valor) &&
+    typeof valor === 'number' &&
+    typeof valorAnterior === 'number'
       ? calcularDelta(valor, valorAnterior)
       : null;
 
@@ -102,7 +147,7 @@ export function CardKPI({
       className={[
         'group flex h-full flex-col rounded-gov-card bg-app-surface p-4 shadow-gov-card transition-all motion-safe:duration-150',
         est.borda,
-        href ? 'hover:shadow-gov-card-hover hover:-translate-y-0.5' : '',
+        destino ? 'hover:shadow-gov-card-hover hover:-translate-y-0.5' : '',
       ].join(' ')}
     >
       <div className="flex items-start gap-3">
@@ -116,24 +161,43 @@ export function CardKPI({
         ) : null}
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-app-fg-muted">
-            <span className="sr-only">{ROTULOS_SEVERIDADE[severidade]}: </span>
+            {/* Sem rótulo de severidade quando não há medição: o próprio valor
+                visível já diz "Não apurado", e o leitor de tela o lê. */}
+            {semApuracao ? null : (
+              <span className="sr-only">{ROTULOS_SEVERIDADE[severidade]}: </span>
+            )}
             {titulo}
           </p>
-          <p className="tabular mt-0.5 text-2xl font-semibold text-app-fg">
-            {valorFormatado}
-          </p>
-          {contexto ? (
-            <p className="text-xs text-app-fg-muted">{contexto}</p>
-          ) : null}
+          {semApuracao ? (
+            <>
+              {/* Peso visual deliberadamente MENOR que o dos números vizinhos:
+                  o que não foi medido não pode competir com o que foi. */}
+              <p className="mt-0.5 text-base font-medium text-app-fg-muted">
+                Não apurado
+              </p>
+              <p className="mt-0.5 text-xs text-app-fg-muted">
+                {semApuracao.motivo}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="tabular mt-0.5 text-2xl font-semibold text-app-fg">
+                {valorFormatado}
+              </p>
+              {contexto ? (
+                <p className="text-xs text-app-fg-muted">{contexto}</p>
+              ) : null}
+            </>
+          )}
           {delta ? <DeltaBadge delta={delta} rotuloPeriodo={rotuloPeriodo} sentidoPositivo={sentidoPositivo} /> : null}
         </div>
       </div>
-      {serie && serie.length >= 2 ? (
+      {serieVisivel && serieVisivel.length >= 2 ? (
         <div className="mt-3">
-          <Sparkline serie={serie} cor={est.icone} />
+          <Sparkline serie={serieVisivel} cor={est.icone} />
         </div>
       ) : null}
-      {href ? (
+      {destino ? (
         <p
           className={[
             'mt-3 inline-flex items-center gap-1 text-xs font-medium',
@@ -148,10 +212,10 @@ export function CardKPI({
     </div>
   );
 
-  if (href) {
+  if (destino) {
     return (
       <Link
-        href={href}
+        href={destino}
         className="block rounded-gov-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
       >
         {conteudo}

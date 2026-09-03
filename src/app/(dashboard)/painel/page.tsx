@@ -19,7 +19,17 @@ import {
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { logger } from '@/infrastructure/logging/logger';
+import { formatarPercentual } from '@/lib/format';
+import {
+  apuracaoDeConformidade,
+  apuracaoDePostosSemArquivo,
+  naoApurado,
+} from '@/lib/painel-apuracao';
 import { CardKPI } from '@/components/features/painel/CardKPI';
+import {
+  BlocoNaoApurado,
+  BlocoSemOcorrencia,
+} from '@/components/features/painel/BlocoNaoApurado';
 import { BarraProgresso } from '@/components/features/painel/BarraProgresso';
 import { Alerta } from '@/components/ui/Alerta';
 import { Tabela, type ColunaTabela } from '@/components/ui/Tabela';
@@ -49,6 +59,31 @@ function rotuloClasse(classe: string): string {
     outlier_ana: 'ANA outlier',
   };
   return mapa[classe] ?? classe;
+}
+
+/**
+ * Cor da barra por tipo de posto.
+ *
+ * As duas origens do painel escrevem o MESMO tipo com vocabulários
+ * diferentes: o nosso PostgreSQL guarda a sigla (`PLU`, `FLU`) e o cadastro do
+ * órgão devolve o nome por extenso e acentuado (`PLUVIOMÉTRICO`). A comparação
+ * por igualdade contra `'PLU'` continuava compilando e mandava TODOS os tipos
+ * para a cor de exceção — quatro barras da mesma cor, sem nada quebrar.
+ *
+ * A regra olha o início do nome, sem acento e em maiúscula, para valer nas
+ * duas origens e em qualquer terceira.
+ */
+function corDoTipoDePosto(tipo: string): string {
+  // Faixa dos sinais diacríticos combinantes, escrita por escape: caractere
+  // invisível colado no fonte é o tipo de coisa que some numa edição futura.
+  const chave = tipo
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  if (chave.startsWith('PLU')) return 'bg-gov-azul';
+  if (chave.startsWith('FLU')) return 'bg-gov-sucesso';
+  if (chave.startsWith('MET')) return 'bg-gov-alerta';
+  return 'bg-app-border-strong';
 }
 
 interface ProximaAcao {
@@ -157,7 +192,7 @@ const colunasUgrhi: readonly ColunaTabela<LinhaUgrhi>[] = [
           : u.taxa >= 0.2
             ? { cor: 'bg-gov-alerta', texto: 'em atenção' }
             : { cor: 'bg-gov-azul', texto: 'normal' };
-      const pct = (u.taxa * 100).toFixed(1);
+      const pct = formatarPercentual(u.taxa * 100);
       return (
         <div className="flex items-center gap-2">
           <BarraProgresso
@@ -165,10 +200,10 @@ const colunasUgrhi: readonly ColunaTabela<LinhaUgrhi>[] = [
             total={u.total}
             cor={severidade.cor}
             tamanho="sm"
-            rotulo={`Taxa de desconformidade ${severidade.texto}: ${pct}%`}
+            rotulo={`Taxa de desconformidade ${severidade.texto}: ${pct}`}
           />
           <span className="w-12 text-right mono text-2xs tabular text-app-fg-muted">
-            {pct}%
+            {pct}
           </span>
         </div>
       );
@@ -183,11 +218,16 @@ export default async function PaginaPainel() {
   let classes: Awaited<ReturnType<typeof painelRepository.classesDesconformidade>> = [];
   let statusOp: Awaited<ReturnType<typeof painelRepository.statusOperacional>> | null = null;
   let mantenedores: Awaited<ReturnType<typeof painelRepository.rankingMantenedores>> = [];
+  // Tolerante a falha DE PROPÓSITO (ver o `.catch` abaixo): esta consulta é a
+  // única do painel que só serve para decidir se um indicador foi apurado.
+  let atividade:
+    | Awaited<ReturnType<typeof painelRepository.atividadeRecente>>
+    | null = null;
   let falha = false;
   let proxima: ProximaAcao | null = null;
 
   try {
-    [resumo, tipos, ugrhis, classes, statusOp, mantenedores] =
+    [resumo, tipos, ugrhis, classes, statusOp, mantenedores, atividade] =
       await Promise.all([
         painelRepository.resumoPendencias(),
         painelRepository.distribuicaoPorTipo(),
@@ -195,6 +235,27 @@ export default async function PaginaPainel() {
         painelRepository.classesDesconformidade(),
         painelRepository.statusOperacional(),
         painelRepository.rankingMantenedores(15),
+        /*
+         * A atividade recente entrou no painel para responder UMA pergunta: a
+         * indexação de arquivos já rodou nesta base? Sem ela, "postos sem
+         * arquivo" não distingue rede não indexada de indexador que nunca
+         * executou.
+         *
+         * Ela cai dentro do `Promise.all` para não custar uma ida a mais em
+         * série, e traz o próprio `catch` para não derrubar o painel inteiro:
+         * antes desta consulta a tela sobrevivia sem ela, e continuar
+         * sobrevivendo é requisito. Falhar aqui vira "não apurado" com motivo
+         * próprio, e nunca silêncio — o log é o que separa isso de um caminho
+         * que não faz nada sem dizer.
+         */
+        painelRepository.atividadeRecente().catch((e: unknown) => {
+          logger.warn(
+            'painel.atividadeRecente.falha',
+            { motivo: e instanceof Error ? e.message : String(e) },
+            'Atividade recente indisponível; indicadores de indexação ficam não apurados',
+          );
+          return null;
+        }),
       ]);
   } catch (e) {
     logger.error(
@@ -248,6 +309,24 @@ export default async function PaginaPainel() {
       ? 0
       : (resumo.postosComArquivos / resumo.totalPostos) * 100;
 
+  /*
+   * OS DOIS VEREDITOS DE APURAÇÃO.
+   *
+   * Antes deles, dois indicadores chegavam à tela como zero vermelho e nenhum
+   * gestor conseguia resolver: "postos sem arquivo" repetia o total da rede
+   * porque o indexador nunca rodou, e "cadastro irregular" saía zerado porque
+   * a régua de desconformidade não descreve o vocabulário do `Dbfch`. A regra
+   * e o porquê de cada um estão em `@/lib/painel-apuracao`.
+   */
+  const semArquivo = apuracaoDePostosSemArquivo(
+    atividade,
+    resumo.postosSemArquivos,
+  );
+  const conformidade = apuracaoDeConformidade(
+    resumo.desconformidadesPostos,
+    classes,
+  );
+
   const classesPrefixo = classes
     .filter((c) => c.tipo === 'prefixo')
     .sort((a, b) => b.total - a.total);
@@ -300,13 +379,25 @@ export default async function PaginaPainel() {
           Ações necessárias
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {/*
+            O rótulo "Rodar worker" saiu daqui, e ele nunca chegou a aparecer
+            na tela: o `CardKPI` só desenha a linha de ação quando existe
+            `href`, e este cartão não tinha nenhum. Ou seja, era promessa
+            escrita no código esperando alguém ligar um destino — e o destino
+            não existe, porque a imagem do órgão não tem o indexador (runbook
+            §9.3). Sai o texto, e uma guarda passa a reprovar rótulo de ação
+            sem destino em qualquer cartão do sistema.
+          */}
           <CardKPI
             titulo="Postos sem arquivo"
-            valor={resumo.postosSemArquivos}
-            contexto={`${(100 - pctCobertura).toFixed(1)}% da rede não indexada`}
+            valor={
+              semArquivo.apurado
+                ? semArquivo.valor
+                : naoApurado(semArquivo.motivo)
+            }
+            contexto={`${formatarPercentual(100 - pctCobertura)} da rede não indexada`}
             severidade="critica"
             icone={FolderX}
-            rotuloAcao="Rodar worker"
             valorAnterior={resumo.tendencias.postosSemArquivos?.valorAnterior}
             serie={resumo.tendencias.postosSemArquivos?.serie}
             sentidoPositivo="menor"
@@ -314,18 +405,29 @@ export default async function PaginaPainel() {
           />
           <CardKPI
             titulo="Cadastro irregular"
-            valor={resumo.desconformidadesPostos}
+            valor={
+              conformidade.apurado
+                ? conformidade.valor
+                : naoApurado(conformidade.motivo)
+            }
             contexto="prefixo ou código ANA inconsistente"
             severidade="alta"
             icone={AlertTriangle}
-            href="/desconformidades"
+            href={conformidade.apurado ? '/desconformidades' : undefined}
             rotuloAcao="Revisar lista"
           />
+          {/*
+            Zero MEDIDO é boa notícia, e tem de parecer boa notícia: em âmbar,
+            ao lado de dois cartões não apurados, o painel inteiro virava campo
+            de alarme. É a regra que "Sem coordenadas" e o inventário ANA já
+            seguem, e ela é o outro lado da distinção que esta entrega faz:
+            "não apurado" fica neutro, "medimos e deu zero" fica verde.
+          */}
           <CardKPI
             titulo="Arquivos órfãos"
             valor={resumo.arquivosOrfaos}
             contexto="não associados a posto"
-            severidade="alta"
+            severidade={resumo.arquivosOrfaos > 0 ? 'alta' : 'sucesso'}
             icone={FileWarning}
             href="/desconformidades/arquivos-malformados"
             rotuloAcao="Classificar"
@@ -356,17 +458,18 @@ export default async function PaginaPainel() {
           Dois indicadores, então a grade para em 2 colunas: com
           `lg:grid-cols-3` sobraria um terço vazio na linha.
 
-          O terceiro era "Telemetria ativa". O campo `telemetrico` EXISTE e
-          tem dado real (149 postos), e a ficha e a busca voltaram a mostrá-lo.
-          O que não existe é a origem deste painel: ele lê o
-          `painel-repository.pg`, ou seja, o PostgreSQL, que está com zero
-          linhas em `postos` desde que o cadastro migrou para o SQL Server do
-          órgão. O cartão exibiria "0,0% · 0 postos transmitindo" com
-          severidade de alerta, e o gestor lê isso como número operacional.
+          O terceiro era "Telemetria ativa", e ele foi retirado quando o painel
+          lia só o PostgreSQL, que ficou com zero linhas em `postos` depois que
+          o cadastro migrou para o SQL Server do órgão.
 
-          Vale para o painel inteiro, e não só para este cartão: todos os
-          números daqui estão zerados até o painel migrar de origem. O cartão
-          volta junto com a migração, e não antes.
+          ESSA RAZÃO CAIU EM 03/09/2026: o painel passou a compor as duas
+          origens e o cadastro volta a responder (5.790 postos, 99,9% com
+          coordenada). `resumoCadastro()` já traz `postosComTelemetria` do
+          `Dbfch`, então o dado está aqui — falta MEDIR quanto ele vale nesta
+          base antes de publicar o cartão, porque o número é desconhecido e um
+          "0,0% transmitindo" errado é o mesmo alarme falso de sempre. Enquanto
+          isso não for medido, o cartão fica fora, e este comentário é a dívida
+          declarada, não uma justificativa que envelheceu.
         */}
         <div className="grid gap-3 sm:grid-cols-2">
           <CardKPI
@@ -382,7 +485,11 @@ export default async function PaginaPainel() {
           />
           <CardKPI
             titulo="Cobertura geográfica"
-            valor={`${(resumo.totalPostos === 0 ? 0 : (resumo.postosComCoordenadas / resumo.totalPostos) * 100).toFixed(1)}%`}
+            valor={formatarPercentual(
+              resumo.totalPostos === 0
+                ? 0
+                : (resumo.postosComCoordenadas / resumo.totalPostos) * 100,
+            )}
             contexto={`${resumo.postosComCoordenadas.toLocaleString('pt-BR')} com coordenadas`}
             severidade="sucesso"
             icone={FileCheck}
@@ -399,32 +506,44 @@ export default async function PaginaPainel() {
               {tipos.length} categorias
             </span>
           </div>
-          <ul className="space-y-2.5">
+          {/*
+            Rótulo em cima, barra embaixo. A versão anterior punha o rótulo
+            numa coluna de 3,5rem ao lado da barra, o que só funcionava
+            enquanto a origem devolvia a sigla de três letras: com o cadastro
+            do órgão o valor virou "PLUVIOMÉTRICO" e o texto passava POR CIMA
+            da barra. Esta forma não depende do comprimento do rótulo, e é a
+            mesma do quadro de tipos de inconsistência mais abaixo.
+          */}
+          {tipos.length === 0 ? (
+            <p className="text-xs text-app-fg-muted">
+              Nenhum posto classificado por tipo nesta base.
+            </p>
+          ) : (
+          <ul className="space-y-3">
             {tipos.map((t) => {
               const totalTipo = tipos.reduce((a, x) => a + x.total, 0);
               return (
-                <li key={t.tipo} className="flex items-center gap-3">
-                  <span className="w-14 text-sm font-medium text-app-fg mono">
-                    {t.tipo}
-                  </span>
-                  <div className="flex-1">
-                    <BarraProgresso
-                      valor={t.total}
-                      total={totalTipo}
-                      cor={
-                        t.tipo === 'PLU'
-                          ? 'bg-gov-azul'
-                          : t.tipo === 'FLU'
-                            ? 'bg-gov-sucesso'
-                            : 'bg-gov-alerta'
-                      }
-                      mostrarValor
-                    />
+                <li key={t.tipo} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate text-sm font-medium text-app-fg">
+                      {t.tipo}
+                    </span>
+                    <span className="mono shrink-0 text-2xs tabular text-app-fg-muted">
+                      {t.total.toLocaleString('pt-BR')} de{' '}
+                      {totalTipo.toLocaleString('pt-BR')}
+                    </span>
                   </div>
+                  <BarraProgresso
+                    valor={t.total}
+                    total={totalTipo}
+                    cor={corDoTipoDePosto(t.tipo)}
+                    tamanho="sm"
+                  />
                 </li>
               );
             })}
           </ul>
+          )}
         </div>
       </section>
 
@@ -440,7 +559,7 @@ export default async function PaginaPainel() {
           <CardKPI
             titulo="Postos ativos"
             valor={statusOp.ativos}
-            contexto={`${(statusOp.total === 0 ? 0 : (statusOp.ativos / statusOp.total) * 100).toFixed(1)}% da rede`}
+            contexto={`${formatarPercentual(statusOp.total === 0 ? 0 : (statusOp.ativos / statusOp.total) * 100)} da rede`}
             severidade="sucesso"
             icone={Power}
             href="/?status=ativo"
@@ -449,7 +568,7 @@ export default async function PaginaPainel() {
           <CardKPI
             titulo="Postos desativados"
             valor={statusOp.desativados}
-            contexto={`${(statusOp.total === 0 ? 0 : (statusOp.desativados / statusOp.total) * 100).toFixed(1)}% da rede`}
+            contexto={`${formatarPercentual(statusOp.total === 0 ? 0 : (statusOp.desativados / statusOp.total) * 100)} da rede`}
             severidade="info"
             icone={PowerOff}
             href="/?status=desativado"
@@ -479,69 +598,111 @@ export default async function PaginaPainel() {
           itens={mantenedores}
           densidade="compact"
           chaveItem={(m) => m.nome}
+          vazio={
+            <BlocoSemOcorrencia texto="Nenhum mantenedor com posto sob gestão nesta base." />
+          }
         />
       </section>
 
-      {/* UGRHIs */}
-      <section aria-labelledby="sec-ugrhi" className="space-y-3">
-        <h2
-          id="sec-ugrhi"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          UGRHIs com maior % de cadastro irregular
-        </h2>
-        <Tabela
-          legenda="Top 10 UGRHIs com maior taxa de postos desconformes, com contagem de desconformes e taxa percentual."
-          colunas={colunasUgrhi}
-          itens={ugrhiPiores}
-          densidade="compact"
-          chaveItem={(u) => String(u.numero)}
-        />
-      </section>
+      {/*
+        CONFORMIDADE DO CADASTRO — as duas seções abaixo (ranking de UGRHI e
+        tipos de inconsistência) saem da MESMA régua do cartão "Cadastro
+        irregular", então elas aparecem e somem juntas. Mostrar uma tabela de
+        UGRHI ordenada por uma taxa que não foi apurada seria um ranking sem
+        critério de ordenação, com cara de ranking.
 
-      {/* CLASSES DE INCONSISTÊNCIA */}
-      <section aria-labelledby="sec-classes" className="space-y-3">
-        <h2
-          id="sec-classes"
-          className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
-        >
-          Tipos de inconsistência detectados
-        </h2>
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
-            <h3 className="mb-2 text-sm font-semibold text-app-fg">
-              Prefixo ({totalDesconfPrefixo})
-            </h3>
-            <ul className="space-y-2">
-              {classesPrefixo.map((c) => (
-                <li key={c.classe} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-xs text-app-fg-muted">{rotuloClasse(c.classe)}</span>
-                    <span className="mono tabular text-2xs text-app-fg">{c.total}</span>
-                  </div>
-                  <BarraProgresso valor={c.total} total={totalDesconfPrefixo} cor="bg-gov-azul" tamanho="sm" />
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
-            <h3 className="mb-2 text-sm font-semibold text-app-fg">
-              Código ANA ({totalDesconfPrefixoAna})
-            </h3>
-            <ul className="space-y-2">
-              {classesPrefixoAna.map((c) => (
-                <li key={c.classe} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-xs text-app-fg-muted">{rotuloClasse(c.classe)}</span>
-                    <span className="mono tabular text-2xs text-app-fg">{c.total}</span>
-                  </div>
-                  <BarraProgresso valor={c.total} total={totalDesconfPrefixoAna} cor="bg-gov-alerta" tamanho="sm" />
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
+        Quando não há apuração, as duas viram UMA seção com o motivo: sumir sem
+        explicar faz o painel parecer que nunca teve a funcionalidade.
+      */}
+      {conformidade.apurado ? (
+        <>
+          {/* UGRHIs */}
+          <section aria-labelledby="sec-ugrhi" className="space-y-3">
+            <h2
+              id="sec-ugrhi"
+              className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
+            >
+              UGRHIs com maior % de cadastro irregular
+            </h2>
+            <Tabela
+              legenda="Top 10 UGRHIs com maior taxa de postos desconformes, com contagem de desconformes e taxa percentual."
+              colunas={colunasUgrhi}
+              itens={ugrhiPiores}
+              densidade="compact"
+              chaveItem={(u) => String(u.numero)}
+              vazio={
+                <BlocoSemOcorrencia texto="Nenhuma UGRHI com posto de cadastro irregular." />
+              }
+            />
+          </section>
+
+          {/* CLASSES DE INCONSISTÊNCIA */}
+          <section aria-labelledby="sec-classes" className="space-y-3">
+            <h2
+              id="sec-classes"
+              className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
+            >
+              Tipos de inconsistência detectados
+            </h2>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
+                <h3 className="mb-2 text-sm font-semibold text-app-fg">
+                  Prefixo ({totalDesconfPrefixo})
+                </h3>
+                {classesPrefixo.length === 0 ? (
+                  <p className="text-xs text-app-fg-muted">
+                    Nenhuma inconsistência de prefixo detectada.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {classesPrefixo.map((c) => (
+                      <li key={c.classe} className="space-y-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-xs text-app-fg-muted">{rotuloClasse(c.classe)}</span>
+                          <span className="mono tabular text-2xs text-app-fg">{c.total}</span>
+                        </div>
+                        <BarraProgresso valor={c.total} total={totalDesconfPrefixo} cor="bg-gov-azul" tamanho="sm" />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="rounded-gov-card border border-app-border-subtle bg-app-surface p-4">
+                <h3 className="mb-2 text-sm font-semibold text-app-fg">
+                  Código ANA ({totalDesconfPrefixoAna})
+                </h3>
+                {classesPrefixoAna.length === 0 ? (
+                  <p className="text-xs text-app-fg-muted">
+                    Nenhuma inconsistência de código ANA detectada.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {classesPrefixoAna.map((c) => (
+                      <li key={c.classe} className="space-y-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-xs text-app-fg-muted">{rotuloClasse(c.classe)}</span>
+                          <span className="mono tabular text-2xs text-app-fg">{c.total}</span>
+                        </div>
+                        <BarraProgresso valor={c.total} total={totalDesconfPrefixoAna} cor="bg-gov-alerta" tamanho="sm" />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : (
+        <section aria-labelledby="sec-conformidade" className="space-y-3">
+          <h2
+            id="sec-conformidade"
+            className="text-2xs font-semibold uppercase tracking-wider text-app-fg-subtle"
+          >
+            Conformidade do cadastro
+          </h2>
+          <BlocoNaoApurado motivo={conformidade.motivo} />
+        </section>
+      )}
     </div>
   );
 }

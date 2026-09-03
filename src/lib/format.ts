@@ -46,6 +46,28 @@ export function formatarMedida(valor: unknown): string {
   return FORMATADOR_MEDIDA.format(valor);
 }
 
+const FORMATADOR_PERCENTUAL = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/**
+ * Percentual em pt-BR, com uma casa decimal e VÍRGULA.
+ *
+ * Existe porque `Number.prototype.toFixed` devolve ponto decimal em qualquer
+ * idioma, e o painel publicava "99.9% com coordenadas" para órgão público. É o
+ * mesmo defeito da acentuação: passa por todo teste, por todo build, e só
+ * aparece com a tela aberta.
+ *
+ * Recebe o percentual JÁ CALCULADO (0 a 100), e não a fração, porque metade
+ * das chamadas do painel derivam de uma divisão que precisa tratar total zero
+ * antes — embutir isso aqui esconderia essa decisão.
+ */
+export function formatarPercentual(pct: number): string {
+  if (!Number.isFinite(pct)) return NAO_INFORMADO;
+  return `${FORMATADOR_PERCENTUAL.format(pct)}%`;
+}
+
 const FORMATADOR_BYTES = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 export function formatarTamanho(bytes: number): string {
