@@ -58,13 +58,25 @@ export function montarMarkdownRelatorioPosto(
   ].join('\n');
 
   // `Status PCD` e `Última transmissão` saíram em 03/09/2026: eram ESTADO da
-  // telemetria, e o `Dbfch` cadastra EQUIPAMENTO, não estado. As duas linhas
-  // que ficam vêm do vínculo de aparelho ativo e são preenchidas de verdade.
+  // telemetria, e o `Dbfch` cadastra EQUIPAMENTO, não estado.
+  //
+  // Os CINCO campos de instrumentação, na MESMA ordem e com os MESMOS rótulos
+  // de `components/features/ficha/FichaPosto.tsx`. Até 04/09/2026 o relatório
+  // trazia dois (telemétrico e convencional), numa ordem própria, e os outros
+  // três eram lidos da origem, exibidos na ficha e sumiam no documento.
+  //
+  // A paridade não é estética: o relatório existe para ser conferido CONTRA a
+  // tela, pela mesma pessoa. Documento que traz um subconjunto silencioso do
+  // que a tela mostra ensina a desconfiar do documento, e campo ausente no
+  // papel é indistinguível de campo vazio na origem.
   const operacao = [
     linhaTabela('Início de operação', valor(posto.operacaoInicioAno)),
     linhaTabela('Fim de operação', valor(posto.operacaoFimAno)),
-    linhaTabela('Telemétrico', valor(posto.telemetrico)),
     linhaTabela('Convencional', valor(posto.convencional)),
+    linhaTabela('Logger', valor(posto.loggerEqp)),
+    linhaTabela('Telemétrico', valor(posto.telemetrico)),
+    linhaTabela('Nível', valor(posto.nivel)),
+    linhaTabela('Vazão', valor(posto.vazao)),
   ].join('\n');
 
   const medicoesAna = [
