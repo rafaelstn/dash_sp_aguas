@@ -11,6 +11,7 @@ import { Alerta } from '@/components/ui/Alerta';
 import { Skeleton, SkeletonGrupo } from '@/components/ui/Skeleton';
 import { BadgeIndexacao } from '@/components/features/posto/BadgeIndexacao';
 import { StatusIndexacaoArquivos } from '@/components/features/arquivos/StatusIndexacaoArquivos';
+import { PainelSeriesPosto } from '@/components/features/postos/series/PainelSeriesPosto';
 import { obterFicha } from '@/application/use-cases/obter-ficha';
 import { listarArquivosAgrupados } from '@/application/use-cases/listar-arquivos-agrupados';
 import {
@@ -18,6 +19,7 @@ import {
   arquivosRepository,
   auditoriaRepository,
   fichasVisitaRepository,
+  seriesMedicaoRepository,
 } from '@/infrastructure/repositories';
 import { listarFichasDoPosto } from '@/application/use-cases/fichas-visita';
 import { IndexacaoPendente, PostoNaoEncontrado } from '@/domain/errors';
@@ -52,6 +54,81 @@ async function BlocoFichas({ prefixo }: { prefixo: string }) {
       <Alerta tipo="erro" titulo="Falha ao carregar histórico de visitas">
         Tente recarregar a página em instantes.
       </Alerta>
+    );
+  }
+}
+
+/**
+ * Séries históricas de medição — chuva, cota do rio e piezômetro, lidas AO VIVO
+ * do banco do órgão (ADR-0023: nada é copiado nem cacheado).
+ *
+ * Este bloco carrega SÓ O RETRATO das cinco séries, e nenhuma leitura. É o
+ * pedido do proprietário com todas as letras: "caso eu queira carregar todas as
+ * medições do dia eu consiga, mas ela não precisa abrir de cara para não pesar
+ * o processamento". MEDIDO em 03/09/2026 contra a produção do órgão: de 35 a
+ * 289 ms, incluindo o pior posto de cada série. O histórico, a conferência com
+ * o SIBH e as medições cruas vêm por rota própria, cada uma sob pedido.
+ *
+ * Os três desfechos que não são erro têm resposta própria, e nenhum deles pode
+ * virar o mesmo vazio:
+ *
+ *   origem ausente   este ambiente não tem o banco do órgão configurado (é o
+ *                    501 da API). É limitação de AMBIENTE, e dizer "o posto não
+ *                    tem série" no lugar seria uma afirmação sobre o DADO.
+ *   posto ausente    o prefixo não corresponde a posto ativo no cadastro do
+ *                    órgão, ainda que exista na ficha daqui. É divergência de
+ *                    cadastro entre as duas origens, e vale ser dita.
+ *   cinco zeradas    o posto existe lá e não tem nenhuma medição. Quem trata é
+ *                    o painel, que continua exibindo os cinco cartões.
+ */
+async function BlocoSeries({ prefixo }: { prefixo: string }) {
+  if (seriesMedicaoRepository === null) {
+    return (
+      <div className="space-y-3">
+        <h2 id="sec-series" className="text-base font-semibold text-app-fg">
+          Séries históricas de medição
+        </h2>
+        <Alerta tipo="info" titulo="Origem das séries não configurada neste ambiente">
+          As séries de chuva, cota do rio e piezômetro são lidas ao vivo do banco
+          do órgão, que não está configurado neste ambiente. Isto não diz nada
+          sobre este posto: nenhuma série pôde ser consultada.
+        </Alerta>
+      </div>
+    );
+  }
+
+  try {
+    const series = await seriesMedicaoRepository.resumoPorPosto(prefixo);
+    if (series === null) {
+      return (
+        <div className="space-y-3">
+          <h2 id="sec-series" className="text-base font-semibold text-app-fg">
+            Séries históricas de medição
+          </h2>
+          <Alerta tipo="aviso" titulo="Posto não encontrado no cadastro do órgão">
+            A ficha existe aqui e o cadastro do órgão não reconhece este prefixo
+            como posto ativo, então não há série a consultar.
+          </Alerta>
+        </div>
+      );
+    }
+    return <PainelSeriesPosto prefixo={prefixo} series={series} />;
+  } catch (e) {
+    logger.error(
+      'monitor.series.resumo.falha',
+      { prefixo, motivo: e instanceof Error ? e.message : String(e) },
+      'Falha ao carregar o resumo das séries históricas do posto',
+    );
+    return (
+      <div className="space-y-3">
+        <h2 id="sec-series" className="text-base font-semibold text-app-fg">
+          Séries históricas de medição
+        </h2>
+        <Alerta tipo="erro" titulo="Falha ao consultar as séries do órgão">
+          Não foi possível ler o banco do órgão agora. Recarregue a página em
+          instantes.
+        </Alerta>
+      </div>
     );
   }
 }
@@ -334,6 +411,35 @@ export default async function PaginaPosto({ params }: PageProps) {
             </Suspense>
           </aside>
         </div>
+
+        {/* Séries históricas — chuva, cota e piezômetro do banco do órgão.
+            Fica logo abaixo da ficha, e antes das visitas e do acervo, porque
+            é a resposta ao que o proprietário pediu para fazer nesta tela:
+            "abrir um posto e ver o histórico de chuva, do rio e piezo e bater
+            com a SIBH". Abaixo do acervo, que pode ter centenas de linhas, o
+            bloco ficaria fora do alcance de quem abriu a ficha para isto. */}
+        <section
+          aria-labelledby="sec-series"
+          className="space-y-3 rounded-gov-card border border-app-border-subtle bg-app-surface p-4"
+        >
+          <Suspense
+            fallback={
+              <SkeletonGrupo
+                rotulo="Carregando séries históricas de medição"
+                className="space-y-3"
+              >
+                <Skeleton className="h-6 w-1/2" />
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <Skeleton variante="card" className="h-28" />
+                  <Skeleton variante="card" className="h-28" />
+                  <Skeleton variante="card" className="h-28" />
+                </div>
+              </SkeletonGrupo>
+            }
+          >
+            <BlocoSeries prefixo={posto.prefixo} />
+          </Suspense>
+        </section>
 
         {/* Fichas digitais — histórico de visitas estruturadas, vindas do
             app de campo (futuro) ou formulário web. Aparecem ANTES dos
