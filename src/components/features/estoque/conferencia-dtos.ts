@@ -12,7 +12,6 @@ import type {
   StatusConferencia,
 } from '@/domain/estoque/conferencia';
 import type { UnidadeFisica } from '@/domain/estoque/local';
-import type { MovimentacaoDTO } from './dtos';
 
 export type { NaturezaConferida, OrigemItem, SituacaoItem, StatusConferencia };
 
@@ -157,6 +156,3 @@ export interface AcaoConferenciaPayload {
 export interface ReconciliarLotePayload {
   itemIds: string[];
 }
-
-/** Movimentacao gerada pela reconciliacao (mesmo shape do ledger). */
-export type MovimentacaoAjusteDTO = MovimentacaoDTO;

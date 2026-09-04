@@ -1,6 +1,5 @@
 import type { AnaRevisaoRepository } from '@/application/ports/ana-revisao-repository';
 import type {
-  AcaoBulkAna,
   AnaRevisaoEstacao,
   AnaRevisaoLote,
   ContextoAtor,
@@ -390,5 +389,3 @@ export const META_ATOR: ContextoAtor = {
   ip: '127.0.0.1',
   userAgent: 'vitest',
 };
-
-export type AcaoBulkAnaTeste = AcaoBulkAna;

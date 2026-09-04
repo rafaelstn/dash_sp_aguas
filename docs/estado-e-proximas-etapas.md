@@ -166,6 +166,77 @@ arquivos órfãos verde por medição que não aconteceu, já foi corrigido.
   qualquer preenchimento de cadastro elevaria, e responde parte da pergunta 2 ao
   órgão sem depender da resposta dele.
 
+### 3.2.2 Inventário da varredura de código morto (04/09/2026)
+
+O código estava limpo: **512 arquivos, zero órfãos, zero dependências mortas,
+zero código comentado**. O lint roda com `--max-warnings 0`, o que já mantinha
+import e variável sem uso em zero por construção. Foram removidas 76 linhas, e o
+que sobrou está listado aqui com o motivo, para ninguém remedir.
+
+**O critério que separou o que sai do que fica:** código morto **esquecido**
+engana, porque parece usado, e sai. Código morto **declarado**, com docblock
+dizendo que não é usado e por quê, informa, e é decisão de produto, não faxina.
+
+**Removido:** dois aliases de tipo puros, e o cluster fechado de
+`lib/triagem-api.ts` (`triagemAPI` e os cinco símbolos que só ele alcançava),
+junto de dois comentários de seção órfãos que descreviam código já retirado
+("Fetch utilitário pra Server Components" acima de um objeto que não faz fetch).
+
+**Mantido por ser reserva DECLARADA:** `BlocoAnexos`
+(`components/features/triagem/PainelPayload.tsx`), cujo docblock diz que nenhum
+tipo de ficha tem campo de anexo hoje e que o bloco existe para o dia em que o
+app enviar arquivos. Não mente sobre o próprio estado, então não é o alvo desta
+limpeza.
+
+**Mantido por pertencer a módulo em construção:** `listarDesconformidades`
+(o módulo está na seção 3.1) e `listarSaldosParaConciliacao`.
+
+**Mantido por decisão de escopo, e é o mais delicado:** as três rotas
+`/api/sibh/valor`, `/api/sibh/estacoes` e `/api/sibh/medicoes`. A primeira tem
+zero citação e as outras duas só aparecem em documentação; o docblock de `valor`
+diz servir o "ao vivo" dos Diagramas, mas o consumidor real chama
+`/api/diagramas/valores`. **Parecem superadas e não foram removidas**, porque
+`viabilidade-dados-prodesp.md` as lista como superfície entregue e a migração
+para o servidor do órgão está em curso: remover rota é mudança de contrato
+externo, e esta é a pior hora.
+
+**ACHADO que vale mais que a remoção: o domínio e a fronteira mantêm listas
+LITERAIS PARALELAS dos mesmos valores.** `domain/estoque/material.ts` tem
+`NATUREZAS` congelado e `ehNatureza`; `app/api/estoque/_schemas.ts` escreve
+`z.enum(['serializado', 'quantificavel'])` à mão. O mesmo vale para
+`TIPOS_MOVIMENTACAO` contra `tipoMovEnum`, com os cinco tipos repetidos.
+
+Os type guards do domínio (`ehNatureza`, `ehTipoMovimentacao`) não têm chamador
+justamente porque a fronteira validou por conta própria. **Valor escrito duas
+vezes é divergência agendada:** acrescentar uma natureza no domínio sem lembrar
+da fronteira faz o valor novo ser recusado com 400 sem explicação, e o contrário
+o faz entrar sem o domínio reconhecê-lo. A correção é o esquema derivar do
+domínio, e ela **não foi feita aqui de propósito**: mexer em validação de
+fronteira exige provar que o comportamento não mudou, e isso é trabalho de outra
+ordem que não se mistura com remoção de código morto.
+
+Também mantidos, pela mesma razão de superfície convencional: `SITUACOES_ITEM`,
+`ehUuidV4`, `TIPOS_DOCUMENTO_FIXTURES` e `TIPOS_DADO_FIXTURES`.
+
+**Três falsos positivos que a varredura produziu**, registrados porque a próxima
+vai produzi-los de novo:
+
+- `eslint-plugin-jsx-a11y` parecia órfão porque o config o cita como
+  `plugin:jsx-a11y/recommended`, e não pelo nome do pacote.
+- `public/logo-spaguas.png` tem zero referência em código **e está no precache do
+  `public/sw.js`**: removê-lo quebraria a instalação do service worker, ou seja a
+  PWA inteira.
+- **`.next/types/` faz TODA rota parecer referenciada.** O Next gera
+  `routes.d.ts` e `validator.ts` a partir do sistema de arquivos, então eles
+  listam as 68 rotas por construção, chamadas ou não. São SAÍDA, e não
+  consumidor. Quem auditar rota morta com `grep` sem escopo recebe falso negativo
+  em todas elas.
+
+E o dado que muda como se faz a próxima varredura: o projeto tem **17 guardas que
+leem o código-fonte como texto**, não quatro. Um identificador pode estar sem uso
+no grafo de imports e ser exatamente o que uma guarda procura por expressão
+regular.
+
 ### 3.3 Acabamento medido e não afirmado
 
 8. **Navegação por setas entre séries não foi exercitada:** foram sondados 86

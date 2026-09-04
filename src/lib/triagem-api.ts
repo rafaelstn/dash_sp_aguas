@@ -12,7 +12,6 @@
 
 import { mensagemAcessoRestrito } from '@/domain/auth/mensagem-acesso-restrito';
 import type { FichaTriagem } from '@/domain/triagem';
-import type { EventoTriagem } from '@/domain/triagem-evento';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Wire types — JSON serializado pelo NextResponse.json. As datas viram
@@ -30,10 +29,6 @@ interface FichaTriagemWire
   atualizadaEm: string;
 }
 
-interface EventoTriagemWire extends Omit<EventoTriagem, 'ocorreuEm'> {
-  ocorreuEm: string;
-}
-
 function reidratarFicha(w: FichaTriagemWire): FichaTriagem {
   return {
     ...w,
@@ -42,33 +37,6 @@ function reidratarFicha(w: FichaTriagemWire): FichaTriagem {
     criadaEm: new Date(w.criadaEm),
     atualizadaEm: new Date(w.atualizadaEm),
   };
-}
-
-function reidratarEvento(w: EventoTriagemWire): EventoTriagem {
-  return { ...w, ocorreuEm: new Date(w.ocorreuEm) };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Tipos públicos
-// ─────────────────────────────────────────────────────────────────────────
-
-export interface FiltrosListaTriagem {
-  codTipoDocumento?: number;
-  prefixo?: string;
-  desde?: string; // YYYY-MM-DD
-  ate?: string;
-  limite?: number;
-  offset?: number;
-}
-
-export interface RespostaListaTriagem {
-  itens: FichaTriagem[];
-  total: number;
-}
-
-export interface RespostaDetalheTriagem {
-  ficha: FichaTriagem;
-  eventos: EventoTriagem[];
 }
 
 /**
@@ -116,26 +84,6 @@ async function tratarErro(resp: Response): Promise<never> {
     mensagem,
     body as unknown as Record<string, unknown>,
   );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Server-side: leituras chamadas em Server Components passando cookies.
-// O fetch relativo do Next 15 dentro de RSC herda os cookies da request,
-// então precisamos só do `cache: 'no-store'`.
-// ─────────────────────────────────────────────────────────────────────────
-
-function paraQueryString(filtros: FiltrosListaTriagem): string {
-  const usp = new URLSearchParams();
-  if (filtros.codTipoDocumento !== undefined) {
-    usp.set('codTipoDocumento', String(filtros.codTipoDocumento));
-  }
-  if (filtros.prefixo) usp.set('prefixo', filtros.prefixo);
-  if (filtros.desde) usp.set('desde', filtros.desde);
-  if (filtros.ate) usp.set('ate', filtros.ate);
-  if (filtros.limite !== undefined) usp.set('limite', String(filtros.limite));
-  if (filtros.offset !== undefined) usp.set('offset', String(filtros.offset));
-  const s = usp.toString();
-  return s ? `?${s}` : '';
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -394,13 +342,3 @@ function tempoRelativoFuturo(ms: number): string {
   return h === 1 ? 'em 1 hora' : `em ${h} horas`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Fetch utilitário pra Server Components — recebe a base absoluta da
-// request atual via headers() pra que o fetch interno carregue o cookie.
-// ─────────────────────────────────────────────────────────────────────────
-
-export const triagemAPI = {
-  reidratarFicha,
-  reidratarEvento,
-  paraQueryString,
-};
