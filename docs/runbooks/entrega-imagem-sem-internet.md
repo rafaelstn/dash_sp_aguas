@@ -44,7 +44,7 @@ Isso elimina, de uma vez, todo o caminho normal de entrega:
 | `docker build` no servidor | `npm ci` baixa 698 pacotes do registro público |
 | `docker pull` de um registro | não alcança `ghcr.io` nem `docker.io` |
 | Runner do GitHub publicando a imagem | o servidor não busca o que foi publicado |
-| Renovação automática do certificado | não alcança a API do Let's Encrypt (seção 10.2) |
+| ~~Renovação automática do certificado~~ | **fora da lista desde 04/09/2026:** o órgão renova por conta dele (seção 10.2) |
 
 Sobra um caminho: **construir aqui, transportar o arquivo, carregar lá.** E
 isso vale inclusive para a imagem do PostgreSQL: ela também não pode ser baixada
@@ -702,10 +702,21 @@ Solicitar: janela para `sudo apt update && sudo apt upgrade` e reinicialização
 reinicialização vira indisponibilidade anunciada, com custo muito maior. Fazer
 agora custa minutos e não afeta ninguém.
 
-### 10.2 Certificado: a renovação vai falhar em 23/10, e o site cai em 22/11
+### 10.2 Certificado: previsão SUPERADA, a renovação é automática no órgão
 
-Este é o achado mais silencioso da preparação, porque **nada quebra hoje** e o
-monitoramento do órgão não tem como perceber.
+> **CORREÇÃO DE 04/09/2026.** O proprietário informou que **o certificado renova
+> automaticamente** no ambiente da PRODESP. A projeção abaixo (falha em 23/10,
+> queda em 22/11) **não se aplica** e não deve gerar ação nem alerta ao cliente.
+>
+> O raciocínio fica registrado porque a medição que o originou era verdadeira e
+> continua útil se o cenário mudar: o servidor não tinha saída para a internet
+> quando ele foi escrito, e o proxy corporativo só foi descoberto em 03/09/2026.
+> O erro não foi medir: foi concluir sobre a OPERAÇÃO do órgão a partir de uma
+> medição feita de fora dela. Quem renova o certificado é o órgão, e isso não
+> estava ao alcance de nenhum comando desta bancada.
+
+Este era o achado mais silencioso da preparação, porque **nada quebrava hoje** e o
+monitoramento do órgão não teria como perceber.
 
 **MEDIDO:** certificado Let's Encrypt válido até **22/11/2026**; renovador
 configurado com `authenticator = nginx`; `snap.certbot.renew.timer` **ativo**; e
