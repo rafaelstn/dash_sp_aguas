@@ -674,12 +674,40 @@ não depende de nada externo.
 >    medições), e falhava com o limite inicial de 300 s mesmo funcionando.
 >
 > **PENDÊNCIA ABERTA, e ela é do módulo Monitor:** a sincronização responde
-> HTTP 200 com **2.714 erros no corpo**. `estacoes_pluviometricas` tem chave
-> estrangeira para `postos` no PostgreSQL, que está **vazia** desde que o
-> cadastro passou a vir do órgão ao vivo (ADR-0023), e `vinculadasAposto` é
-> zero. Metade das estações não é gravada. A rotina "funciona" para o systemd e
-> entrega metade do efeito, que é a definição de sinal positivo falso. Corrigir
-> junto com a migração do Monitor.
+> HTTP 200 com **2.714 erros no corpo**. Metade das estações não é gravada
+> (5.415 recebidas, 2.701 gravadas, e a conta fecha exatamente). A rotina
+> "funciona" para o systemd e entrega metade do efeito, que é a definição de
+> sinal positivo falso.
+>
+> **RETRATAÇÃO DE 04/09/2026: a causa escrita aqui estava errada, e mandava
+> procurar no lugar errado.** O texto anterior atribuía os erros à chave
+> estrangeira de `estacoes_pluviometricas` para `postos`, que está vazia desde o
+> ADR-0023. Isso é impossível, e o próprio parágrafo trazia a prova sem que
+> ninguém a lesse: **`vinculadasAposto` é ZERO**, ou seja toda estação grava
+> `posto_id` nulo, e a coluna é `NULL REFERENCES postos (id)`. Nulo não viola
+> chave estrangeira. Foram duas afirmações verdadeiras (a tabela está vazia, e
+> há 2.714 erros) coladas numa relação causal que não existe.
+>
+> **O que a leitura do código diz, e é HIPÓTESE, não causa:** o upsert conflita
+> em `sibh_id`, e a migration 0045 criava índice ÚNICO em `prefixo`, que a 0052
+> derruba justamente porque o SIBH repete prefixo entre tipos hidrológicos. Se a
+> sincronização de produção rodou num banco onde a 0052 ainda não estava
+> aplicada, cada prefixo repetido falharia. Bate com a ordem de grandeza e com o
+> incidente de 03/09, em que a criação daquele índice único foi recusada por
+> prefixo duplicado. **Não está medido.** O código atual trata o caso: há teste
+> afirmando que o mesmo prefixo em tipos diferentes vira dois upserts com
+> `sibhId` distinto.
+>
+> **Como medir, quando houver VPN**, em três passos e sem escrever nada:
+>
+> 1. `SELECT * FROM _prisma_migrations` (ou a tabela de controle equivalente)
+>    conferindo se **0052 consta como aplicada** no banco de produção.
+> 2. `SELECT indexname, indexdef FROM pg_indexes WHERE tablename =
+>    'estacoes_pluviometricas'` — se `uq_estacoes_pluviometricas_prefixo` ainda
+>    existir, a hipótese está confirmada e a correção é aplicar a 0052.
+> 3. Rodar a sincronização e **ler o `motivo` dos primeiros erros do corpo**. É a
+>    resposta direta, e é o passo que não foi dado da primeira vez: o corpo já
+>    carregava a mensagem, e ela foi substituída por uma dedução.
 
 ---
 

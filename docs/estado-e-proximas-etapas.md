@@ -136,14 +136,34 @@ vez de manter lista.
 
 ### 3.2 Monitor: a sincronização precisa de chão
 
-6. **2.714 erros de chave estrangeira** na sincronização do SIBH, porque
-   `estacoes_pluviometricas` aponta para `postos`, que nasce vazia por desenho
-   (posto vem do órgão ao vivo). Enquanto isso não for resolvido, a
-   sincronização grava com erro e produz duplicata. **Já derrubou produção uma
-   vez, em 03/09/2026:** a criação de um índice único foi recusada porque havia
-   prefixo repetido, e a aplicação respondeu 502 até as duplicatas serem
-   removidas em transação (2.701 linhas para 2.345). Nenhum dado do cliente foi
-   perdido, porque a tabela tinha sido populada pela própria sincronização.
+6. **2.714 erros na sincronização do SIBH, e a causa registrada estava errada.**
+   O fato medido: 5.415 estações recebidas, 2.701 gravadas, 2.714 erros, e a
+   conta fecha exatamente. Metade não é gravada, e a rotina responde HTTP 200
+   assim mesmo, o que é sinal positivo falso para o systemd.
+
+   **Retratado em 04/09/2026:** este item dizia "erros de chave estrangeira,
+   porque `estacoes_pluviometricas` aponta para `postos`, que nasce vazia". É
+   impossível, e a prova estava no próprio texto que copiei do runbook:
+   `vinculadasAposto` é **zero**, ou seja toda estação grava `posto_id` nulo, e a
+   coluna é `NULL REFERENCES`. **Nulo não viola chave estrangeira.** Duas
+   afirmações verdadeiras coladas numa relação causal que não existe, e eu
+   propaguei para uma segunda superfície sem reconferir.
+
+   **Hipótese atual, NÃO medida:** o upsert conflita em `sibh_id`, e a migration
+   0045 criava índice único em `prefixo`, que a 0052 derruba justamente porque o
+   SIBH repete prefixo entre tipos hidrológicos. Se a sincronização de produção
+   rodou antes da 0052, cada prefixo repetido falharia. Bate com a ordem de
+   grandeza e com o incidente de 03/09, em que a criação daquele índice foi
+   recusada por prefixo repetido e a aplicação respondeu 502 até as duplicatas
+   saírem em transação (2.701 linhas para 2.345, sem perda de dado do cliente,
+   porque a tabela tinha sido populada pela própria sincronização).
+
+   **O código atual trata o caso**, e há teste afirmando que o mesmo prefixo em
+   tipos diferentes vira dois upserts com `sibhId` distinto. O roteiro de
+   medição de três passos está no runbook `entrega-imagem-sem-internet.md`,
+   seção 9. O terceiro passo é o que faltou da primeira vez: **ler o `motivo`
+   dos erros no corpo da resposta**, que já estava lá e foi substituído por uma
+   dedução.
 7. **Só depois disso** faz sentido ampliar o comparativo, que hoje cobre 2% das
    estações.
 
