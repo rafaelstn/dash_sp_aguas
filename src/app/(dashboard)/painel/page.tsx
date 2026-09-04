@@ -11,6 +11,7 @@ import {
   MapPinOff,
   Power,
   PowerOff,
+  RadioTower,
 } from 'lucide-react';
 import {
   anaRevisaoRepository,
@@ -476,14 +477,29 @@ export default async function PaginaPainel() {
 
           ESSA RAZÃO CAIU EM 03/09/2026: o painel passou a compor as duas
           origens e o cadastro volta a responder (5.790 postos, 99,9% com
-          coordenada). `resumoCadastro()` já traz `postosComTelemetria` do
-          `Dbfch`, então o dado está aqui — falta MEDIR quanto ele vale nesta
-          base antes de publicar o cartão, porque o número é desconhecido e um
-          "0,0% transmitindo" errado é o mesmo alarme falso de sempre. Enquanto
-          isso não for medido, o cartão fica fora, e este comentário é a dívida
-          declarada, não uma justificativa que envelheceu.
+          coordenada). A dívida declarada dizia que o dado já estava aqui, em
+          `resumoCadastro().postosComTelemetria`, e que faltava MEDIR quanto ele
+          vale nesta base antes de publicar, para não repetir o alarme falso.
+
+          DÍVIDA QUITADA EM 04/09/2026. A medição existe: 149 postos com
+          aparelho telemétrico ativo, de 5.790. E ela é corroborada por outro
+          caminho, que é o que o comentário pedia antes de publicar: o catálogo
+          de séries mede, em tabelas diferentes, 140 postos com chuva automática
+          e 81 com piezômetro eletrônico. A ordem de grandeza fecha.
+
+          DUAS DECISÕES DE REDAÇÃO QUE SÃO CONDIÇÃO, E NÃO PREFERÊNCIA:
+
+          O rótulo diz "com telemetria", jamais "transmitindo" nem "ativa". O
+          `Dbfch` cadastra APARELHO instalado e não desativado, e não estado de
+          transmissão. As cinco séries do órgão pararam em agosto de 2025, então
+          "transmitindo" seria afirmação que a própria base contradiz.
+
+          A severidade é `info`. São 2,6% da rede, e 2,6% pintado de vermelho é
+          exatamente o alarme falso contra o qual esta dívida existia: baixa
+          telemetria é fato de modernização da rede, e não irregularidade de
+          cadastro. O painel não acusa o órgão de nada.
         */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <CardKPI
             titulo="Total de postos"
             valor={resumo.totalPostos}
@@ -506,6 +522,15 @@ export default async function PaginaPainel() {
             severidade="sucesso"
             icone={FileCheck}
             formatarValor={false}
+          />
+          <CardKPI
+            titulo="Postos com telemetria"
+            valor={resumo.postosComTelemetria}
+            contexto={`de ${resumo.totalPostos.toLocaleString('pt-BR')} postos`}
+            severidade="info"
+            icone={RadioTower}
+            href="/?tem_telem=1"
+            rotuloAcao="Ver postos"
           />
         </div>
 

@@ -115,14 +115,19 @@ vez de manter lista.
    é posto extinto, e que não existe filtro de busca por esse critério, ou seja o
    cartão nasceria sem destino.
 
-   **No lugar dele:** publicar **"Postos com telemetria" (149 de 5.790)**, que
-   já está no contrato (`ResumoCadastroPostos.postosComTelemetria`), tem destino
-   exercitado (`/?tem_telem=1`), quita uma dívida declarada no comentário do
-   bloco "Panorama da rede" e restaura a grade de três colunas. Severidade
-   `info`, nunca alarme: 2,6% em vermelho é alarme falso. E o rótulo é "com
-   telemetria", jamais "transmitindo": o `Dbfch` cadastra APARELHO instalado, e
-   as séries pararam em ago/2025, então "transmitindo" seria afirmação que a
-   própria base contradiz.
+   **No lugar dele, e já publicado em 04/09/2026:** o cartão **"Postos com
+   telemetria" (149 de 5.790)**. Ele já estava no contrato
+   (`ResumoCadastroPostos.postosComTelemetria`), tem destino exercitado
+   (`/?tem_telem=1`), quitou a dívida declarada no comentário do bloco "Panorama
+   da rede" e devolveu a grade às três colunas. Severidade `info`, nunca alarme:
+   2,6% em vermelho seria alarme falso, e baixa telemetria é fato de
+   modernização da rede, não irregularidade de cadastro.
+
+   O rótulo diz "com telemetria" e **nunca "transmitindo" ou "ativa"**: o
+   `Dbfch` cadastra APARELHO instalado, e as séries pararam em ago/2025, então
+   afirmar transmissão contradiria a própria base do cliente. Está fixado em
+   guarda (`tests/unit/components/painel/telemetria-nao-afirma-transmissao.test.ts`),
+   porque a troca é o tipo de coisa que alguém faz de boa-fé achando que melhora.
 4. **Relatório em PDF mostra 2 de 5 campos de instrumentação.** Os outros três
    existem na origem e não chegam ao documento.
 5. **Migração de remoção dos 12 campos órfãos**, só depois que o adaptador
