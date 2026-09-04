@@ -140,7 +140,39 @@ vez de manter lista.
    PostgreSQL de posto sair de cena. Antes disso a remoção é irreversível sem
    ganho.
 
-### 3.2 Monitor: a sincronização precisa de chão
+### 3.2 Monitor: CORRIGIDO em produção, 04/09/2026
+
+A migration 0067 foi aplicada no banco do órgão às 13:13 e a rotina foi disparada
+em seguida. Medido antes e depois, no mesmo banco:
+
+| | Antes | Depois |
+|---|---|---|
+| Estações gravadas | 2.701 | **5.415** |
+| Erros no corpo | 2.714 | **0** |
+| Tipos hidrológicos | 2 | **3** (piezométricas estavam 100% fora) |
+| `vinculadasAposto` | 0 | **2.714** |
+| Medições recebidas | ~540 mil | 663.219 |
+| Duração | 380 s | 746 s |
+
+**`vinculadasAposto: 2714` é a confirmação final da causa:** é exatamente o
+número de erros anteriores. Eram essas as estações que casavam com um posto do
+órgão, e casar era a condição para serem recusadas.
+
+A duração praticamente dobrou, o que é coerente com o dobro de estações, e está
+**bem dentro do teto de 1800 s** configurado no systemd. Sem ação necessária.
+
+**Detalhe operacional que o registro anterior errava:** as migrations viajam
+DENTRO da imagem `spaguas/migrate`, com a mesma tag de commit da aplicação, e
+não por bind mount. O comentário do compose diz que isso existe para não
+transportar dois pacotes num servidor sem internet. Por isso a 0067 foi aplicada
+com o SQL enviado direto ao banco, o que é seguro porque ela é idempotente e
+será reaplicada sem efeito quando a imagem nova subir.
+
+**Pendente:** a migration 0068, que remove a coluna `posto_id`, **só depois do
+deploy da imagem nova**. Antes dele ela derrubaria 100% das estações, porque o
+código que está rodando ainda grava naquela coluna.
+
+### 3.2.0 Histórico do defeito
 
 6. **2.714 erros na sincronização do SIBH, e a causa registrada estava errada.**
    O fato medido: 5.415 estações recebidas, 2.701 gravadas, 2.714 erros, e a
