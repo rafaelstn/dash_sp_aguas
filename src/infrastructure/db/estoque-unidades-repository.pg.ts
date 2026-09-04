@@ -48,7 +48,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
       const offset = (pagina - 1) * porPagina;
 
       const itens = await sql<LinhaUnidade[]>`
-        SELECT ${COLUNAS} FROM estoque_unidades u
+        SELECT ${COLUNAS()} FROM estoque_unidades u
          WHERE ${where}
          ORDER BY u.descricao, u.criado_em DESC
          LIMIT ${porPagina} OFFSET ${offset}
@@ -90,7 +90,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaUnidade[]>`
-        SELECT ${COLUNAS} FROM estoque_unidades u WHERE u.id = ${id}::uuid LIMIT 1
+        SELECT ${COLUNAS()} FROM estoque_unidades u WHERE u.id = ${id}::uuid LIMIT 1
       `;
       return linhas[0] ? mapear(linhas[0]) : null;
     } catch (e) {
@@ -113,7 +113,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
           ${dados.localId ?? null}, ${dados.dataAquisicao ?? null}, ${dados.observacao ?? null},
           ${dados.chaveImport ?? null}
         )
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {
@@ -148,7 +148,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
       const linhas = await sql<LinhaUnidade[]>`
         UPDATE estoque_unidades SET ${setClause}
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS}
+         RETURNING ${COLUNAS()}
       `;
       if (!linhas[0]) throw new UnidadeNaoEncontrada(id);
       return mapear(linhas[0]);

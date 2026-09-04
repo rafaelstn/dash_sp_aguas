@@ -34,7 +34,7 @@ function mapear(l: LinhaMaterial): Material {
   };
 }
 
-const COLUNAS = sql`id, descricao, marca, modelo, natureza, unidade_medida, categoria_id, quantidade_minima, ativo, criado_em, atualizado_em`;
+const COLUNAS = () => sql`id, descricao, marca, modelo, natureza, unidade_medida, categoria_id, quantidade_minima, ativo, criado_em, atualizado_em`;
 
 export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
   async listar(filtros) {
@@ -57,7 +57,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       const offset = (pagina - 1) * porPagina;
 
       const itens = await sql<LinhaMaterial[]>`
-        SELECT ${COLUNAS} FROM estoque_materiais
+        SELECT ${COLUNAS()} FROM estoque_materiais
          WHERE ${where}
          ORDER BY descricao
          LIMIT ${porPagina} OFFSET ${offset}
@@ -74,7 +74,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaMaterial[]>`
-        SELECT ${COLUNAS} FROM estoque_materiais WHERE id = ${id}::uuid LIMIT 1
+        SELECT ${COLUNAS()} FROM estoque_materiais WHERE id = ${id}::uuid LIMIT 1
       `;
       return linhas[0] ? mapear(linhas[0]) : null;
     } catch (e) {
@@ -91,7 +91,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
           ${dados.natureza}, ${dados.unidadeMedida ?? null},
           ${dados.categoriaId ?? null}, ${dados.quantidadeMinima ?? null}, ${dados.ativo ?? true}
         )
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {
@@ -120,7 +120,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       const linhas = await sql<LinhaMaterial[]>`
         UPDATE estoque_materiais SET ${setClause}
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS}
+         RETURNING ${COLUNAS()}
       `;
       if (!linhas[0]) throw new MaterialNaoEncontrado(id);
       return mapear(linhas[0]);
@@ -135,7 +135,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       const linhas = await sql<LinhaMaterial[]>`
         UPDATE estoque_materiais SET ativo = false, atualizado_em = NOW()
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS}
+         RETURNING ${COLUNAS()}
       `;
       if (!linhas[0]) throw new MaterialNaoEncontrado(id);
       return mapear(linhas[0]);

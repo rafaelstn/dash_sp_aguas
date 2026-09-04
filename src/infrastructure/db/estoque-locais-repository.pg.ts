@@ -29,14 +29,14 @@ function mapear(l: LinhaLocal): Local {
   };
 }
 
-const COLUNAS = sql`id, unidade, sala, prateleira, armario, rotulo, observacao, criado_em`;
+const COLUNAS = () => sql`id, unidade, sala, prateleira, armario, rotulo, observacao, criado_em`;
 
 export const estoqueLocaisRepository: EstoqueLocaisRepository = {
   async listar(filtros) {
     try {
       const cond = filtros?.unidade ? sql`WHERE unidade = ${filtros.unidade}` : sql``;
       const linhas = await sql<LinhaLocal[]>`
-        SELECT ${COLUNAS} FROM estoque_locais ${cond} ORDER BY rotulo
+        SELECT ${COLUNAS()} FROM estoque_locais ${cond} ORDER BY rotulo
       `;
       return linhas.map(mapear);
     } catch (e) {
@@ -47,7 +47,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaLocal[]>`
-        SELECT ${COLUNAS} FROM estoque_locais WHERE id = ${id}::uuid LIMIT 1
+        SELECT ${COLUNAS()} FROM estoque_locais WHERE id = ${id}::uuid LIMIT 1
       `;
       return linhas[0] ? mapear(linhas[0]) : null;
     } catch (e) {
@@ -61,7 +61,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
       const linhas = await sql<LinhaLocal[]>`
         INSERT INTO estoque_locais (unidade, sala, prateleira, armario, rotulo, observacao)
         VALUES (${norm.unidade}, ${norm.sala}, ${norm.prateleira}, ${norm.armario}, ${norm.rotulo}, ${dados.observacao ?? null})
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {
@@ -86,7 +86,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
            SET unidade = ${norm.unidade}, sala = ${norm.sala}, prateleira = ${norm.prateleira},
                armario = ${norm.armario}, rotulo = ${rotulo}, observacao = ${observacao}
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS}
+         RETURNING ${COLUNAS()}
       `;
       if (!linhas[0]) throw new LocalNaoEncontrado(id);
       return mapear(linhas[0]);
@@ -124,7 +124,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
         VALUES (${normalizado.unidade}, ${normalizado.sala}, ${normalizado.prateleira}, ${normalizado.armario}, ${normalizado.rotulo})
         ON CONFLICT (unidade, COALESCE(sala, ''), COALESCE(prateleira, ''), COALESCE(armario, ''))
         DO UPDATE SET rotulo = estoque_locais.rotulo
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {

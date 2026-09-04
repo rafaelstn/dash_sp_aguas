@@ -28,7 +28,7 @@ export type LinhaUnidadePg = {
 };
 
 /** Fragmento de colunas reutilizado pelo repo de unidades e pelo de movimentacao. */
-export const COLUNAS_UNIDADE = sql`
+export const COLUNAS_UNIDADE = () => sql`
   id, material_id, codigo, codigo_spaguas, pat_daee, outros_pat, numero_serie,
   helice, descricao, marca, modelo, estado, status, local_id, data_aquisicao,
   observacao, chave_import, criado_em, atualizado_em

@@ -85,12 +85,12 @@ function mapearSaldo(l: LinhaSaldo): Saldo {
 // conferencia_id entra na lista de colunas junto com o codigo da reconciliacao
 // (migration 0064 aplicada ANTES do push, ver nota da arquitetura). A partir daqui
 // o ledger le/grava a coluna nova.
-const COLUNAS_MOV = sql`
+const COLUNAS_MOV = () => sql`
   id, tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
   estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id,
   conferencia_id, criado_em
 `;
-const COLUNAS_SALDO = sql`id, material_id, local_id, quantidade, tamanho, atualizado_em`;
+const COLUNAS_SALDO = () => sql`id, material_id, local_id, quantidade, tamanho, atualizado_em`;
 
 /**
  * WHERE compartilhado por `listar` e `listarParaExport`. Colunas QUALIFICADAS com
@@ -138,7 +138,7 @@ async function retirarGuardado(
        AND local_id = ${localId}::uuid
        AND COALESCE(tamanho, '') = COALESCE(${tamanho}, '')
        AND quantidade >= ${q}
-     RETURNING ${COLUNAS_SALDO}
+     RETURNING ${COLUNAS_SALDO()}
   `;
   if (linhas.length === 0) {
     // 0 linhas afetadas = saldo inexistente OU insuficiente. Ambos = nao ha o que
@@ -166,7 +166,7 @@ async function acrescentarUpsert(
     ON CONFLICT (material_id, local_id, COALESCE(tamanho, ''))
     DO UPDATE SET quantidade = estoque_saldos.quantidade + EXCLUDED.quantidade,
                   atualizado_em = NOW()
-    RETURNING ${COLUNAS_SALDO}
+    RETURNING ${COLUNAS_SALDO()}
   `;
   return mapearSaldo(linhas[0]!);
 }
@@ -225,7 +225,7 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
       const offset = (pagina - 1) * porPagina;
 
       const itens = await sql<LinhaMov[]>`
-        SELECT ${COLUNAS_MOV} FROM estoque_movimentacoes em
+        SELECT ${COLUNAS_MOV()} FROM estoque_movimentacoes em
          WHERE ${where}
          ORDER BY em.criado_em DESC
          LIMIT ${porPagina} OFFSET ${offset}
@@ -295,7 +295,7 @@ async function registrarSerializado(
   const unidadeId = (cmd.alvo as { unidadeId: string }).unidadeId;
   // FOR UPDATE: serializa duas movimentacoes concorrentes na mesma unidade.
   const linhas = await tx<LinhaUnidadePg[]>`
-    SELECT ${COLUNAS_UNIDADE} FROM estoque_unidades u WHERE u.id = ${unidadeId}::uuid FOR UPDATE
+    SELECT ${COLUNAS_UNIDADE()} FROM estoque_unidades u WHERE u.id = ${unidadeId}::uuid FOR UPDATE
   `;
   const atual = linhas[0];
   if (!atual) throw new UnidadeNaoEncontrada(unidadeId);
@@ -347,7 +347,7 @@ async function registrarSerializado(
        SET estado = ${estadoNovo}, status = ${statusNovo}, local_id = ${localNovo},
            atualizado_em = NOW()
      WHERE id = ${unidadeId}::uuid
-     RETURNING ${COLUNAS_UNIDADE}
+     RETURNING ${COLUNAS_UNIDADE()}
   `;
 
   const movs = await tx<LinhaMov[]>`
@@ -360,7 +360,7 @@ async function registrarSerializado(
       ${estadoAnterior}, ${estadoNovo}, ${statusAnterior}, ${statusNovo},
       ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId}
     )
-    RETURNING ${COLUNAS_MOV}
+    RETURNING ${COLUNAS_MOV()}
   `;
 
   return {
@@ -420,7 +420,7 @@ async function registrarQuantificavel(
       ${cmd.tipo}, NULL, ${materialId}::uuid, ${q}, ${localOrigem}, ${localDestino},
       ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId}
     )
-    RETURNING ${COLUNAS_MOV}
+    RETURNING ${COLUNAS_MOV()}
   `;
 
   return { movimentacao: mapearMov(movs[0]!), saldo, unidade: null };

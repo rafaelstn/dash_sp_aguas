@@ -220,7 +220,17 @@ describe('estacoes-pluviometricas-repository.pg — regressão de schema', () =>
     expect(source).toMatch(/transmission_status\s*=\s*EXCLUDED\.transmission_status/);
     expect(source).toMatch(/ultima_transmissao\s*=\s*EXCLUDED\.ultima_transmissao/);
     // No SELECT (via COLUNAS).
-    expect(source).toMatch(/COLUNAS\s*=\s*sql`[^`]*transmission_status[^`]*ultima_transmissao/);
+    //
+    // A declaração aceita as duas formas porque o que este caso mede é SCHEMA
+    // (a coluna está no SELECT?), e não a forma de declarar o fragmento. Quem
+    // exige a forma preguiçosa (`() => sql`) é a guarda própria dela,
+    // `tests/unit/db/importar-repositorios-em-demo.test.ts`, e é lá que a
+    // regressão precisa aparecer: um fragmento voltar a ser construído no
+    // import derruba o modo demo inteiro, e essa falha não tem nada a ver com
+    // a migration 0053 nem com esta suíte.
+    expect(source).toMatch(
+      /COLUNAS\s*=\s*(?:\(\)\s*=>\s*)?sql`[^`]*transmission_status[^`]*ultima_transmissao/,
+    );
   });
 
   it('normaliza a data crua do SIBH e casta explicitamente para timestamptz', () => {

@@ -10,13 +10,13 @@ function mapear(l: LinhaCategoria): Categoria {
   return { id: l.id, nome: l.nome, criadoEm: l.criado_em };
 }
 
-const COLUNAS = sql`id, nome, criado_em`;
+const COLUNAS = () => sql`id, nome, criado_em`;
 
 export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
   async listar() {
     try {
       const linhas = await sql<LinhaCategoria[]>`
-        SELECT ${COLUNAS} FROM estoque_categorias ORDER BY nome
+        SELECT ${COLUNAS()} FROM estoque_categorias ORDER BY nome
       `;
       return linhas.map(mapear);
     } catch (e) {
@@ -27,7 +27,7 @@ export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaCategoria[]>`
-        SELECT ${COLUNAS} FROM estoque_categorias WHERE id = ${id}::uuid LIMIT 1
+        SELECT ${COLUNAS()} FROM estoque_categorias WHERE id = ${id}::uuid LIMIT 1
       `;
       return linhas[0] ? mapear(linhas[0]) : null;
     } catch (e) {
@@ -39,7 +39,7 @@ export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
     try {
       const linhas = await sql<LinhaCategoria[]>`
         INSERT INTO estoque_categorias (nome) VALUES (${dados.nome.trim()})
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {
@@ -57,7 +57,7 @@ export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
       const linhas = await sql<LinhaCategoria[]>`
         UPDATE estoque_categorias SET nome = ${dados.nome.trim()}
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS}
+         RETURNING ${COLUNAS()}
       `;
       if (!linhas[0]) throw new CategoriaNaoEncontrada(id);
       return mapear(linhas[0]);
@@ -84,7 +84,7 @@ export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
       const linhas = await sql<LinhaCategoria[]>`
         INSERT INTO estoque_categorias (nome) VALUES (${nome.trim()})
         ON CONFLICT (lower(nome)) DO UPDATE SET nome = estoque_categorias.nome
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {

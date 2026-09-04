@@ -112,7 +112,7 @@ function mapearEvento(l: LinhaEvento): EventoTriagem {
   };
 }
 
-const COLUNAS_TRIAGEM = sql`
+const COLUNAS_TRIAGEM = () => sql`
   id, prefixo, cod_tipo_documento, data_visita, hora_inicio, hora_fim,
   tecnico_id, tecnico_nome, latitude_capturada, longitude_capturada,
   precisao_gps_m, observacoes, dados, origem, estado, motivo_decisao,
@@ -120,7 +120,7 @@ const COLUNAS_TRIAGEM = sql`
   idempotency_key, criada_em, atualizada_em
 `;
 
-const COLUNAS_EVENTO = sql`
+const COLUNAS_EVENTO = () => sql`
   id, triagem_id, evento, estado_anterior, estado_novo, ator_id,
   motivo, payload, ip, user_agent, ocorreu_em
 `;
@@ -138,7 +138,7 @@ export const triagemRepository: TriagemRepository = {
         // tentar INSERT que vai falhar no UNIQUE e estourar FalhaRepositorio.
         if (entrada.idempotencyKey) {
           const existentes = await tx<LinhaTriagem[]>`
-            SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+            SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
              WHERE tecnico_id = ${entrada.tecnicoId}::uuid
                AND idempotency_key = ${entrada.idempotencyKey}
              LIMIT 1
@@ -172,7 +172,7 @@ export const triagemRepository: TriagemRepository = {
             ${entrada.fichaOrigemId ?? null},
             ${entrada.idempotencyKey ?? null}
           )
-          RETURNING ${COLUNAS_TRIAGEM}
+          RETURNING ${COLUNAS_TRIAGEM()}
         `;
         const inserida = linhas[0];
         if (!inserida) throw new Error('INSERT triagem não retornou linha');
@@ -202,7 +202,7 @@ export const triagemRepository: TriagemRepository = {
       return await sql.begin(async (tx) => {
         // Re-confirma estado da origem dentro da transação (race-safe).
         const origens = await tx<LinhaTriagem[]>`
-          SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+          SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
            WHERE id = ${fichaOrigemId}::uuid
            FOR UPDATE
         `;
@@ -236,7 +236,7 @@ export const triagemRepository: TriagemRepository = {
             ${fichaOrigemId}::uuid,
             ${entrada.idempotencyKey ?? null}
           )
-          RETURNING ${COLUNAS_TRIAGEM}
+          RETURNING ${COLUNAS_TRIAGEM()}
         `;
         const inserida = linhas[0];
         if (!inserida) throw new Error('INSERT reenvio não retornou linha');
@@ -306,7 +306,7 @@ export const triagemRepository: TriagemRepository = {
       }
 
       const itens = await sql<LinhaTriagem[]>`
-        SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+        SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
          WHERE ${whereClause}
          ORDER BY criada_em ASC
          LIMIT ${limite} OFFSET ${offset}
@@ -326,7 +326,7 @@ export const triagemRepository: TriagemRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaTriagem[]>`
-        SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+        SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
          WHERE id = ${id}::uuid
          LIMIT 1
       `;
@@ -341,7 +341,7 @@ export const triagemRepository: TriagemRepository = {
       return await sql.begin(async (tx) => {
         // Trava a linha pra evitar race entre 2 aprovadores.
         const fichas = await tx<LinhaTriagem[]>`
-          SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+          SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
            WHERE id = ${triagemId}::uuid
            FOR UPDATE
         `;
@@ -413,7 +413,7 @@ export const triagemRepository: TriagemRepository = {
           UPDATE fichas_triagem
              SET estado = 'em_revisao'
            WHERE id = ${triagemId}::uuid
-           RETURNING ${COLUNAS_TRIAGEM}
+           RETURNING ${COLUNAS_TRIAGEM()}
         `;
         const atualizada = atualizadas[0];
         if (!atualizada) throw new Error('UPDATE estado em_revisao não retornou linha');
@@ -445,7 +445,7 @@ export const triagemRepository: TriagemRepository = {
     try {
       return await sql.begin(async (tx) => {
         const fichas = await tx<LinhaTriagem[]>`
-          SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+          SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
            WHERE id = ${triagemId}::uuid
            FOR UPDATE
         `;
@@ -516,7 +516,7 @@ export const triagemRepository: TriagemRepository = {
                  decidida_em = NOW(),
                  decidida_por = ${aprovadorId}::uuid
            WHERE id = ${triagemId}::uuid
-           RETURNING ${COLUNAS_TRIAGEM}
+           RETURNING ${COLUNAS_TRIAGEM()}
         `;
         const triagem = triagemAtualizada[0];
         if (!triagem) throw new Error('UPDATE triagem aprovada não retornou linha');
@@ -604,7 +604,7 @@ export const triagemRepository: TriagemRepository = {
   async listarEventos(triagemId, limite = 50) {
     try {
       const linhas = await sql<LinhaEvento[]>`
-        SELECT ${COLUNAS_EVENTO} FROM triagem_eventos
+        SELECT ${COLUNAS_EVENTO()} FROM triagem_eventos
          WHERE triagem_id = ${triagemId}::uuid
          ORDER BY ocorreu_em DESC
          LIMIT ${limite}
@@ -632,7 +632,7 @@ export const triagemRepository: TriagemRepository = {
           ${entrada.ip ?? null}::inet,
           ${entrada.userAgent ?? null}
         )
-        RETURNING ${COLUNAS_EVENTO}
+        RETURNING ${COLUNAS_EVENTO()}
       `;
       const inserida = linhas[0];
       if (!inserida) throw new Error('INSERT evento não retornou linha');
@@ -645,7 +645,7 @@ export const triagemRepository: TriagemRepository = {
   async obterPorIdempotency(tecnicoId, idempotencyKey) {
     try {
       const linhas = await sql<LinhaTriagem[]>`
-        SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+        SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
          WHERE tecnico_id = ${tecnicoId}::uuid
            AND idempotency_key = ${idempotencyKey}::uuid
          LIMIT 1
@@ -700,7 +700,7 @@ async function decidir(
   try {
     return await sql.begin(async (tx) => {
       const fichas = await tx<LinhaTriagem[]>`
-        SELECT ${COLUNAS_TRIAGEM} FROM fichas_triagem
+        SELECT ${COLUNAS_TRIAGEM()} FROM fichas_triagem
          WHERE id = ${triagemId}::uuid
          FOR UPDATE
       `;
@@ -730,7 +730,7 @@ async function decidir(
                decidida_em = NOW(),
                decidida_por = ${aprovadorId}::uuid
          WHERE id = ${triagemId}::uuid
-         RETURNING ${COLUNAS_TRIAGEM}
+         RETURNING ${COLUNAS_TRIAGEM()}
       `;
       const atualizada = atualizadas[0];
       if (!atualizada) throw new Error(`UPDATE ${rotuloOperacao} não retornou linha`);

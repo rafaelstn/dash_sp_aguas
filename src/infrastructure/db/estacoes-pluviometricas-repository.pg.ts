@@ -45,7 +45,7 @@ function mapear(linha: LinhaEstacao): EstacaoPluviometrica {
   };
 }
 
-const COLUNAS = sql`id, prefixo, nome, lat, lng, tipo, tipo_estacao, bacia, owner, transmission_status, ultima_transmissao, posto_id, sibh_id, criado_em`;
+const COLUNAS = () => sql`id, prefixo, nome, lat, lng, tipo, tipo_estacao, bacia, owner, transmission_status, ultima_transmissao, posto_id, sibh_id, criado_em`;
 
 export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository = {
   async listar(filtros) {
@@ -63,7 +63,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
       : sql``;
     try {
       const linhas = await sql<LinhaEstacao[]>`
-        SELECT ${COLUNAS} FROM estacoes_pluviometricas
+        SELECT ${COLUNAS()} FROM estacoes_pluviometricas
          WHERE true
          ${condBacia}
          ${condTipo}
@@ -80,7 +80,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaEstacao[]>`
-        SELECT ${COLUNAS} FROM estacoes_pluviometricas
+        SELECT ${COLUNAS()} FROM estacoes_pluviometricas
          WHERE id = ${id}::uuid
          LIMIT 1
       `;
@@ -126,7 +126,7 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
           transmission_status = EXCLUDED.transmission_status,
           ultima_transmissao  = EXCLUDED.ultima_transmissao,
           posto_id            = EXCLUDED.posto_id
-        RETURNING ${COLUNAS}
+        RETURNING ${COLUNAS()}
       `;
       return mapear(linhas[0]!);
     } catch (e) {

@@ -6,9 +6,32 @@ import { getEnv } from '@/infrastructure/config/env';
  * Singleton do cliente postgres.js com conexão PREGUIÇOSA.
  *
  * Em modo demo (DATABASE_URL vazia) o módulo pode ser importado sem efeito
- * colateral — nenhuma conexão é aberta e nenhuma variável é validada até que
+ * colateral: nenhuma conexão é aberta e nenhuma variável é validada até que
  * alguém efetivamente execute uma query. Isso permite que os repositórios
  * `.pg.ts` coexistam com os mocks no mesmo bundle sem quebrar o boot.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * FRAGMENTO DE COLUNAS EM ESCOPO DE MÓDULO PRECISA SER FUNÇÃO
+ * ─────────────────────────────────────────────────────────────────────────
+ * A promessa acima é frágil de um jeito que não parece: `sql` é o Proxy abaixo,
+ * e APLICAR a template tag já é uso, mesmo quando o resultado é só um pedaço de
+ * SQL que nunca vai ser aguardado. Ou seja:
+ *
+ *   const COLUNAS = sql`id, nome`;        // executa no IMPORT, e joga em demo
+ *   const COLUNAS = () => sql`id, nome`;  // executa na query, que é o correto
+ *
+ * Nove repositórios faziam a primeira forma, com treze fragmentos. O efeito era
+ * que importar `repositories.ts` em modo demo estourava antes de a escolha
+ * entre mock e PostgreSQL acontecer, e como toda página e toda rota importam
+ * dali, o modo demo inteiro respondia 500. Nada disso aparecia na bancada, que
+ * sempre teve `DATABASE_URL`, e nenhum teste cobria o caminho.
+ *
+ * A guarda que impede a volta é
+ * `tests/unit/db/importar-repositorios-em-demo.test.ts`. Ela varre o diretório
+ * em vez de manter lista, para que repositório novo entre sozinho, e afirma
+ * também que executar query em modo demo continua sendo RECUSADO: adiar a
+ * criação do cliente não pode virar permissão para falar com um banco que não
+ * existe.
  */
 declare global {
    

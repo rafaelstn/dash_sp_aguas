@@ -51,7 +51,7 @@ function mapear(linha: LinhaFicha): FichaVisita {
   };
 }
 
-const COLUNAS_SELECT = sql`
+const COLUNAS_SELECT = () => sql`
   id, prefixo, cod_tipo_documento, data_visita, hora_inicio, hora_fim,
   tecnico_nome, tecnico_id, latitude_capturada, longitude_capturada,
   observacoes, dados, origem, status, criada_em, atualizada_em
@@ -61,7 +61,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
   async listarPorPosto(prefixo) {
     try {
       const linhas = await sql<LinhaFicha[]>`
-        SELECT ${COLUNAS_SELECT} FROM fichas_visita
+        SELECT ${COLUNAS_SELECT()} FROM fichas_visita
          WHERE prefixo = ${prefixo}
          ORDER BY data_visita DESC, criada_em DESC
       `;
@@ -74,7 +74,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
   async listarPorPostoETipo(prefixo, codigo) {
     try {
       const linhas = await sql<LinhaFicha[]>`
-        SELECT ${COLUNAS_SELECT} FROM fichas_visita
+        SELECT ${COLUNAS_SELECT()} FROM fichas_visita
          WHERE prefixo = ${prefixo}
            AND cod_tipo_documento = ${codigo}
          ORDER BY data_visita DESC, criada_em DESC
@@ -88,7 +88,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaFicha[]>`
-        SELECT ${COLUNAS_SELECT} FROM fichas_visita
+        SELECT ${COLUNAS_SELECT()} FROM fichas_visita
          WHERE id = ${id}::uuid
          LIMIT 1
       `;
@@ -120,7 +120,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
           ${entrada.origem ?? 'web_simulada'},
           ${entrada.status ?? 'enviada'}
         )
-        RETURNING ${COLUNAS_SELECT}
+        RETURNING ${COLUNAS_SELECT()}
       `;
       const inserida = linhas[0];
       if (!inserida) throw new Error('INSERT não retornou linha');
@@ -180,7 +180,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
         UPDATE fichas_visita
            SET ${setClause}
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS_SELECT}
+         RETURNING ${COLUNAS_SELECT()}
       `;
       const atualizada = linhas[0];
       if (!atualizada) throw new Error(`Ficha ${id} não encontrada`);

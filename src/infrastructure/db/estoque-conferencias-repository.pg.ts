@@ -78,18 +78,18 @@ type LinhaItem = {
   atualizado_em: Date;
 };
 
-const COLUNAS_CONF = sql`
+const COLUNAS_CONF = () => sql`
   id, unidade, natureza, local_id, status, observacao, criada_por, criada_em,
   concluida_por, concluida_em, atualizada_em
 `;
-const COLUNAS_ITEM = sql`
+const COLUNAS_ITEM = () => sql`
   id, conferencia_id, unidade_id, material_id, local_esperado_id, tamanho, origem,
   situacao, local_encontrado_id, quantidade_sistema, quantidade_contada, diferenca,
   observacao, contado_por, contado_em, movimentacao_id, reconciliado_por, reconciliado_em,
   criado_em, atualizado_em
 `;
 /** Mesma lista, qualificada: a listagem faz JOIN e coluna nua sai ambigua. */
-const COLUNAS_ITEM_Q = sql`
+const COLUNAS_ITEM_Q = () => sql`
   i.id, i.conferencia_id, i.unidade_id, i.material_id, i.local_esperado_id, i.tamanho, i.origem,
   i.situacao, i.local_encontrado_id, i.quantidade_sistema, i.quantidade_contada, i.diferenca,
   i.observacao, i.contado_por, i.contado_em, i.movimentacao_id, i.reconciliado_por,
@@ -198,7 +198,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         const confRows = await tx<LinhaConf[]>`
           INSERT INTO estoque_conferencias (unidade, natureza, local_id, observacao, criada_por)
           VALUES (${comando.unidade}, ${comando.natureza}, ${comando.localId}, ${comando.observacao}, ${comando.criadaPor}::uuid)
-          RETURNING ${COLUNAS_CONF}
+          RETURNING ${COLUNAS_CONF()}
         `;
         const conf = mapConf(confRows[0]!);
 
@@ -255,7 +255,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       const offset = (pagina - 1) * porPagina;
 
       const itens = await sql<LinhaConf[]>`
-        SELECT ${COLUNAS_CONF} FROM estoque_conferencias
+        SELECT ${COLUNAS_CONF()} FROM estoque_conferencias
          WHERE ${where}
          ORDER BY criada_em DESC
          LIMIT ${porPagina} OFFSET ${offset}
@@ -272,7 +272,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
   async obterPorId(id) {
     try {
       const linhas = await sql<LinhaConf[]>`
-        SELECT ${COLUNAS_CONF} FROM estoque_conferencias WHERE id = ${id}::uuid LIMIT 1
+        SELECT ${COLUNAS_CONF()} FROM estoque_conferencias WHERE id = ${id}::uuid LIMIT 1
       `;
       return linhas[0] ? mapConf(linhas[0]) : null;
     } catch (e) {
@@ -385,7 +385,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       // mudou ANTES de o almoxarife confirmar o ajuste: antes disso o aviso so
       // existia na resposta do POST, ou seja, depois do estoque ja mexido.
       const itens = await sql<(LinhaItem & LinhaEstadoAtual)[]>`
-        SELECT ${COLUNAS_ITEM_Q},
+        SELECT ${COLUNAS_ITEM_Q()},
                s.quantidade AS saldo_atual,
                u.local_id   AS local_atual_id,
                u.status     AS status_atual
@@ -416,7 +416,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     try {
       // Guarda de IDOR: id + conferencia_id juntos, nunca so o itemId.
       const linhas = await sql<LinhaItem[]>`
-        SELECT ${COLUNAS_ITEM} FROM estoque_conferencia_itens
+        SELECT ${COLUNAS_ITEM()} FROM estoque_conferencia_itens
          WHERE id = ${itemId}::uuid AND conferencia_id = ${conferenciaId}::uuid
          LIMIT 1
       `;
@@ -439,7 +439,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         }
 
         const itemRows = await tx<LinhaItem[]>`
-          SELECT ${COLUNAS_ITEM} FROM estoque_conferencia_itens
+          SELECT ${COLUNAS_ITEM()} FROM estoque_conferencia_itens
            WHERE id = ${itemId}::uuid AND conferencia_id = ${conferenciaId}::uuid
            FOR UPDATE
         `;
@@ -476,7 +476,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
                    contado_em = NOW(),
                    atualizado_em = NOW()
              WHERE id = ${itemId}::uuid
-             RETURNING ${COLUNAS_ITEM}
+             RETURNING ${COLUNAS_ITEM()}
           `;
         } else {
           atualizadas = await tx<LinhaItem[]>`
@@ -487,7 +487,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
                    contado_em = NOW(),
                    atualizado_em = NOW()
              WHERE id = ${itemId}::uuid
-             RETURNING ${COLUNAS_ITEM}
+             RETURNING ${COLUNAS_ITEM()}
           `;
         }
         return mapItem(atualizadas[0]!);
@@ -559,7 +559,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
             VALUES (${conferenciaId}::uuid, ${sobra.unidadeId}::uuid, ${localAtual},
                     'encontrado_em_outro_local', ${sobra.localEncontradoId}::uuid, 'sobra',
                     ${usuarioId}::uuid, NOW())
-            RETURNING ${COLUNAS_ITEM}
+            RETURNING ${COLUNAS_ITEM()}
           `;
           return mapItem(inseridas[0]!);
         }
@@ -603,7 +603,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           VALUES (${conferenciaId}::uuid, ${sobra.materialId}::uuid, ${sobra.localId}::uuid,
                   ${sobra.tamanho}, ${quantidadeSistema}, ${sobra.quantidadeContada}, 'sobra',
                   ${usuarioId}::uuid, NOW())
-          RETURNING ${COLUNAS_ITEM}
+          RETURNING ${COLUNAS_ITEM()}
         `;
         return mapItem(inseridas[0]!);
       });
@@ -640,7 +640,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
 
         // Guarda de IDOR igual ao resto: id + conferencia_id juntos.
         const itemRows = await tx<LinhaItem[]>`
-          SELECT ${COLUNAS_ITEM} FROM estoque_conferencia_itens
+          SELECT ${COLUNAS_ITEM()} FROM estoque_conferencia_itens
            WHERE id = ${itemId}::uuid AND conferencia_id = ${conferenciaId}::uuid
            FOR UPDATE
         `;
@@ -691,7 +691,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
         const tx = txRaw as unknown as Sql;
         // 1. Trava o item (serializa reconciliacoes concorrentes do mesmo item).
         const itemRows = await tx<LinhaItem[]>`
-          SELECT ${COLUNAS_ITEM} FROM estoque_conferencia_itens
+          SELECT ${COLUNAS_ITEM()} FROM estoque_conferencia_itens
            WHERE id = ${itemId}::uuid AND conferencia_id = ${conferenciaId}::uuid
            FOR UPDATE
         `;
@@ -808,7 +808,7 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
                  observacao = ${observacaoFinal},
                  atualizado_em = NOW()
            WHERE id = ${itemId}::uuid
-           RETURNING ${COLUNAS_ITEM}
+           RETURNING ${COLUNAS_ITEM()}
         `;
         return {
           item: mapItem(carimbadas[0]!),
@@ -850,7 +850,7 @@ async function transicionar(
     return await sql.begin(async (txRaw) => {
       const tx = txRaw as unknown as Sql;
       const confRows = await tx<LinhaConf[]>`
-        SELECT ${COLUNAS_CONF} FROM estoque_conferencias WHERE id = ${id}::uuid FOR UPDATE
+        SELECT ${COLUNAS_CONF()} FROM estoque_conferencias WHERE id = ${id}::uuid FOR UPDATE
       `;
       if (confRows.length === 0) throw new ConferenciaNaoEncontrada(id);
       const atual = mapConf(confRows[0]!);
@@ -866,7 +866,7 @@ async function transicionar(
                observacao = COALESCE(${observacao}, observacao),
                atualizada_em = NOW()
          WHERE id = ${id}::uuid
-         RETURNING ${COLUNAS_CONF}
+         RETURNING ${COLUNAS_CONF()}
       `;
       return mapConf(atualizadas[0]!);
     });
