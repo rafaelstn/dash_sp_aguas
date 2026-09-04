@@ -191,3 +191,120 @@ describe('guarda: o que deve passar, passa', () => {
     expect(recusa('SELECT Codigo, Descricao FROM dbo.UGRHIs')).toBeNull();
   });
 });
+
+describe('guarda: as cinco tabelas de medição também filtram Excluido = 0', () => {
+  // Entraram na guarda em 03/09/2026, junto com a porta de séries históricas.
+  // Aqui o esquecimento é mais caro que no cadastro: são 42 milhões de linhas
+  // somando as cinco, e o efeito não é uma linha a mais numa lista, é um número
+  // diferente num gráfico, que ninguém confere de olho.
+  const TABELAS = [
+    'MedicaoPluviometricas',
+    'MedicaoLoggerPluviograficas',
+    'CotaEscalaFluviometricas',
+    'LeituraManualPiezometricas',
+    'LeituraEletronicaPiezometricas',
+  ];
+
+  it.each(TABELAS)('recusa SELECT em dbo.%s sem o filtro', (tabela) => {
+    const motivo = recusa(`SELECT m.Data, m.Valor FROM dbo.${tabela} m WHERE m.PostoId = @p`);
+    expect(motivo).toContain('Excluido = 0');
+    expect(motivo).toContain(tabela);
+  });
+
+  it.each(TABELAS)('aceita SELECT em dbo.%s com o filtro', (tabela) => {
+    expect(
+      recusa(
+        `SELECT m.Data FROM dbo.${tabela} m WHERE m.PostoId = @p AND m.Excluido = 0`,
+      ),
+    ).toBeNull();
+  });
+
+  // ─── As tentativas de escapar ──────────────────────────────────────────
+  //
+  // Escrever a guarda e tentar vencê-la é o que separa guarda de decoração. A
+  // primeira versão desta régua, que exigia a presença do texto `Excluido = 0`
+  // em algum lugar do comando, PERDEU para o primeiro caso abaixo, que é
+  // exatamente a consulta que o adaptador de séries manda ao banco.
+
+  it('NÃO deixa uma tabela filtrada cobrir as outras quatro da mesma consulta', () => {
+    // O adaptador de séries lê as cinco numa consulta só. Com a régua antiga,
+    // um `Excluido = 0` num ramo aprovava os cinco, e as leituras excluídas
+    // entravam na contagem de quatro séries sem nada quebrar.
+    const uniaoTorta = `
+      SELECT serie = 'chuva', n = COUNT(*)
+        FROM dbo.MedicaoPluviometricas m
+       WHERE m.PostoId = @posto AND m.Excluido = 0
+      UNION ALL
+      SELECT 'cota', COUNT(*)
+        FROM dbo.CotaEscalaFluviometricas c
+       WHERE c.PostoId = @posto`;
+    const motivo = recusa(uniaoTorta);
+    expect(motivo).toContain('CotaEscalaFluviometricas');
+    // E nomeia o apelido, senão quem esbarra na guarda tem de reler a consulta
+    // inteira para descobrir QUAL referência ficou sem filtro.
+    expect(motivo).toContain('"c"');
+  });
+
+  it('NÃO aceita o filtro de OUTRA tabela no lugar do da tabela guardada', () => {
+    // Escapatória de quem lê a mensagem de erro e procura a saída mais curta:
+    // pôr `Excluido = 0` de uma tabela de apoio e seguir a vida.
+    const filtroDoVizinho = `
+      SELECT m.Data
+        FROM dbo.MedicaoPluviometricas m
+        JOIN dbo.AparelhoPostos ap ON ap.PostoId = m.PostoId
+       WHERE ap.Excluido = 0`;
+    expect(recusa(filtroDoVizinho)).toContain('MedicaoPluviometricas');
+  });
+
+  it('NÃO aceita filtro do apelido errado quando a mesma tabela aparece duas vezes', () => {
+    const doisApelidos = `
+      SELECT a.Data, b.Data
+        FROM dbo.MedicaoPluviometricas a
+        JOIN dbo.MedicaoPluviometricas b ON b.PostoId = a.PostoId
+       WHERE a.Excluido = 0`;
+    const motivo = recusa(doisApelidos);
+    expect(motivo).toContain('"b"');
+    expect(motivo).not.toContain('"a"');
+  });
+
+  it('aceita a união das cinco quando TODAS filtram, que é o caso real', () => {
+    const uniaoCerta = [
+      'MedicaoPluviometricas',
+      'MedicaoLoggerPluviograficas',
+      'CotaEscalaFluviometricas',
+      'LeituraManualPiezometricas',
+      'LeituraEletronicaPiezometricas',
+    ]
+      .map(
+        (t) => `
+      SELECT serie = '${t}', n = COUNT(*)
+        FROM dbo.${t} m
+       WHERE m.PostoId = @posto AND m.Excluido = 0`,
+      )
+      .join('\n      UNION ALL\n');
+    expect(recusa(uniaoCerta)).toBeNull();
+  });
+
+  it('aceita o apelido com AS explícito', () => {
+    expect(
+      recusa('SELECT m.Data FROM dbo.CotaEscalaFluviometricas AS m WHERE m.Excluido = 0'),
+    ).toBeNull();
+  });
+
+  it('aceita a dica de tabela entre o nome e o filtro', () => {
+    // `WITH (NOLOCK)` entra entre o nome da tabela e o apelido em consulta de
+    // medição. Sem tratar isso, a guarda leria "WITH" como apelido e passaria a
+    // exigir `WITH.Excluido = 0`, reprovando consulta correta.
+    expect(
+      recusa('SELECT COUNT(*) FROM dbo.MedicaoPluviometricas WITH (NOLOCK) WHERE Excluido = 0'),
+    ).toBeNull();
+  });
+
+  it('a exceção declarada vale para as tabelas de medição também', () => {
+    expect(
+      recusa(
+        'SELECT COUNT(*) FROM dbo.MedicaoPluviometricas m -- inclui-excluidos: auditoria de exclusao',
+      ),
+    ).toBeNull();
+  });
+});

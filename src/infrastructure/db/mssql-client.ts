@@ -260,9 +260,98 @@ const PADROES_DE_ESCRITA: ReadonlyArray<readonly [RegExp, string]> = VERBOS_PROI
  * afrouxar apareça em diff:
  *   SELECT ... FROM dbo.Postos  -- inclui-excluidos: relatório de auditoria
  */
-const REFERENCIA_A_POSTOS = /\bdbo\s*\.\s*Postos\b/i;
+/**
+ * As tabelas que têm a coluna `Excluido` e são lidas por este projeto.
+ *
+ * As cinco de MEDIÇÃO entraram em 03/09/2026, junto com a porta de séries
+ * históricas. Ali o esquecimento é mais caro do que no cadastro, por dois
+ * motivos: a ordem de grandeza é outra (27,2 milhões de linhas só na chuva
+ * manual) e o efeito não é uma linha a mais numa lista, é um NÚMERO diferente
+ * num gráfico, que ninguém confere de olho.
+ */
+const TABELAS_COM_EXCLUIDO: readonly string[] = [
+  'Postos',
+  'MedicaoPluviometricas',
+  'MedicaoLoggerPluviograficas',
+  'CotaEscalaFluviometricas',
+  'LeituraManualPiezometricas',
+  'LeituraEletronicaPiezometricas',
+];
+
 const FILTRO_DE_EXCLUIDOS = /\bExcluido\s*=\s*0\b/i;
 const EXCECAO_DECLARADA = /inclui-excluidos\s*:\s*\S/i;
+
+/**
+ * Palavras que seguem o nome da tabela sem serem apelido.
+ *
+ * Sem esta lista, `FROM dbo.Postos WHERE Excluido = 0` leria `WHERE` como
+ * apelido e passaria a exigir `WHERE.Excluido = 0`, que ninguém escreve: a
+ * guarda reprovaria consulta correta. Falso positivo de guarda é pior que falso
+ * negativo, porque manda mexer no código bom ou desligar a guarda.
+ */
+const NAO_SAO_APELIDO: ReadonlySet<string> = new Set([
+  'where',
+  'with',
+  'inner',
+  'left',
+  'right',
+  'full',
+  'cross',
+  'outer',
+  'join',
+  'on',
+  'group',
+  'order',
+  'having',
+  'union',
+  'except',
+  'intersect',
+  'option',
+  'for',
+  'offset',
+  'select',
+  'from',
+  'as',
+  'apply',
+  'pivot',
+  'unpivot',
+]);
+
+/**
+ * Nomeia as referências a tabela guardada que ficaram sem o filtro.
+ *
+ * A régua é POR REFERÊNCIA, com o apelido, e não por presença do texto
+ * `Excluido = 0` em algum lugar do comando. A diferença não é purismo: o
+ * adaptador de séries lê as CINCO tabelas de medição numa consulta só, e uma
+ * régua que se contentasse com uma ocorrência qualquer deixaria quatro sem
+ * filtro. É o mesmo furo que o adaptador de facetas expôs, agora com cinco
+ * tabelas diferentes em vez de cinco cópias da mesma.
+ */
+function referenciasSemFiltro(comando: string): string[] {
+  const faltando: string[] = [];
+
+  for (const tabela of TABELAS_COM_EXCLUIDO) {
+    const referencia = new RegExp(
+      `\\bdbo\\s*\\.\\s*${tabela}\\b\\s*(?:as\\s+)?([A-Za-z_][A-Za-z0-9_]*)?`,
+      'gi',
+    );
+    for (const achado of comando.matchAll(referencia)) {
+      const candidato = achado[1];
+      const apelido =
+        candidato && !NAO_SAO_APELIDO.has(candidato.toLowerCase()) ? candidato : null;
+
+      const filtro = apelido
+        ? new RegExp(`\\b${apelido}\\s*\\.\\s*Excluido\\s*=\\s*0\\b`, 'i')
+        : FILTRO_DE_EXCLUIDOS;
+
+      if (!filtro.test(comando)) {
+        faltando.push(apelido ? `dbo.${tabela} (apelido "${apelido}")` : `dbo.${tabela}`);
+      }
+    }
+  }
+
+  return faltando;
+}
 
 /** Falha do próprio adaptador, e não do banco: erro de programação, não de dado. */
 export class ConsultaMssqlProibida extends Error {
@@ -300,13 +389,14 @@ export function conferirConsultaDeLeitura(sqlTexto: string): void {
   // e não por sorte: todo valor viaja como parâmetro nomeado, então o texto não
   // carrega literal de usuário onde um ponto e vírgula pudesse se esconder.
   for (const comando of alvo.split(';')) {
-    if (!REFERENCIA_A_POSTOS.test(comando)) continue;
-    if (FILTRO_DE_EXCLUIDOS.test(comando)) continue;
     if (EXCECAO_DECLARADA.test(comando)) continue;
+    const faltando = referenciasSemFiltro(comando);
+    if (faltando.length === 0) continue;
     throw new ConsultaMssqlProibida(
-      'lê dbo.Postos sem "Excluido = 0". São 13 postos excluídos que ' +
-        'apareceriam como fantasmas na tela. Para incluí-los de propósito, ' +
-        'escreva no SQL o comentário "inclui-excluidos: <motivo>".',
+      `lê ${faltando.join(', ')} sem "Excluido = 0". Linha excluída na origem ` +
+        'aparece como fantasma na tela e como número errado no gráfico. Para ' +
+        'incluí-la de propósito, escreva no SQL o comentário ' +
+        '"inclui-excluidos: <motivo>".',
     );
   }
 }
@@ -339,4 +429,11 @@ export const TiposMssql = {
   inteiro: sql.Int,
   decimal: sql.Float,
   guid: sql.UniqueIdentifier,
+  /**
+   * `datetime` do SQL Server, que é o tipo de `Data` nas cinco tabelas de
+   * medição. Não usar `sql.Date` aqui: ele truncaria a hora, e a cota tem até
+   * seis leituras no mesmo dia (MEDIDO), então o limite da janela precisa
+   * carregar hora para não comer ou repetir leitura na borda.
+   */
+  dataHora: sql.DateTime,
 } as const;

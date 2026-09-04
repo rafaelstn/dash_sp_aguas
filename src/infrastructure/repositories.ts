@@ -24,6 +24,8 @@ import {
   painelOperacaoRepositoryPg,
 } from './db/painel-repository.pg';
 import { painelCadastroRepositoryMssql } from './db/painel-cadastro-repository.mssql';
+import { seriesMedicaoRepositoryMssql } from './db/series-medicao-repository.mssql';
+import { seriesMedicaoRepositoryMock } from './mock/series-medicao-repository.mock';
 import { comporPainelRepository } from './db/painel-repository.composto';
 import { diagramasRepository as diagramasPg } from './db/diagramas-repository.pg';
 import { inventarioAnaExportRepository as inventarioAnaExportPg } from './db/inventario-ana-export-repository.pg';
@@ -162,6 +164,25 @@ export const estacoesPluviometricasRepository = demo
 export const leiturasPluviometricasRepository = demo
   ? leiturasPluviometricasMock
   : leiturasPluviometricasPg;
+
+/**
+ * Séries HISTÓRICAS de medição do posto (chuva, cota de rio, piezômetro).
+ *
+ * Não há adaptador PostgreSQL, e é deliberado: nosso banco nunca teve essas
+ * tabelas, e criá-las significaria copiar 42 milhões de linhas do órgão, que é
+ * exatamente o que o ADR-0023 proíbe ("a ideia não é refazer o banco, é começar
+ * a transmitir o banco deles"). Fora do modo demo, e sem `SQLSERVER_*`, a porta
+ * fica INDISPONÍVEL, e quem consome trata isso como recurso ausente.
+ *
+ * `null` aqui é a resposta honesta para "não temos como ler isto neste
+ * ambiente", e é diferente de um adaptador que devolvesse listas vazias: o
+ * segundo diria, sem nada quebrar, que o posto não tem série nenhuma.
+ */
+export const seriesMedicaoRepository = demo
+  ? seriesMedicaoRepositoryMock
+  : mssqlConfigurado()
+    ? seriesMedicaoRepositoryMssql
+    : null;
 
 // Modulo Estoque (almoxarifado / patrimonio, ADR 0020): 6 repositorios atras de
 // ports, com adapter mock in-memory (store compartilhado) para o MODO DEMO. A
