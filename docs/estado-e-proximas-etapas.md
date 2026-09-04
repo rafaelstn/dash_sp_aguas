@@ -89,8 +89,40 @@ vez de manter lista.
 2. **`ResumoPendencias.desconformidadesPostos` precisa aceitar `number | null`**,
    para a tela distinguir "medimos e deu zero" de "não temos como medir", que é a
    distinção que o painel já faz nos outros blocos.
-3. **Substituto medível enquanto a régua não vem:** 1.093 postos sem código ANA é
-   um número que o órgão reconhece e que não depende de régua nova.
+3. **Substituto medível: DESCARTADO em 04/09/2026, e o motivo importa.** Eu havia
+   registrado "1.093 postos sem código ANA" como número que o órgão reconhece e
+   não depende de régua nova. Conferido, ele não se sustenta em três frentes:
+
+   - **O rótulo seria falso para 199 postos.** Dos 4.697 com `PrefixoDNAEE`
+     preenchido, 4.498 estão no formato ANA de oito dígitos e **199 têm
+     caractere não numérico** (`130-036`, `267-005`), que a seção 6.4 de
+     `viabilidade-dados-prodesp.md` conclui **não serem código ANA**. Ou seja,
+     1.093 mede campo VAZIO e o rótulo prometeria identidade AUSENTE, que são
+     1.292. Divergência que qualquer conferência na origem encontra.
+   - **A consequência que justificaria o cartão é refutada pela aritmética.** Dos
+     4.697 códigos que já existem, apenas 46 casam com as 2.701 estações do
+     SIBH, ou seja 0,98%. Preencher os 1.093 restantes ao mesmo aproveitamento
+     acrescentaria cerca de onze estações. O cartão mandaria o gestor executar um
+     trabalho de cadastro que **não resolve o problema que o próprio cartão
+     nomeia**, e o motivo real está medido: são vocabulários diferentes.
+   - **A premissa nunca foi verificada.** O inventário ANA de 2026 tem 2.371
+     estações (ADR-0011) contra 5.790 postos, e 4.697 já carregam um
+     `PrefixoDNAEE`. O campo é herança do DNAEE, não carteira do inventário
+     vigente: afirmar que a ausência é defeito é a mesma objeção que fez a régua
+     de desconformidade ser recusada.
+
+   Some-se que 1.374 dos 5.790 estão desativados e ninguém mediu quanto do 1.093
+   é posto extinto, e que não existe filtro de busca por esse critério, ou seja o
+   cartão nasceria sem destino.
+
+   **No lugar dele:** publicar **"Postos com telemetria" (149 de 5.790)**, que
+   já está no contrato (`ResumoCadastroPostos.postosComTelemetria`), tem destino
+   exercitado (`/?tem_telem=1`), quita uma dívida declarada no comentário do
+   bloco "Panorama da rede" e restaura a grade de três colunas. Severidade
+   `info`, nunca alarme: 2,6% em vermelho é alarme falso. E o rótulo é "com
+   telemetria", jamais "transmitindo": o `Dbfch` cadastra APARELHO instalado, e
+   as séries pararam em ago/2025, então "transmitindo" seria afirmação que a
+   própria base contradiz.
 4. **Relatório em PDF mostra 2 de 5 campos de instrumentação.** Os outros três
    existem na origem e não chegam ao documento.
 5. **Migração de remoção dos 12 campos órfãos**, só depois que o adaptador
@@ -109,6 +141,25 @@ vez de manter lista.
    perdido, porque a tabela tinha sido populada pela própria sincronização.
 7. **Só depois disso** faz sentido ampliar o comparativo, que hoje cobre 2% das
    estações.
+
+### 3.2.1 Dois achados do painel que ainda estão abertos
+
+Vieram da revisão de produto de 04/09/2026. O terceiro achado dela, o cartão de
+arquivos órfãos verde por medição que não aconteceu, já foi corrigido.
+
+- **"Postos sem arquivo" é permanentemente não apurável nesta instalação**, e
+  isso é classe diferente de "Cadastro irregular". O ADR-0023 põe arquivos
+  indexados fora de escopo e a imagem do órgão não contém o indexador (runbook
+  §9.3). O de conformidade será apurado quando a régua chegar; este não será
+  apurado nunca ali. Cartão permanentemente inerte é vaga morta, e esconder por
+  instalação é decisão de produto que ainda não foi tomada.
+- **Hipótese barata que vale mais que preencher cadastro:** os identificadores do
+  SIBH incluem valores de sete dígitos (`1000010`) e o projeto já conhece a
+  classe `faltando_zero_esquerda`. Cruzar `PrefixoDNAEE` contra o código do SIBH
+  normalizado para oito dígitos com zero à esquerda custa uma consulta. **Não
+  está medido.** Se casar, eleva a cobertura do comparativo muito acima do que
+  qualquer preenchimento de cadastro elevaria, e responde parte da pergunta 2 ao
+  órgão sem depender da resposta dele.
 
 ### 3.3 Acabamento medido e não afirmado
 

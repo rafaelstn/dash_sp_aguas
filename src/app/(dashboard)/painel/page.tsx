@@ -21,6 +21,7 @@ import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { logger } from '@/infrastructure/logging/logger';
 import { formatarPercentual } from '@/lib/format';
 import {
+  apuracaoDeArquivosOrfaos,
   apuracaoDeConformidade,
   apuracaoDePostosSemArquivo,
   naoApurado,
@@ -326,6 +327,7 @@ export default async function PaginaPainel() {
     resumo.desconformidadesPostos,
     classes,
   );
+  const orfaos = apuracaoDeArquivosOrfaos(atividade, resumo.arquivosOrfaos);
 
   const classesPrefixo = classes
     .filter((c) => c.tipo === 'prefixo')
@@ -422,14 +424,24 @@ export default async function PaginaPainel() {
             de alarme. É a regra que "Sem coordenadas" e o inventário ANA já
             seguem, e ela é o outro lado da distinção que esta entrega faz:
             "não apurado" fica neutro, "medimos e deu zero" fica verde.
+
+            O QUE FALTAVA, e foi corrigido em 04/09/2026: aqui o zero nem sempre
+            é medido. Órfão é arquivo INDEXADO que não casou com posto, então na
+            instalação do órgão, onde o indexador nunca rodou, a contagem é zero
+            porque a população está vazia. O cartão pintava verde e anunciava
+            "nenhum arquivo órfão" a partir de uma medição que não aconteceu.
+
+            Era o pior dos três, justamente por ser o único otimista: alarme
+            falso alguém contesta, porque incomoda. Ninguém abre chamado para
+            conferir um cartão verde.
           */}
           <CardKPI
             titulo="Arquivos órfãos"
-            valor={resumo.arquivosOrfaos}
+            valor={orfaos.apurado ? orfaos.valor : naoApurado(orfaos.motivo)}
             contexto="não associados a posto"
-            severidade={resumo.arquivosOrfaos > 0 ? 'alta' : 'sucesso'}
+            severidade={orfaos.apurado && orfaos.valor > 0 ? 'alta' : 'sucesso'}
             icone={FileWarning}
-            href="/desconformidades/arquivos-malformados"
+            href={orfaos.apurado ? '/desconformidades/arquivos-malformados' : undefined}
             rotuloAcao="Classificar"
             valorAnterior={resumo.tendencias.arquivosOrfaos?.valorAnterior}
             serie={resumo.tendencias.arquivosOrfaos?.serie}

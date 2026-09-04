@@ -10,6 +10,7 @@ import {
   MOTIVO_CONFORMIDADE_SEM_CRITERIO,
   MOTIVO_INDEXACAO_INDISPONIVEL,
   MOTIVO_INDEXACAO_NUNCA_EXECUTOU,
+  apuracaoDeArquivosOrfaos,
   apuracaoDeConformidade,
   apuracaoDePostosSemArquivo,
   ehNaoApurado,
@@ -88,6 +89,53 @@ describe('apuração de "postos sem arquivo"', () => {
     );
     // Zero aprovado é zero MEDIDO, e tem de chegar à tela como zero.
     expect(v).toEqual({ apurado: true, valor: 0 });
+  });
+});
+
+describe('apuração de "arquivos órfãos"', () => {
+  it('NÃO anuncia zero órfãos quando a indexação nunca rodou', () => {
+    // Este era o cartão VERDE, e por isso o mais perigoso dos três. Órfão é
+    // arquivo indexado que não casou com posto: sem indexação, o zero vem da
+    // população vazia, e o painel dizia "nenhum arquivo órfão" a partir de uma
+    // medição que não aconteceu.
+    //
+    // Boa notícia falsa é pior que alarme falso, e a assimetria é o argumento:
+    // alarme falso alguém contesta, porque incomoda. Ninguém abre chamado para
+    // conferir um cartão verde.
+    const v = apuracaoDeArquivosOrfaos(
+      { totalLotesIndexacao: 0, arquivosIndexadosTotal: 0 },
+      0,
+    );
+    expect(v.apurado).toBe(false);
+    if (v.apurado) throw new Error('inalcançável');
+    expect(v.motivo).toBe(MOTIVO_INDEXACAO_NUNCA_EXECUTOU);
+  });
+
+  it('anuncia zero órfãos quando a indexação REALMENTE rodou', () => {
+    // O par do caso acima, e ele é obrigatório: uma apuração que respondesse
+    // "não apurado" sempre passaria no primeiro e apagaria a boa notícia
+    // legítima, que é a base limpa depois de indexar.
+    const v = apuracaoDeArquivosOrfaos(
+      { totalLotesIndexacao: 4, arquivosIndexadosTotal: 12_000 },
+      0,
+    );
+    expect(v).toEqual({ apurado: true, valor: 0 });
+  });
+
+  it('segue a MESMA régua de "postos sem arquivo", e não uma paralela', () => {
+    // As duas dependem da mesma indexação. Réguas separadas divergiriam no
+    // primeiro ajuste, e o sintoma seria um cartão dizendo "não apurado" ao
+    // lado de outro anunciando zero, sobre a mesma base.
+    for (const sinal of [
+      null,
+      { totalLotesIndexacao: 0, arquivosIndexadosTotal: 0 },
+      { totalLotesIndexacao: 0, arquivosIndexadosTotal: 90 },
+      { totalLotesIndexacao: 2, arquivosIndexadosTotal: 0 },
+    ]) {
+      expect(apuracaoDeArquivosOrfaos(sinal, 7)).toEqual(
+        apuracaoDePostosSemArquivo(sinal, 7),
+      );
+    }
   });
 });
 

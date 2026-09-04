@@ -119,6 +119,32 @@ export function apuracaoDePostosSemArquivo(
   return { apurado: false, motivo: MOTIVO_INDEXACAO_NUNCA_EXECUTOU };
 }
 
+/**
+ * "Arquivos órfãos" tem EXATAMENTE a mesma dependência, e o cartão dele era o
+ * caso mais perigoso dos três porque ficava VERDE.
+ *
+ * Órfão é arquivo indexado que não casou com posto nenhum. Numa base onde a
+ * indexação nunca rodou, a contagem é zero pela mesma razão que "postos sem
+ * arquivo" era o total da rede: a população está vazia. O cartão então pintava
+ * `sucesso` e anunciava "nenhum arquivo órfão" a partir de uma medição que não
+ * aconteceu.
+ *
+ * **Boa notícia falsa é pior que alarme falso**, e por um motivo assimétrico:
+ * alarme falso alguém contesta, porque incomoda. Ninguém abre chamado para
+ * conferir um cartão verde.
+ *
+ * Existe como função própria, e não como chamada direta à de cima, porque o
+ * nome daquela responde por outro indicador: reusá-la aqui deixaria
+ * `apuracaoDePostosSemArquivo(atividade, resumo.arquivosOrfaos)` no código, que
+ * é uma linha que se lê como defeito mesmo estando correta.
+ */
+export function apuracaoDeArquivosOrfaos(
+  sinal: SinalDeIndexacao | null,
+  arquivosOrfaos: number,
+): Apuracao<number> {
+  return apuracaoDePostosSemArquivo(sinal, arquivosOrfaos);
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
  * VEREDITO 2 — "CADASTRO IRREGULAR" E OS DOIS QUADROS QUE DEPENDEM DELE
  * ────────────────────────────────────────────────────────────────────────── */
