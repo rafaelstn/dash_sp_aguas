@@ -107,16 +107,16 @@ function Resultado({
     case 'sem_correspondencia':
       return (
         <Aviso tom="atencao" titulo="Este posto não tem estação correspondente no SIBH">
-          {comparativo.motivo === 'posto_sem_codigo_ana' ? (
+          {comparativo.motivo === 'posto_sem_identificador' ? (
             <p>
-              O cadastro do órgão não traz o código ANA deste posto, e é esse
-              código que liga um posto a uma estação do SIBH. Enquanto ele não
-              for preenchido, não há o que conferir.
+              O cadastro do órgão não traz prefixo nem código ANA para este
+              posto, e é por um desses que se chega à estação correspondente no
+              SIBH. Enquanto nenhum for preenchido, não há o que conferir.
             </p>
           ) : (
             <p>
-              O posto tem código ANA no cadastro do órgão, e a lista de estações
-              do SIBH não conhece esse código. A divergência é de cadastro entre
+              O posto tem identificador no cadastro do órgão, e a lista de
+              estações do SIBH não o conhece. A divergência é de cadastro entre
               os dois sistemas, e não de medição.
             </p>
           )}

@@ -50,7 +50,9 @@ export const estacoesPluviometricasRepository: EstacoesPluviometricasRepository 
       transmissionStatus: estacao.transmissionStatus ?? null,
       // Espelha o .pg: normaliza a string crua do SIBH pra ISO (ou null).
       ultimaTransmissao: normalizarTimestampSibh(estacao.ultimaTransmissao),
-      postoId: estacao.postoId ?? null,
+      // Espelha o DEFAULT FALSE da coluna (migration 0067): ausente e' false,
+      // nunca nulo. Nao ha id de posto aqui, e e' de proposito (ADR-0023).
+      vinculadoAPosto: estacao.vinculadoAPosto ?? false,
       sibhId: estacao.sibhId,
       criadoEm: existente?.criadoEm ?? new Date(),
     };

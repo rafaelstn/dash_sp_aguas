@@ -59,21 +59,47 @@ Uma fonte está viva e a outra parada há treze meses. **Comparar as duas hoje
 produziria divergência em praticamente 100% dos casos, e a divergência seria do
 método, não do dado.**
 
-### 2.2 Não há sobreposição de IDENTIDADE
+### 2.2 A identidade CASA em mais da metade, e a medição anterior estava invertida
 
-Medidas as 2.701 estações que o SIBH entregou contra os 5.790 postos ativos:
+> **CORREÇÃO DE 04/09/2026.** Esta seção afirmava "não há sobreposição de
+> identidade", com zero casamentos por `Postos.Prefixo` e cobertura de 2%. **O
+> resultado estava invertido, e não apenas impreciso.**
+>
+> A medição foi feita contra a tabela `estacoes_pluviometricas` do nosso
+> PostgreSQL, e naquele momento essa tabela continha **apenas as estações que
+> NÃO casavam com posto**: as que casavam recebiam o `Postos.Id` do órgão numa
+> coluna com chave estrangeira para a tabela `postos` local, que está vazia por
+> desenho, e eram recusadas pelo banco sem nunca ser gravadas (ver a migration
+> 0067 e o incidente registrado no runbook de entrega).
+>
+> **A amostra era exatamente o complemento do que se queria medir.** Medir
+> cobertura de casamento numa tabela cujo critério de entrada era "não casou"
+> não podia dar outro resultado.
 
-| Casamento | Estações |
-|---|---|
-| por `Postos.Prefixo` | **0** |
-| por `Postos.PrefixoDNAEE` (código ANA) | **46** |
-| não casam | **2.655** |
-| **cobertura** | **2%** |
+Medido em 04/09/2026 contra a **FONTE dos dois lados** (a API do SIBH e o
+`Dbfch`), que é onde isto deveria ter sido medido desde o começo: 5.415 estações
+hidrológicas do SIBH, com 5.050 prefixos distintos, contra 5.790 postos ativos.
 
-São vocabulários diferentes. O órgão usa `C5-018`, `5C-003`, `V-06-391`,
-`C4-A112`; o SIBH usa `1000010`, `353180302A`, `IAC-Caconde - SP`. Dos postos
-ativos, 4.697 de 5.790 têm código ANA, então a chave existe — ela é que não é a
-que o SIBH publica.
+| Casamento | Estações | Cobertura |
+|---|---|---|
+| `prefix` x `Postos.Prefixo` | **2.706** | **53,6%** |
+| `prefix` x `Postos.PrefixoDNAEE` (código ANA) | 93 | 1,8% |
+| `alt_prefix` x `Postos.PrefixoDNAEE` | 54 de 665 | 8,1% |
+| `alt_prefix` x `Postos.Prefixo` | 13 de 665 | 2,0% |
+
+**O prefixo do próprio órgão é a chave, e o código ANA é o caso minoritário.**
+Os vocabulários se encontram: o SIBH publica `C4-019` e `1D-008` ao lado de
+`1000010` e `353180302A`.
+
+A hipótese do zero à esquerda (normalizar prefixo numérico para oito dígitos e
+comparar com o código ANA) foi medida junto e rende pouco: **164 de 1.235**
+(13,3%) dos prefixos numéricos, contra os 53,6% que o casamento direto já
+entrega. Não vale complexidade.
+
+Existe ainda um campo `alt_prefix` na resposta do SIBH, hoje **não consumido**
+pelo sistema. Cobre 665 estações e casa mal com as duas chaves, então não é
+prioridade, mas está registrado porque é a única chave publicada que ninguém
+tentou.
 
 ---
 
@@ -81,8 +107,9 @@ que o SIBH publica.
 
 1. **Histórico do posto** (chuva, rio, piezômetro) lido do `Dbfch`, com resumo
    barato ao abrir e carregamento por período sob demanda.
-2. **Comparativo com o SIBH nas 46 estações que casam**, quando houver período em
-   comum.
+2. **Comparativo com o SIBH nas 2.706 estações que casam por prefixo** (53,6% da
+   rede), quando houver período em comum. O caso de uso tenta o prefixo primeiro
+   e o código ANA depois.
 3. **Três estados explícitos**, que não podem virar o mesmo vazio:
    `sem correspondência no SIBH`, `correspondência existe mas sem dado no
    período`, e `dado dos dois lados`. Só o terceiro compara. Confundi-los é o
@@ -96,8 +123,12 @@ que o SIBH publica.
 1. **A série manual ainda é alimentada?** Se parou em agosto de 2025, essa é uma
    informação de valor por si: o banco oficial está treze meses atrás do
    telemétrico.
-2. **Existe tabela de correspondência entre estação do SIBH e posto?** Sem ela,
-   98% das estações ficam órfãs e o comparativo cobre quase nada.
+2. **Existe tabela de correspondência entre estação do SIBH e posto?**
+   **Rebaixada em 04/09/2026, de bloqueio para melhoria.** A pergunta nasceu de
+   uma medição enviesada que dizia 2% de cobertura; a real é 53,6% por prefixo
+   direto, então o comparativo funciona sem essa tabela. Ela continua valendo
+   para os 46,4% que não casam, e aí é ganho, não desbloqueio. **Não é mais
+   motivo para segurar a entrega do comparativo.**
 3. **O que significa `Validacao`** nas duas tabelas que a têm, e se dado não
    validado pode ser publicado.
 
@@ -116,7 +147,8 @@ credencial lida do cofre sem passar por argv:
 | `atualidade_series.py` | leituras mês a mês nos últimos meses |
 | `sobreposicao.py` | se os prefixos do SIBH existem no cadastro |
 | `casamento_ana.py` | casamento pelo código ANA |
-| `cobertura_casamento.py` | a cobertura de 2% |
+| `cobertura_casamento.py` | a cobertura de 2%, MEDIDA COM VIES (ver 2.2) |
+| `cobertura_real.py` | a cobertura real, contra a fonte dos dois lados |
 
 Duas notas de dado sujo, pequenas mas reais: `MedicaoPluviometricas` tem **30
 linhas com data futura** e `MedicaoLoggerPluviograficas` tem **12**, uma delas em

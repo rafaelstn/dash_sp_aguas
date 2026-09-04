@@ -42,8 +42,14 @@ const querySchema = z.object({
  * o mapa. Exige sessão. Filtros opcionais por bacia e tipo via query string.
  *
  * Resposta 200: { total, itens } com a entidade EstacaoPluviometrica como está
- * (id, prefixo, nome, lat, lng, tipo, bacia, postoId, sibhId, criadoEm). O
- * payload completo (~3690 estações) é aceitável para carga única do mapa.
+ * (id, prefixo, nome, lat, lng, tipo, bacia, vinculadoAPosto, sibhId,
+ * criadoEm). O payload completo é aceitável para carga única do mapa.
+ *
+ * `vinculadoAPosto` é booleano de propósito: o catálogo de postos vive no SQL
+ * Server do órgão (ADR-0023) e nenhum identificador dele atravessa para cá. Se
+ * um dia o frescor de uma hora não bastar, é AQUI que o campo passa a ser
+ * derivado em tempo de leitura, cruzando `prefixo` com uma chamada em lote a
+ * `postosRepository.mapaIdsPorPrefixo()`, e não voltando a persistir o id.
  */
 export async function GET(request: NextRequest) {
   const auth = await exigirUsuario();
@@ -98,7 +104,7 @@ export async function GET(request: NextRequest) {
       tipoEstacao: e.tipoEstacao,
       bacia: e.bacia,
       owner: e.owner,
-      postoId: e.postoId,
+      vinculadoAPosto: e.vinculadoAPosto,
       sibhId: e.sibhId,
       criadoEm: e.criadoEm,
       online: estacaoOnline(e),

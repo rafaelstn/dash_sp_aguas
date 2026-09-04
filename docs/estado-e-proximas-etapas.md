@@ -99,12 +99,18 @@ vez de manter lista.
      `viabilidade-dados-prodesp.md` conclui **não serem código ANA**. Ou seja,
      1.093 mede campo VAZIO e o rótulo prometeria identidade AUSENTE, que são
      1.292. Divergência que qualquer conferência na origem encontra.
-   - **A consequência que justificaria o cartão é refutada pela aritmética.** Dos
-     4.697 códigos que já existem, apenas 46 casam com as 2.701 estações do
-     SIBH, ou seja 0,98%. Preencher os 1.093 restantes ao mesmo aproveitamento
-     acrescentaria cerca de onze estações. O cartão mandaria o gestor executar um
-     trabalho de cadastro que **não resolve o problema que o próprio cartão
-     nomeia**, e o motivo real está medido: são vocabulários diferentes.
+   - **A consequência que justificaria o cartão é refutada pela aritmética.**
+     Números corrigidos em 04/09/2026: dos 4.646 códigos ANA que já existem,
+     **93 casam** com as 5.415 estações do SIBH, ou seja 2,0%. Preencher os 1.093
+     restantes ao mesmo aproveitamento acrescentaria cerca de **vinte e duas**
+     estações. O cartão mandaria o gestor executar um trabalho de cadastro que
+     **não resolve o problema que o próprio cartão nomeia**.
+
+     A refutação original usava "46 de 4.697, ou 0,98%", vindos da medição
+     enviesada da seção 2.2 do catálogo de séries. **Os números mudaram e a
+     conclusão não**: vinte e duas estações continuam sendo nada diante das 2.706
+     que o prefixo direto já casa. Decisão certa com argumento errado continua
+     precisando da correção do argumento, senão a próxima pessoa reusa o número.
    - **A premissa nunca foi verificada.** O inventário ANA de 2026 tem 2.371
      estações (ADR-0011) contra 5.790 postos, e 4.697 já carregam um
      `PrefixoDNAEE`. O campo é herança do DNAEE, não carteira do inventário
@@ -164,8 +170,10 @@ vez de manter lista.
    seção 9. O terceiro passo é o que faltou da primeira vez: **ler o `motivo`
    dos erros no corpo da resposta**, que já estava lá e foi substituído por uma
    dedução.
-7. **Só depois disso** faz sentido ampliar o comparativo, que hoje cobre 2% das
-   estações.
+7. **Só depois disso** faz sentido ampliar o comparativo. E ele cobre **53,6%**
+   da rede, não os 2% que este documento afirmava: aquele número saiu da mesma
+   tabela envenenada pelo defeito do item 6, que continha só as estações que não
+   casavam. Corrigido no catálogo de séries, seção 2.2.
 
 ### 3.2.1 Dois achados do painel que ainda estão abertos
 
@@ -290,10 +298,15 @@ de medição, não de suposição.
    parou, essa é uma informação de valor por si, porque o banco oficial está treze
    meses atrás do telemétrico.
 
-2. **Existe tabela de correspondência entre estação do SIBH e posto?** Das 2.701
-   estações do SIBH, ZERO casam por `Prefixo` e 46 por `PrefixoDNAEE`, ou seja 2%
-   de cobertura. Sem essa tabela, o comparativo cobre quase nada, e não há como
-   contornar do nosso lado: são vocabulários diferentes.
+2. **Existe tabela de correspondência entre estação do SIBH e posto?**
+   **REBAIXADA de bloqueio para melhoria em 04/09/2026.** Esta pergunta dizia
+   "zero casam por `Prefixo`, 2% de cobertura, e não há como contornar do nosso
+   lado". Medido contra a fonte dos dois lados: **2.706 de 5.050 prefixos do
+   SIBH casam direto com `Postos.Prefixo`, 53,6%.**
+
+   O comparativo funciona sem a tabela. Ela continua útil para os 46,4% que não
+   casam, e aí é ganho, não desbloqueio. **Não segura mais entrega nenhuma**, e
+   pedi-la como bloqueio seria cobrar do órgão a solução de um problema nosso.
 
 3. **O que significa a coluna `Validacao`**, presente na chuva manual e na cota,
    e se dado não validado pode ser publicado. Filtrar por um significado suposto

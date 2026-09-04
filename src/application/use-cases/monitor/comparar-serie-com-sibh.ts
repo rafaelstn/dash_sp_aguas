@@ -76,8 +76,15 @@ const CM_POR_M = 100;
 
 /** Posto alvo da comparação, na forma mínima que o caso de uso precisa. */
 export interface PostoParaComparar {
+  /**
+   * Prefixo do órgão (`Postos.Prefixo`). É a chave PRINCIPAL de casamento com o
+   * SIBH: 53,6% das estações casam por ela (medido em 04/09/2026).
+   */
   readonly prefixo: string;
-  /** Código ANA (`Postos.PrefixoDNAEE`). É a ÚNICA chave que casa com o SIBH. */
+  /**
+   * Código ANA (`Postos.PrefixoDNAEE`), tentado quando o prefixo não casa.
+   * Cobre 1,8% das estações.
+   */
   readonly prefixoAna: string | null;
 }
 
@@ -124,11 +131,18 @@ export type ResultadoComparativo =
 
 /**
  * Por que não há correspondência. A distinção importa: "este posto não tem
- * código ANA" é problema de cadastro, e "tem código e o SIBH não conhece" é
- * problema de vocabulário entre os dois sistemas. São conversas diferentes com
- * o órgão.
+ * identificador nenhum" é problema de cadastro, e "tem identificador e o SIBH
+ * não o conhece" é problema de vocabulário entre os dois sistemas. São
+ * conversas diferentes com o órgão.
+ *
+ * Renomeados em 04/09/2026: eram `posto_sem_codigo_ana` e
+ * `codigo_ana_nao_esta_no_sibh`, de quando o casamento usava só o código ANA.
+ * Como o prefixo do órgão passou a ser a chave principal, os nomes antigos
+ * afirmariam algo falso sobre um posto que tem prefixo e não tem código ANA.
  */
-export type MotivoSemCorrespondencia = 'posto_sem_codigo_ana' | 'codigo_ana_nao_esta_no_sibh';
+export type MotivoSemCorrespondencia =
+  | 'posto_sem_identificador'
+  | 'identificador_nao_esta_no_sibh';
 
 /** Normaliza código para comparação: sem espaço nas pontas e em caixa alta. */
 function chave(valor: string): string {
@@ -157,16 +171,45 @@ function unidadeDaComparacao(serie: SerieMedicao): string {
 /**
  * Acha a estação do SIBH que corresponde ao posto.
  *
- * A regra é uma só: `Postos.PrefixoDNAEE` contra `EstacaoSibh.prefixo`. O
- * casamento por `Postos.Prefixo` foi MEDIDO e dá ZERO em 2.701 estações, então
- * tentá-lo não seria tolerância, seria ruído: qualquer coincidência futura
- * entre um código do SIBH e um prefixo do órgão viraria um par falso, e par
- * falso num comparativo é pior que par nenhum.
+ * ─────────────────────────────────────────────────────────────────────────
+ * CORREÇÃO DE 04/09/2026, E O ERRO DE MEDIÇÃO QUE A EXIGIU
+ * ─────────────────────────────────────────────────────────────────────────
+ * Até hoje esta função casava SÓ por `Postos.PrefixoDNAEE`, e o comentário
+ * afirmava que `Postos.Prefixo` "foi MEDIDO e dá ZERO em 2.701 estações".
+ *
+ * A medição estava correta sobre a amostra e a amostra estava errada. Ela foi
+ * feita contra a tabela `estacoes_pluviometricas` do nosso PostgreSQL, que
+ * continha **apenas as estações que NÃO casavam com posto** — porque as que
+ * casavam violavam a chave estrangeira e nunca chegavam a ser gravadas (ver
+ * migration 0067). **A amostra era exatamente o complemento do que se queria
+ * medir**, e por isso o resultado saiu invertido, e não só impreciso.
+ *
+ * MEDIDO em 04/09/2026 contra a FONTE dos dois lados (a API do SIBH e o
+ * `Dbfch`), que é onde isso deveria ter sido medido desde o começo:
+ *
+ *   `EstacaoSibh.prefixo` x `Postos.Prefixo`      2.706 de 5.050  (53,6%)
+ *   `EstacaoSibh.prefixo` x `Postos.PrefixoDNAEE`    93 de 5.050  ( 1,8%)
+ *
+ * Ou seja, o prefixo do próprio órgão é a chave que casa, e o código ANA é o
+ * caso minoritário. A ordem abaixo reflete isso.
+ *
+ * As duas são tentadas, e não uma: são vocabulários distintos, o prefixo tem
+ * forma própria (`C5-018`, `V-06-391`) e o código ANA é numérico de oito
+ * dígitos, então a chance de um valor casar no campo errado é remota. Tentar a
+ * segunda só depois de a primeira falhar mantém o par sempre preferindo a
+ * chave mais forte.
  */
 export function acharEstacaoCorrespondente(
   posto: PostoParaComparar,
   estacoes: readonly EstacaoSibh[],
 ): EstacaoSibh | null {
+  const prefixo = posto.prefixo?.trim();
+  if (prefixo) {
+    const alvo = chave(prefixo);
+    const porPrefixo = estacoes.find((e) => chave(e.prefixo) === alvo);
+    if (porPrefixo) return porPrefixo;
+  }
+
   const codigo = posto.prefixoAna?.trim();
   if (!codigo) return null;
   const alvo = chave(codigo);
@@ -271,8 +314,13 @@ export async function compararSerieComSibh(
   janela: JanelaPeriodo,
   onErroSibh?: (erro: unknown) => void,
 ): Promise<ResultadoComparativo> {
-  if (!posto.prefixoAna?.trim()) {
-    return { estado: 'sem_correspondencia', motivo: 'posto_sem_codigo_ana' };
+  // Sem NENHUM identificador não há o que procurar. Até 04/09/2026 esta guarda
+  // exigia o código ANA e retornava antes de tentar qualquer coisa: um posto
+  // sem código ANA e com prefixo que casa perfeitamente jamais era comparado.
+  // Como o prefixo é a chave que casa em 53,6% dos casos e o código ANA em
+  // 1,8%, o curto-circuito descartava justamente a via principal.
+  if (!posto.prefixo?.trim() && !posto.prefixoAna?.trim()) {
+    return { estado: 'sem_correspondencia', motivo: 'posto_sem_identificador' };
   }
 
   let estacoes: readonly EstacaoSibh[];
@@ -285,7 +333,7 @@ export async function compararSerieComSibh(
 
   const estacao = acharEstacaoCorrespondente(posto, estacoes);
   if (!estacao) {
-    return { estado: 'sem_correspondencia', motivo: 'codigo_ana_nao_esta_no_sibh' };
+    return { estado: 'sem_correspondencia', motivo: 'identificador_nao_esta_no_sibh' };
   }
 
   const identificacao: EstacaoCorrespondente = {

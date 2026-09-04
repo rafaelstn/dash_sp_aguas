@@ -23,7 +23,12 @@ export interface Estacao {
   bacia: string | null;
   /** Entidade responsável (SIBH station_owner); null = "Outros". */
   owner: string | null;
-  postoId: string | null;
+  /**
+   * Existe posto com este mesmo `prefixo` no catálogo do órgão. Booleano, e não
+   * id: o catálogo mora em outro banco (ADR-0023) e nenhum identificador dele
+   * chega ao navegador. Quem precisa navegar até o posto usa `prefixo`.
+   */
+  vinculadoAPosto: boolean;
   sibhId: string | null;
   criadoEm: string;
   /**

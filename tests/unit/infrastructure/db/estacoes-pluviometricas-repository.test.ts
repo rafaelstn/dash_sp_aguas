@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   estacoesPluviometricasRepository as repo,
@@ -45,7 +45,9 @@ describe('estações pluviométricas (mock) — upsertPorSibhId', () => {
     expect(e.sibhId).toBe('sibh-42');
     expect(e.tipoEstacao).toBe('pluviometrico');
     expect(e.bacia).toBeNull();
-    expect(e.postoId).toBeNull();
+    // Espelha o DEFAULT FALSE da coluna (migration 0067): sem vínculo é false,
+    // e não nulo, porque o campo é um fato e não um identificador.
+    expect(e.vinculadoAPosto).toBe(false);
     expect(e.criadoEm).toBeInstanceOf(Date);
   });
 
@@ -245,5 +247,100 @@ describe('estacoes-pluviometricas-repository.pg — regressão de schema', () =>
     // com concatenação de variável de usuário neste repo.
     expect(source).not.toMatch(/sql\.unsafe/);
     expect(source).not.toMatch(/FROM\s+["'`]\s*\+/);
+  });
+
+  it('persiste vinculado_a_posto (migration 0067) no insert, update e select', () => {
+    expect(source).toMatch(
+      /INSERT\s+INTO\s+estacoes_pluviometricas[\s\S]*vinculado_a_posto/,
+    );
+    expect(source).toMatch(/vinculado_a_posto\s*=\s*EXCLUDED\.vinculado_a_posto/);
+    expect(source).toMatch(
+      /COLUNAS\s*=\s*(?:\(\)\s*=>\s*)?sql`[^`]*vinculado_a_posto/,
+    );
+  });
+
+  it('não cita posto_id em lugar nenhum: identificador do banco do órgão não volta', () => {
+    // Incidente de 04/09/2026: `posto_id` era chave estrangeira para a nossa
+    // tabela `postos`, que ficou vazia com o ADR-0023, enquanto o valor gravado
+    // passou a ser o `Postos.Id` do SQL Server do órgão. 2.714 das 5.415
+    // estações eram recusadas pelo banco, e só as que NÃO casavam entravam.
+    //
+    // A proibição é do nome inteiro, inclusive em comentário, e isso é
+    // deliberado: guarda com exceção de contexto vira discussão sobre o que
+    // conta como "menção legítima", e a história desta coluna já está escrita
+    // nas migrations 0045, 0067 e 0068, que é onde ela pertence.
+    expect(source).not.toMatch(/posto_id/);
+  });
+});
+
+describe('migrations do vínculo estação x posto, o acoplamento entre os dois bancos', () => {
+  const dirMigrations = resolve(process.cwd(), 'supabase/migrations');
+  const arquivos = readdirSync(dirMigrations)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+  const ler = (nome: string) =>
+    readFileSync(resolve(dirMigrations, nome), 'utf-8');
+
+  it('0067 remove a chave estrangeira pelo nome real e cria o fato booleano', () => {
+    const m = ler('0067_estacoes_vinculo_posto_sem_chave_estrangeira.sql');
+    // O nome vem do banco, não da memória: é o que aparece no erro de produção
+    // e é o que `DROP CONSTRAINT IF EXISTS` precisa acertar para ter efeito.
+    expect(m).toMatch(
+      /DROP CONSTRAINT IF EXISTS\s+estacoes_pluviometricas_posto_id_fkey/,
+    );
+    expect(m).toMatch(
+      /ADD COLUMN IF NOT EXISTS\s+vinculado_a_posto\s+BOOLEAN\s+NOT NULL\s+DEFAULT FALSE/,
+    );
+    // O backfill lê a coluna antiga, então precisa ser guardado pelo catálogo:
+    // `db/migrate.sh` reaplica tudo a cada subida, e depois da 0068 uma
+    // referência literal a `posto_id` abortaria o psql e o app não subiria.
+    expect(m).toMatch(/information_schema\.columns/);
+    expect(m).toMatch(/EXECUTE\s+'UPDATE estacoes_pluviometricas/);
+  });
+
+  it('0068 remove a coluna, de forma reaplicável', () => {
+    const m = ler('0068_estacoes_remove_posto_id.sql');
+    expect(m).toMatch(/DROP COLUMN IF EXISTS\s+posto_id/);
+    expect(m).toMatch(/DROP INDEX IF EXISTS\s+idx_estacoes_pluviometricas_posto/);
+  });
+
+  it('nenhuma migration NOVA reintroduz posto_id em estacoes_pluviometricas', () => {
+    // Varre por MARCA (o nome da coluna junto do nome da tabela) em todo o
+    // diretório, e não por uma lista de arquivos conhecidos: arquivo novo com
+    // outro nome não tem porta dos fundos.
+    //
+    // Cada exceção carrega o escopo em que vale, senão ela cobre o caso que a
+    // guarda existe para pegar:
+    //   0045 -> criou a coluna e a chave estrangeira (histórico, não se edita)
+    //   0067 -> lê a coluna uma vez para migrar o valor para o booleano
+    //   0068 -> remove a coluna
+    // Qualquer outro arquivo citando os dois nomes está reabrindo o
+    // acoplamento que o ADR-0023 proíbe.
+    const permitidos = new Set([
+      '0045_estacoes_pluviometricas.sql',
+      '0067_estacoes_vinculo_posto_sem_chave_estrangeira.sql',
+      '0068_estacoes_remove_posto_id.sql',
+    ]);
+
+    const infratores = arquivos.filter((nome) => {
+      if (permitidos.has(nome)) return false;
+      const conteudo = readFileSync(resolve(dirMigrations, nome), 'utf-8');
+      return /estacoes_pluviometricas/.test(conteudo) && /posto_id/.test(conteudo);
+    });
+
+    expect(infratores).toEqual([]);
+  });
+
+  it('a 0068 é a última palavra: a coluna não é recriada depois dela', () => {
+    // A guarda acima olha nome de arquivo; esta olha ORDEM, que é o que o
+    // `db/migrate.sh` respeita (ele aplica em ordem alfabética, sem tabela de
+    // controle). Uma migration numerada acima da 0068 que fizesse
+    // `ADD COLUMN posto_id` desfaria a correção mesmo sem citar as duas marcas
+    // no mesmo trecho.
+    const depoisDa0068 = arquivos.filter((n) => n > '0068_estacoes_remove_posto_id.sql');
+    const recriam = depoisDa0068.filter((nome) =>
+      /ADD COLUMN[^;]*posto_id/i.test(readFileSync(resolve(dirMigrations, nome), 'utf-8')),
+    );
+    expect(recriam).toEqual([]);
   });
 });

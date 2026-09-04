@@ -16,7 +16,6 @@ export interface EstacaoLeituras {
   nome: string;
   bacia: string | null;
   tipo: TipoEstacao;
-  postoId: string | null;
 }
 
 /** Uma leitura diária: total de chuva do dia (mm). */

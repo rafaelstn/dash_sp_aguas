@@ -62,7 +62,7 @@ function fakeEstacoesRepo(): FakeEstacoesRepo {
         owner: estacao.owner ?? null,
         transmissionStatus: estacao.transmissionStatus ?? null,
         ultimaTransmissao: estacao.ultimaTransmissao ?? null,
-        postoId: estacao.postoId ?? null,
+        vinculadoAPosto: estacao.vinculadoAPosto ?? false,
         sibhId: estacao.sibhId,
         criadoEm: new Date('2026-01-01T00:00:00Z'),
       };
@@ -289,7 +289,7 @@ describe('use-case/sincronizarEstacoesPluviometricas', () => {
     expect(estacoesRepo.upserts[0]!.prefixo).toBe('P003');
   });
 
-  it('vincula posto_id quando existe posto com o mesmo prefixo', async () => {
+  it('marca vinculadoAPosto quando existe posto com o mesmo prefixo', async () => {
     const sibh = fakeSibh([
       estacao({ prefixo: 'P001' }),
       estacao({ prefixo: 'P002' }),
@@ -306,8 +306,72 @@ describe('use-case/sincronizarEstacoesPluviometricas', () => {
     expect(resumo.vinculadasAposto).toBe(1);
     const p001 = estacoesRepo.upserts.find((u) => u.prefixo === 'P001');
     const p002 = estacoesRepo.upserts.find((u) => u.prefixo === 'P002');
-    expect(p001!.postoId).toBe('posto-uuid-001');
-    expect(p002!.postoId).toBeNull();
+    // O que atravessa é o FATO, não o identificador do catálogo do órgão.
+    expect(p001!.vinculadoAPosto).toBe(true);
+    expect(p002!.vinculadoAPosto).toBe(false);
+  });
+
+  it('REGRESSÃO: casar com posto do órgão não impede mais a gravação', async () => {
+    // Incidente de produção de 04/09/2026. `estacoes_pluviometricas.posto_id`
+    // era chave estrangeira para a NOSSA tabela `postos`, que ficou vazia
+    // depois do ADR-0023, enquanto `mapaIdsPorPrefixo()` passou a devolver o
+    // `Postos.Id` do SQL Server do órgão. Toda estação que CASAVA com um posto
+    // era recusada pelo banco: 2.714 das 5.415, e a sincronização respondia
+    // HTTP 200 com os erros no corpo.
+    //
+    // Este caso trava o efeito, e não a implementação: todas casam, e todas
+    // precisam ser gravadas, com zero erro.
+    const prefixos = ['A1', 'A2', 'A3', 'A4', 'A5'];
+    const sibh = fakeSibh(
+      prefixos.map((p, i) => estacao({ prefixo: p, id: String(i + 1) })),
+    );
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo(
+      Object.fromEntries(prefixos.map((p) => [p, `id-do-orgao-${p}`])),
+    );
+
+    const resumo = await sincronizarEstacoesPluviometricas(
+      sibh,
+      estacoesRepo,
+      postosRepo,
+    );
+
+    expect(resumo.erros).toEqual([]);
+    expect(resumo.upsertadas).toBe(prefixos.length);
+    expect(resumo.totalSibh).toBe(prefixos.length);
+    // E `vinculadasAposto` reflete a realidade: antes ele era incrementado
+    // DEPOIS do upsert, então saía 0 justamente no cenário em que todas
+    // casavam, e se lia como "nenhuma estação tem posto".
+    expect(resumo.vinculadasAposto).toBe(prefixos.length);
+    expect(estacoesRepo.upserts).toHaveLength(prefixos.length);
+  });
+
+  it('GUARDA: nenhum identificador do banco do órgão atravessa para o upsert', async () => {
+    // Mede o DADO, não o nome do campo, e é essa a razão de ele existir: o
+    // TypeScript já barra o campo NOVO (o tipo do upsert não tem onde pôr um
+    // id, e literal fresco reprova propriedade desconhecida). O que ele NÃO
+    // barra é o id entrando num campo de texto que já existe.
+    //
+    // Provado que denuncia, com a fuga rodada: trocando o use-case para
+    // `prefixo: idsPorPrefixo.get(estacao.prefixo) ?? estacao.prefixo`, o
+    // `tsc --noEmit` sai 0 e este caso reprova nomeando o valor vazado.
+    const SENTINELA = 'ID-DO-ORGAO-QUE-NAO-PODE-ATRAVESSAR-0001';
+    const sibh = fakeSibh([
+      estacao({ prefixo: 'P001', id: '1' }),
+      estacao({ prefixo: 'P002', id: '2' }),
+    ]);
+    const estacoesRepo = fakeEstacoesRepo();
+    const postosRepo = fakePostosRepo({ P001: SENTINELA, P002: SENTINELA });
+
+    await sincronizarEstacoesPluviometricas(sibh, estacoesRepo, postosRepo);
+
+    expect(estacoesRepo.upserts).toHaveLength(2);
+    for (const u of estacoesRepo.upserts) {
+      expect(JSON.stringify(u)).not.toContain(SENTINELA);
+    }
+    // E o fato continua sendo gravado, senão a guarda passaria com o vínculo
+    // simplesmente removido do produto.
+    expect(estacoesRepo.upserts.every((u) => u.vinculadoAPosto === true)).toBe(true);
   });
 
   it('tolera falha por estação sem derrubar o lote', async () => {

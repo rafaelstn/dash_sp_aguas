@@ -57,8 +57,18 @@ export interface EstacaoPluviometrica {
    * 0053); o adapter converte o `Date` do banco para ISO. Alimenta "online".
    */
   ultimaTransmissao: string | null;
-  /** Vínculo opcional ao catálogo interno `postos` (ON DELETE SET NULL). */
-  postoId: string | null;
+  /**
+   * Havia posto com este mesmo `prefixo` no catálogo do órgão na última
+   * sincronização. Espelha a coluna `vinculado_a_posto` (migration 0067).
+   *
+   * É um FATO, não uma identidade. Depois do ADR-0023 o catálogo de postos vive
+   * no SQL Server do órgão, e guardar o `Postos.Id` dele aqui criava uma chave
+   * estrangeira entre os dois armazenamentos: era exatamente isso que recusava
+   * metade das estações na gravação (cabeçalho da migration 0067). Quem navega
+   * até o posto usa `prefixo`, a chave natural comum aos dois lados; o valor do
+   * id nunca foi lido por ninguém.
+   */
+  vinculadoAPosto: boolean;
   /**
    * Identificador do registro no SIBH. É a chave natural/estável da estação
    * (único quando preenchido, índice parcial único na migration 0052). `null`
@@ -99,7 +109,15 @@ export interface UpsertEstacaoPluviometrica {
    * `ultima_transmissao` (migration 0053).
    */
   ultimaTransmissao?: string | null;
-  postoId?: string | null;
+  /**
+   * A estação casou com um posto do catálogo do órgão pelo `prefixo`. Ausente
+   * equivale a `false`.
+   *
+   * Note que NÃO existe aqui nenhum identificador do outro armazenamento, e é
+   * de propósito: é o tipo que impede a chave estrangeira cruzada de voltar
+   * (`postoId` era o campo, a migration 0067 é o histórico).
+   */
+  vinculadoAPosto?: boolean;
 }
 
 /**

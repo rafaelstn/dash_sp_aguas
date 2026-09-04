@@ -94,24 +94,53 @@ function nivelSibh(dia: string, metros: number): PontoNivelSibh {
 }
 
 describe('casamento de estação', () => {
-  it('casa pelo código ANA, e não pelo prefixo do órgão', () => {
-    // MEDIDO em 03/09/2026: das 2.701 estações do SIBH, ZERO casam por
-    // `Postos.Prefixo` e 46 casam por `PrefixoDNAEE`. Aceitar o prefixo do
-    // órgão como chave criaria par falso na primeira coincidência.
+  it('casa pelo PREFIXO do órgão, que é a chave principal', () => {
+    // INVERTIDO em 04/09/2026, e a inversão É a correção.
+    //
+    // O caso anterior afirmava o oposto, citando "das 2.701 estações do SIBH,
+    // ZERO casam por Postos.Prefixo". A medição estava certa sobre a amostra, e
+    // a amostra estava errada: foi feita contra `estacoes_pluviometricas`, que
+    // continha APENAS as estações que não casavam, porque as que casavam
+    // violavam a chave estrangeira e nunca eram gravadas (migration 0067). O
+    // resultado saiu invertido, e não só impreciso.
+    //
+    // MEDIDO contra a fonte dos dois lados: prefixo casa 2.706 de 5.050
+    // (53,6%), código ANA casa 93 (1,8%).
     const estacoes = [estacao('02147031'), estacao('C4-019')];
     const achado = acharEstacaoCorrespondente(
       { prefixo: 'C4-019', prefixoAna: '02147031' },
       estacoes,
     );
+    expect(achado?.prefixo).toBe('C4-019');
+  });
+
+  it('cai para o código ANA quando o prefixo não casa', () => {
+    // O código ANA cobre um resto pequeno e real, então continua sendo tentado.
+    const achado = acharEstacaoCorrespondente(
+      { prefixo: 'C4-019', prefixoAna: '02147031' },
+      [estacao('02147031')],
+    );
     expect(achado?.prefixo).toBe('02147031');
   });
 
-  it('não casa quando o posto não tem código ANA', () => {
+  it('casa por prefixo mesmo SEM código ANA nenhum', () => {
+    // O caso que o curto-circuito antigo descartava antes de olhar: 1.093
+    // postos não têm código ANA, e o prefixo deles casa normalmente.
     expect(
-      acharEstacaoCorrespondente({ prefixo: 'C4-019', prefixoAna: null }, [estacao('C4-019')]),
-    ).toBeNull();
+      acharEstacaoCorrespondente({ prefixo: 'C4-019', prefixoAna: null }, [estacao('C4-019')])
+        ?.prefixo,
+    ).toBe('C4-019');
     expect(
-      acharEstacaoCorrespondente({ prefixo: 'C4-019', prefixoAna: '   ' }, [estacao('C4-019')]),
+      acharEstacaoCorrespondente({ prefixo: 'C4-019', prefixoAna: '   ' }, [estacao('C4-019')])
+        ?.prefixo,
+    ).toBe('C4-019');
+  });
+
+  it('não casa quando nenhum dos dois identificadores está no SIBH', () => {
+    expect(
+      acharEstacaoCorrespondente({ prefixo: 'C4-019', prefixoAna: '02147031' }, [
+        estacao('99999999'),
+      ]),
     ).toBeNull();
   });
 
@@ -176,20 +205,44 @@ describe('cruzamento por dia', () => {
 });
 
 describe('os quatro estados', () => {
-  it('posto sem código ANA responde sem_correspondencia, e diz o motivo', async () => {
+  it('posto sem identificador NENHUM responde sem_correspondencia, e diz o motivo', async () => {
     const r = await compararSerieComSibh(
       repositorio([dia('2025-03-01', 10)]),
       gateway({}),
-      { prefixo: 'C4-019', prefixoAna: null },
+      { prefixo: '', prefixoAna: null },
       'chuva_manual',
       JANELA,
     );
     expect(r.estado).toBe('sem_correspondencia');
-    expect(r).toMatchObject({ motivo: 'posto_sem_codigo_ana' });
+    expect(r).toMatchObject({ motivo: 'posto_sem_identificador' });
   });
 
-  it('código ANA que o SIBH não conhece é outro motivo, e a distinção importa', async () => {
-    // "Este posto não tem código" é problema de cadastro; "tem código e o SIBH
+  it('posto SEM código ANA mas com prefixo que casa continua comparando', async () => {
+    // Regressão do curto-circuito corrigido em 04/09/2026: a guarda de entrada
+    // exigia código ANA e retornava ANTES de consultar o SIBH, então um posto
+    // sem código ANA e com prefixo que casa perfeitamente jamais chegava a
+    // comparar. Como o prefixo é a chave que casa em 53,6% dos casos, ela
+    // descartava a via principal.
+    const r = await compararSerieComSibh(
+      repositorio([dia('2025-03-01', 10)]),
+      gateway({
+        listarEstacoes: vi.fn(async () => [estacao('C4-019')]),
+        medicoesPorPrefixo: vi.fn(async () => [chuvaSibh('C4-019', '2025-03-01', 10)]),
+      }),
+      { prefixo: 'C4-019', prefixoAna: null },
+      'chuva_manual',
+      JANELA,
+    );
+    // Afirma o estado FINAL, e não só "deixou de recusar": um curto-circuito
+    // movido para depois da chamada ao SIBH passaria num `not.toBe`.
+    expect(r).toMatchObject({
+      estado: 'dado_dos_dois_lados',
+      estacao: { prefixo: 'C4-019' },
+    });
+  });
+
+  it('identificador que o SIBH não conhece é outro motivo, e a distinção importa', async () => {
+    // "Este posto não tem identificador" é problema de cadastro; "tem e o SIBH
     // não conhece" é problema de vocabulário entre os dois sistemas. São
     // conversas diferentes com o órgão, e colapsá-las apaga a diferença.
     const r = await compararSerieComSibh(
@@ -201,7 +254,7 @@ describe('os quatro estados', () => {
     );
     expect(r).toMatchObject({
       estado: 'sem_correspondencia',
-      motivo: 'codigo_ana_nao_esta_no_sibh',
+      motivo: 'identificador_nao_esta_no_sibh',
     });
   });
 

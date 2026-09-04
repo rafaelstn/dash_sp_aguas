@@ -218,7 +218,9 @@ export async function GET(
           nome: estacao.nome,
           bacia: estacao.bacia,
           tipo: estacao.tipo,
-          postoId: estacao.postoId,
+          // Sem campo de vinculo ao posto aqui: o painel de detalhe monta o
+          // cabecalho a partir da estacao que ja veio de /api/monitor/estacoes,
+          // e nenhum consumidor lia este campo (medido antes de remover).
         },
         itens,
       },

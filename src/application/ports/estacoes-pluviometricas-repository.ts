@@ -10,6 +10,14 @@ import type {
  * Contrato enxuto: só o que o painel (B2/B3) e o sync (B1.2) vão consumir. O
  * adapter PG persiste em `estacoes_pluviometricas` (migration 0045); o adapter
  * mock guarda em memória para o modo demo.
+ *
+ * Regra que este contrato passa a carregar com a migration 0067: **nenhum campo
+ * daqui transporta identificador do banco do órgão.** O vínculo ao catálogo de
+ * postos é o booleano `vinculadoAPosto` mais o `prefixo`, nunca o `Postos.Id`
+ * do SQL Server. Persistir aquele id como chave estrangeira do nosso PostgreSQL
+ * foi o que recusou 2.714 das 5.415 estações na sincronização de produção: o
+ * ADR-0023 proíbe acoplamento entre os dois armazenamentos, e este era o ponto
+ * onde ele entrava sem aparecer como `JOIN`.
  */
 export interface EstacoesPluviometricasRepository {
   /**

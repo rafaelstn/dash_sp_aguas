@@ -40,7 +40,7 @@ export function ListaEstacoes({
       cabecalho: 'Estação',
       interativa: true,
       render: (e) =>
-        e.postoId && e.prefixo ? (
+        e.vinculadoAPosto && e.prefixo ? (
           <Link
             href={`/postos/${encodeURIComponent(e.prefixo)}`}
             className="inline-flex items-center gap-1.5 rounded-sm text-app-fg hover:text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"

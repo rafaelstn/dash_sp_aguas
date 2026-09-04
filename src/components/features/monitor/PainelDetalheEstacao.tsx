@@ -224,7 +224,7 @@ function CabecalhoPainel({
           {estacao.nome || 'Sem nome'}
         </h2>
         <p className="mt-0.5 text-sm text-app-fg-muted">{meta.join(' · ')}</p>
-        {estacao.postoId && estacao.prefixo ? (
+        {estacao.vinculadoAPosto && estacao.prefixo ? (
           <Link
             href={`/postos/${encodeURIComponent(estacao.prefixo)}`}
             className="mt-1.5 inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"

@@ -90,7 +90,7 @@ const FORMA_VINCULADA: FormaPonto = { raio: 6.5, espessuraBorda: 2.5 };
 const FORMA_PADRAO: FormaPonto = { raio: 4, espessuraBorda: 1 };
 
 export function ehVinculada(e: Estacao): boolean {
-  return Boolean(e.postoId);
+  return e.vinculadoAPosto;
 }
 
 export function formaDaEstacao(e: Estacao): FormaPonto {

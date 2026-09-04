@@ -8,8 +8,20 @@
  * em `estacoes_pluviometricas` com o canal 'automatico' (estação vinda do
  * logger do SIBH) e o `tipoEstacao` correspondente. Conflitar por sibhId (e não
  * por prefixo) permite que o mesmo prefixo coexista em tipos diferentes.
- * Quando existe um posto do catálogo com o mesmo prefixo, grava o vínculo
- * `posto_id`.
+ *
+ * VÍNCULO AO CATÁLOGO DE POSTOS, e por que ele é um booleano
+ *
+ * Depois do ADR-0023 o catálogo de postos vive no SQL Server do órgão, e
+ * `postosRepo.mapaIdsPorPrefixo()` devolve o `Postos.Id` DELES. Até a migration
+ * 0067 esse id era gravado em `estacoes_pluviometricas.posto_id`, que era chave
+ * estrangeira para a nossa tabela `postos` (vazia por desenho): toda estação que
+ * CASAVA com um posto era recusada pelo banco, 2.714 das 5.415, e a sincronização
+ * respondia HTTP 200 com os erros no corpo.
+ *
+ * Agora o que atravessa é só o fato de ter casado. O mapa continua sendo
+ * carregado numa consulta por lote, que é o que o ADR-0023 prescreve para
+ * composição entre os dois armazenamentos; o que mudou é que o identificador do
+ * outro banco morre aqui, dentro deste arquivo, e não vira coluna nossa.
  *
  * Camada fina e testável: recebe as portas por injeção, não conhece banco nem
  * HTTP. Degrada por estação (uma estação ruim não derruba o lote inteiro).
@@ -58,7 +70,15 @@ export interface ResumoSyncEstacoes {
   totalSibh: number;
   /** Quantas estações foram inseridas ou atualizadas no banco. */
   upsertadas: number;
-  /** Dentre as upsertadas, quantas casaram com um posto do catálogo. */
+  /**
+   * Quantas estações casaram com um posto do catálogo do órgão, pelo prefixo.
+   *
+   * Contado no CASAMENTO, e não na gravação: antes ele era incrementado depois
+   * do upsert, e como o upsert falhava justamente para quem casava, o número
+   * saía `0` e se lia como "nenhuma estação tem posto" quando o fato era
+   * "todas as que têm posto falharam". Falha de escrita aparece em `erros`, que
+   * é onde ela pertence; este campo responde à cobertura SIBH x catálogo.
+   */
   vinculadasAposto: number;
   /** Estações puladas por não terem coordenada válida (lat/lng obrigatórios). */
   puladasSemCoordenada: number;
@@ -76,7 +96,8 @@ export interface ResumoSyncEstacoes {
  *
  * @param sibh        Gateway do SIBH (fonte das estações automáticas).
  * @param estacoesRepo Repositório de estações do Monitor (upsert por sibhId).
- * @param postosRepo  Catálogo interno de postos (para o vínculo posto_id).
+ * @param postosRepo  Catálogo de postos do órgão (só para saber se o prefixo da
+ *                    estação existe lá; o id dele não sai deste arquivo).
  */
 export async function sincronizarEstacoesPluviometricas(
   sibh: SibhGateway,
@@ -152,8 +173,15 @@ async function sincronizarUma(
     throw new Error(`tipo hidrológico não suportado: ${estacao.tipo}`);
   }
 
-  // Vínculo ao catálogo: consulta em memória, o mapa já veio pronto.
-  const postoId = idsPorPrefixo.get(estacao.prefixo) ?? null;
+  // Vínculo ao catálogo: consulta em memória, o mapa já veio pronto. O id do
+  // posto é lido e DESCARTADO aqui: o que interessa (e o que pode ser gravado
+  // sem acoplar os dois armazenamentos) é apenas se houve casamento.
+  const vinculadoAPosto = idsPorPrefixo.has(estacao.prefixo);
+
+  // Contado antes da escrita, de propósito: ver o comentário do campo em
+  // `ResumoSyncEstacoes`. Casar é fato do SIBH contra o catálogo, e não
+  // consequência de a gravação ter dado certo.
+  if (vinculadoAPosto) resumo.vinculadasAposto += 1;
 
   await estacoesRepo.upsertPorSibhId({
     // Chave natural do upsert: o id estável do SIBH.
@@ -171,9 +199,8 @@ async function sincronizarUma(
     // Status de transmissão para derivar "online" (persistido, migration 0053).
     transmissionStatus: estacao.transmissionStatus,
     ultimaTransmissao: estacao.ultimaTransmissao,
-    postoId,
+    vinculadoAPosto,
   });
 
   resumo.upsertadas += 1;
-  if (postoId) resumo.vinculadasAposto += 1;
 }
