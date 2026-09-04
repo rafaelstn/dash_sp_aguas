@@ -226,10 +226,18 @@ async function buscar(): Promise<PainelCadastroDbfch> {
           totalPostos: Number(r0.total),
           postosComCoordenadas: Number(r0.comCoordenadas),
           postosComTelemetria: Number(r0.comTelemetria),
-          // ZERO DECLARADO, E NÃO NÚMERO AUSENTE. Ver o bloco
-          // `DESCONFORMIDADE` no fim deste arquivo: a régua de desconformidade
-          // é da planilha DAEE e não descreve o vocabulário do `Dbfch`.
-          desconformidadesPostos: 0,
+          // `null` É A ORIGEM DECLARANDO QUE NÃO CLASSIFICA CONFORMIDADE, e
+          // não um número que faltou. Ver o bloco `DESCONFORMIDADE` no fim
+          // deste arquivo: a régua é da planilha DAEE e não descreve o
+          // vocabulário do `Dbfch`, onde ela marcaria 54% da rede como
+          // irregular.
+          //
+          // Antes isto era `0`, e o painel tinha de adivinhar o que aquele zero
+          // significava, por uma heurística que errava nos dois sentidos: base
+          // genuinamente limpa também produz zero, e ficava marcada como não
+          // apurada. Publicar "nenhuma inconsistência detectada" sem ter
+          // detectado coisa alguma é pior que dizer que não se sabe.
+          desconformidadesPostos: null,
         },
         status: {
           total: Number(s0.total),

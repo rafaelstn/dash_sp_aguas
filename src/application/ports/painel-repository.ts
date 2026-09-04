@@ -27,7 +27,18 @@ export interface ResumoPendencias {
   postosComCoordenadas: number;
   postosSemCoordenadas: number;
   postosComTelemetria: number;
-  desconformidadesPostos: number;
+  /**
+   * Postos com cadastro irregular, ou `null` quando a ORIGEM não classifica
+   * conformidade.
+   *
+   * O `null` não é ausência de dado: é a origem DECLARANDO que não tem régua.
+   * Sem ele, zero carrega duas leituras opostas ("a régua rodou e não achou
+   * nada" e "não existe régua aqui"), e o painel precisa adivinhar qual das
+   * duas mostrar. Quem consome isto não pode tratar `null` como zero: a
+   * decisão entre exibir o número e dizer que o indicador não foi apurado é de
+   * `lib/painel-apuracao.ts`, e mora só lá.
+   */
+  desconformidadesPostos: number | null;
   arquivosOrfaos: number;
   /**
    * Tendências dos KPIs que têm base temporal. Mapa chaveado pela métrica.
@@ -136,10 +147,17 @@ export interface ResumoCadastroPostos {
    * Postos com prefixo ou código ANA fora do padrão.
    *
    * Fica na metade CADASTRAL, e não na nossa, porque é derivação pura do
-   * prefixo do posto: quem muda de origem leva a derivação junto. Adaptador
-   * cuja origem não sabe classificar devolve zero e escreve o motivo.
+   * prefixo do posto: quem muda de origem leva a derivação junto.
+   *
+   * **Adaptador cuja origem não sabe classificar devolve `null`, e não zero.**
+   * Devolver zero foi o que este contrato pedia antes, e obrigava o painel a
+   * inferir a diferença por heurística: se o número era zero E não havia
+   * nenhuma classe apurada, ele supunha "origem sem régua". A heurística era
+   * conservadora e ainda assim errada nos dois sentidos, porque uma base
+   * genuinamente limpa também produz esse par e ficava marcada como não
+   * apurada. `null` é a origem falando, e não o painel adivinhando.
    */
-  desconformidadesPostos: number;
+  desconformidadesPostos: number | null;
 }
 
 /**

@@ -76,8 +76,6 @@ export const MOTIVO_INDEXACAO_INDISPONIVEL =
   'Histórico de indexação indisponível no momento.';
 export const MOTIVO_CONFORMIDADE_SEM_CRITERIO =
   'Critério de conformidade em definição com o órgão.';
-export const MOTIVO_CONFORMIDADE_SEM_CLASSIFICACAO =
-  'Sem classificação de conformidade nesta base.';
 
 /* ──────────────────────────────────────────────────────────────────────────
  * VEREDITO 1 — "POSTOS SEM ARQUIVO"
@@ -144,27 +142,29 @@ export function apuracaoDeConformidade(
   }
 
   /*
-   * DÍVIDA DECLARADA, E ELA CAI QUANDO O CONTRATO CARREGAR O `null`.
+   * DÍVIDA QUITADA EM 04/09/2026. O registro fica porque a forma antiga é
+   * tentadora, e quem a reintroduzir vai achar que está sendo prudente.
    *
-   * Isto está errado e ainda não foi corrigido: hoje o adaptador do `Dbfch`
-   * devolve `0` (e não `null`) para um indicador que ele não sabe apurar, e o
-   * contrato `ResumoPendencias.desconformidadesPostos` é `number`. Sem uma
-   * declaração da origem, "0 desconformes com nenhuma classe" tem duas
-   * leituras: origem sem régua, ou régua que não achou nada.
+   * Havia aqui uma heurística: "zero desconformes E nenhuma classe apurada"
+   * era lido como origem sem régua. Ela existia porque o contrato entregava
+   * `0` para um indicador que a origem não sabe apurar, e o painel não tinha
+   * como distinguir isso de uma régua que rodou e não achou nada.
    *
-   * Enquanto isso, o conservador é tratar como NÃO APURADO, e por isso o
-   * motivo é redigido para ser verdadeiro nas duas leituras (fala de
-   * classificação AUSENTE, não de critério inexistente). O custo é subestimar
-   * uma base limpa; o custo do contrário seria afirmar "nenhuma inconsistência
-   * detectada" sem ter detectado coisa alguma.
+   * A heurística era conservadora e ERRADA NOS DOIS SENTIDOS: uma base
+   * genuinamente limpa produz exatamente o mesmo par, e ficava marcada como
+   * não apurada. Ou seja, ela escondia o bom resultado junto com o
+   * desconhecido, e o painel nunca poderia dizer "está tudo certo".
    *
-   * QUANDO `desconformidadesPostos` PASSAR A SER `number | null`: apagar este
-   * bloco inteiro e devolver `{ apurado: true, valor: 0 }` aqui, porque aí zero
-   * volta a ser zero medido.
+   * Agora o contrato carrega `number | null` e o adaptador do `Dbfch` devolve
+   * `null`: a origem DECLARA em vez de o painel adivinhar, e zero volta a ser
+   * zero medido.
+   *
+   * `classesDeDesconformidade` deixou de participar da decisão. Continua no
+   * parâmetro porque as três superfícies governadas por esta função o
+   * consomem, e porque devolvê-lo à decisão exigiria mexer na assinatura, o
+   * que torna a reintrodução visível em diff em vez de silenciosa.
    */
-  if (desconformidadesPostos === 0 && classesDeDesconformidade.length === 0) {
-    return { apurado: false, motivo: MOTIVO_CONFORMIDADE_SEM_CLASSIFICACAO };
-  }
+  void classesDeDesconformidade;
 
   return { apurado: true, valor: desconformidadesPostos };
 }

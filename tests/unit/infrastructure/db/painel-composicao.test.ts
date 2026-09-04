@@ -15,6 +15,8 @@
  * arquivo possível sem subir banco.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type {
   PainelCadastroRepository,
   PainelOperacaoRepository,
@@ -205,5 +207,67 @@ describe('comporPainelRepository, a aritmética entre as duas origens', () => {
     });
     expect((await painel.distribuicaoPorTipo())[0]?.tipo).toBe('PLUVIOMÉTRICO');
     expect((await painel.rankingUGRHI())[0]?.numero).toBe('2');
+  });
+});
+
+describe('a declaração de "não classifico conformidade" atravessa intacta', () => {
+  it('null do cadastro chega ao resumo como null, e nunca como zero', async () => {
+    // O compositor é o único ponto por onde a resposta do órgão passa antes da
+    // tela. Se ele normalizasse `null` para `0` "por segurança", o painel
+    // voltaria a publicar "nenhuma inconsistência detectada" sem ter detectado
+    // coisa alguma, e nada quebraria: o tipo aceita zero.
+    const painel = comporPainelRepository(
+      cadastroDuble({
+        resumoCadastro: async () => ({
+          totalPostos: 5790,
+          postosComCoordenadas: 5784,
+          postosComTelemetria: 149,
+          desconformidadesPostos: null,
+        }),
+      }),
+      operacaoDuble(),
+    );
+
+    const resumo = await painel.resumoPendencias();
+    expect(resumo.desconformidadesPostos).toBeNull();
+    // Afirmado à parte, porque `toBeNull` passaria com `undefined` num objeto
+    // montado à mão, e undefined chegaria à tela como traço mudo.
+    expect(resumo.desconformidadesPostos).not.toBe(0);
+  });
+
+  it('numero medido continua atravessando, inclusive o zero', async () => {
+    // O par do caso acima: uma origem QUE classifica e achou zero precisa
+    // chegar como zero. Sem este caso, um compositor que devolvesse `null`
+    // sempre passaria no primeiro.
+    for (const valor of [0, 489]) {
+      const painel = comporPainelRepository(
+        cadastroDuble({
+          resumoCadastro: async () => ({
+            totalPostos: 5790,
+            postosComCoordenadas: 5784,
+            postosComTelemetria: 149,
+            desconformidadesPostos: valor,
+          }),
+        }),
+        operacaoDuble(),
+      );
+      const resumo = await painel.resumoPendencias();
+      expect(resumo.desconformidadesPostos).toBe(valor);
+    }
+  });
+
+  it('o adaptador do Dbfch declara null no fonte, e não zero', () => {
+    // Guarda de FONTE porque o adaptador precisa do SQL Server do órgão para
+    // rodar, e esta regressão não pode depender de VPN para aparecer.
+    //
+    // Voltar para `desconformidadesPostos: 0` é uma edição de um caractere que
+    // não quebra tipo nenhum e devolve o painel ao defeito que ele tinha antes
+    // de 04/09/2026, quando a régua do órgão ainda não existe.
+    const fonte = readFileSync(
+      join(process.cwd(), 'src/infrastructure/db/painel-cadastro-repository.mssql.ts'),
+      'utf-8',
+    );
+    expect(fonte).toMatch(/desconformidadesPostos:\s*null/);
+    expect(fonte).not.toMatch(/desconformidadesPostos:\s*0(?!\d)/);
   });
 });

@@ -7,7 +7,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  MOTIVO_CONFORMIDADE_SEM_CLASSIFICACAO,
   MOTIVO_CONFORMIDADE_SEM_CRITERIO,
   MOTIVO_INDEXACAO_INDISPONIVEL,
   MOTIVO_INDEXACAO_NUNCA_EXECUTOU,
@@ -110,14 +109,19 @@ describe('apuração de conformidade do cadastro', () => {
     expect(v.apurado).toBe(false);
   });
 
-  it('reprova o zero sem classificação nenhuma, que é o estado de hoje', () => {
-    // Ponte enquanto o contrato ainda entrega `0` no lugar de `null`. Quando
-    // ele passar a entregar `null`, este caso deixa de existir e o de baixo
-    // ("zero com régua") assume o lugar dele.
+  it('aprova zero SEM classe nenhuma, porque base limpa também é resultado', () => {
+    // Este caso é o INVERSO do que existia aqui até 04/09/2026, e a inversão é
+    // a correção, não um afrouxamento.
+    //
+    // A ponte antiga lia "zero desconformes e nenhuma classe" como origem sem
+    // régua. Era conservador e errado nos dois sentidos: uma base genuinamente
+    // limpa produz exatamente o mesmo par, e ficava marcada como não apurada,
+    // ou seja, o painel nunca poderia dizer "está tudo certo".
+    //
+    // Quem declara ausência de régua passou a ser a ORIGEM, com `null`, e isso
+    // é o caso logo acima. Aqui zero é zero medido.
     const v = apuracaoDeConformidade(0, []);
-    expect(v.apurado).toBe(false);
-    if (v.apurado) throw new Error('inalcançável');
-    expect(v.motivo).toBe(MOTIVO_CONFORMIDADE_SEM_CLASSIFICACAO);
+    expect(v).toEqual({ apurado: true, valor: 0 });
   });
 
   it('aprova zero quando existe classificação, porque aí o zero foi medido', () => {
@@ -138,7 +142,6 @@ describe('os motivos são texto de produto, e não mensagem técnica', () => {
     MOTIVO_INDEXACAO_NUNCA_EXECUTOU,
     MOTIVO_INDEXACAO_INDISPONIVEL,
     MOTIVO_CONFORMIDADE_SEM_CRITERIO,
-    MOTIVO_CONFORMIDADE_SEM_CLASSIFICACAO,
   ];
 
   it.each(motivos)('"%s" é frase completa, sem vocabulário de código', (m) => {
