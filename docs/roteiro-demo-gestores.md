@@ -12,11 +12,14 @@ acesso fechado. Detalhe em `docs/verificacao-2026-08-18.md`.
 
 **Endereço:** `https://dash-sp-aguas.vercel.app`
 
-**Se for demonstrar da máquina local em vez da produção:** abra o projeto pela unidade mapeada
-(`F:\Projetos\Clientes\GOV\SPAGUAS - DMO`), **nunca** pelo caminho de rede `\\192.168.18.170\...`,
-porque as ferramentas não rodam de caminho UNC. E confira que é esta pasta: existe uma cópia
-desatualizada, de abril, em `C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica`, que não deve ser
-aberta.
+**Se for demonstrar da máquina local em vez da produção:** rode de `C:\Projetos\gov\dmo`, que é a
+bancada. O `F:\Projetos\Clientes\GOV\SPAGUAS - DMO` é espelho de leitura e não tem as dependências
+instaladas. Nunca abrir pelo caminho de rede `\\192.168.18.170\...`, porque as ferramentas não
+rodam de caminho UNC.
+
+A cópia desatualizada de abril que ficava em `C:\Projetos\Clientes\GOV\SPAGUAS - Ficha Tecnica`
+foi apagada em 05/09/2026, na reorganização das pastas. O `.env.local` dela, que apontava para
+outro projeto Supabase, ficou guardado em `F:\Credenciais\spaguas-dmo-ambiente-abril-2026.txt`.
 
 **Checagem de 10 segundos, antes da reunião:** abrir
 `https://dash-sp-aguas.vercel.app/api/health`. Tem que responder `{"status":"ok","db":"ok"}`. Se o

@@ -597,6 +597,10 @@ Dois pontos correlatos, para registro:
   outro repositório git, de abril de 2026, com 15 páginas e 13 rotas de API contra as 38 e 66 da
   versão atual. Não mexi nela. Recomendo apagar ou renomear para algo inequívoco, porque abrir a
   pasta errada custa caro justamente num dia de reunião.
+  **Resolvido em 05/09/2026:** a cópia foi apagada na reorganização das pastas, depois de medir que
+  ela não tinha nenhum commit fora do GitHub. O `.env.local` dela apontava para outro projeto
+  Supabase, então foi preservado em `F:\Credenciais\spaguas-dmo-ambiente-abril-2026.txt`. A bancada
+  passou a ser `C:\Projetos\gov\dmo`.
 
 ---
 
