@@ -59,7 +59,36 @@ export function ehNaoApurado(valor: ValorKPI): valor is KPINaoApurado {
  */
 export type Apuracao<T> =
   | { readonly apurado: true; readonly valor: T }
-  | { readonly apurado: false; readonly motivo: string };
+  | {
+      readonly apurado: false;
+      readonly motivo: string;
+      /**
+       * `true` quando o indicador **não será apurado nesta instalação**, e não
+       * apenas "ainda não foi". A diferença decide o que a tela faz com ele:
+       *
+       *   ausente ou `false`  ainda não apurado. O cartão FICA, dizendo o
+       *                       motivo, porque um dia ele vai trazer número.
+       *                       É o caso da conformidade, que espera a régua
+       *                       do órgão.
+       *   `true`              não há caminho para apurar aqui. O cartão SAI,
+       *                       porque cartão que exibe "não apurado" para
+       *                       sempre é vaga morta no painel: ocupa o lugar
+       *                       de um indicador que traria informação e ensina
+       *                       o gestor a ignorar aquela região da tela.
+       *
+       * Campo opcional de propósito: quem já lia `motivo` continua correto
+       * sem mudar uma linha, e só quem decide layout precisa olhar isto.
+       */
+      readonly foraDeEscopo?: true;
+    };
+
+/**
+ * `true` quando o indicador não tem como ser apurado nesta instalação. Existe
+ * como função para o `?.` e o `=== true` não se espalharem pela tela.
+ */
+export function ehForaDeEscopo<T>(a: Apuracao<T>): boolean {
+  return a.apurado === false && a.foraDeEscopo === true;
+}
 
 /* ──────────────────────────────────────────────────────────────────────────
  * OS MOTIVOS
@@ -74,6 +103,14 @@ export const MOTIVO_INDEXACAO_NUNCA_EXECUTOU =
   'Nenhuma indexação de arquivos executada nesta base.';
 export const MOTIVO_INDEXACAO_INDISPONIVEL =
   'Histórico de indexação indisponível no momento.';
+/**
+ * Só aparece em log e em teste: o cartão que receberia este motivo é retirado
+ * da tela, então o gestor nunca lê esta frase. Existe nomeada mesmo assim
+ * porque é ela que explica, para quem for ler o código ou o teste, POR QUE o
+ * cartão sumiu naquela instalação.
+ */
+export const MOTIVO_INDEXACAO_FORA_DE_ESCOPO =
+  'Indexação de arquivos fora de escopo nesta instalação.';
 export const MOTIVO_CONFORMIDADE_SEM_CRITERIO =
   'Critério de conformidade em definição com o órgão.';
 
@@ -105,11 +142,29 @@ export interface SinalDeIndexacao {
  * @param sinal `null` quando a consulta ao histórico falhou — desconhecido
  *   também é não apurado, e com motivo próprio, porque manda procurar em outro
  *   lugar (infraestrutura, e não escopo).
+ * @param indexadorNoAmbiente `false` quando o indexador não existe nesta
+ *   instalação, e aí o veredito é FORA DE ESCOPO e não "ainda não rodou".
+ *   Omitido, assume `true`, que preserva o comportamento de quem já chamava
+ *   esta função com dois argumentos.
+ *
+ * A ORDEM DOS TESTES IMPORTA, e é esta de propósito: o escopo vem PRIMEIRO,
+ * antes até da falha de consulta. Numa instalação sem indexador, o histórico de
+ * indexação estar indisponível é irrelevante, e responder "indisponível no
+ * momento" mandaria o gestor esperar por um número que não vem nunca, ou
+ * procurar defeito de infraestrutura que não existe.
  */
 export function apuracaoDePostosSemArquivo(
   sinal: SinalDeIndexacao | null,
   postosSemArquivo: number,
+  indexadorNoAmbiente: boolean = true,
 ): Apuracao<number> {
+  if (!indexadorNoAmbiente) {
+    return {
+      apurado: false,
+      motivo: MOTIVO_INDEXACAO_FORA_DE_ESCOPO,
+      foraDeEscopo: true,
+    };
+  }
   if (sinal === null) {
     return { apurado: false, motivo: MOTIVO_INDEXACAO_INDISPONIVEL };
   }

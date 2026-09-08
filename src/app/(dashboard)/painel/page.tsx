@@ -25,8 +25,10 @@ import {
   apuracaoDeArquivosOrfaos,
   apuracaoDeConformidade,
   apuracaoDePostosSemArquivo,
+  ehForaDeEscopo,
   naoApurado,
 } from '@/lib/painel-apuracao';
+import { indexadorDisponivelNesteAmbiente } from '@/infrastructure/indexer/lazy-indexer';
 import { CardKPI } from '@/components/features/painel/CardKPI';
 import {
   BlocoNaoApurado,
@@ -320,9 +322,25 @@ export default async function PaginaPainel() {
    * a régua de desconformidade não descreve o vocabulário do `Dbfch`. A regra
    * e o porquê de cada um estão em `@/lib/painel-apuracao`.
    */
+  /*
+   * O terceiro estado, e por que ele não é "mais um motivo".
+   *
+   * "Postos sem arquivo" depende do indexador, e a imagem entregue ao órgão não
+   * carrega Python nem a pasta `ops/` (runbook `entrega-imagem-sem-internet`,
+   * §9.3), enquanto o ADR-0023 põe arquivos indexados fora do escopo daquela
+   * instalação. Ali o cartão não está "esperando a primeira indexação": ele
+   * nunca vai apurar. Mantê-lo exibindo o motivo para sempre é vaga morta no
+   * painel, e pior, ensina o gestor a ignorar aquele canto da tela, onde um dia
+   * pode aparecer coisa que importa.
+   *
+   * A distinção é a mesma que a ficha do posto já faz desde 03/09/2026 com
+   * `IndexadorIndisponivelError`: ausência de ambiente é classe diferente de
+   * falha. O que muda aqui é só quem pergunta, e quando.
+   */
   const semArquivo = apuracaoDePostosSemArquivo(
     atividade,
     resumo.postosSemArquivos,
+    indexadorDisponivelNesteAmbiente(),
   );
   const conformidade = apuracaoDeConformidade(
     resumo.desconformidadesPostos,
@@ -391,21 +409,28 @@ export default async function PaginaPainel() {
             §9.3). Sai o texto, e uma guarda passa a reprovar rótulo de ação
             sem destino em qualquer cartão do sistema.
           */}
-          <CardKPI
-            titulo="Postos sem arquivo"
-            valor={
-              semArquivo.apurado
-                ? semArquivo.valor
-                : naoApurado(semArquivo.motivo)
-            }
-            contexto={`${formatarPercentual(100 - pctCobertura)} da rede não indexada`}
-            severidade="critica"
-            icone={FolderX}
-            valorAnterior={resumo.tendencias.postosSemArquivos?.valorAnterior}
-            serie={resumo.tendencias.postosSemArquivos?.serie}
-            sentidoPositivo="menor"
-            rotuloPeriodo="vs. mês anterior"
-          />
+          {/*
+            O cartão SOME quando a instalação não tem como apurar, e continua
+            aparecendo quando o número apenas ainda não existe. São coisas
+            diferentes: a segunda é espera, a primeira é ausência definitiva.
+          */}
+          {!ehForaDeEscopo(semArquivo) && (
+            <CardKPI
+              titulo="Postos sem arquivo"
+              valor={
+                semArquivo.apurado
+                  ? semArquivo.valor
+                  : naoApurado(semArquivo.motivo)
+              }
+              contexto={`${formatarPercentual(100 - pctCobertura)} da rede não indexada`}
+              severidade="critica"
+              icone={FolderX}
+              valorAnterior={resumo.tendencias.postosSemArquivos?.valorAnterior}
+              serie={resumo.tendencias.postosSemArquivos?.serie}
+              sentidoPositivo="menor"
+              rotuloPeriodo="vs. mês anterior"
+            />
+          )}
           <CardKPI
             titulo="Cadastro irregular"
             valor={

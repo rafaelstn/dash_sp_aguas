@@ -1,6 +1,7 @@
 import 'server-only';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { sql } from '@/infrastructure/db/client';
 
@@ -287,4 +288,39 @@ export class IndexadorIndisponivelError extends Error {
 export function ehIndexadorAusente(erro: unknown): boolean {
   const codigo = (erro as { code?: unknown } | null)?.code;
   return codigo === 'ENOENT' || codigo === 'EACCES';
+}
+
+/**
+ * O indexador existe NESTE ambiente? Responde ANTES de alguém tentar usá-lo.
+ *
+ * `ehIndexadorAusente` acima resolve o caso reativo: o erro já aconteceu e
+ * precisa ser classificado. Só que o painel não dispara indexação nenhuma, e
+ * mesmo assim precisa da resposta, para não anunciar ao gestor um indicador que
+ * nunca vai trazer número naquela instalação. Perguntar por um `spawn` a cada
+ * carregamento do painel seria pagar um processo por render para saber algo que
+ * não muda enquanto o container vive.
+ *
+ * A pergunta é feita ao DISCO, e não ao Python: a imagem de produção
+ * (`node:24-alpine`) não tem o interpretador **nem carrega a pasta `ops/`**,
+ * conforme a seção 9.3 do runbook `entrega-imagem-sem-internet.md`. A ausência
+ * do módulo é a mesma evidência e custa uma chamada de sistema.
+ *
+ * O resultado é memoizado porque o sistema de arquivos do container não ganha
+ * pasta nova em tempo de execução. O caminho sai de variável de ambiente para o
+ * teste exercitar os dois lados sem mexer no disco do projeto.
+ */
+let indexadorNoAmbiente: boolean | null = null;
+
+export function indexadorDisponivelNesteAmbiente(): boolean {
+  if (indexadorNoAmbiente === null) {
+    indexadorNoAmbiente = existsSync(
+      process.env.CAMINHO_MODULO_INDEXER ?? 'ops/indexer',
+    );
+  }
+  return indexadorNoAmbiente;
+}
+
+/** Só para teste: descarta a memoização entre casos. */
+export function esquecerDisponibilidadeDoIndexador(): void {
+  indexadorNoAmbiente = null;
 }

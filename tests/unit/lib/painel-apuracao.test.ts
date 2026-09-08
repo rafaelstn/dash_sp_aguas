@@ -8,11 +8,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOTIVO_CONFORMIDADE_SEM_CRITERIO,
+  MOTIVO_INDEXACAO_FORA_DE_ESCOPO,
   MOTIVO_INDEXACAO_INDISPONIVEL,
   MOTIVO_INDEXACAO_NUNCA_EXECUTOU,
   apuracaoDeArquivosOrfaos,
   apuracaoDeConformidade,
   apuracaoDePostosSemArquivo,
+  ehForaDeEscopo,
   ehNaoApurado,
   naoApurado,
   type ValorKPI,
@@ -89,6 +91,96 @@ describe('apuração de "postos sem arquivo"', () => {
     );
     // Zero aprovado é zero MEDIDO, e tem de chegar à tela como zero.
     expect(v).toEqual({ apurado: true, valor: 0 });
+  });
+});
+
+/*
+ * FORA DE ESCOPO É CLASSE PRÓPRIA, E NÃO UM MOTIVO A MAIS.
+ *
+ * O que separa os dois: "ainda não apurado" é espera e o cartão fica na tela
+ * dizendo por quê; "fora de escopo" é ausência definitiva naquela instalação e
+ * o cartão sai. Confundi-los deixa o painel com uma vaga exibindo o mesmo aviso
+ * para sempre, que é como se ensina alguém a ignorar um canto da tela.
+ *
+ * Os casos abaixo procuram a forma de ESCAPAR da distinção: o perigo real é o
+ * escopo ser engolido por outro veredito, e não o caminho feliz falhar.
+ */
+describe('"postos sem arquivo" quando o indexador não existe na instalação', () => {
+  it('responde fora de escopo, e não "nunca executou"', () => {
+    const v = apuracaoDePostosSemArquivo(
+      { totalLotesIndexacao: 0, arquivosIndexadosTotal: 0 },
+      5790,
+      false,
+    );
+    expect(v.apurado).toBe(false);
+    expect(ehForaDeEscopo(v)).toBe(true);
+    // O motivo tem de ser o do escopo. Cair em NUNCA_EXECUTOU faria o gestor
+    // esperar por uma indexação que ninguém vai rodar ali.
+    if (!v.apurado) expect(v.motivo).toBe(MOTIVO_INDEXACAO_FORA_DE_ESCOPO);
+  });
+
+  it('o escopo vence a falha de consulta, que é a ordem que importa', () => {
+    // Sem indexador, "histórico indisponível" é irrelevante: mandaria procurar
+    // defeito de infraestrutura que não existe.
+    const v = apuracaoDePostosSemArquivo(null, 5790, false);
+    expect(ehForaDeEscopo(v)).toBe(true);
+    if (!v.apurado) expect(v.motivo).toBe(MOTIVO_INDEXACAO_FORA_DE_ESCOPO);
+  });
+
+  it('o escopo vence até a base COM indexação registrada', () => {
+    // Caso adversarial: se um dia a instalação sem indexador herdar um banco
+    // com histórico, o número não pode voltar a aparecer, porque ali ele não
+    // descreve mais a realidade daquele ambiente.
+    const v = apuracaoDePostosSemArquivo(
+      { totalLotesIndexacao: 12, arquivosIndexadosTotal: 4000 },
+      321,
+      false,
+    );
+    expect(ehForaDeEscopo(v)).toBe(true);
+  });
+
+  it('NÃO marca fora de escopo onde o indexador existe: aí é espera', () => {
+    // O outro lado da guarda, que é o que quase ninguém escreve. Sem este caso,
+    // uma implementação que respondesse "fora de escopo" SEMPRE passaria nos
+    // três acima e esconderia o cartão em toda instalação.
+    const nuncaRodou = apuracaoDePostosSemArquivo(
+      { totalLotesIndexacao: 0, arquivosIndexadosTotal: 0 },
+      5790,
+      true,
+    );
+    expect(ehForaDeEscopo(nuncaRodou)).toBe(false);
+    if (!nuncaRodou.apurado) {
+      expect(nuncaRodou.motivo).toBe(MOTIVO_INDEXACAO_NUNCA_EXECUTOU);
+    }
+
+    const apurado = apuracaoDePostosSemArquivo(
+      { totalLotesIndexacao: 3, arquivosIndexadosTotal: 900 },
+      42,
+      true,
+    );
+    expect(ehForaDeEscopo(apurado)).toBe(false);
+    expect(apurado).toEqual({ apurado: true, valor: 42 });
+  });
+
+  it('quem chama com dois argumentos continua correto', () => {
+    // O parâmetro nasceu opcional para não obrigar a mexer em toda chamada
+    // existente. Se o padrão fosse `false`, os outros vereditos sumiriam da
+    // tela em silêncio no dia em que este código subisse.
+    const antigo = apuracaoDePostosSemArquivo(
+      { totalLotesIndexacao: 0, arquivosIndexadosTotal: 0 },
+      5790,
+    );
+    expect(ehForaDeEscopo(antigo)).toBe(false);
+  });
+
+  it('apurado nunca é fora de escopo, em nenhuma combinação', () => {
+    const v = apuracaoDePostosSemArquivo(
+      { totalLotesIndexacao: 1, arquivosIndexadosTotal: 0 },
+      7,
+      true,
+    );
+    expect(v.apurado).toBe(true);
+    expect(ehForaDeEscopo(v)).toBe(false);
   });
 });
 
