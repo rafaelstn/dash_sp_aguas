@@ -8,9 +8,18 @@ name: CI
 # exige e quebra o `npm ci` só no CI. Depois de mexer em dependência, regenerar com
 # `npm run lock:ci` antes do push.
 
+# A branch de trabalho entra no gatilho de propósito. Ela é onde o
+# desenvolvimento acontece desde 19/08/2026, e até 08/09 acumulou cerca de 35
+# commits que NUNCA passaram por esta porta: o gatilho só cobria `main`, e a
+# fusão para `main` ainda não aconteceu. CI que não roda no lugar onde o código
+# é escrito não é porta de qualidade, é enfeite.
+#
+# É uma branch nomeada e não um curinga porque cada execução gasta minuto de
+# Actions em `ubuntu-latest`, e a conta do GitHub é assunto aberto na operação.
+# Quando esta branch for fundida, a linha sai junto: o `main` volta a bastar.
 on:
   push:
-    branches: [main]
+    branches: [main, chore/preparar-container-prodesp-offline]
   pull_request:
     branches: [main]
 
