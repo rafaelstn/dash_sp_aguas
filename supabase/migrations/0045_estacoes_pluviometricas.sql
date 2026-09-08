@@ -52,10 +52,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_estacoes_pluviometricas_prefixo
   ON estacoes_pluviometricas (prefixo)
   WHERE prefixo IS NOT NULL;
 
--- vinculo ao catalogo, indexado so onde existe.
-CREATE INDEX IF NOT EXISTS idx_estacoes_pluviometricas_posto
-  ON estacoes_pluviometricas (posto_id)
-  WHERE posto_id IS NOT NULL;
+-- Vinculo ao catalogo, indexado so onde existe.
+--
+-- O `IF NOT EXISTS` do CREATE INDEX NAO basta aqui, e foi o que quebrou a
+-- reaplicacao. A migration 0068 remove a coluna `posto_id`, e o indice cai
+-- junto com ela. Numa base ja migrada, reaplicar este arquivo encontra a
+-- tabela existente (o CREATE TABLE IF NOT EXISTS pula), o indice ausente, e a
+-- coluna tambem ausente: o CREATE INDEX passa da guarda de existencia do
+-- indice e morre em `column "posto_id" does not exist`.
+--
+-- MEDIDO em 08/09/2026, na primeira execucao do CI nesta branch: a etapa
+-- "Reaplicar tudo (as migrations tem que ser idempotentes)" abortou nesta
+-- linha, com exit 3. Do zero nunca falhou, porque ali a coluna existe (foi
+-- criada acima) e a 0068 so roda depois.
+--
+-- A condicao pergunta pela COLUNA, e nao pelo indice: quem some primeiro e ela.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_name = 'estacoes_pluviometricas'
+       AND column_name = 'posto_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_estacoes_pluviometricas_posto
+      ON estacoes_pluviometricas (posto_id)
+      WHERE posto_id IS NOT NULL;
+  END IF;
+END $$;
 
 -- filtragem por bacia no painel.
 CREATE INDEX IF NOT EXISTS idx_estacoes_pluviometricas_bacia
