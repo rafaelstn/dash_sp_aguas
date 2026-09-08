@@ -344,6 +344,20 @@ regular.
     testado não conta como backup.
 12. **As senhas que trafegaram por WhatsApp precisam ser trocadas** (servidor e
     Portainer).
+13. **O CI passou a rodar nesta branch em 08/09/2026, e achou defeito na
+    primeira execução.** O gatilho cobria só a `main`, então cerca de trinta e
+    cinco commits desde 19/08 nunca tinham passado por lint, typecheck, testes
+    nem pela etapa de integração. Minutos depois de ligar, a etapa "Reaplicar
+    tudo (as migrations têm que ser idempotentes)" reprovou: a `0045` indexa
+    `posto_id` e a `0068` remove essa coluna, então reaplicar sobre base já
+    migrada morria em `column "posto_id" does not exist`. Do zero nunca falhava,
+    que é por isso que ninguém tinha visto.
+
+    Corrigido e provado nos dois sentidos contra Postgres com PostGIS local, na
+    mesma imagem do CI. Run verde nos três jobs (`34246814039`).
+
+    **A linha do gatilho sai quando esta branch for fundida na `main`**, e é
+    branch nomeada e não curinga porque cada execução gasta minuto de Actions.
 
 ---
 
