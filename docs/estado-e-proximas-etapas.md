@@ -86,9 +86,11 @@ vez de manter lista.
 1. **`/desconformidades` responde zerada.** A régua de desconformidade não foi
    portada para a origem do órgão, e a antiga classificaria 54% da rede como
    irregular, o que não se publica sem a régua nova (seção 4).
-2. **`ResumoPendencias.desconformidadesPostos` precisa aceitar `number | null`**,
-   para a tela distinguir "medimos e deu zero" de "não temos como medir", que é a
-   distinção que o painel já faz nos outros blocos.
+2. ~~**`ResumoPendencias.desconformidadesPostos` precisa aceitar
+   `number | null`**~~ **FEITO em 04/09/2026.** O contrato já declara
+   `number | null` (`application/ports/painel-repository.ts`) e o adaptador do
+   órgão devolve `null` com o motivo escrito ao lado. Conferido no código em
+   08/09/2026.
 3. **Substituto medível: DESCARTADO em 04/09/2026, e o motivo importa.** Eu havia
    registrado "1.093 postos sem código ANA" como número que o órgão reconhece e
    não depende de régua nova. Conferido, ele não se sustenta em três frentes:
@@ -134,8 +136,10 @@ vez de manter lista.
    afirmar transmissão contradiria a própria base do cliente. Está fixado em
    guarda (`tests/unit/components/painel/telemetria-nao-afirma-transmissao.test.ts`),
    porque a troca é o tipo de coisa que alguém faz de boa-fé achando que melhora.
-4. **Relatório em PDF mostra 2 de 5 campos de instrumentação.** Os outros três
-   existem na origem e não chegam ao documento.
+4. ~~**Relatório em PDF mostra 2 de 5 campos de instrumentação.**~~ **FEITO em
+   04/09/2026** (commit `f95fde7`). O documento traz os cinco, na mesma ordem e
+   com os mesmos rótulos da ficha de tela, porque ele existe para ser conferido
+   CONTRA ela. Conferido no código em 08/09/2026.
 5. **Migração de remoção dos 12 campos órfãos**, só depois que o adaptador
    PostgreSQL de posto sair de cena. Antes disso a remoção é irreversível sem
    ganho.
@@ -207,24 +211,47 @@ código que está rodando ainda grava naquela coluna.
    tabela envenenada pelo defeito do item 6, que continha só as estações que não
    casavam. Corrigido no catálogo de séries, seção 2.2.
 
-### 3.2.1 Dois achados do painel que ainda estão abertos
+### 3.2.1 Os dois achados do painel: RESOLVIDOS
 
 Vieram da revisão de produto de 04/09/2026. O terceiro achado dela, o cartão de
-arquivos órfãos verde por medição que não aconteceu, já foi corrigido.
+arquivos órfãos verde por medição que não aconteceu, foi corrigido no mesmo dia.
 
 - **"Postos sem arquivo" é permanentemente não apurável nesta instalação**, e
   isso é classe diferente de "Cadastro irregular". O ADR-0023 põe arquivos
   indexados fora de escopo e a imagem do órgão não contém o indexador (runbook
   §9.3). O de conformidade será apurado quando a régua chegar; este não será
-  apurado nunca ali. Cartão permanentemente inerte é vaga morta, e esconder por
-  instalação é decisão de produto que ainda não foi tomada.
-- **Hipótese barata que vale mais que preencher cadastro:** os identificadores do
-  SIBH incluem valores de sete dígitos (`1000010`) e o projeto já conhece a
-  classe `faltando_zero_esquerda`. Cruzar `PrefixoDNAEE` contra o código do SIBH
-  normalizado para oito dígitos com zero à esquerda custa uma consulta. **Não
-  está medido.** Se casar, eleva a cobertura do comparativo muito acima do que
-  qualquer preenchimento de cadastro elevaria, e responde parte da pergunta 2 ao
-  órgão sem depender da resposta dele.
+  apurado nunca ali.
+
+  **RESOLVIDO em 08/09/2026, e a decisão de produto foi tomada: o cartão SAI da
+  tela onde não há como apurar.** `Apuracao<T>` ganhou o estado `foraDeEscopo`,
+  que é classe própria e não mais um motivo: "ainda não apurado" é espera e o
+  cartão fica dizendo por quê; "fora de escopo" é ausência definitiva e o cartão
+  não é renderizado. Quem responde se o indexador existe é
+  `indexadorDisponivelNesteAmbiente()`, que pergunta ao disco pela pasta `ops/`
+  (a mesma evidência que a imagem não carrega) uma vez por processo, e não a
+  cada render.
+
+  O escopo é avaliado ANTES da falha de consulta, de propósito: numa instalação
+  sem indexador, responder "histórico indisponível no momento" mandaria o gestor
+  esperar por um número que não vem, ou procurar defeito de infraestrutura que
+  não existe.
+
+  Provado por mutante: removida a guarda de escopo, reprovam exatamente três
+  casos, e os outros vinte e três seguem passando. O caso que quase não se
+  escreve está lá: onde o indexador EXISTE, `foraDeEscopo` tem de ser falso,
+  senão uma implementação que escondesse o cartão em toda instalação passaria.
+
+- **Hipótese do zero à esquerda: MEDIDA e descartada, ainda em 04/09/2026.** O
+  texto acima dizia "não está medido", e envelheceu em horas: a medição está na
+  seção 2.2 do catálogo `series-de-medicao-dbfch-e-sibh.md`. Normalizar prefixo
+  numérico para oito dígitos rende **164 de 1.235** (13,3%) contra os **53,6%**
+  que o casamento direto por `Postos.Prefixo` já entrega. Não vale a
+  complexidade.
+
+  Remedido de forma independente em 08/09/2026, contra a API do SIBH (6.018
+  estações) e o CSV oficial de postos: o ganho da normalização é **zero** pelo
+  `prefix` e **dois postos** pelo `alt_prefix`, sobre uma amostra de 512. A
+  conclusão do catálogo se confirma por outro caminho.
 
 ### 3.2.2 Inventário da varredura de código morto (04/09/2026)
 

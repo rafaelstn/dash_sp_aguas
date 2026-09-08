@@ -29,19 +29,36 @@
  * ═════════════════════════════════════════════════════════════════════════
  * O QUE A MEDIÇÃO DIZ QUE VAI ACONTECER NA PRÁTICA
  * ═════════════════════════════════════════════════════════════════════════
- * MEDIDO em 03/09/2026, e está no catálogo `series-de-medicao-dbfch-e-sibh.md`:
+ * MEDIDO em 04/09/2026 contra a FONTE dos dois lados (a API do SIBH e o
+ * `Dbfch`), e está no catálogo `series-de-medicao-dbfch-e-sibh.md`:
  *
- *   Das 2.701 estações do SIBH, ZERO casam com `Postos.Prefixo` e 46 casam com
- *   `Postos.PrefixoDNAEE`. São 2% de cobertura.
+ *   `prefix` x `Postos.Prefixo`        2.706 estações,  53,6% de cobertura
+ *   `prefix` x `Postos.PrefixoDNAEE`      93 estações,   1,8%
+ *
+ *   **O prefixo do próprio órgão é a chave, e o código ANA é o caso
+ *   minoritário.** É por isso que a correspondência abaixo tenta o prefixo
+ *   PRIMEIRO e só depois cai para o código ANA.
  *
  *   As cinco séries do órgão param em agosto de 2025 (uma em dezembro), e o
  *   SIBH entrega dado desta semana. **Não há sobreposição no tempo.**
  *
- * Ou seja: hoje este caso de uso responde `sem_correspondencia` em 98% dos
- * postos e `sem_dado_no_periodo` em quase todo o resto. Isso não é defeito, é
- * o retrato do que existe, e é exatamente o que o proprietário precisa VER na
- * tela para decidir o que pedir ao órgão. Escondê-lo atrás de um gráfico vazio
- * transformaria um achado em silêncio.
+ * Ou seja: hoje este caso de uso encontra correspondência em pouco mais da
+ * metade da rede, e nessas responde `sem_dado_no_periodo` enquanto as duas
+ * pontas não tiverem janela em comum. Isso não é defeito, é o retrato do que
+ * existe, e é exatamente o que o proprietário precisa VER na tela para decidir
+ * o que pedir ao órgão. Escondê-lo atrás de um gráfico vazio transformaria um
+ * achado em silêncio.
+ *
+ * **CORREÇÃO DE 08/09/2026.** Este bloco afirmava "ZERO casam com
+ * `Postos.Prefixo` e 46 casam com `PrefixoDNAEE`, 2% de cobertura", e concluía
+ * que o caso de uso responderia `sem_correspondencia` em 98% dos postos. Estava
+ * **invertido**: a medição de 03/09 rodou contra uma tabela cujo critério de
+ * entrada era justamente "não casou com posto", então mediu o complemento do
+ * que queria medir. O catálogo foi corrigido em 04/09 e a função abaixo passou
+ * a tentar o prefixo primeiro na mesma data; só este comentário ficou para
+ * trás, afirmando o contrário do que o código faz. Comentário que descreve o
+ * oposto do comportamento é pior que comentário ausente, porque quem lê para
+ * de procurar.
  *
  * ═════════════════════════════════════════════════════════════════════════
  * A CONVERSÃO DE UNIDADE ACONTECE AQUI, E SÓ AQUI
