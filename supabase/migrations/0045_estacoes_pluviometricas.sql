@@ -48,9 +48,41 @@ COMMENT ON TABLE estacoes_pluviometricas IS
 
 -- prefixo unico apenas entre valores nao nulos (varias estacoes podem estar
 -- sem prefixo durante a conciliacao, mas dois prefixos iguais sao proibidos).
-CREATE UNIQUE INDEX IF NOT EXISTS uq_estacoes_pluviometricas_prefixo
-  ON estacoes_pluviometricas (prefixo)
-  WHERE prefixo IS NOT NULL;
+--
+-- ESTE INDICE E TRANSITORIO, e por isso a criacao e guardada. A migration 0052
+-- o DERRUBA (`DROP INDEX IF EXISTS uq_estacoes_pluviometricas_prefixo`), porque
+-- o SIBH repete prefixo entre tipos hidrologicos e a chave natural passou a ser
+-- `sibh_id`. No estado final ele NAO existe.
+--
+-- MEDIDO em 10/09/2026, em PRODUCAO, e custou o servico no ar: reaplicar este
+-- arquivo abortou com
+--   ERROR: could not create unique index "uq_estacoes_pluviometricas_prefixo"
+--   DETAIL: Key (prefixo)=(532) is duplicated.
+-- e como o `app` so sobe depois de o `migrate` encerrar com sucesso, o site
+-- respondeu 502 ate o servico ser restaurado. O banco tinha 363 prefixos
+-- duplicados, que sao LEGITIMOS desde a 0052: apagar seria destruir dado do
+-- SIBH para satisfazer um indice que a proxima migration remove.
+--
+-- O `IF NOT EXISTS` nao protege, pelo mesmo motivo do indice de `posto_id`
+-- abaixo: a 0052 removeu o indice, entao ele esta ausente, o CREATE passa da
+-- guarda de existencia e morre na duplicata. A condicao pergunta por `sibh_id`,
+-- a coluna que a 0052 acrescenta: se ela existe, aquela migration ja rodou e
+-- este indice nao deve voltar. Do zero, `sibh_id` ainda nao existe neste ponto
+-- e o indice e criado normalmente, preservando a historia do schema.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_name  = 'estacoes_pluviometricas'
+       AND column_name = 'sibh_id'
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_estacoes_pluviometricas_prefixo
+      ON estacoes_pluviometricas (prefixo)
+      WHERE prefixo IS NOT NULL;
+  END IF;
+END
+$$;
 
 -- Vinculo ao catalogo, indexado so onde existe.
 --
