@@ -15,10 +15,14 @@ seção 4 estão prontas para virar ofício.
    favorito e foto voltou a funcionar. Ver 2.4.
 3. **O painel Portainer do servidor responde na internet pública e está em versão
    vulnerável** (CVE-2026-72533, CVSS 9.4). É infraestrutura do órgão, não nossa. Ver 2.5.
-4. **Os dois pontos de CÓDIGO que a migration não alcançava foram corrigidos**: a aprovação
-   de triagem parou de responder `posto_inativo` para posto ativo, e o `aceitar-match` do
-   ANA parou de responder 404 para posto que existe e de tentar escrever num cadastro
-   somente leitura. **Não estão em produção**: falta o transporte de versão (IN-05). Ver 2.6.
+4. **Os dois pontos de CÓDIGO que a migration não alcançava foram corrigidos e SUBIRAM**:
+   a aprovação de triagem parou de responder `posto_inativo` para posto ativo, e o
+   `aceitar-match` do ANA parou de responder 404 para posto que existe e de tentar escrever
+   num cadastro somente leitura. No ar desde 10/09 na `sha-5ff93c7`. Ver 2.6 e 2.7.
+5. **A migration 0045 bloqueava TODO deploy, e derrubou o serviço por três minutos.** Ela
+   recriava um índice único de `prefixo` que a 0052 derruba de propósito, e o banco tem 363
+   prefixos duplicados legítimos. Não era defeito de uma entrega: nenhuma subida passaria
+   pelo caminho normal. Corrigido e validado em produção. Ver 2.7.
 
 Documento de ESTADO envelhece por construção, porque descreve um instante. Cada
 afirmação daqui traz a data em que foi medida, e frase do tipo "está vazio",
@@ -196,17 +200,58 @@ no repositório, ou seja, teria reprovado a correção; outra reprovava a própr
 comentário, com o caso que prova que ainda enxergam o trecho removido. Régua apagada deixa
 o caminho livre; régua invertida denuncia a volta por descuido.
 
+### 2.7 O deploy de 10/09, e o incidente que ele antecipou
+
+A versão `sha-5ff93c7` subiu em 10/09/2026. Registro completo da passagem, com integridade
+conferida nas duas pontas e a lista do que foi verificado depois, em
+`docs/runbooks/registro-de-entregas.md`.
+
+**A primeira tentativa derrubou o serviço, e a causa não era a entrega.** O `migrate`
+abortou ao reaplicar a 0045:
+
+```
+ERROR: could not create unique index "uq_estacoes_pluviometricas_prefixo"
+DETAIL: Key (prefixo)=(532) is duplicated.
+```
+
+O índice é **transitório**: a 0045 o cria e a 0052 o **derruba**, porque o SIBH repete
+prefixo entre tipos hidrológicos e a chave natural passou a ser `sibh_id`. Como o
+`migrate.sh` reaplica todos os arquivos a cada subida, a 0045 encontrava o índice ausente,
+passava do `IF NOT EXISTS` e morria na duplicata. E o `app` só sobe depois de o `migrate`
+encerrar com sucesso, então o site respondeu **502 por cerca de três minutos**.
+
+Medido no banco do órgão: **363 prefixos duplicados**, e eles são **legítimos** desde a
+0052. Apagar seria destruir dado do SIBH para satisfazer um índice que a migration seguinte
+remove. Não era anomalia: era o estado normal.
+
+**Restauração:** o app subiu sem a dependência do `migrate` (`up -d --no-deps app`), seguro
+porque o banco já tinha o schema completo, inclusive a 0069.
+
+**Correção (commit `5ff93c7`):** a criação do índice passou a ser guardada por catálogo,
+perguntando por `sibh_id`, no mesmo padrão que o commit `c612d6e` já usara no outro índice
+deste arquivo. Provada do zero e na reaplicação com duplicata presente, e validada em
+produção: `migrate` com **exit 0** e "[migrate] concluído".
+
+**O que fica, e vale mais que a correção:** enquanto estivesse assim, **nenhum** deploy
+subiria pelo caminho normal. O incidente não foi causado pela entrega, foi **antecipado**
+por ela. E a primeira tentativa de provar a correção passou **por vacuidade**, porque a
+semeadura da duplicata falhou em silêncio e a reaplicação rodou sem duplicata nenhuma; só
+conferindo a contagem de duplicados antes de reaplicar é que a prova passou a valer.
+
 ---
 
 ## 3. Próximas etapas, em ordem
 
-### 3.0 Fechar o fluxo de ficha: FEITO em código, falta subir (10/09/2026)
+### 3.0 Fechar o fluxo de ficha: FEITO e NO AR desde 10/09/2026
 
-Os dois pontos que estavam abertos aqui foram corrigidos e estão descritos na 2.6, com a
-prova de cada um. **O que resta é transporte de versão**, que é o item IN-05 e não é
-tarefa de código: o servidor do órgão não tem internet e a subida tem procedimento próprio.
+Os dois pontos que estavam abertos aqui foram corrigidos (descritos na 2.6, com a prova de
+cada um) e **subiram para produção em 10/09/2026**, na versão `sha-5ff93c7`. A passagem
+está registrada em `docs/runbooks/registro-de-entregas.md`, com o incidente da subida.
 
-Ao subir, conferir na tela, e não só no log:
+O item IN-05 (canal oficial de transporte de versão) **continua pendente do órgão**: a
+subida foi feita pelo caminho disponível hoje, SSH com VPN e imagem por arquivo.
+
+**Falta a conferência NA TELA**, que nenhum log substitui e que só se faz usando o produto:
 
 1. Aprovar uma ficha de triagem de um posto que o órgão tem como ATIVO, e ver a promoção
    concluir. Antes disso, toda aprovação respondia 409 `posto_inativo`.
