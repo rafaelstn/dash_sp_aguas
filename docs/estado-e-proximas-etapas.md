@@ -1,8 +1,20 @@
 # Estado do projeto e próximas etapas
 
-**Atualizado em 04/09/2026.** Este documento é o ponto de retomada: o que está de
+**Atualizado em 10/09/2026.** Este documento é o ponto de retomada: o que está de
 pé, o que está medido e o que ainda não foi afirmado. As perguntas ao órgão na
 seção 4 estão prontas para virar ofício.
+
+**O que mudou em 10/09/2026, e é o que evita reabrir investigação já fechada:**
+
+1. **`postos` está vazia em produção: MEDIDO, e não mais inferido.** `count(*) = 0` no
+   banco do órgão, junto de `fichas_visita`, `fichas_triagem`, favoritos e fotos, todas em
+   zero. Até aqui a única base da afirmação era o comentário datado de 02/09 em
+   `repositories.ts`.
+2. **As nove chaves estrangeiras contra `postos` foram removidas em produção**
+   (migration 0069). Eram **nove e não oito**: `ana_revisao_estacao` tem duas. Gravar ficha,
+   favorito e foto voltou a funcionar. Ver 2.4.
+3. **O painel Portainer do servidor responde na internet pública e está em versão
+   vulnerável** (CVE-2026-72533, CVSS 9.4). É infraestrutura do órgão, não nossa. Ver 2.5.
 
 Documento de ESTADO envelhece por construção, porque descreve um instante. Cada
 afirmação daqui traz a data em que foi medida, e frase do tipo "está vazio",
@@ -28,7 +40,7 @@ vamos ler na tela tem que ser diretamente do banco original"*.
 
 ---
 
-## 2. Concluído em 03 e 04/09/2026
+## 2. Concluído em 03, 04 e 10/09/2026
 
 ### 2.1 Séries históricas de medição (módulo Monitor)
 
@@ -77,9 +89,84 @@ vez de manter lista.
 
 **Cadeia:** typecheck e lint limpos, 99 arquivos e 998 casos verdes.
 
+### 2.4 As nove FKs contra `postos` saíram, e a gravação de ficha voltou (10/09/2026)
+
+**O defeito.** O ADR-0023 deixou `postos` vazia por desenho, e nove restrições de chave
+estrangeira ainda ligavam os dados próprios a ela. Com a tabela vazia, elas recusavam a
+escrita de qualquer registro que se referisse a um posto: ficha de visita, ficha de
+triagem, favorito, foto, cache de indexação e caminho de posto, todos com `23503`.
+
+É a **mesma classe** que a 0067 fechou em 04/09 para o Monitor (2.714 estações recusadas).
+Aquela migration nomeou a classe com todas as letras ("o nono ponto, e o único que não
+aparece como JOIN") e **corrigiu um membro só**. Estes eram os restantes.
+
+| Medição | Antes | Depois |
+|---|---|---|
+| FKs contra `postos` (produção) | 9 | **0** |
+| Índices das seis tabelas de prefixo | 22 | 22 |
+| INSERT de ficha com `postos` vazia | `23503` | **aceito** |
+
+**O que a 0069 faz:** remove as nove restrições, mantendo coluna e índice. Nas seis de
+`prefixo` a coluna **é** a chave natural compartilhada (a navegação já é
+`/postos/{prefixo}`); nas três de `posto_id` remove-se só a FK, porque o módulo ANA lê
+essas colunas em JOIN local e removê-las é escopo próprio. Nenhum dado alterado.
+
+**Ordem seguida em produção**, e ela é a regra da casa: provado contra o banco real numa
+transação desfeita (9 → 0 → 9, sem resíduo), aplicado, conferido **no catálogo** e não na
+saída do comando, e a gravação de ficha verificada com INSERT em transação desfeita.
+
+**Guarda que impede a classe de voltar:**
+`tests/integration/acoplamento-postos-fk-postgres.test.ts` pergunta ao **catálogo**
+(`pg_constraint`), não ao texto das migrations, e recusa qualquer FK para `postos` fora de
+uma lista de permissão que **nasce vazia**. Provada nos dois lados (reprova nomeando as 9
+antes, passa depois) e com sonda em transação desfeita, para não passar por vacuidade.
+A guarda anterior media UMA tabela pelo nome literal, e por isso não via as outras oito.
+
+**O que a 0069 NÃO resolve, e é código do próximo deploy:** a aprovação de triagem faz
+`SELECT ... FROM postos` e responde sempre `posto_inativo` com a tabela vazia
+(`triagem-repository.pg.ts`), e o "aceitar match" do inventário ANA responde 404 para posto
+que existe e ainda tenta **escrever** em `postos`, que é somente leitura pelo ADR-0023.
+
+### 2.5 Portainer: exposto na internet e em versão vulnerável (10/09/2026)
+
+Medido de rede externa, sem qualquer tentativa de autenticação: o painel responde em
+`https://dmo.spaguas.sp.gov.br/portainer/` **sem VPN** e informa a versão (2.39.6) sem
+autenticação. Essa versão é afetada pela **CVE-2026-72533 (CVSS 9.4)**, corrigida na
+2.39.7: escalonamento a root do host por usuário autenticado **sem** privilégio
+administrativo. Conferido na fonte (advisory oficial do Portainer), não de memória.
+
+**É infraestrutura do órgão, não nossa.** Está no relatório de pendências de 10/09 como
+item IN-03, com a recomendação em ordem de esforço. O que é nosso e foi corrigido: o
+roteiro de deploy mandava usar esse painel pela internet, e a DamaTech passou a ter conta
+nele (o Diego enviou os logins), o que entra no IN-04.
+
 ---
 
 ## 3. Próximas etapas, em ordem
+
+### 3.0 Fechar o fluxo de ficha: os dois pontos que a 0069 não alcança
+
+A 0069 restaurou a **gravação**. Estes dois são de **código**, vão no próximo deploy, e
+ambos falham hoje por consultarem a `postos` vazia. Nenhum deles é resolvido por migration.
+
+1. **Aprovação de triagem responde `posto_inativo` para posto ativo.**
+   `triagem-repository.pg.ts` faz `SELECT deleted_at FROM postos WHERE prefixo = ...` dentro
+   da transação de aprovação; com a tabela vazia, `postos[0]` é sempre `undefined` e toda
+   aprovação vira 409. A pergunta "este posto existe e está ativo?" tem que ir ao
+   `postosRepository` (SQL Server), e **sai da transação**, virando composição por lote, que
+   é o que o ADR-0023 §2.3 prescreve. O 409 só pode ser dito quando o órgão disser que o
+   posto está inativo.
+2. **`aceitar-match` do inventário ANA responde 404 para posto que existe, e escreve em
+   `postos`.** `ana-revisao-repository.pg.ts` busca o posto com `FOR UPDATE` e depois faz
+   `UPDATE postos SET prefixo_ana = ...`. A escrita contraria o ADR-0023 (o cadastro é
+   somente leitura), então **isto é decisão de produto e não conserto mecânico**: ou a rota
+   responde `EscritaIndisponivel` (o tipo já existe e já está mapeado para 501 em
+   `erros.ts`), ou o `prefixo_ana` passa a morar em tabela nossa.
+
+Junto, e é o que torna os dois visíveis para quem usa: `FalhaRepositorio` não tem ramo em
+`respostaDeErro` e cai no genérico 500, e `FormularioFicha.tsx` imprime `body.erro` (o
+slug) quando existe `body.mensagem` ao lado. Quem preenche uma ficha inteira lê
+`erro_interno` na tela.
 
 ### 3.1 Fechar o módulo de postos e o painel
 
