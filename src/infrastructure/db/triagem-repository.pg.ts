@@ -472,16 +472,17 @@ export const triagemRepository: TriagemRepository = {
           throw new LockRevisaoNegado(triagemId, 'lock_expirado');
         }
 
-        // Verifica posto ativo (regra ADR-0008 §2.4). O esquema usa
-        // deleted_at IS NULL como flag de atividade (migration 0002), nao
-        // existe coluna `ativo` separada. Aprovar uma ficha cujo posto foi
-        // removido (soft delete) viola a invariante de auditoria.
-        const postos = await tx<{ deleted_at: Date | null }[]>`
-          SELECT deleted_at FROM postos WHERE prefixo = ${ficha.prefixo}
-        `;
-        if (!postos[0] || postos[0].deleted_at !== null) {
-          throw new EstadoTriagemInvalido('posto_inativo', 'aprovada');
-        }
+        // A verificação de posto ativo (regra ADR-0008 §2.4) NÃO mora mais
+        // aqui. Ela era `SELECT deleted_at FROM postos WHERE prefixo = ...`
+        // dentro desta transação, e desde o ADR-0023 essa tabela está VAZIA em
+        // produção (`count(*) = 0`, medido em 10/09/2026), porque o cadastro é
+        // lido ao vivo do banco do órgão. O efeito era que TODA aprovação
+        // respondia 409 `posto_inativo` para posto ativo.
+        //
+        // Quem pergunta agora é `aprovarFichaTriagem`, ao `postosRepository`,
+        // que é a origem de verdade. A consulta sai da transação de propósito:
+        // a resposta vem de outro armazenamento e o ADR-0023 §2.3 proíbe
+        // junção entre os dois. Não reintroduzir aqui.
 
         // INSERT em fichas_visita.
         const fvLinhas = await tx<{ id: string }[]>`

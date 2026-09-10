@@ -1,6 +1,27 @@
 import type { Posto } from '@/domain/posto';
 
 /**
+ * Qual armazenamento responde pelo CADASTRO de posto neste ambiente (ADR-0023).
+ *
+ *   'dbfch'    → SQL Server do órgão, lido ao vivo. SOMENTE LEITURA.
+ *   'postgres' → a nossa tabela `postos`. É a origem do cadastro naquele
+ *                ambiente, então escrever nela é legítimo ali, e só ali.
+ *   'mock'     → fixtures do modo demo.
+ *
+ * Mora no port, e não em `infrastructure/repositories.ts`, porque quem decide
+ * com base nisto é a camada de aplicação, e ela não importa o composition root
+ * (que é `server-only`).
+ */
+export type OrigemCadastroPostos = 'mock' | 'dbfch' | 'postgres';
+
+/**
+ * Rótulo do `Dbfch` como ele aparece na mensagem de `EscritaIndisponivel`.
+ * Fica junto do tipo para que a origem e o nome dela não divirjam entre o
+ * adaptador e quem recusa a escrita antes de chegar nele.
+ */
+export const ROTULO_ORIGEM_DBFCH = 'Dbfch';
+
+/**
  * Parâmetros de busca composta (ADR-0005 / filtros combinados).
  * Todos opcionais; podem ser combinados com AND. `termo` e `prefixoComecaCom`
  * são mutuamente exclusivos na origem (ver `buscarPostos` use case).

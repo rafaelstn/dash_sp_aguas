@@ -15,6 +15,10 @@ seção 4 estão prontas para virar ofício.
    favorito e foto voltou a funcionar. Ver 2.4.
 3. **O painel Portainer do servidor responde na internet pública e está em versão
    vulnerável** (CVE-2026-72533, CVSS 9.4). É infraestrutura do órgão, não nossa. Ver 2.5.
+4. **Os dois pontos de CÓDIGO que a migration não alcançava foram corrigidos**: a aprovação
+   de triagem parou de responder `posto_inativo` para posto ativo, e o `aceitar-match` do
+   ANA parou de responder 404 para posto que existe e de tentar escrever num cadastro
+   somente leitura. **Não estão em produção**: falta o transporte de versão (IN-05). Ver 2.6.
 
 Documento de ESTADO envelhece por construção, porque descreve um instante. Cada
 afirmação daqui traz a data em que foi medida, e frase do tipo "está vazio",
@@ -122,10 +126,8 @@ uma lista de permissão que **nasce vazia**. Provada nos dois lados (reprova nom
 antes, passa depois) e com sonda em transação desfeita, para não passar por vacuidade.
 A guarda anterior media UMA tabela pelo nome literal, e por isso não via as outras oito.
 
-**O que a 0069 NÃO resolve, e é código do próximo deploy:** a aprovação de triagem faz
-`SELECT ... FROM postos` e responde sempre `posto_inativo` com a tabela vazia
-(`triagem-repository.pg.ts`), e o "aceitar match" do inventário ANA responde 404 para posto
-que existe e ainda tenta **escrever** em `postos`, que é somente leitura pelo ADR-0023.
+**O que a 0069 não resolvia foi corrigido em CÓDIGO no mesmo dia, ver 2.6.** Nada disso
+está em produção: o transporte de versão é procedimento próprio (item IN-05).
 
 ### 2.5 Portainer: exposto na internet e em versão vulnerável (10/09/2026)
 
@@ -140,33 +142,78 @@ item IN-03, com a recomendação em ordem de esforço. O que é nosso e foi corr
 roteiro de deploy mandava usar esse painel pela internet, e a DamaTech passou a ter conta
 nele (o Diego enviou os logins), o que entra no IN-04.
 
+### 2.6 Os dois pontos de CÓDIGO que a 0069 não alcançava (10/09/2026)
+
+Os dois falhavam pela mesma causa (consultar a `postos` local, vazia por desenho) e nenhum
+é resolvido por migration.
+
+| Ponto | Antes | Depois |
+|---|---|---|
+| Aprovação de triagem | 409 `posto_inativo` para posto ATIVO, sempre | pergunta à origem do cadastro e conclui |
+| `aceitar-match` do ANA | 404 para posto que existe, e `UPDATE postos` | 501 `EscritaIndisponivel`, sem tentar escrever |
+| `FalhaRepositorio` na tela | `erro_interno` (o slug) | frase legível com o código para relatar |
+
+**1. Aprovação de triagem.** O `SELECT deleted_at FROM postos` saiu da transação do
+repositório e virou pergunta ao `postosRepository`, feita pelo use case
+`aprovarFichaTriagem`. Ela **sai da transação** porque a resposta vem de outro
+armazenamento e o ADR-0023 §2.3 proíbe junção entre os dois: vira composição por lote,
+pergunta antes e grava depois. O 409 só é dito quando a origem do cadastro não oferece o
+posto como ativo, e a verificação só roda com a ficha em `em_revisao` (fora disso quem tem
+a palavra é o `FOR UPDATE`, senão o motivo real da recusa some).
+
+Provado contra Postgres real com `postos` VAZIA em
+`tests/integration/triagem-aprovacao-postgres.test.ts` (5 casos). Reintroduzindo o `SELECT`
+de propósito, dois deles reprovam com a mensagem exata do defeito
+(`Transição inválida na triagem: posto_inativo → aprovada`). Os testes de triagem que já
+existiam usam o mock e nunca tocaram o Postgres, que é por que ficavam verdes com o defeito
+presente.
+
+**2. `aceitar-match` do inventário ANA.** Decisão de produto, e é a mínima: com o cadastro
+no `Dbfch` a rota responde `EscritaIndisponivel` (501), o mesmo tratamento que criar,
+editar, remover e restaurar posto já recebem. Levar `prefixo_ana` para tabela nossa é outra
+funcionalidade, com escopo próprio, e não foi decidida. A recusa é **condicionada à
+origem**: com origem `postgres` a tabela `postos` É o cadastro daquele ambiente, e com
+`mock` o repositório de demo nem toca em posto. E ela acontece **antes** de o repositório
+rodar, senão a estação ANA ficaria marcada como revisada sem o vínculo existir. A
+transação atômica do repositório não foi tocada, e o teste que a prova continua valendo.
+
+**3. O que tornava os dois invisíveis para quem usa.** `FalhaRepositorio` não tinha ramo em
+`respostaDeErro` e caía no genérico 500, e `FormularioFicha.tsx` imprimia `body.erro` (o
+slug) existindo `body.mensagem` ao lado. As telas do inventário ANA e do estoque já liam
+`mensagem` primeiro; as três da pasta `fichas` eram as que faltavam.
+
+O ramo novo devolve frase legível mais `correlationId`, e **não** devolve nem registra a
+mensagem do erro: ela embute `String(causa)`, e a causa de um driver carrega a consulta e
+os parâmetros ligados junto (numa violação de índice único, `detail` é literalmente
+`Key (email)=(...)`). Vão para o log a operação e os campos de PROTOCOLO da causa (`code`,
+`constraint_name`, `table_name`), por lista de PERMISSÃO. Sem isso o log viraria uma segunda
+base de dado pessoal, fora do controle de acesso do banco e fora do atendimento ao titular,
+que é o oposto do que a rule `governo` exige.
+
+**Duas réguas foram INVERTIDAS, e nenhuma apagada.** Uma exigia o `SELECT ... FROM postos`
+no repositório, ou seja, teria reprovado a correção; outra reprovava a própria migration
+0069 porque casava as marcas dentro de COMENTÁRIO. As duas passaram a medir código sem
+comentário, com o caso que prova que ainda enxergam o trecho removido. Régua apagada deixa
+o caminho livre; régua invertida denuncia a volta por descuido.
+
 ---
 
 ## 3. Próximas etapas, em ordem
 
-### 3.0 Fechar o fluxo de ficha: os dois pontos que a 0069 não alcança
+### 3.0 Fechar o fluxo de ficha: FEITO em código, falta subir (10/09/2026)
 
-A 0069 restaurou a **gravação**. Estes dois são de **código**, vão no próximo deploy, e
-ambos falham hoje por consultarem a `postos` vazia. Nenhum deles é resolvido por migration.
+Os dois pontos que estavam abertos aqui foram corrigidos e estão descritos na 2.6, com a
+prova de cada um. **O que resta é transporte de versão**, que é o item IN-05 e não é
+tarefa de código: o servidor do órgão não tem internet e a subida tem procedimento próprio.
 
-1. **Aprovação de triagem responde `posto_inativo` para posto ativo.**
-   `triagem-repository.pg.ts` faz `SELECT deleted_at FROM postos WHERE prefixo = ...` dentro
-   da transação de aprovação; com a tabela vazia, `postos[0]` é sempre `undefined` e toda
-   aprovação vira 409. A pergunta "este posto existe e está ativo?" tem que ir ao
-   `postosRepository` (SQL Server), e **sai da transação**, virando composição por lote, que
-   é o que o ADR-0023 §2.3 prescreve. O 409 só pode ser dito quando o órgão disser que o
-   posto está inativo.
-2. **`aceitar-match` do inventário ANA responde 404 para posto que existe, e escreve em
-   `postos`.** `ana-revisao-repository.pg.ts` busca o posto com `FOR UPDATE` e depois faz
-   `UPDATE postos SET prefixo_ana = ...`. A escrita contraria o ADR-0023 (o cadastro é
-   somente leitura), então **isto é decisão de produto e não conserto mecânico**: ou a rota
-   responde `EscritaIndisponivel` (o tipo já existe e já está mapeado para 501 em
-   `erros.ts`), ou o `prefixo_ana` passa a morar em tabela nossa.
+Ao subir, conferir na tela, e não só no log:
 
-Junto, e é o que torna os dois visíveis para quem usa: `FalhaRepositorio` não tem ramo em
-`respostaDeErro` e cai no genérico 500, e `FormularioFicha.tsx` imprime `body.erro` (o
-slug) quando existe `body.mensagem` ao lado. Quem preenche uma ficha inteira lê
-`erro_interno` na tela.
+1. Aprovar uma ficha de triagem de um posto que o órgão tem como ATIVO, e ver a promoção
+   concluir. Antes disso, toda aprovação respondia 409 `posto_inativo`.
+2. `aceitar-match` no inventário ANA: a resposta esperada agora é **501** com a frase que
+   nomeia a estação, o posto e a origem, e nunca mais 404.
+3. Forçar uma falha de gravação de ficha e ler a tela: tem de aparecer frase em português
+   com o código para relatar, e nunca `erro_interno`.
 
 ### 3.1 Fechar o módulo de postos e o painel
 

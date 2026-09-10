@@ -18,6 +18,7 @@ import {
   TECNICO_ID_PADRAO,
   entradaSubmissaoValida,
   papeisFake,
+  postosFake,
 } from '../unit/use-cases/triagem/_helpers';
 
 /**
@@ -101,6 +102,10 @@ describe('integração/triagem — fluxo end-to-end happy path', () => {
     const r = await aprovarFichaTriagem(
       triagemRepository,
       papeis,
+      // O cadastro de posto é outro armazenamento desde o ADR-0023, e a
+      // aprovação pergunta a ele se o posto está ativo. Este arquivo exercita
+      // o fluxo com mocks e nunca toca o Postgres.
+      postosFake(),
       reenviada.id,
       APROVADOR_A,
       META,

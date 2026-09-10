@@ -99,8 +99,30 @@ export class EscritaIndisponivel extends Error {
   }
 }
 
+/**
+ * Falha de infraestrutura ao falar com o armazenamento. Tradução padrão:
+ * HTTP 500, com correlation ID e SEM o texto desta mensagem.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * A MENSAGEM DESTE ERRO NÃO VAI PARA A TELA NEM PARA O LOG
+ * ─────────────────────────────────────────────────────────────────────────
+ * `String(causa)` de um erro do driver carrega a consulta e os PARÂMETROS
+ * LIGADOS. Num sistema de governo isso é dado de cidadão: uma violação de
+ * índice único chega como `Key (email)=(fulano@orgao.sp.gov.br) already
+ * exists`. O log não está sob o controle de acesso do banco e não entra no
+ * atendimento ao titular, então ele viraria uma segunda base de dado pessoal
+ * sem retenção nem dono.
+ *
+ * Por isso `operacao` e `causa` ficam expostos: quem traduz para HTTP registra
+ * a OPERAÇÃO e os campos de protocolo da causa (classe, `code`,
+ * `constraint_name`, `table_name`), que identificam o defeito sem carregar
+ * valor de linha nenhum.
+ */
 export class FalhaRepositorio extends Error {
-  constructor(operacao: string, causa: unknown) {
+  constructor(
+    public readonly operacao: string,
+    public readonly causa: unknown,
+  ) {
     super(`Falha no repositório (${operacao}): ${String(causa)}`);
     this.name = 'FalhaRepositorio';
   }

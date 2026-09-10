@@ -7,6 +7,7 @@ import type {
   CampoFicha,
   SchemaFicha,
 } from '@/domain/fichas/schemas';
+import { mensagemDeFalha } from '@/lib/mensagem-de-erro';
 
 export interface FormularioFichaProps {
   prefixo: string;
@@ -102,15 +103,24 @@ export function FormularioFicha({
         body: JSON.stringify(corpo),
       });
 
+      // `mensagem` primeiro, `erro` só como último recurso: `erro` é o SLUG do
+      // contrato da API (`erro_interno`, `falha_repositorio`), escrito para
+      // código e não para gente. Quem preenchia uma ficha inteira e falhava
+      // lia "erro_interno" na tela. As telas do inventário ANA e do estoque já
+      // liam `mensagem` primeiro; as de ficha eram as que faltavam.
       if (resp.status === 422) {
         const body = await resp.json();
-        setErros422(body.motivos ?? [body.erro ?? 'Dados inválidos.']);
+        setErros422(
+          body.motivos ?? [body.mensagem ?? body.erro ?? 'Dados inválidos.'],
+        );
         setEnviando(false);
         return;
       }
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
-        setErro(body.erro ?? `Falha ${resp.status} ao enviar ficha.`);
+        setErro(
+          mensagemDeFalha(body, `Falha ${resp.status} ao enviar a ficha.`),
+        );
         setEnviando(false);
         return;
       }

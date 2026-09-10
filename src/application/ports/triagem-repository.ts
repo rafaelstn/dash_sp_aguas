@@ -100,6 +100,10 @@ export interface TriagemRepository {
    *   - DELETE do lock
    *   - INSERT em triagem_eventos
    * Qualquer falha → ROLLBACK total.
+   *
+   * NÃO verifica se o posto está ativo. Essa pergunta é do CADASTRO, que desde
+   * o ADR-0023 vive em outro armazenamento, e quem a faz é o use case
+   * `aprovarFichaTriagem` antes de chamar este método.
    */
   aprovar(
     triagemId: string,

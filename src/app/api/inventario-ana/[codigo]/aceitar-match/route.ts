@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   anaRevisaoRepository,
+  origemDoCadastroDePostos,
   papeisRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { aceitarMatchAna } from '@/application/use-cases/inventario-ana/aceitar-match';
 import { PostoNaoEncontrado, PostoRemovido } from '@/domain/errors';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import {
@@ -71,7 +73,14 @@ export async function POST(
     // acontecem na mesma transação dentro do repositório. Se a segunda
     // falhasse antes, o posto ficava com prefixo_ana setado e a estação
     // pendente (estado inconsistente sem compensação).
-    await anaRevisaoRepository.aceitarMatch(
+    //
+    // Com o cadastro no `Dbfch` (ADR-0023), aquela transação não pode nem
+    // começar: a primeira escrita é no cadastro, que é somente leitura. O use
+    // case recusa antes, com `EscritaIndisponivel` (501), em vez de responder
+    // 404 para um posto que existe no órgão.
+    await aceitarMatchAna(
+      anaRevisaoRepository,
+      origemDoCadastroDePostos,
       {
         estacaoId: sugestao.estacaoId,
         postoIdSugerido: sugestao.matchSugeridoPostoId,

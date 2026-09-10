@@ -1,5 +1,7 @@
 import type { PapeisRepository } from '@/application/ports/papeis-repository';
+import type { PostosRepository } from '@/application/ports/postos-repository';
 import type { EntradaSubmeterTriagem } from '@/application/ports/triagem-repository';
+import type { Posto } from '@/domain/posto';
 
 /**
  * Helpers compartilhados pelos testes de use case de triagem.
@@ -34,6 +36,52 @@ export function papeisFake(opts: OpcoesPapeis = {}): PapeisRepository {
       return aprovadores.has(id);
     },
   };
+}
+
+/**
+ * Cadastro de posto de mentira, para os testes de aprovação.
+ *
+ * A aprovação pergunta "este posto existe e está ativo?" ao `postosRepository`
+ * desde 10/09/2026, porque a nossa tabela `postos` está vazia por desenho
+ * (ADR-0023) e a resposta é do órgão. As três respostas possíveis viram os três
+ * modos daqui, e o nome de cada um diz QUEM está respondendo o quê:
+ *
+ *   'ativo'    → a origem devolve o posto, sem soft delete. Aprovação segue.
+ *   'ausente'  → a origem não tem aquele posto ativo. É como o adaptador do
+ *                `Dbfch` responde a posto excluído: `Excluido = 0` no WHERE faz
+ *                a linha simplesmente não voltar.
+ *   'removido' → a origem devolve o posto com `deletedAt` preenchido. Só
+ *                acontece com a origem PostgreSQL, onde soft delete existe.
+ *
+ * Só `buscarPorPrefixo` é implementado. Os outros métodos jogam, e isso é
+ * proposital: se um dia a aprovação passar a chamar outra coisa do cadastro,
+ * o teste tem de dizer isso em voz alta em vez de seguir com `undefined`.
+ */
+export function postosFake(
+  modo: 'ativo' | 'ausente' | 'removido' = 'ativo',
+): PostosRepository {
+  const naoUsado = (metodo: string) => () => {
+    throw new Error(`postosFake: ${metodo} não deveria ser chamado na aprovação`);
+  };
+
+  return {
+    async buscarPorPrefixo(prefixo: string): Promise<Posto | null> {
+      if (modo === 'ausente') return null;
+      return {
+        id: '99999999-9999-4999-8999-999999999999',
+        prefixo,
+        deletedAt: modo === 'removido' ? new Date('2026-01-01') : null,
+      } as Posto;
+    },
+    mapaIdsPorPrefixo: naoUsado('mapaIdsPorPrefixo'),
+    pesquisar: naoUsado('pesquisar'),
+    autocompletar: naoUsado('autocompletar'),
+    atualizar: naoUsado('atualizar'),
+    criar: naoUsado('criar'),
+    remover: naoUsado('remover'),
+    restaurar: naoUsado('restaurar'),
+    listarEventos: naoUsado('listarEventos'),
+  } as PostosRepository;
 }
 
 export function entradaSubmissaoValida(

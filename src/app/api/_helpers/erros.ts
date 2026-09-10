@@ -35,6 +35,7 @@ import {
   ConferenciaNaoConcluida,
   EscopoConferenciaEmAberto,
   EscritaIndisponivel,
+  FalhaRepositorio,
 } from '@/domain/errors';
 import { TipoFichaIndisponivel, DadosFichaInvalidos } from '@/application/use-cases/fichas-visita';
 import { logger } from '@/infrastructure/logging/logger';
@@ -56,6 +57,44 @@ import { logger } from '@/infrastructure/logging/logger';
  *     return respostaDeErro('POST /api/postos', { prefixo }, e);
  *   }
  */
+/**
+ * Campos de PROTOCOLO de um erro de banco, e só eles.
+ *
+ * Lista de PERMISSÃO, e não de negação: o conjunto do lado de fora é infinito e
+ * uma versão nova do driver acrescenta campo sem avisar ninguém. Cada nome aqui
+ * identifica o defeito (qual restrição, qual tabela, qual coluna) sem carregar
+ * VALOR de linha.
+ *
+ * Ficam de fora, e o motivo é escrito porque a tentação de incluir é real:
+ *   message, detail → `detail` de uma violação de índice único é literalmente
+ *                     `Key (email)=(fulano@orgao.sp.gov.br) already exists`;
+ *   hint, where     → citam valores do contexto de execução;
+ *   internal_query, position → carregam a consulta.
+ */
+const CAMPOS_DE_PROTOCOLO = [
+  'code',
+  'severity',
+  'schema_name',
+  'table_name',
+  'column_name',
+  'constraint_name',
+  'routine',
+] as const;
+
+function camposDeProtocolo(causa: unknown): Record<string, unknown> {
+  const saida: Record<string, unknown> = {
+    causaClasse:
+      causa instanceof Error ? causa.name : typeof causa,
+  };
+  if (causa === null || typeof causa !== 'object') return saida;
+  const bruto = causa as Record<string, unknown>;
+  for (const campo of CAMPOS_DE_PROTOCOLO) {
+    const valor = bruto[campo];
+    if (typeof valor === 'string' && valor.length > 0) saida[campo] = valor;
+  }
+  return saida;
+}
+
 export function respostaDeErro(rota: string, contexto: Record<string, unknown>, erro: unknown) {
   // ── 400 Bad Request ──────────────────────────────────────────────────────
   if (erro instanceof DadosFichaInvalidos) {
@@ -279,6 +318,44 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
         origem: erro.origem,
       },
       { status: 501 },
+    );
+  }
+
+  // ── 500 com causa conhecida: falha ao falar com o armazenamento ──────────
+  // Sem este ramo, `FalhaRepositorio` caía no genérico abaixo e a pessoa que
+  // preencheu uma ficha inteira lia `erro_interno` na tela (o slug, porque o
+  // formulário imprimia `body.erro`). Continua sendo 500, porque é falha nossa
+  // e não da solicitação, mas agora diz o que aconteceu, o que fazer, e dá o
+  // código para relatar.
+  //
+  // A mensagem do erro NÃO é devolvida nem registrada: ela carrega
+  // `String(causa)`, e a causa de um driver traz a consulta e os PARÂMETROS
+  // LIGADOS junto. Numa violação de índice único isso é literalmente o dado do
+  // cidadão. Vão para o log a operação e os campos de PROTOCOLO da causa, que
+  // nomeiam o defeito sem carregar valor de linha.
+  if (erro instanceof FalhaRepositorio) {
+    const correlationIdRepo = randomUUID();
+    logger.error(
+      'falha_repositorio',
+      {
+        correlationId: correlationIdRepo,
+        rota,
+        ...contexto,
+        operacao: erro.operacao,
+        ...camposDeProtocolo(erro.causa),
+      },
+      `Falha de repositório em ${rota}`,
+    );
+    return NextResponse.json(
+      {
+        erro: 'falha_repositorio',
+        mensagem:
+          'Não foi possível gravar agora: o banco de dados recusou a operação. ' +
+          'Os dados preenchidos continuam nesta tela. Tente enviar de novo em ' +
+          'alguns instantes e, se continuar, informe o código abaixo ao suporte.',
+        correlationId: correlationIdRepo,
+      },
+      { status: 500 },
     );
   }
 

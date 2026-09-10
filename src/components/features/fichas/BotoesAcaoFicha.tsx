@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { mensagemDeFalha } from '@/lib/mensagem-de-erro';
 
 export interface BotoesAcaoFichaProps {
   prefixo: string;
@@ -30,7 +31,11 @@ export function BotoesAcaoFicha({ prefixo, fichaId }: BotoesAcaoFichaProps) {
       if (!resp.ok && resp.status !== 204) {
         const body = await resp.json().catch(() => ({}));
         setApagando(false);
-        throw new Error(body.erro ?? `Falha ${resp.status} ao apagar a ficha.`);
+        // `mensagem` antes do slug: `erro` é o código do contrato da API, e o
+        // ConfirmDialog mostra este texto direto para quem clicou.
+        throw new Error(
+          mensagemDeFalha(body, `Falha ${resp.status} ao apagar a ficha.`),
+        );
       }
       setConfirmando(false);
       router.push(`/postos/${encodeURIComponent(prefixo)}`);

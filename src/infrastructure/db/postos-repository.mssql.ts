@@ -7,6 +7,7 @@ import type {
   PostosRepository,
   ResultadoPesquisa,
 } from '@/application/ports/postos-repository';
+import { ROTULO_ORIGEM_DBFCH } from '@/application/ports/postos-repository';
 import type { Posto } from '@/domain/posto';
 import { EscritaIndisponivel, FalhaRepositorio } from '@/domain/errors';
 import { consultarMssql, TiposMssql, type ParametroMssql } from './mssql-client';
@@ -63,7 +64,10 @@ import { postosRepository as postosPg } from './postos-repository.pg';
  * caminho pelo município é inferência geográfica e só entra como recurso.
  */
 
-const ORIGEM = 'Dbfch';
+// O rótulo vem do port: quem recusa a escrita ANTES de chegar neste adaptador
+// (ver `aceitarMatchAna`) precisa dizer a mesma origem, e duas cópias do texto
+// divergiriam sem nada acusar.
+const ORIGEM = ROTULO_ORIGEM_DBFCH;
 const ORIGEM_CADASTRO = 'dbfch';
 
 

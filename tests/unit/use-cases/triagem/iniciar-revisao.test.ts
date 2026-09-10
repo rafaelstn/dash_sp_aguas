@@ -18,6 +18,7 @@ import {
   META,
   entradaSubmissaoValida,
   papeisFake,
+  postosFake,
 } from './_helpers';
 
 describe('use-case/iniciarRevisao', () => {
@@ -122,7 +123,14 @@ describe('use-case/iniciarRevisao', () => {
     );
     const papeis = papeisFake({ aprovadores: [APROVADOR_A] });
     await iniciarRevisao(triagemRepository, papeis, ficha.id, APROVADOR_A, META);
-    await aprovarFichaTriagem(triagemRepository, papeis, ficha.id, APROVADOR_A, META);
+    await aprovarFichaTriagem(
+      triagemRepository,
+      papeis,
+      postosFake(),
+      ficha.id,
+      APROVADOR_A,
+      META,
+    );
 
     await expect(
       iniciarRevisao(triagemRepository, papeis, ficha.id, APROVADOR_A, META),

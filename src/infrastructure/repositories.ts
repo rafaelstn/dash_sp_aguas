@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { OrigemCadastroPostos } from '@/application/ports/postos-repository';
 import { getEnv } from './config/env';
 
 // Implementações PostgreSQL (padrão em produção/banco real).
@@ -95,7 +96,7 @@ const demo = getEnv().isDemoMode;
  * nosso PostgreSQL, sem uma linha alterada (ADR-0023 §2.1: dezenove dos vinte
  * e cinco adaptadores nunca tocam em `postos`).
  */
-export const origemDoCadastroDePostos: 'mock' | 'dbfch' | 'postgres' = demo
+export const origemDoCadastroDePostos: OrigemCadastroPostos = demo
   ? 'mock'
   : mssqlConfigurado()
     ? 'dbfch'

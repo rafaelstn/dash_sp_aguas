@@ -281,6 +281,21 @@ describe('migrations do vínculo estação x posto, o acoplamento entre os dois 
   const ler = (nome: string) =>
     readFileSync(resolve(dirMigrations, nome), 'utf-8');
 
+  /**
+   * SQL sem comentário, para a varredura por marca medir o que EXECUTA.
+   *
+   * Existe porque a versão anterior desta régua reprovou a 0069, que só cita
+   * `estacoes_pluviometricas` num comentário explicando por que ela existe.
+   * Guarda que aponta a versão certa de uma linha faz a próxima pessoa desfazer
+   * a correção com a régua mandando.
+   *
+   * Conservadora de propósito: não tenta entender literal de string nem cifrão
+   * de corpo de função, porque errar para o lado de acusar demais custa uma
+   * conversa, e errar para o lado de não ver custa o acoplamento de volta.
+   */
+  const semComentarios = (sql: string) =>
+    sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+
   it('0067 remove a chave estrangeira pelo nome real e cria o fato booleano', () => {
     const m = ler('0067_estacoes_vinculo_posto_sem_chave_estrangeira.sql');
     // O nome vem do banco, não da memória: é o que aparece no erro de produção
@@ -324,11 +339,42 @@ describe('migrations do vínculo estação x posto, o acoplamento entre os dois 
 
     const infratores = arquivos.filter((nome) => {
       if (permitidos.has(nome)) return false;
-      const conteudo = readFileSync(resolve(dirMigrations, nome), 'utf-8');
+      const conteudo = semComentarios(readFileSync(resolve(dirMigrations, nome), 'utf-8'));
       return /estacoes_pluviometricas/.test(conteudo) && /posto_id/.test(conteudo);
     });
 
-    expect(infratores).toEqual([]);
+    expect(
+      infratores,
+      `migration(s) reabrindo o acoplamento: ${infratores.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('a régua olha SQL e não comentário: a 0069 explica a história e não reabre nada', () => {
+    // Régua da régua, escrita depois de a versão anterior REPROVAR a 0069, que
+    // é justamente a migration que fechou o acoplamento. Ela casava as duas
+    // marcas em qualquer lugar do arquivo, e a 0069 cita
+    // `estacoes_pluviometricas` UMA vez, num comentário, para dizer que a 0067
+    // corrigiu só um membro da classe. Régua que reprova o comportamento
+    // correto manda desfazer a correção, e é o pior modo de falha que uma
+    // guarda tem.
+    //
+    // Comentário não executa: o que reabre acoplamento é DDL. Mas a régua
+    // continua tendo de enxergar o caso real, e é isso que os dois lados abaixo
+    // afirmam.
+    const bruto = readFileSync(
+      resolve(dirMigrations, '0069_dados_proprios_sem_fk_para_postos.sql'),
+      'utf-8',
+    );
+    // Lado 1: o texto bruto casa as duas marcas (ou seja, o caso que derrubava
+    // a régua anterior continua presente no arquivo, e não sumiu por acaso).
+    expect(/estacoes_pluviometricas/.test(bruto)).toBe(true);
+    // Lado 2: sem comentário, a menção some — porque ela SÓ existe em comentário.
+    expect(/estacoes_pluviometricas/.test(semComentarios(bruto))).toBe(false);
+    // Lado 3: a régua não ficou cega. Um DDL de verdade continua sendo visto.
+    const sonda = semComentarios(
+      '-- estacoes_pluviometricas era assim\nALTER TABLE estacoes_pluviometricas ADD COLUMN posto_id UUID;\n',
+    );
+    expect(/estacoes_pluviometricas/.test(sonda) && /posto_id/.test(sonda)).toBe(true);
   });
 
   it('a 0068 é a última palavra: a coluna não é recriada depois dela', () => {

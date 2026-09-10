@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
   papeisRepository,
+  postosRepository,
   triagemRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
@@ -54,6 +55,10 @@ export async function POST(
     const resultado = await aprovarFichaTriagem(
       triagemRepository,
       papeisRepository,
+      // Origem do cadastro (ADR-0023): em produção é o `Dbfch`. É ela quem
+      // responde se o posto está ativo, e não a nossa tabela `postos`, que
+      // está vazia por desenho.
+      postosRepository,
       id,
       usuario.id,
       metadata,
