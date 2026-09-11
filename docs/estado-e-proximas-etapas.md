@@ -251,7 +251,23 @@ está registrada em `docs/runbooks/registro-de-entregas.md`, com o incidente da 
 O item IN-05 (canal oficial de transporte de versão) **continua pendente do órgão**: a
 subida foi feita pelo caminho disponível hoje, SSH com VPN e imagem por arquivo.
 
-**Falta a conferência NA TELA**, que nenhum log substitui e que só se faz usando o produto:
+**A conferência na tela foi tentada em 10/09 e NÃO É EXECUTÁVEL hoje**, por dois motivos
+independentes, os dois medidos em produção:
+
+1. As rotas de triagem e de `aceitar-match` respondem **403 `sem_papel_aprovador`**, porque
+   exigem papel de aprovador e a instalação roda sem identidade (ADR-0024). Ninguém tem esse
+   papel hoje.
+2. Não há o que aprovar: `fichas_triagem = 0` e `fichas_visita = 0` no banco do órgão.
+
+O que **foi** verificado na tela em 10/09, e vale registrar: o painel responde com dado real
+do `Dbfch` (5.790 postos, 149 com telemetria, 4.416 ativos), e a tela de triagem apresenta
+a recusa como **frase em português** ("Operação indisponível sem identificação... A consulta
+permanece liberada"), e não como slug. Isso cobre, por outro caminho, o terceiro item da
+lista abaixo.
+
+A prova que existe para os dois primeiros é a de integração contra Postgres real com
+`postos` vazia, que é o mesmo estado de produção (ver 2.6). **A conferência na tela fica
+condicionada à identidade (ID-01)**, e é isto que se confere quando ela existir:
 
 1. Aprovar uma ficha de triagem de um posto que o órgão tem como ATIVO, e ver a promoção
    concluir. Antes disso, toda aprovação respondia 409 `posto_inativo`.
