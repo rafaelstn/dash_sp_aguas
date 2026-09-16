@@ -54,6 +54,11 @@ vi.mock('@/infrastructure/db/client', () => {
       return Promise.resolve([]);
     },
     {
+      // Helper do driver para gravar jsonb como valor (ver migration 0072).
+      // Aqui só precisa existir: o mock não inspeciona parâmetros.
+      json(valor: unknown) {
+        return valor;
+      },
       async begin(cb: (t: typeof tx) => Promise<unknown>) {
         estado.beginCount += 1;
         // Semântica do postgres.js: callback que rejeita => begin rejeita

@@ -510,7 +510,10 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             FROM ana_revisao_estacao e
             LEFT JOIN postos p ON p.id = e.posto_id AND p.deleted_at IS NULL
            WHERE e.id = ${estacaoId}
-             FOR UPDATE
+             -- OF e: sem ele o Postgres recusa a consulta inteira ("FOR UPDATE
+             -- cannot be applied to the nullable side of an outer join"), e toda
+             -- revisão individual respondia erro. Só a estação precisa de trava.
+             FOR UPDATE OF e
         `;
         const atual = linhas[0];
         if (!atual) {
@@ -549,8 +552,8 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             ${estacaoId},
             ${evento},
             ${ator.usuarioId},
-            ${JSON.stringify(valoresAntes)}::jsonb,
-            ${JSON.stringify({ status: payload.novoStatus })}::jsonb,
+            ${sql.json(valoresAntes)},
+            ${sql.json({ status: payload.novoStatus })},
             ${payload.observacao ?? null},
             ${ator.ip}::inet,
             ${ator.userAgent}
@@ -829,8 +832,8 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             ${posto.id},
             'atualizado',
             ${ator.usuarioId},
-            ${JSON.stringify({ prefixoAna: posto.prefixo_ana })}::jsonb,
-            ${JSON.stringify({ prefixoAna: codigoAna })}::jsonb,
+            ${sql.json({ prefixoAna: posto.prefixo_ana })},
+            ${sql.json({ prefixoAna: codigoAna })},
             ${origemEvento},
             ${referenciaExternaId}::uuid,
             ${observacaoPosto},
@@ -857,11 +860,11 @@ export const anaRevisaoRepository: AnaRevisaoRepository = {
             ${estacaoId}::uuid,
             'revisada',
             ${ator.usuarioId}::uuid,
-            ${JSON.stringify({
+            ${sql.json({
               posto_id: postoIdSugerido,
               posto_prefixo: prefixoSugerido,
               status: 'revisada',
-            })}::jsonb,
+            })},
             ${`Match aceito: vinculado ao posto ${prefixoSugerido}`},
             ${ator.ip}::inet,
             ${ator.userAgent}

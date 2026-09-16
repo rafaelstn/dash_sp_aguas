@@ -7,6 +7,7 @@ import type {
 } from '@/domain/ficha-visita';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
 import { FalhaRepositorio } from '@/domain/errors';
+import type { JSONValue } from 'postgres';
 import { sql } from './client';
 
 type LinhaFicha = {
@@ -116,7 +117,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
           ${entrada.latitudeCapturada},
           ${entrada.longitudeCapturada},
           ${entrada.observacoes},
-          ${JSON.stringify(entrada.dados)}::jsonb,
+          ${sql.json(entrada.dados as JSONValue)},
           ${entrada.origem ?? 'web_simulada'},
           ${entrada.status ?? 'enviada'}
         )
@@ -154,7 +155,7 @@ export const fichasVisitaRepository: FichasVisitaRepository = {
       if (entrada.observacoes !== undefined)
         fragmentos.push(sql`observacoes = ${entrada.observacoes}`);
       if (entrada.dados !== undefined)
-        fragmentos.push(sql`dados = ${JSON.stringify(entrada.dados)}::jsonb`);
+        fragmentos.push(sql`dados = ${sql.json(entrada.dados as JSONValue)}`);
       if (entrada.origem !== undefined)
         fragmentos.push(sql`origem = ${entrada.origem}`);
       if (entrada.status !== undefined)

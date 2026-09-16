@@ -276,7 +276,7 @@
     padding: 0 !important;
   }
 
-  /* Garante que a borda e o QR (preto no branco) saiam na impressão mesmo
+  /* Garante que a borda e o código de barras (preto no branco) saiam na impressão mesmo
      com o navegador economizando tinta de fundo. */
   body.etiquetas-print .break-inside-avoid {
     -webkit-print-color-adjust: exact;

@@ -2,8 +2,11 @@ import 'server-only';
 import type { EstoqueLocaisRepository } from '@/application/ports/estoque-locais-repository';
 import type { Local, UnidadeFisica } from '@/domain/estoque/local';
 import { normalizarLocal, montarRotulo } from '@/domain/estoque/local';
-import { FalhaRepositorio, LocalEmUso, LocalNaoEncontrado } from '@/domain/errors';
+import { FalhaRepositorio, LocalDuplicado, LocalEmUso, LocalNaoEncontrado } from '@/domain/errors';
 import { sql } from './client';
+import { violouUnicidade } from './violacao-unicidade';
+
+const INDICE_CHAVE = 'uq_estoque_locais_chave';
 
 type LinhaLocal = {
   id: string;
@@ -56,8 +59,8 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
   },
 
   async criar(dados) {
+    const norm = normalizarLocal(dados);
     try {
-      const norm = normalizarLocal(dados);
       const linhas = await sql<LinhaLocal[]>`
         INSERT INTO estoque_locais (unidade, sala, prateleira, armario, rotulo, observacao)
         VALUES (${norm.unidade}, ${norm.sala}, ${norm.prateleira}, ${norm.armario}, ${norm.rotulo}, ${dados.observacao ?? null})
@@ -65,11 +68,13 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
       `;
       return mapear(linhas[0]!);
     } catch (e) {
+      if (violouUnicidade(e, INDICE_CHAVE)) throw new LocalDuplicado(norm.rotulo);
       throw new FalhaRepositorio('estoqueLocais.criar', e);
     }
   },
 
   async atualizar(id, dados) {
+    let rotulo: string | null = null;
     try {
       const atual = await this.obterPorId(id);
       if (!atual) throw new LocalNaoEncontrado(id);
@@ -79,7 +84,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
         prateleira: dados.prateleira !== undefined ? dados.prateleira : atual.prateleira,
         armario: dados.armario !== undefined ? dados.armario : atual.armario,
       });
-      const rotulo = montarRotulo(norm.unidade, norm.sala, norm.prateleira, norm.armario);
+      rotulo = montarRotulo(norm.unidade, norm.sala, norm.prateleira, norm.armario);
       const observacao = dados.observacao !== undefined ? dados.observacao : atual.observacao;
       const linhas = await sql<LinhaLocal[]>`
         UPDATE estoque_locais
@@ -92,6 +97,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
       return mapear(linhas[0]);
     } catch (e) {
       if (e instanceof LocalNaoEncontrado) throw e;
+      if (rotulo !== null && violouUnicidade(e, INDICE_CHAVE)) throw new LocalDuplicado(rotulo);
       throw new FalhaRepositorio('estoqueLocais.atualizar', e);
     }
   },

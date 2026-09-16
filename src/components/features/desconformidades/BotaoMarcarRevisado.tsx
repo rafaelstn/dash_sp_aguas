@@ -1,10 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
+import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { LiveRegion } from '@/components/a11y/LiveRegion';
 import type { CategoriaDesconformidade } from '@/domain/desconformidade';
+import { enviarRevisaoPorFetch, registrarRevisao } from './revisao-envio';
+import { ID_NOTA_REVISAO_INDISPONIVEL, useRevisaoDisponivel } from './RevisaoDisponibilidade';
 
 export interface BotaoMarcarRevisadoProps {
   tipoEntidade: 'posto' | 'arquivo';
@@ -13,10 +15,14 @@ export interface BotaoMarcarRevisadoProps {
   statusInicial: 'pendente' | 'revisado';
 }
 
+type Aviso = { tipo: 'sucesso' | 'falha' | 'indisponivel'; mensagem: string } | null;
+
 /**
- * Botão client-side que invoca POST /api/desconformidades/revisoes.
- * Faz optimistic update e dispara revalidação da rota ao completar.
- * Comunica o resultado via LiveRegion para leitor de tela.
+ * Invoca POST /api/desconformidades/revisoes e só mostra "Revisado" depois da
+ * confirmação do servidor. A região de status fica montada o tempo todo (troca
+ * de botão para selo não derruba o anúncio). Sem identidade o botão fica
+ * aria-disabled, apontando para a frase do layout; se o servidor recusar com
+ * 403 `identificacao_obrigatoria`, fica igual e a mensagem não convida a repetir.
  */
 export function BotaoMarcarRevisado({
   tipoEntidade,
@@ -25,61 +31,70 @@ export function BotaoMarcarRevisado({
   statusInicial,
 }: BotaoMarcarRevisadoProps) {
   const router = useRouter();
+  const disponivelNaSessao = useRevisaoDisponivel();
   const [status, setStatus] = useState(statusInicial);
-  const [anuncio, setAnuncio] = useState('');
-  const [pending, startTransition] = useTransition();
+  const [aviso, setAviso] = useState<Aviso>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [recusadoPeloServidor, setRecusadoPeloServidor] = useState(false);
+  const [atualizando, startTransition] = useTransition();
+  const travaRef = useRef(false);
+
+  const indisponivel = !disponivelNaSessao || recusadoPeloServidor;
+  const ocupado = enviando || atualizando;
 
   async function enviar() {
-    const statusAntes = status;
-    setStatus('revisado');
-    setAnuncio('Registro marcado como revisado.');
-    try {
-      const resp = await fetch('/api/desconformidades/revisoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipoEntidade,
-          idEntidade,
-          categoria,
-        }),
-      });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
+    if (indisponivel || travaRef.current) return;
+    travaRef.current = true;
+    setEnviando(true);
+    setAviso(null);
+    const r = await registrarRevisao(
+      { tipoEntidade, idEntidade, categoria },
+      disponivelNaSessao,
+      enviarRevisaoPorFetch,
+    );
+    setEnviando(false);
+    travaRef.current = false;
+    if (r.tipo === 'registrada') {
+      setStatus('revisado');
+      setAviso({ tipo: 'sucesso', mensagem: 'Registro marcado como revisado.' });
       startTransition(() => router.refresh());
-    } catch {
-      setStatus(statusAntes);
-      setAnuncio('Falha ao registrar revisão. Tente novamente em instantes.');
+    } else if (r.tipo === 'indisponivel') {
+      setRecusadoPeloServidor(true);
+      setAviso({ tipo: 'indisponivel', mensagem: r.mensagem });
+    } else {
+      setAviso({ tipo: 'falha', mensagem: r.mensagem });
     }
   }
 
-  if (status === 'revisado') {
-    return (
-      <>
-        <span
-          className="inline-flex items-center gap-2 text-sm text-gov-sucesso font-medium"
-          role="status"
-        >
-          <span aria-hidden="true">✓</span>
-          <span>Revisado</span>
-        </span>
-        <LiveRegion mensagem={anuncio} />
-      </>
-    );
-  }
+  const classeAviso =
+    aviso?.tipo === 'falha'
+      ? 'text-xs font-medium text-gov-perigo'
+      : aviso?.tipo === 'indisponivel'
+        ? 'text-xs text-app-fg-muted'
+        : 'sr-only';
 
   return (
-    <>
-      <Button
-        type="button"
-        variante="secundario"
-        onClick={enviar}
-        disabled={pending}
-        aria-describedby={`entidade-${idEntidade.replace(/[^a-z0-9]/gi, '-')}`}
-      >
-        {pending ? 'Registrando...' : 'Marcar como revisado'}
-      </Button>
-      <LiveRegion mensagem={anuncio} />
-    </>
+    <span className="inline-flex flex-col items-end gap-1">
+      {status === 'revisado' ? (
+        <span className="inline-flex items-center gap-2 text-sm font-medium text-gov-sucesso">
+          <Check className="h-4 w-4" aria-hidden="true" />
+          <span>Revisado</span>
+        </span>
+      ) : (
+        <Button
+          type="button"
+          variante="secundario"
+          onClick={enviar}
+          aria-disabled={indisponivel || ocupado || undefined}
+          aria-describedby={!disponivelNaSessao ? ID_NOTA_REVISAO_INDISPONIVEL : undefined}
+          className={indisponivel ? 'cursor-not-allowed opacity-50' : ''}
+        >
+          {ocupado ? 'Registrando...' : 'Marcar como revisado'}
+        </Button>
+      )}
+      <span role="status" aria-atomic="true" className={classeAviso}>
+        {aviso?.mensagem ?? ''}
+      </span>
+    </span>
   );
 }

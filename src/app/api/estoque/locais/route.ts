@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { estoqueLocaisRepository } from '@/infrastructure/repositories';
-import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { checarRateLimit } from '../_rl';
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const auth = await exigirUsuario();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
 
   try {
@@ -28,11 +28,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** POST /api/estoque/locais — cria local. Escrita: exigirAdmin. */
+/** POST /api/estoque/locais — cria local. Escrita: exigirGestorEstoque. */
 export async function POST(request: NextRequest) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   let corpo: unknown;

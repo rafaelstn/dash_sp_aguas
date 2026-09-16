@@ -1,0 +1,158 @@
+# syntax=docker/dockerfile:1.7
+#
+# SP Aguas, DMO | imagem da CARGA INICIAL DO ESTOQUE (roda uma vez e encerra).
+#
+# POR QUE ESTA IMAGEM EXISTE:
+# a carga inicial e `scripts/estoque/importar-inventario.mjs`, um script Node que
+# precisa de `postgres` e `exceljs`. O servidor do orgao nao tem internet, entao
+# ali nao existe `npm ci`, e a imagem da aplicacao (standalone do Next) nao
+# carrega nem o script nem as dependencias dele. Empacotar o script numa imagem
+# propria, com tag de commit, faz o codigo da carga viajar pelo MESMO caminho das
+# outras duas imagens (docker save, transporte, docker load) e responde sem
+# ambiguidade qual versao do script gravou o dado.
+#
+# O QUE ENTRA, e so isto:
+#   1. o script, e nada mais do repositorio;
+#   2. `postgres` e `exceljs` com as dependencias transitivas NAS VERSOES EXATAS
+#     do package-lock.json da raiz (com o hash de integridade de cada pacote).
+#
+# O QUE NAO ENTRA, e o arquivo de ignore proprio garante isso por PERMISSAO:
+#   1. a planilha (`ops/estoque/planilha-inicial.xlsx`): e dado do cliente, nao e
+#     versionada, e e montada SOMENTE LEITURA na hora de rodar;
+#   2. qualquer `.env` ou segredo: a DATABASE_URL chega por `--env-file` no
+#     `docker run`, nunca no build;
+#   3. o codigo da aplicacao.
+#
+# POR QUE UM IGNORE PROPRIO (Dockerfile.carga-estoque.dockerignore):
+# o `.dockerignore` da raiz e lista de NEGACAO, feito para o build da aplicacao,
+# que precisa do repositorio quase inteiro. Para esta imagem o contexto certo e
+# duas entradas, e o BuildKit usa o arquivo `<Dockerfile>.dockerignore` no lugar
+# do da raiz quando ele existe. Assim o contexto e lista de PERMISSAO, e arquivo
+# novo no repositorio nao tem como entrar aqui por esquecimento.
+#
+# POR QUE NAO `npm ci` COM O package.json DA APLICACAO:
+# `npm ci --omit=dev` instalaria todas as dependencias de producao do dashboard
+# (Next, React e o resto) numa imagem que usa duas. O primeiro estagio recorta do
+# lock so a arvore alcancavel a partir de `postgres` e `exceljs`, sem trocar
+# nenhuma versao, e o `npm ci` instala exatamente esse recorte. Se o lock nao
+# tiver uma dependencia obrigatoria dessa arvore, o build FALHA em vez de
+# resolver versao nova por conta propria.
+#
+# POR QUE A BASE E `node:24-alpine`:
+# e a mesma do runner da aplicacao (Dockerfile da raiz), entao as camadas da base
+# ja estao no disco do servidor e esta imagem so acrescenta o que e dela. A
+# ressalva do Dockerfile.migrate vale aqui tambem: `docker save` NAO deduplica
+# contra o destino, e o arquivo transportado leva a base inteira.
+#
+# SEM HEALTHCHECK, de proposito: e processo de uma vez so, e quem diz se deu
+# certo e o codigo de saida mais as contagens do runbook, nao uma sonda.
+#
+# Build (na maquina com internet, a partir da RAIZ do repositorio):
+#   docker build -f ops/producao/Dockerfile.carga-estoque -t spaguas/carga-estoque:sha-xxxxxxx .
+#
+# Uso: docs/runbooks/carga-inicial-estoque.md
+
+# =============================================================================
+# Estagio 1: recorte do lock e instalacao das dependencias
+# =============================================================================
+FROM node:24-alpine AS deps
+WORKDIR /deps
+
+COPY package-lock.json ./lock-da-aplicacao.json
+
+# Recorte do lock. Resolucao igual a do Node: a dependencia `x` de um pacote em
+# `node_modules/a/node_modules/b` e procurada primeiro dentro de `b`, depois
+# subindo ate `node_modules/x`. Dependencia obrigatoria ausente derruba o build;
+# opcional ausente e pulada (e o caso de binario de outra plataforma).
+RUN node <<'JS'
+const fs = require('node:fs');
+const lock = JSON.parse(fs.readFileSync('lock-da-aplicacao.json', 'utf8'));
+const pk = lock.packages;
+const RAIZES = ['postgres', 'exceljs'];
+
+function resolver(de, nome) {
+  let base = de;
+  for (;;) {
+    const candidato = (base ? base + '/' : '') + 'node_modules/' + nome;
+    if (pk[candidato]) return candidato;
+    if (!base) return null;
+    const i = base.lastIndexOf('/node_modules/');
+    base = i < 0 ? '' : base.slice(0, i);
+  }
+}
+
+const manter = new Set();
+const fila = [];
+const dependenciasRaiz = {};
+for (const nome of RAIZES) {
+  const caminho = 'node_modules/' + nome;
+  if (!pk[caminho]) throw new Error('lock sem ' + nome);
+  dependenciasRaiz[nome] = pk[caminho].version;
+  fila.push(caminho);
+}
+while (fila.length) {
+  const caminho = fila.pop();
+  if (manter.has(caminho)) continue;
+  manter.add(caminho);
+  const e = pk[caminho];
+  const obrigatorias = { ...(e.dependencies || {}) };
+  const opcionais = { ...(e.optionalDependencies || {}) };
+  for (const [nome] of Object.entries(e.peerDependencies || {})) {
+    const meta = (e.peerDependenciesMeta || {})[nome];
+    if (meta && meta.optional) opcionais[nome] = true;
+    else obrigatorias[nome] = true;
+  }
+  for (const nome of Object.keys(obrigatorias)) {
+    const alvo = resolver(caminho, nome);
+    if (!alvo) throw new Error('dependencia obrigatoria ausente no lock: ' + nome + ' (de ' + caminho + ')');
+    fila.push(alvo);
+  }
+  for (const nome of Object.keys(opcionais)) {
+    const alvo = resolver(caminho, nome);
+    if (alvo) fila.push(alvo);
+  }
+}
+
+const raiz = { name: 'carga-estoque', version: '0.0.0', private: true, dependencies: dependenciasRaiz };
+const pacotes = { '': raiz };
+for (const caminho of [...manter].sort()) {
+  const e = { ...pk[caminho] };
+  // Marcas de "dev" dizem respeito a arvore da APLICACAO; aqui tudo e runtime.
+  delete e.dev;
+  delete e.devOptional;
+  pacotes[caminho] = e;
+}
+fs.writeFileSync('package.json', JSON.stringify(raiz, null, 2));
+fs.writeFileSync('package-lock.json', JSON.stringify({ name: raiz.name, version: raiz.version, lockfileVersion: 3, requires: true, packages: pacotes }, null, 2));
+console.log('recorte do lock: ' + manter.size + ' pacotes, raizes ' + JSON.stringify(dependenciasRaiz));
+JS
+
+# --ignore-scripts: nenhuma das duas precisa de script de instalacao, e codigo de
+# terceiro nao roda no build. `npm ls` depois reprova arvore incompleta ou versao
+# diferente da declarada, que o `npm ci` sozinho nao denuncia em todo caso.
+RUN npm ci --ignore-scripts --no-audit --no-fund \
+ && npm ls --all > /dev/null
+
+# =============================================================================
+# Estagio 2: imagem final
+# =============================================================================
+FROM node:24-alpine
+
+ENV NODE_ENV=production
+
+# O script le a planilha em `<cwd>/ops/estoque/planilha-inicial.xlsx`. O diretorio
+# e criado vazio na imagem para ser o ponto de montagem do arquivo, que chega
+# somente leitura no `docker run`. Nada e gravado nele.
+WORKDIR /carga
+RUN mkdir -p /carga/ops/estoque
+
+COPY --from=deps --chown=root:root /deps/node_modules ./node_modules
+COPY --chown=root:root scripts/estoque/importar-inventario.mjs ./scripts/estoque/importar-inventario.mjs
+
+# Usuario sem privilegio que ja existe na imagem oficial (uid 1000). Os arquivos
+# sao de root e so leitura para ele: o processo nao consegue alterar o proprio
+# codigo nem as dependencias.
+USER node
+
+# Argumentos extras (por exemplo `--estrito`) vao depois do nome da imagem.
+ENTRYPOINT ["node", "scripts/estoque/importar-inventario.mjs"]

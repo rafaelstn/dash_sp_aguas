@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { estoqueConferenciasRepository } from '@/infrastructure/repositories';
-import { exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { reconciliarItem } from '@/application/use-cases/estoque/reconciliar-conferencia';
@@ -19,12 +19,12 @@ const idSchema = z.string().uuid('Identificador inválido.');
  * Toca o estoque real -> politica `movimentacaoEstoque`. Guarda de IDOR no repo.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: { params: Promise<{ id: string; itemId: string }> },
 ) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const params = await ctx.params;

@@ -141,6 +141,64 @@ export interface ResultadoMovimentacaoDTO {
   unidade: UnidadeDTO | null;
 }
 
+// ── Desconformidades da importacao da planilha de inventario ────────────────
+/**
+ * Tipos de desconformidade gravados pela importacao. A ordem da tupla e a
+ * ordem de exibicao no filtro. Contrato: GET /api/estoque/desconformidades.
+ */
+export const TIPOS_DESCONFORMIDADE = [
+  'item_sem_descricao',
+  'identificador_repetido',
+  'chave_repetida',
+  'leitura_diferente_do_codigo',
+  'descricao_suspeita',
+  'quantidade_vazia',
+  'coluna_sem_cabecalho',
+] as const;
+export type TipoDesconformidade = (typeof TIPOS_DESCONFORMIDADE)[number];
+
+export const STATUS_DESCONFORMIDADE = ['aberta', 'resolvida', 'ignorada'] as const;
+export type StatusDesconformidade = (typeof STATUS_DESCONFORMIDADE)[number];
+
+export interface DesconformidadeDTO {
+  id: string;
+  tipo: TipoDesconformidade;
+  /** Arquivo ou carga de origem. */
+  origem: string;
+  /** Aba da planilha (null quando o problema nao tem aba). */
+  aba: string | null;
+  /** Linha da planilha (null quando o problema e da aba inteira). */
+  linha: number | null;
+  detalhe: string;
+  /** Campos brutos da linha; em `item_sem_descricao` traz os identificadores. */
+  dados: Record<string, unknown>;
+  status: StatusDesconformidade;
+  nota: string | null;
+  /** Unidade cadastrada a partir desta pendencia, quando houver. */
+  unidadeId: string | null;
+  resolvidaPor: string | null;
+  resolvidaEm: string | null;
+  detectadaEm: string;
+  ultimaDeteccaoEm: string;
+}
+
+export interface RespostaDesconformidades extends RespostaPaginada<DesconformidadeDTO> {
+  /** Contagem por status respeitando o filtro de tipo (ignora o de status). */
+  contagem: Record<StatusDesconformidade, number>;
+}
+
+export interface AtualizarDesconformidadeUI {
+  status: StatusDesconformidade;
+  /** Obrigatoria (3 a 500) quando o status nao e `aberta`. */
+  nota?: string;
+  unidadeId?: string;
+  /**
+   * Situação que a tela mostrava ao decidir. Se outra pessoa mudou antes, o
+   * servidor recusa com 409 `desconformidade_alterada` em vez de sobrescrever.
+   */
+  statusEsperado?: StatusDesconformidade;
+}
+
 /** Detalhe de unidade serializada: registro + trilha de movimentacao. */
 export interface DetalheUnidadeDTO {
   unidade: UnidadeDTO;

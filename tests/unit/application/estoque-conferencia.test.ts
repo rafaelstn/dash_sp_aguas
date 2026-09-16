@@ -235,8 +235,9 @@ describe('conferencia, sobra / IDOR / lote / resumo', () => {
     const s1 = await abrirConferencia(conf, { unidade: 'PENHA', natureza: 'quantificavel' }, USER);
     const item = (await conf.listarItens(s1.id, {})).itens[0]!;
 
-    // outra conferencia REAL (existe), mas nao e a dona do item de s1.
-    await seedQuant(3); // gera saldo em ARARAQUARA? nao: seedQuant usa PENHA. Basta existir a sessao.
+    // outra conferencia REAL (existe), mas nao e a dona do item de s1. Basta existir a
+    // sessao: um segundo seedQuant repetiria material e local, que o banco (e o mock,
+    // que espelha os indices unicos) recusa.
     const s2 = await abrirConferencia(conf, { unidade: 'ARARAQUARA', natureza: 'quantificavel' }, USER);
     await concluirConferencia(conf, s2.id, 'concluir', USER);
 

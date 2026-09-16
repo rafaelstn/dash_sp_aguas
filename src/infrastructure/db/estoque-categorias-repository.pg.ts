@@ -1,8 +1,11 @@
 import 'server-only';
 import type { EstoqueCategoriasRepository } from '@/application/ports/estoque-categorias-repository';
 import type { Categoria } from '@/domain/estoque/categoria';
-import { CategoriaNaoEncontrada, FalhaRepositorio } from '@/domain/errors';
+import { CategoriaDuplicada, CategoriaNaoEncontrada, FalhaRepositorio } from '@/domain/errors';
 import { sql } from './client';
+import { violouUnicidade } from './violacao-unicidade';
+
+const INDICE_NOME = 'uq_estoque_categorias_nome';
 
 type LinhaCategoria = { id: string; nome: string; criado_em: Date };
 
@@ -43,6 +46,7 @@ export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
       `;
       return mapear(linhas[0]!);
     } catch (e) {
+      if (violouUnicidade(e, INDICE_NOME)) throw new CategoriaDuplicada(dados.nome.trim());
       throw new FalhaRepositorio('estoqueCategorias.criar', e);
     }
   },
@@ -63,6 +67,9 @@ export const estoqueCategoriasRepository: EstoqueCategoriasRepository = {
       return mapear(linhas[0]);
     } catch (e) {
       if (e instanceof CategoriaNaoEncontrada) throw e;
+      if (dados.nome !== undefined && violouUnicidade(e, INDICE_NOME)) {
+        throw new CategoriaDuplicada(dados.nome.trim());
+      }
       throw new FalhaRepositorio('estoqueCategorias.atualizar', e);
     }
   },

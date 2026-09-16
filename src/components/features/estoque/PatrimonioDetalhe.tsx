@@ -16,7 +16,7 @@ import { formatarData, formatarDataHora } from './rotulos';
 import type { DetalheUnidadeDTO, LocalDTO } from './dtos';
 
 interface Props {
-  /** UUID cru da unidade serializada (vindo do QR/rota). */
+  /** UUID cru da unidade serializada (vindo da rota). */
   id: string;
   /** Papel do ator resolvido no servidor: admin/super_admin movimentam. */
   podeGerenciar: boolean;
@@ -29,8 +29,7 @@ type Carga =
   | { fase: 'ok'; dados: DetalheUnidadeDTO };
 
 /**
- * Pagina de leitura de um item serializado, alvo do QR de patrimonio. Qualquer
- * celular abre a URL (sem leitor proprio); sem sessao, cai no login e volta
+ * Pagina de leitura de um item serializado. Sem sessao, cai no login e volta
  * para ca. Layout de leitura (container estreito), estados cobertos e trilha de
  * auditoria reaproveitada. A acao de escrita (Movimentar) so aparece para quem
  * pode gerenciar; o backend continua sendo a autoridade.

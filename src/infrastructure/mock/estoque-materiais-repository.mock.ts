@@ -2,8 +2,22 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { EstoqueMateriaisRepository } from '@/application/ports/estoque-materiais-repository';
 import type { Material } from '@/domain/estoque/material';
-import { MaterialNaoEncontrado } from '@/domain/errors';
+import { MaterialDuplicado, MaterialNaoEncontrado } from '@/domain/errors';
 import { estoqueStore } from './estoque-store.mock';
+
+type ChaveMaterial = Pick<Material, 'natureza' | 'descricao' | 'marca' | 'modelo'>;
+
+/** Espelha `uq_estoque_materiais_dedup`: natureza, e descrição, marca e modelo sem caixa. */
+function chaveMaterial(m: ChaveMaterial): string {
+  return [m.natureza, m.descricao.toLowerCase(), (m.marca ?? '').toLowerCase(), (m.modelo ?? '').toLowerCase()].join('|');
+}
+
+function garantirMaterialLivre(m: ChaveMaterial, ignorarId?: string): void {
+  const alvo = chaveMaterial(m);
+  for (const outro of estoqueStore.materiais.values()) {
+    if (outro.id !== ignorarId && chaveMaterial(outro) === alvo) throw new MaterialDuplicado();
+  }
+}
 
 function contemBusca(m: Material, busca: string): boolean {
   const alvo = busca.toLowerCase();
@@ -49,6 +63,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       criadoEm: agora,
       atualizadoEm: agora,
     };
+    garantirMaterialLivre(novo);
     estoqueStore.materiais.set(novo.id, novo);
     return novo;
   },
@@ -68,6 +83,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       ...(dados.ativo !== undefined ? { ativo: dados.ativo } : {}),
       atualizadoEm: new Date(),
     };
+    garantirMaterialLivre(atualizado, id);
     estoqueStore.materiais.set(id, atualizado);
     return atualizado;
   },

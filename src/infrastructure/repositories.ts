@@ -39,6 +39,7 @@ import { estoqueUnidadesRepository as estoqueUnidadesPg } from './db/estoque-uni
 import { estoqueSaldosRepository as estoqueSaldosPg } from './db/estoque-saldos-repository.pg';
 import { estoqueMovimentacoesRepository as estoqueMovimentacoesPg } from './db/estoque-movimentacoes-repository.pg';
 import { estoqueConferenciasRepository as estoqueConferenciasPg } from './db/estoque-conferencias-repository.pg';
+import { estoqueDesconformidadesRepository as estoqueDesconformidadesPg } from './db/estoque-desconformidades-repository.pg';
 import { usuariosIdentidadeRepository as usuariosIdentidadePg } from './db/usuarios-identidade-repository.pg';
 
 // Implementações in-memory (ativadas apenas em MODO DEMO).
@@ -66,6 +67,7 @@ import { estoqueUnidadesRepository as estoqueUnidadesMock } from './mock/estoque
 import { estoqueSaldosRepository as estoqueSaldosMock } from './mock/estoque-saldos-repository.mock';
 import { estoqueMovimentacoesRepository as estoqueMovimentacoesMock } from './mock/estoque-movimentacoes-repository.mock';
 import { estoqueConferenciasRepository as estoqueConferenciasMock } from './mock/estoque-conferencias-repository.mock';
+import { estoqueDesconformidadesRepository as estoqueDesconformidadesMock } from './mock/estoque-desconformidades-repository.mock';
 import { usuariosIdentidadeRepository as usuariosIdentidadeMock } from './mock/usuarios-identidade-repository.mock';
 
 /**
@@ -202,6 +204,12 @@ export const estoqueMovimentacoesRepository = demo
 export const estoqueConferenciasRepository = demo
   ? estoqueConferenciasMock
   : estoqueConferenciasPg;
+
+// Desconformidades da carga (migration 0071): o importador grava, a aba
+// "Desconformidades" lista e decide (resolver, ignorar, reabrir).
+export const estoqueDesconformidadesRepository = demo
+  ? estoqueDesconformidadesMock
+  : estoqueDesconformidadesPg;
 
 // Resolucao de identidade de operador (email/nome) para a trilha/export do
 // Estoque. `.pg` le de auth.users em lote; `.mock` devolve vazio (sem Auth em demo).

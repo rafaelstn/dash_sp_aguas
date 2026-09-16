@@ -44,6 +44,25 @@ data
 # reprovado). O resto de `data/` continua fora: sao CSV de carga e amostras,
 # que nao vao para a imagem.
 !data/colunas-ana.json
+# Planilha de inventario do cliente (carga inicial do estoque). E dado, nao e
+# codigo, e nao e versionada. Sem esta linha ela entrava no contexto do build da
+# aplicacao e numa camada do estagio `builder` (`COPY . .`), medido em 16/09/2026.
+# A imagem de carga usa ignore proprio por permissao
+# (ops/producao/Dockerfile.carga-estoque.dockerignore) e recebe a planilha
+# somente por montagem na hora de rodar.
+#
+# A pasta inteira fica fora, e não só `*.xlsx`: é onde a carga guarda a planilha
+# e, no servidor, o arquivo de ambiente dela; um `.csv` ou `.env` salvo ali ao
+# lado entraria pela regra estreita. As duas linhas `**/` cobrem cópia da
+# planilha esquecida em outra pasta e `.env` fora da raiz (as regras `.env`
+# acima só valem para a raiz do contexto).
+ops/estoque
+**/*.xlsx
+**/*.xls
+**/.env
+**/.env.*
+!.env.example
+!.env.docker.example
 supabase/.branches
 supabase/.temp
 *.log

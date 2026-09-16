@@ -81,4 +81,23 @@ describe('migrations do estoque, integridade declarada no banco', () => {
       /CREATE INDEX IF NOT EXISTS idx_estoque_unidades_codigo_spaguas\s+ON estoque_unidades \(codigo_spaguas\) WHERE codigo_spaguas IS NOT NULL/,
     );
   });
+
+  it('0073 recria uq_estoque_unidades_codigo sobre lower(codigo) com o MESMO nome, depois da checagem de duplicata', () => {
+    const m = ler('supabase/migrations/0073_estoque_unidades_codigo_sem_caixa.sql');
+    // Mesmo nome: a 0060 roda antes a cada subida e o adapter traduz o 23505 por ele.
+    expect(m).toMatch(
+      /CREATE UNIQUE INDEX uq_estoque_unidades_codigo\s+ON public\.estoque_unidades \(lower\(codigo\)\) WHERE codigo IS NOT NULL/,
+    );
+    const checagem = m.indexOf('GROUP BY lower(codigo)');
+    const recusa = m.indexOf('RAISE EXCEPTION');
+    const drop = m.indexOf('DROP INDEX IF EXISTS public.uq_estoque_unidades_codigo');
+    expect(checagem).toBeGreaterThan(-1);
+    expect(recusa).toBeGreaterThan(checagem);
+    expect(drop).toBeGreaterThan(recusa);
+    // Nunca normaliza o código gravado (a etiqueta usa a caixa original).
+    expect(m).not.toMatch(/UPDATE\s+(public\.)?estoque_unidades/i);
+    expect(m).toMatch(/INDEX uq_estoque_unidades_codigo/);
+    const pg = ler('src/infrastructure/db/estoque-unidades-repository.pg.ts');
+    expect(pg).toMatch(/const INDICE_CODIGO = 'uq_estoque_unidades_codigo';/);
+  });
 });

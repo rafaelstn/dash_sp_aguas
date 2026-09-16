@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { papeisRepository } from '@/infrastructure/repositories';
-import { ehAdmin } from '@/domain/auth/papel';
+import { podeGerenciarEstoque } from '@/infrastructure/auth/permissao-estoque';
 import { ConferenciaLista } from '@/components/features/estoque/conferencia/ConferenciaLista';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +20,6 @@ export default async function PaginaConferencias() {
     redirect('/login');
   }
 
-  const papel = await papeisRepository.obterPapel(usuario.id);
-  return <ConferenciaLista podeGerenciar={ehAdmin(papel)} />;
+  const podeGerenciar = await podeGerenciarEstoque(usuario.id);
+  return <ConferenciaLista podeGerenciar={podeGerenciar} />;
 }

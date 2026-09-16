@@ -5,7 +5,7 @@ import {
   estoqueMovimentacoesRepository,
   usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
-import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { UnidadeComMovimentacao, UnidadeNaoEncontrada } from '@/domain/errors';
 import { logger } from '@/infrastructure/logging/logger';
@@ -19,10 +19,10 @@ export const dynamic = 'force-dynamic';
 const idSchema = z.string().uuid('Identificador de unidade inválido.');
 
 /** GET /api/estoque/unidades/[id] — detalhe + historico de movimentacao. */
-export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const auth = await exigirUsuario();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);
@@ -61,11 +61,11 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
   }
 }
 
-/** PATCH /api/estoque/unidades/[id] — edita atributos. Escrita: exigirAdmin. */
+/** PATCH /api/estoque/unidades/[id] — edita atributos. Escrita: exigirGestorEstoque. */
 export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);
@@ -102,10 +102,10 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
  * DELETE /api/estoque/unidades/[id] — exclui SO se nao houver movimentacao;
  * caso contrario oriente usar `baixa` (409 unidade_com_movimentacao). Admin.
  */
-export async function DELETE(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+export async function DELETE(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);

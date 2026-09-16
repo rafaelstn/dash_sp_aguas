@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
-import { papeisRepository } from '@/infrastructure/repositories';
-import { ehAdmin } from '@/domain/auth/papel';
+import { podeGerenciarEstoque } from '@/infrastructure/auth/permissao-estoque';
 import { PainelEstoque } from '@/components/features/estoque/PainelEstoque';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +20,6 @@ export default async function PaginaEstoque() {
     redirect('/login');
   }
 
-  const papel = await papeisRepository.obterPapel(usuario.id);
-  return <PainelEstoque podeGerenciar={ehAdmin(papel)} />;
+  const podeGerenciar = await podeGerenciarEstoque(usuario.id);
+  return <PainelEstoque podeGerenciar={podeGerenciar} />;
 }

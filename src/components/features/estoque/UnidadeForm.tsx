@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ESTADOS } from '@/domain/estoque/estado';
 import { STATUS } from '@/domain/estoque/status-unidade';
-import { FormDialog, CampoSelectForm, CampoTextoForm } from './FormDialog';
+import { FormDialog, CampoSelectForm, CampoTextoForm, ErroDeCampo } from './FormDialog';
 import { atualizarUnidade, criarUnidade } from './api';
 import { ROTULO_ESTADO, ROTULO_STATUS } from './rotulos';
 import type { Estado, LocalDTO, Status, UnidadeDTO } from './dtos';
@@ -54,7 +54,7 @@ export function UnidadeForm({ aberto, unidade, locais, aoFechar, aoConcluir }: P
 
   async function salvar() {
     if (descricao.trim().length < 1) {
-      throw new Error('Informe a descrição do item.');
+      throw new ErroDeCampo('descricao', 'Informe a descrição do item.');
     }
     const dados = {
       descricao: descricao.trim(),
@@ -87,7 +87,13 @@ export function UnidadeForm({ aberto, unidade, locais, aoFechar, aoConcluir }: P
       aoSalvar={salvar}
       aoFechar={aoFechar}
     >
-      <CampoTextoForm rotulo="Descrição" valor={descricao} aoMudar={setDescricao} obrigatorio />
+      <CampoTextoForm
+        rotulo="Descrição"
+        campo="descricao"
+        valor={descricao}
+        aoMudar={setDescricao}
+        obrigatorio
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <CampoTextoForm rotulo="Marca" valor={marca} aoMudar={setMarca} />
         <CampoTextoForm rotulo="Modelo" valor={modelo} aoMudar={setModelo} />

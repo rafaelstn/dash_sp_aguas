@@ -100,8 +100,8 @@ Caminho: `Estoque` no menu (atalho `E`).
 3. **Conferência física:** abrir uma conferência, registrar contagem, e mostrar as divergências
    entre o que o sistema tem e o que foi contado no físico. Cada divergência é tratada por decisão
    humana, com registro de quem declarou a contagem.
-4. **Etiquetas com QR de patrimônio:** gerar a folha de etiquetas e mostrar que ler o código abre a
-   página do item.
+4. **Etiquetas com código de barras:** gerar a folha de etiquetas e, numa conferência aberta, ler
+   o código com o leitor USB no campo "Ler código" para marcar o item como conferido.
 5. **Exportação para Excel:** inventário, saldo e trilha.
 
 O ponto a fazer: toda movimentação é registro imutável em trilha, e o saldo é projeção dessa trilha.

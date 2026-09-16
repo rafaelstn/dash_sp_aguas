@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { estoqueLocaisRepository } from '@/infrastructure/repositories';
-import { exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { checarRateLimit } from '../../_rl';
@@ -12,11 +12,11 @@ export const dynamic = 'force-dynamic';
 
 const idSchema = z.string().uuid('Identificador de local inválido.');
 
-/** PATCH /api/estoque/locais/[id] — edita local. Escrita: exigirAdmin. */
+/** PATCH /api/estoque/locais/[id] — edita local. Escrita: exigirGestorEstoque. */
 export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);
@@ -50,10 +50,10 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
 }
 
 /** DELETE /api/estoque/locais/[id] — exclui SO se sem uso (senao 409). Admin. */
-export async function DELETE(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+export async function DELETE(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);

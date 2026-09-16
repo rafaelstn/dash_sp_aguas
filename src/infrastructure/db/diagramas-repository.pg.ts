@@ -7,6 +7,7 @@ import type {
 } from '@/domain/diagramas/diagrama';
 import type { ElementoDiagrama } from '@/domain/diagramas/tipos';
 import { DiagramaNaoEncontrado, FalhaRepositorio } from '@/domain/errors';
+import type { JSONValue } from 'postgres';
 import { sql } from './client';
 
 type LinhaResumo = {
@@ -84,7 +85,7 @@ export const diagramasRepository: DiagramasRepository = {
           ${dados.nome},
           ${dados.bacia ?? null},
           ${dados.descricao ?? null},
-          ${JSON.stringify(elementos)}::jsonb,
+          ${sql.json(elementos as unknown as JSONValue)},
           ${criadoPor}::uuid
         )
         RETURNING id, nome, bacia, descricao, elementos,
@@ -138,7 +139,7 @@ export const diagramasRepository: DiagramasRepository = {
             ${`${base.nome} (cópia)`},
             ${base.bacia},
             ${base.descricao},
-            ${JSON.stringify(elementos)}::jsonb,
+            ${sql.json(elementos as unknown as JSONValue)},
             ${criadoPor}::uuid
           )
           RETURNING id, nome, bacia, descricao, elementos,
@@ -157,7 +158,7 @@ export const diagramasRepository: DiagramasRepository = {
   async salvarElementos(id, elementos) {
     try {
       const linhas = await sql<{ id: string }[]>`
-        UPDATE diagramas SET elementos = ${JSON.stringify(elementos)}::jsonb
+        UPDATE diagramas SET elementos = ${sql.json(elementos as unknown as JSONValue)}
          WHERE id = ${id}::uuid
          RETURNING id
       `;

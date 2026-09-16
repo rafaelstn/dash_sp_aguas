@@ -465,3 +465,90 @@ export function progressoContagem(contados: number, total: number): ProgressoCon
     texto: `${contados.toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')} contados`,
   };
 }
+
+// ── Leitura de código (leitor USB na contagem) ────────────────────────────────
+
+/**
+ * O que fazer com UMA leitura de código na contagem. `registrar` é o único caso
+ * que escreve (marca o item como conferido); os outros só informam.
+ */
+export type DecisaoLeituraCodigo =
+  | { tipo: 'vazio' }
+  | { tipo: 'nenhum'; codigo: string }
+  | { tipo: 'varios'; codigo: string }
+  /** A unidade existe, mas não está no escopo desta conferência. */
+  | { tipo: 'fora_do_escopo'; codigo: string }
+  /** Lista parcial: a unidade pode estar no escopo, só não foi carregada. */
+  | { tipo: 'fora_da_lista_carregada'; codigo: string }
+  | { tipo: 'ja_conferido'; codigo: string; item: ConferenciaItemDTO }
+  | { tipo: 'registrar'; codigo: string; item: ConferenciaItemDTO };
+
+/**
+ * Decide a leitura a partir da resposta da busca EXATA por código (a API é a
+ * autoridade da correspondência, que ignora caixa). `totalEncontrado` é o total
+ * da resposta paginada, não o tamanho da página, para nunca tratar "2 ou mais"
+ * como "1". Item já contado com outra situação vira conferido: a leitura prova
+ * que ele está fisicamente aqui. Puro.
+ */
+export function decidirLeituraCodigo(entrada: {
+  codigo: string;
+  unidadesEncontradas: ReadonlyArray<{ id: string }>;
+  totalEncontrado: number;
+  itens: readonly ConferenciaItemDTO[];
+  listaParcial: boolean;
+}): DecisaoLeituraCodigo {
+  const codigo = entrada.codigo.trim();
+  if (!codigo) return { tipo: 'vazio' };
+
+  const total = Math.max(entrada.totalEncontrado, entrada.unidadesEncontradas.length);
+  if (total === 0) return { tipo: 'nenhum', codigo };
+  if (total > 1) return { tipo: 'varios', codigo };
+
+  const unidade = entrada.unidadesEncontradas[0];
+  if (!unidade) return { tipo: 'nenhum', codigo };
+
+  const item = entrada.itens.find((i) => i.unidadeId === unidade.id);
+  if (!item) {
+    return entrada.listaParcial
+      ? { tipo: 'fora_da_lista_carregada', codigo }
+      : { tipo: 'fora_do_escopo', codigo };
+  }
+  if (item.situacao === 'conferido') return { tipo: 'ja_conferido', codigo, item };
+  return { tipo: 'registrar', codigo, item };
+}
+
+export type TomLeituraCodigo = 'sucesso' | 'aviso' | 'erro';
+
+/**
+ * Mensagem anunciada ao operador para cada decisão. `rotulo` resolve o nome do
+ * item (na tela, `resolvedores.rotuloItem`). `registrar` só é descrito depois
+ * de gravado, por isso a frase está no passado. Puro.
+ */
+export function mensagemLeituraCodigo(
+  decisao: Exclude<DecisaoLeituraCodigo, { tipo: 'vazio' }>,
+  rotulo: (item: ConferenciaItemDTO) => string,
+): { tom: TomLeituraCodigo; texto: string } {
+  switch (decisao.tipo) {
+    case 'nenhum':
+      return { tom: 'erro', texto: `Nenhum item com o código ${decisao.codigo}.` };
+    case 'varios':
+      return {
+        tom: 'aviso',
+        texto: `Mais de um item tem o código ${decisao.codigo}. Confira manualmente na lista.`,
+      };
+    case 'fora_do_escopo':
+      return {
+        tom: 'aviso',
+        texto: `O item ${decisao.codigo} não pertence a esta conferência. Se ele está aqui, use “Adicionar sobra”.`,
+      };
+    case 'fora_da_lista_carregada':
+      return {
+        tom: 'aviso',
+        texto: `O item ${decisao.codigo} não está entre os itens carregados nesta tela. Confira manualmente; se ele não for do escopo, use “Adicionar sobra”.`,
+      };
+    case 'ja_conferido':
+      return { tom: 'aviso', texto: `${rotulo(decisao.item)} já estava conferido.` };
+    case 'registrar':
+      return { tom: 'sucesso', texto: `${rotulo(decisao.item)} conferido.` };
+  }
+}

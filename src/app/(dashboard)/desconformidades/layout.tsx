@@ -1,4 +1,11 @@
 import { Abas } from '@/components/features/desconformidades/Abas';
+import {
+  ID_NOTA_REVISAO_INDISPONIVEL,
+  RevisaoDisponibilidade,
+} from '@/components/features/desconformidades/RevisaoDisponibilidade';
+import { MENSAGEM_REVISAO_INDISPONIVEL } from '@/components/features/desconformidades/revisao-envio';
+import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
+import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { desconformidadesRepository } from '@/infrastructure/repositories';
 import { contarDesconformidades } from '@/application/use-cases/listar-desconformidades';
 
@@ -9,7 +16,13 @@ export default async function LayoutDesconformidades({
 }: {
   children: React.ReactNode;
 }) {
-  const contagens = await contarDesconformidades(desconformidadesRepository);
+  const [contagens, usuario] = await Promise.all([
+    contarDesconformidades(desconformidadesRepository),
+    obterUsuarioAtual(),
+  ]);
+  // Mesma regra do servidor (exigirIdentidadeVerificada): o usuário institucional
+  // da janela não revisa. O 403 continua tratado no botão se as duas divergirem.
+  const revisaoDisponivel = usuario?.id !== USUARIO_SEM_IDENTIDADE.id;
 
   return (
     <div className="space-y-6">
@@ -27,7 +40,14 @@ export default async function LayoutDesconformidades({
 
       <Abas contagens={contagens} />
 
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 space-y-4">
+        {revisaoDisponivel ? null : (
+          <p id={ID_NOTA_REVISAO_INDISPONIVEL} className="text-sm text-gov-muted">
+            {MENSAGEM_REVISAO_INDISPONIVEL}
+          </p>
+        )}
+        <RevisaoDisponibilidade disponivel={revisaoDisponivel}>{children}</RevisaoDisponibilidade>
+      </div>
     </div>
   );
 }

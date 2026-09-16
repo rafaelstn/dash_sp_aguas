@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { estoqueConferenciasRepository } from '@/infrastructure/repositories';
-import { exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { reconciliarLote } from '@/application/use-cases/estoque/reconciliar-conferencia';
@@ -21,9 +21,9 @@ const idSchema = z.string().uuid('Identificador de conferência inválido.');
  * concluida (409 antes de iterar). Toca o estoque -> `movimentacaoEstoque`.
  */
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);

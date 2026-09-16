@@ -12,7 +12,7 @@ export const metadata = {
 };
 
 /**
- * Visao de impressao das etiquetas/QR do conjunto serializado FILTRADO. Le os
+ * Visao de impressao das etiquetas (codigo de barras) do conjunto serializado FILTRADO. Le os
  * filtros da querystring (os mesmos da aba serializada do Estoque) no servidor,
  * sanea com os guards do dominio e propaga ao componente cliente, que busca os
  * itens em `/api/estoque/unidades/etiquetas` e monta a grade imprimivel.

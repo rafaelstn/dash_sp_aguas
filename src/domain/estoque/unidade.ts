@@ -62,6 +62,12 @@ export interface FiltrosUnidade {
   materialId?: string;
   /** Busca textual em serie/patrimonio/descricao. */
   busca?: string;
+  /**
+   * Codigo EXATO da etiqueta (leitura do codigo de barras), sem diferenciar
+   * maiuscula de minuscula: o leitor devolve "001SPA26ARARA" para "001SPA26Arara".
+   * Nao usa substring: "1SPA26PENHA" nao pode casar com "11SPA26PENHA".
+   */
+  codigo?: string;
   pagina?: number;
   porPagina?: number;
 }

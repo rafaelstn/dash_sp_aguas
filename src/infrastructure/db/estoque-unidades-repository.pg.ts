@@ -3,13 +3,16 @@ import type { EstoqueUnidadesRepository } from '@/application/ports/estoque-unid
 import type { FiltrosUnidade } from '@/domain/estoque/unidade';
 import type { UnidadeFisica } from '@/domain/estoque/local';
 import { TETO_EXPORT } from '@/domain/estoque/export';
-import { FalhaRepositorio, UnidadeNaoEncontrada } from '@/domain/errors';
+import { CodigoUnidadeDuplicado, FalhaRepositorio, UnidadeNaoEncontrada } from '@/domain/errors';
 import { sql } from './client';
+import { violouUnicidade } from './violacao-unicidade';
 import {
   COLUNAS_UNIDADE as COLUNAS,
   mapearUnidadeLinha as mapear,
   type LinhaUnidadePg as LinhaUnidade,
 } from './estoque-unidades-mapper';
+
+const INDICE_CODIGO = 'uq_estoque_unidades_codigo';
 
 /**
  * WHERE compartilhado por `listar` e `listarParaExport` (mesmos filtros). Usa o
@@ -27,10 +30,19 @@ function montarWhere(filtros: FiltrosUnidade): ReturnType<typeof sql> {
   if (filtros.estado) wheres.push(sql`u.estado = ${filtros.estado}`);
   if (filtros.status) wheres.push(sql`u.status = ${filtros.status}`);
   if (filtros.materialId) wheres.push(sql`u.material_id = ${filtros.materialId}::uuid`);
+  if (filtros.codigo) wheres.push(sql`lower(u.codigo) = lower(${filtros.codigo})`);
   if (filtros.busca) {
     const termo = `%${filtros.busca}%`;
+    // Identificador compara sem espaço: a planilha grava "17264 / 40786" e
+    // "17264/40786" para o mesmo patrimônio, e o importador os trata como iguais.
+    const compacto = `%${filtros.busca.replace(/\s+/g, '')}%`;
     wheres.push(
-      sql`(u.descricao ILIKE ${termo} OR u.numero_serie ILIKE ${termo} OR u.codigo_spaguas ILIKE ${termo} OR u.pat_daee ILIKE ${termo} OR u.codigo ILIKE ${termo})`,
+      sql`(u.descricao ILIKE ${termo}
+        OR regexp_replace(u.numero_serie, '[[:space:]]', '', 'g') ILIKE ${compacto}
+        OR regexp_replace(u.codigo_spaguas, '[[:space:]]', '', 'g') ILIKE ${compacto}
+        OR regexp_replace(u.pat_daee, '[[:space:]]', '', 'g') ILIKE ${compacto}
+        OR regexp_replace(u.outros_pat, '[[:space:]]', '', 'g') ILIKE ${compacto}
+        OR u.codigo ILIKE ${termo})`,
     );
   }
   let where = wheres[0]!;
@@ -117,6 +129,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
       `;
       return mapear(linhas[0]!);
     } catch (e) {
+      if (dados.codigo && violouUnicidade(e, INDICE_CODIGO)) throw new CodigoUnidadeDuplicado(dados.codigo);
       throw new FalhaRepositorio('estoqueUnidades.criar', e);
     }
   },
@@ -154,6 +167,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
       return mapear(linhas[0]);
     } catch (e) {
       if (e instanceof UnidadeNaoEncontrada) throw e;
+      if (dados.codigo && violouUnicidade(e, INDICE_CODIGO)) throw new CodigoUnidadeDuplicado(dados.codigo);
       throw new FalhaRepositorio('estoqueUnidades.atualizar', e);
     }
   },

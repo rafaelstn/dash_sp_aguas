@@ -5,7 +5,7 @@ import { revisoesRepository } from '@/infrastructure/repositories';
 import { marcarRevisaoDesconformidade } from '@/application/use-cases/marcar-revisao-desconformidade';
 import type { CategoriaDesconformidade } from '@/domain/desconformidade';
 import type { TipoEntidadeRevisada } from '@/domain/revisao-desconformidade';
-import { exigirUsuario } from '@/app/api/_helpers/auth';
+import { exigirIdentidadeVerificada } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 
 export const dynamic = 'force-dynamic';
@@ -41,8 +41,13 @@ function validar(body: unknown): Payload | null {
   };
 }
 
+/**
+ * "Revisado" é afirmação de que alguém conferiu, sem caminho de reabrir no
+ * produto, e o UPSERT troca `usuario_id` e `ip` de quem revisou antes. Na janela
+ * sem identidade isso apagaria a autoria real, então fica com 403 (ADR-0024).
+ */
 export async function POST(request: Request) {
-  const auth = await exigirUsuario();
+  const auth = await exigirIdentidadeVerificada();
   if (auth instanceof NextResponse) return auth;
 
   let body: unknown;

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { estoqueConferenciasRepository } from '@/infrastructure/repositories';
-import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { ConferenciaNaoEncontrada } from '@/domain/errors';
 import { logger } from '@/infrastructure/logging/logger';
@@ -16,10 +16,10 @@ export const dynamic = 'force-dynamic';
 const idSchema = z.string().uuid('Identificador de conferência inválido.');
 
 /** GET /api/estoque/conferencias/[id] — detalhe + resumo de divergencias. Leitura: usuario. */
-export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const auth = await exigirUsuario();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);
@@ -40,9 +40,9 @@ export async function GET(_request: NextRequest, ctx: { params: Promise<{ id: st
  * `concluida_por` vem do auth. Erros: 404 nao encontrada; 409 conferencia_fechada.
  */
 export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);

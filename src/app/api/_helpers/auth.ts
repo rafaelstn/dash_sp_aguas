@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server';
 import { obterUsuarioAtual, type UsuarioAutenticado } from '@/infrastructure/auth/current-user';
 import { papeisRepository } from '@/infrastructure/repositories';
 import { ehAdmin, ehSuperAdmin } from '@/domain/auth/papel';
+import { podeGerenciarEstoque } from '@/infrastructure/auth/permissao-estoque';
+import {
+  USUARIO_SEM_IDENTIDADE,
+  acessoSemIdentidadeAtivo,
+} from '@/infrastructure/auth/acesso-sem-identidade';
 
 /**
  * Helper de autorização compartilhado entre rotas API que não estão
@@ -57,6 +62,48 @@ export async function exigirAdmin(): Promise<UsuarioAutenticado | NextResponse> 
   if (!ehAdmin(papel)) {
     return NextResponse.json(
       { erro: 'sem_papel_admin', mensagem: 'Operação requer papel de Admin.' },
+      { status: 403 },
+    );
+  }
+  return auth;
+}
+
+/**
+ * Exige permissão de escrita no módulo de estoque. Critério em
+ * `podeGerenciarEstoque`: Admin, ou o usuário institucional da janela sem
+ * identidade. Use SÓ em rotas de `/api/estoque`.
+ */
+export async function exigirGestorEstoque(): Promise<UsuarioAutenticado | NextResponse> {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+  if (!(await podeGerenciarEstoque(auth.id))) {
+    return NextResponse.json(
+      { erro: 'sem_papel_admin', mensagem: 'Operação requer papel de Admin.' },
+      { status: 403 },
+    );
+  }
+  return auth;
+}
+
+/**
+ * Exige uma pessoa identificada. Com autenticação ligada equivale a
+ * `exigirUsuario`. Na janela sem identidade (ADR-0024), ou para o id do usuário
+ * institucional em qualquer modo, responde 403.
+ *
+ * Use em escrita que o produto apresenta como ato de alguém (por exemplo,
+ * "revisado"), que a janela gravaria sem autor e que sobrescreve a autoria de
+ * quem já tinha feito o registro com login.
+ */
+export async function exigirIdentidadeVerificada(): Promise<UsuarioAutenticado | NextResponse> {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+  // OU, e não E: o id institucional nunca é uma pessoa, com ou sem a janela.
+  if (acessoSemIdentidadeAtivo() || auth.id === USUARIO_SEM_IDENTIDADE.id) {
+    return NextResponse.json(
+      {
+        erro: 'identificacao_obrigatoria',
+        mensagem: 'Esta operação exige usuário identificado e está indisponível no acesso sem identificação.',
+      },
       { status: 403 },
     );
   }

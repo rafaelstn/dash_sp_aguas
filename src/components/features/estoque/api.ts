@@ -10,6 +10,11 @@ import type { UpsertMaterial } from '@/domain/estoque/material';
 import type { UpsertUnidade } from '@/domain/estoque/unidade';
 import type { ItemEtiqueta } from '@/domain/estoque/etiqueta';
 import type {
+  AtualizarDesconformidadeUI,
+  DesconformidadeDTO,
+  RespostaDesconformidades,
+  StatusDesconformidade,
+  TipoDesconformidade,
   CategoriaDTO,
   DetalheUnidadeDTO,
   LocalDTO,
@@ -69,6 +74,8 @@ export interface FiltrosUnidadesUI {
   status?: Status;
   materialId?: string;
   busca?: string;
+  /** Codigo exato da etiqueta (leitor de codigo de barras). */
+  codigo?: string;
   pagina?: number;
   porPagina?: number;
 }
@@ -101,6 +108,7 @@ export function listarUnidades(
       status: f.status,
       materialId: f.materialId,
       busca: f.busca,
+      codigo: f.codigo,
       pagina: f.pagina,
       porPagina: f.porPagina,
     })}`,
@@ -136,7 +144,7 @@ export function excluirUnidade(id: string): Promise<{ id: string; removido: bool
   return enviar(`/api/estoque/unidades/${id}`, 'DELETE');
 }
 
-// ── Etiquetas / QR de patrimonio ─────────────────────────────────────────────
+// ── Etiquetas com codigo de barras ───────────────────────────────────────────
 /** Filtros da geracao de etiquetas: os MESMOS da aba serializada. */
 export interface FiltrosEtiquetasUI {
   unidade?: UnidadeFisica;
@@ -311,6 +319,42 @@ export function registrarMovimentacao(
   payload: PayloadMovimentacao,
 ): Promise<ResultadoMovimentacaoDTO> {
   return enviar('/api/estoque/movimentacoes', 'POST', payload);
+}
+
+// ── Desconformidades da importacao ──────────────────────────────────────────
+export interface FiltrosDesconformidadesUI {
+  status?: StatusDesconformidade;
+  tipo?: TipoDesconformidade;
+  pagina?: number;
+  porPagina?: number;
+}
+
+export function listarDesconformidades(
+  f: FiltrosDesconformidadesUI,
+  signal?: AbortSignal,
+): Promise<RespostaDesconformidades> {
+  return getJson(
+    `/api/estoque/desconformidades${qs({
+      status: f.status,
+      tipo: f.tipo,
+      pagina: f.pagina,
+      porPagina: f.porPagina,
+    })}`,
+    signal,
+  );
+}
+
+/** Quantas desconformidades estao abertas (chamada leve, porPagina=1). */
+export async function contarDesconformidadesAbertas(signal?: AbortSignal): Promise<number> {
+  const r = await listarDesconformidades({ status: 'aberta', pagina: 1, porPagina: 1 }, signal);
+  return r.contagem.aberta;
+}
+
+export function atualizarDesconformidade(
+  id: string,
+  dados: AtualizarDesconformidadeUI,
+): Promise<DesconformidadeDTO> {
+  return enviar(`/api/estoque/desconformidades/${encodeURIComponent(id)}`, 'PATCH', dados);
 }
 
 // ── Exportacao Excel (XLSX) ──────────────────────────────────────────────────

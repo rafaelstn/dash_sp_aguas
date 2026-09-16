@@ -1,15 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Link from 'next/link';
-import { Boxes, ClipboardList, Package, Plus, QrCode, Settings2 } from 'lucide-react';
+import { Barcode, Boxes, ClipboardList, FileWarning, Package, Plus, Settings2 } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
-import { LiveRegion } from '@/components/a11y/LiveRegion';
 import {
+  contarDesconformidadesAbertas,
   contarUnidades,
   excluirCategoria,
   excluirLocal,
@@ -43,6 +43,7 @@ import { UnidadeForm } from './UnidadeForm';
 import { LocalForm } from './LocalForm';
 import { CategoriaForm } from './CategoriaForm';
 import { GestaoCadastros } from './GestaoCadastros';
+import { SecaoDesconformidades } from './desconformidades/SecaoDesconformidades';
 import type {
   CategoriaDTO,
   LocalDTO,
@@ -58,6 +59,17 @@ interface Props {
 }
 
 const POR_PAGINA = 50;
+
+type AbaEstoque = Natureza | 'desconformidades';
+
+const ABAS_ESTOQUE: readonly { valor: AbaEstoque; rotulo: string; icone: typeof Package }[] = [
+  { valor: 'serializado', rotulo: 'Serializados', icone: Package },
+  { valor: 'quantificavel', rotulo: 'Quantificáveis', icone: Boxes },
+  { valor: 'desconformidades', rotulo: 'Desconformidades', icone: FileWarning },
+];
+
+const idAba = (a: AbaEstoque) => `estoque-aba-${a}`;
+const ID_PAINEL_ABA = 'estoque-painel-aba';
 
 type CargaUnidades =
   | { fase: 'carregando' }
@@ -120,7 +132,9 @@ function useDebounce<T>(valor: T, ms: number): T {
  * de escrita so aparecem para quem pode gerenciar (UX; o backend e a autoridade).
  */
 export function PainelEstoque({ podeGerenciar }: Props) {
-  const [aba, setAba] = useState<Natureza>('serializado');
+  const [aba, setAba] = useState<AbaEstoque>('serializado');
+  const natureza: Natureza = aba === 'quantificavel' ? 'quantificavel' : 'serializado';
+  const [desconformidadesAbertas, setDesconformidadesAbertas] = useState<number | null>(null);
   const [filtros, setFiltros] = useState<FiltrosEstoqueUI>(FILTROS_ESTOQUE_INICIAIS);
   const [pagina, setPagina] = useState(1);
   const [filtrosAbertosMobile, setFiltrosAbertosMobile] = useState(false);
@@ -136,8 +150,13 @@ export function PainelEstoque({ podeGerenciar }: Props) {
   const [resumo, setResumo] = useState<ResumoSerial | null>(null);
 
   const [versao, setVersao] = useState(0);
-  const [feedback, setFeedback] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
-  const [anuncio, setAnuncio] = useState('');
+  // O Alerta do retorno é o único anúncio (role=alert no erro, role=status no
+  // sucesso). `seq` remonta o Alerta para a mesma frase repetida ser lida de novo.
+  const [feedback, setFeedback] = useState<{
+    tipo: 'sucesso' | 'erro';
+    texto: string;
+    seq: number;
+  } | null>(null);
 
   // Detalhe (drawers)
   const [detalheUnidadeId, setDetalheUnidadeId] = useState<string | null>(null);
@@ -169,12 +188,60 @@ export function PainelEstoque({ podeGerenciar }: Props) {
 
   const concluir = useCallback(
     (mensagem: string) => {
-      setFeedback({ tipo: 'sucesso', texto: mensagem });
-      setAnuncio(mensagem);
+      setFeedback((f) => ({ tipo: 'sucesso', texto: mensagem, seq: (f?.seq ?? 0) + 1 }));
       recarregar();
     },
     [recarregar],
   );
+
+  const falhar = useCallback(
+    (mensagem: string) => {
+      setFeedback((f) => ({ tipo: 'erro', texto: mensagem, seq: (f?.seq ?? 0) + 1 }));
+      recarregar();
+    },
+    [recarregar],
+  );
+
+  const verNosItens = useCallback((termo: string) => {
+    setFeedback(null);
+    setFiltros({ ...FILTROS_ESTOQUE_INICIAIS, busca: termo });
+    setAba('serializado');
+  }, []);
+
+  // Contador de desconformidades abertas na aba (chamada leve, porPagina=1).
+  // Falha deixa a aba sem numero: o contador e apoio, a lista e a fonte.
+  useEffect(() => {
+    let ativo = true;
+    const c = new AbortController();
+    contarDesconformidadesAbertas(c.signal)
+      .then((n) => {
+        if (ativo) setDesconformidadesAbertas(n);
+      })
+      .catch(() => {
+        if (ativo && !c.signal.aborted) setDesconformidadesAbertas(null);
+      });
+    return () => {
+      ativo = false;
+      c.abort();
+    };
+  }, [versao]);
+
+  const tablistRef = useRef<HTMLDivElement>(null);
+  function aoTeclarAbas(e: KeyboardEvent<HTMLDivElement>) {
+    const atual = ABAS_ESTOQUE.findIndex((a) => a.valor === aba);
+    const total = ABAS_ESTOQUE.length;
+    let prox: number;
+    if (e.key === 'ArrowRight') prox = (atual + 1) % total;
+    else if (e.key === 'ArrowLeft') prox = (atual - 1 + total) % total;
+    else if (e.key === 'Home') prox = 0;
+    else if (e.key === 'End') prox = total - 1;
+    else return;
+    e.preventDefault();
+    const destino = ABAS_ESTOQUE[prox];
+    if (!destino) return;
+    setAba(destino.valor);
+    tablistRef.current?.querySelector<HTMLButtonElement>(`#${idAba(destino.valor)}`)?.focus();
+  }
 
   // Auxiliares (locais, categorias, materiais quantificaveis).
   useEffect(() => {
@@ -475,7 +542,6 @@ export function PainelEstoque({ podeGerenciar }: Props) {
 
   return (
     <div className="space-y-4">
-      <LiveRegion mensagem={anuncio} />
 
       {/* Cabecalho + acoes de gestao */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -511,7 +577,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
                 arquivoFallback="estoque-serializados"
                 descricao="Exporta os itens serializados com os filtros aplicados nesta aba."
               />
-              {/* Etiquetas/QR de patrimonio (LEITURA: qualquer usuario logado
+              {/* Etiquetas de patrimonio com codigo de barras (LEITURA: qualquer usuario logado
                   imprime). Abre a visao de impressao do conjunto filtrado. */}
               <Link
                 href={hrefEtiquetas({
@@ -521,14 +587,14 @@ export function PainelEstoque({ podeGerenciar }: Props) {
                   status: filtros.status || undefined,
                   busca: buscaDebounced.trim() || undefined,
                 })}
-                title="Gera as etiquetas com QR dos itens serializados do filtro atual, prontas para imprimir e colar no equipamento."
+                title="Gera as etiquetas com código de barras dos itens serializados do filtro atual, prontas para imprimir e colar no equipamento."
                 className="inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
               >
-                <QrCode className="h-4 w-4" aria-hidden="true" />
+                <Barcode className="h-4 w-4" aria-hidden="true" />
                 Gerar etiquetas
               </Link>
             </>
-          ) : (
+          ) : aba === 'quantificavel' ? (
             <BotaoExportarExcel
               url={urlExportarQuantificavel({
                 unidade: filtros.unidade || undefined,
@@ -537,7 +603,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
               arquivoFallback="estoque-quantificaveis"
               descricao="Exporta os materiais quantificáveis por unidade e local."
             />
-          )}
+          ) : null}
           <BotaoExportarExcel
             url={urlExportarMovimentacoes()}
             rotulo="Exportar movimentações"
@@ -564,7 +630,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Novo item serializado
                 </Button>
-              ) : (
+              ) : aba === 'quantificavel' ? (
                 <Button
                   type="button"
                   onClick={() => setFormMaterial({ aberto: true, material: null })}
@@ -573,7 +639,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   Novo material
                 </Button>
-              )}
+              ) : null}
             </>
           ) : null}
         </div>
@@ -581,6 +647,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
 
       {feedback ? (
         <Alerta
+          key={feedback.seq}
           tipo={feedback.tipo === 'sucesso' ? 'sucesso' : 'erro'}
           titulo={feedback.tipo === 'sucesso' ? 'Tudo certo' : 'Não foi possível concluir'}
         >
@@ -588,28 +655,47 @@ export function PainelEstoque({ podeGerenciar }: Props) {
         </Alerta>
       ) : null}
 
-      {/* Alternancia por natureza. Botoes aria-pressed num grupo (mesmo padrao
-          da alternancia mapa/lista do Monitor), evitando o padrao ARIA de
-          abas incompleto (tab sem tabpanel). */}
+      {/* Abas WAI-ARIA completas (tablist, tab e tabpanel): setas, Home e End
+          movem e ativam; so a aba ativa entra na ordem de Tab. */}
       <div
-        role="group"
-        aria-label="Natureza dos itens"
-        className="flex gap-1 border-b border-app-border-subtle"
+        ref={tablistRef}
+        role="tablist"
+        aria-label="Seções do estoque"
+        tabIndex={-1}
+        onKeyDown={aoTeclarAbas}
+        className="relative flex gap-1 overflow-x-auto border-b border-app-border-subtle pb-px"
       >
-        <Aba
-          ativa={aba === 'serializado'}
-          onClick={() => setAba('serializado')}
-          icone={Package}
-          rotulo="Serializados"
-        />
-        <Aba
-          ativa={aba === 'quantificavel'}
-          onClick={() => setAba('quantificavel')}
-          icone={Boxes}
-          rotulo="Quantificáveis"
-        />
+        {ABAS_ESTOQUE.map((a) => (
+          <Aba
+            key={a.valor}
+            id={idAba(a.valor)}
+            ativa={aba === a.valor}
+            onClick={() => setAba(a.valor)}
+            icone={a.icone}
+            rotulo={a.rotulo}
+            contador={a.valor === 'desconformidades' ? desconformidadesAbertas : null}
+          />
+        ))}
       </div>
 
+      <div
+        role="tabpanel"
+        id={ID_PAINEL_ABA}
+        aria-labelledby={idAba(aba)}
+        className="space-y-4"
+      >
+      {aba === 'desconformidades' ? (
+        <SecaoDesconformidades
+          podeGerenciar={podeGerenciar}
+          versao={versao}
+          locais={locais}
+          Paginacao={PaginacaoDesconformidades}
+          aoConcluir={concluir}
+          aoFalhar={falhar}
+          aoVerItens={verNosItens}
+        />
+      ) : (
+      <>
       {/* Resumo */}
       {aba === 'serializado' ? (
         <ResumoCards
@@ -660,7 +746,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
           <FiltrosEstoque
             valor={filtros}
             aoMudar={setFiltros}
-            natureza={aba}
+            natureza={natureza}
             locais={locais}
             categorias={categorias}
           />
@@ -694,6 +780,9 @@ export function PainelEstoque({ podeGerenciar }: Props) {
           aoTentarNovamente={recarregar}
         />
       )}
+      </>
+      )}
+      </div>
 
       {/* Drawers de detalhe */}
       {detalheUnidadeId ? (
@@ -749,7 +838,7 @@ export function PainelEstoque({ podeGerenciar }: Props) {
       <MaterialForm
         aberto={formMaterial.aberto}
         material={formMaterial.material}
-        naturezaInicial={aba}
+        naturezaInicial={natureza}
         categorias={categorias}
         aoFechar={() => setFormMaterial({ aberto: false, material: null })}
         aoConcluir={(msg) => {
@@ -805,33 +894,64 @@ export function PainelEstoque({ podeGerenciar }: Props) {
 }
 
 function Aba({
+  id,
   ativa,
   onClick,
   icone: Icone,
   rotulo,
+  contador,
 }: {
+  id: string;
   ativa: boolean;
   onClick: () => void;
   icone: typeof Package;
   rotulo: string;
+  /** Numero de pendencias; null ou zero nao exibe. */
+  contador: number | null;
 }) {
+  // Celular: icone centralizado em cima (contador ao lado, sem deslocar o
+  // icone), rotulo embaixo, abas dividindo a largura; assim as tres cabem
+  // inteiras de 360 px para cima sem encurtar o rotulo. A partir de `sm` volta
+  // a fileira de icone, rotulo e contador.
+  // A ordem no DOM (icone, rotulo, contador) e a mesma nos dois arranjos,
+  // entao o nome acessivel continua "Desconformidades 26 abertas".
   return (
     <button
       type="button"
-      aria-pressed={ativa}
+      role="tab"
+      id={id}
+      aria-selected={ativa}
+      aria-controls={ID_PAINEL_ABA}
+      tabIndex={ativa ? 0 : -1}
       onClick={onClick}
       className={[
-        '-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+        '-mb-px grid flex-auto grid-cols-[1fr_auto_1fr] items-center gap-x-1 gap-y-0.5 whitespace-nowrap border-b-2 px-1 py-1.5 text-sm font-medium transition-colors',
+        'sm:inline-flex sm:flex-none sm:shrink-0 sm:gap-1.5 sm:px-3 sm:py-2',
         'focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul',
         ativa
           ? 'border-gov-azul text-gov-azul'
           : 'border-transparent text-app-fg-muted hover:text-app-fg',
       ].join(' ')}
     >
-      <Icone className="h-4 w-4" aria-hidden="true" />
-      {rotulo}
+      <Icone className="col-start-2 row-start-1 h-4 w-4" aria-hidden="true" />
+      <span className="col-span-full row-start-2 text-center">{rotulo}</span>
+      {contador ? (
+        <span className="col-start-3 row-start-1 inline-flex justify-self-start h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-amber-100 px-1.5 text-2xs font-semibold text-amber-900 tabular">
+          {contador.toLocaleString('pt-BR')}
+          <span className="sr-only"> abertas</span>
+        </span>
+      ) : null}
     </button>
   );
+}
+
+function PaginacaoDesconformidades(props: {
+  pagina: number;
+  totalPaginas: number;
+  total: number;
+  aoPaginar: (p: number) => void;
+}) {
+  return <PaginacaoSimples {...props} rotulo="Paginação das desconformidades" unidade="registros" />;
 }
 
 function ResumoCards({
@@ -1013,20 +1133,24 @@ function PaginacaoSimples({
   totalPaginas,
   total,
   aoPaginar,
+  rotulo = 'Paginação dos itens',
+  unidade = 'itens',
 }: {
   pagina: number;
   totalPaginas: number;
   total: number;
   aoPaginar: (p: number) => void;
+  rotulo?: string;
+  unidade?: string;
 }) {
   if (totalPaginas <= 1) return null;
   return (
     <nav
-      aria-label="Paginação dos itens"
+      aria-label={rotulo}
       className="flex flex-wrap items-center justify-between gap-3 border-t border-app-border-subtle pt-3"
     >
       <p className="text-xs text-app-fg-muted tabular">
-        Página {pagina} de {totalPaginas}, {total.toLocaleString('pt-BR')} itens
+        Página {pagina} de {totalPaginas}, {total.toLocaleString('pt-BR')} {unidade}
       </p>
       <div className="flex items-center gap-2">
         <button

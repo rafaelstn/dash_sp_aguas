@@ -62,8 +62,9 @@ function ligado(): boolean {
 /**
  * `true` quando o sistema está operando sem verificar identidade.
  *
- * Fail-closed por construção: qualquer valor que não seja exatamente `sim`
- * mantém a autenticação exigida, inclusive `true`, `1` e string vazia. A
+ * Fail-closed por construção: qualquer valor que não seja `sim` (sem diferenciar
+ * maiúscula, ignorando espaço nas pontas) mantém a autenticação exigida,
+ * inclusive `true`, `1` e string vazia. A
  * palavra foi escolhida para que ninguém ligue isto sem saber o que digitou.
  */
 export function acessoSemIdentidadeAtivo(): boolean {

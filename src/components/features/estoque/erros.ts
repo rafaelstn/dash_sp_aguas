@@ -9,11 +9,14 @@ export class ErroEstoque extends Error {
   /** Slug estavel do backend (ex.: 'saldo_insuficiente', 'rate_limit'). */
   readonly codigo: string;
   readonly status: number;
-  constructor(mensagem: string, codigo: string, status: number) {
+  /** Identificador que o servidor registrou no log (erro 5xx); vai para o suporte. */
+  readonly correlationId: string | null;
+  constructor(mensagem: string, codigo: string, status: number, correlationId?: string | null) {
     super(mensagem);
     this.name = 'ErroEstoque';
     this.codigo = codigo;
     this.status = status;
+    this.correlationId = correlationId ?? null;
   }
 }
 
@@ -21,6 +24,7 @@ export interface CorpoErroEstoque {
   erro?: string;
   mensagem?: string;
   motivos?: string[];
+  correlationId?: string;
 }
 
 /** Mensagens amigaveis por codigo de negocio conhecido do modulo. */
@@ -95,5 +99,27 @@ export async function lancarErro(resp: Response): Promise<never> {
     /* corpo nao-JSON: usa fallback por status */
   }
   const codigo = corpo.erro ?? `http_${resp.status}`;
-  throw new ErroEstoque(mensagemDeErro(corpo, resp.status), codigo, resp.status);
+  const correlationId =
+    typeof corpo.correlationId === 'string' && corpo.correlationId.trim() !== ''
+      ? corpo.correlationId.trim()
+      : null;
+  throw new ErroEstoque(mensagemDeErro(corpo, resp.status), codigo, resp.status, correlationId);
+}
+
+/** Garante ponto final, sem duplicar a pontuação que a frase já tem. */
+export function comPontoFinal(frase: string): string {
+  const t = frase.trim();
+  if (t === '') return t;
+  return /[.!?…]$/.test(t) ? t : `${t}.`;
+}
+
+/**
+ * Texto de erro pronto para a tela: a mensagem do `ErroEstoque` (ou o padrão
+ * para falha desconhecida) e, quando o servidor devolveu, o código para o
+ * suporte. Função PURA.
+ */
+export function textoDeErro(e: unknown, padrao: string): string {
+  if (!(e instanceof ErroEstoque)) return comPontoFinal(padrao);
+  const base = comPontoFinal(e.message || padrao);
+  return e.correlationId ? `${base} Código para o suporte: ${e.correlationId}.` : base;
 }

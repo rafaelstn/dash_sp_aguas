@@ -238,6 +238,25 @@ por ela. E a primeira tentativa de provar a correção passou **por vacuidade**,
 semeadura da duplicata falhou em silêncio e a reaplicação rodou sem duplicata nenhuma; só
 conferindo a contagem de duplicados antes de reaplicar é que a prova passou a valer.
 
+### 2.8 Estoque: carga do inventário e código de barras (16/09/2026, não commitado, não no ar)
+
+- **Importador** (`scripts/estoque/importar-inventario.mjs`): marcadores de ausência
+  (`S/CHAPA`, `-`) deixam de virar PAT, conciliação por par material/local, 27 avisos
+  listados e `--estrito` com código 2. Ensaio: 814 unidades, 626 com código, 119 saldos
+  somando 1.664, conciliação OK em 89 pares, segunda execução com `inseridas 0`.
+- **Etiqueta** com Code 39 no lugar do QR; `qrcode.react` removido. QA leu as 626
+  etiquetas do PDF A4 a 300 dpi com leitor de terceiro, 626 únicos, nenhum faltando.
+- **Filtro `codigo` exato** em `GET /api/estoque/unidades` e campo "Ler código" na
+  conferência. A busca foi medida pela API no banco real; o fluxo de gravação do leitor
+  **não foi medido** (ver 4, pergunta 6).
+- **Migration 0070**: `f_unaccent` com esquema qualificado. Sem ela o dump do banco não
+  restaurava (`function unaccent(unknown, text) does not exist`); provado com controle.
+- **Carga em produção**: imagem `ops/producao/Dockerfile.carga-estoque` e runbook
+  `docs/runbooks/carga-inicial-estoque.md`. Não executada: depende de VPN.
+- **Pendências do órgão sobre a planilha**: 7 motores de Araraquara sem descrição, bloco
+  das linhas 991 a 996 nas duas abas, IMEI 359911030501121 duplicado, "50 ITENS ANA",
+  linha com link no lugar da descrição e controladora sem quantidade.
+
 ---
 
 ## 3. Próximas etapas, em ordem
@@ -558,7 +577,7 @@ regular.
 
 ## 4. O que depende do órgão
 
-Estas cinco perguntas destravam trabalho que hoje está parado, e todas nasceram
+Estas seis perguntas destravam trabalho que hoje está parado, e todas nasceram
 de medição, não de suposição.
 
 1. **A série manual ainda é alimentada?** As cinco séries param em agosto de 2025,
@@ -589,6 +608,12 @@ de medição, não de suposição.
 5. **Qual a régua vigente de cadastro irregular?** A antiga classificaria 54% da
    rede como irregular, e publicar isso sem confirmação seria acusar o próprio
    órgão com um critério que ele não reconhece.
+
+6. **Quem opera o estoque no acesso sem identificação?** Abrir conferência e ver o
+   campo "Ler código" exigem papel admin, e no modo de entrega (0066) o usuário é
+   `user`: `POST /api/estoque/conferencias` respondeu 403 no ensaio de 16/09/2026.
+   Dar o papel é decisão de dono (ADR-0024, 3.2), e vem com um risco medido: o limite
+   de requisições é por usuário, e nesse modo todos os operadores dividem o mesmo.
 
 ---
 

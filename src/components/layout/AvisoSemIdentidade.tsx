@@ -41,7 +41,7 @@ export function AvisoSemIdentidade() {
   return (
     <div
       role="status"
-      className="border-b border-app-border-subtle bg-app-surface-2"
+      className="no-print border-b border-app-border-subtle bg-app-surface-2"
     >
       {/* `px-4` puro, sem `sm:px-6` e sem `max-w`, para casar com a régua do
           `<header>` logo abaixo (que é `px-4` em largura cheia). O `main` e o

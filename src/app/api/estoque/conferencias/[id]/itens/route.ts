@@ -5,7 +5,7 @@ import {
   usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
 import { resolverOperadores } from '@/application/use-cases/estoque/resolver-operadores';
-import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import type { FiltrosItemConferencia, SobraComando } from '@/domain/estoque/conferencia';
@@ -26,7 +26,7 @@ const idSchema = z.string().uuid('Identificador de conferência inválido.');
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const auth = await exigirUsuario();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);
@@ -83,9 +83,9 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
  * cadastrado; so com a sessao aberta). Escrita: admin. Erros: 404/409/400.
  */
 export async function POST(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const idParsed = idSchema.safeParse((await ctx.params).id);

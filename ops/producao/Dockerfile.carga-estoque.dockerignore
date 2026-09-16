@@ -1,0 +1,7 @@
+# Contexto de build da imagem de carga do estoque, por PERMISSAO.
+# O BuildKit usa este arquivo no lugar do .dockerignore da raiz quando o build
+# aponta para ops/producao/Dockerfile.carga-estoque. Tudo fica de fora, e so
+# entram as duas entradas abaixo. Planilha e .env nunca chegam ao contexto.
+*
+!package-lock.json
+!scripts/estoque/importar-inventario.mjs

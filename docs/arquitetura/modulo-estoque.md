@@ -307,10 +307,13 @@ em `observacao`**; o enum e derivado, nao substitui.
 
 ### 3.3 Chave natural / idempotencia por aba
 
-`chave_import` deterministica por unidade serializada, na ordem de preferencia:
-`codigo_spaguas` -> `numero_serie`/`imei` -> `pat_daee` -> `codigo` -> hash estavel de
-(descricao+marca+modelo+serie+unidade+linha). `S/N`, `SN`, `?` nao contam como identificador
-(viram null). ON CONFLICT (`chave_import`) DO UPDATE nas colunas de atributo. Para quantificaveis,
+`chave_import` deterministica por unidade serializada, na ordem de preferencia (corrigida em
+16/09/2026 para refletir o codigo): `codigo` -> `numero_serie`/`imei` -> `pat_daee` ->
+`codigo_spaguas` -> hash estavel de (descricao+marca+modelo+serie+unidade+linha). `codigo_spaguas`
+vem por ultimo porque "SPA26" e codigo de LOTE, igual em toda a aba. Nao contam como identificador
+(viram null): `S/N`, `SN`, `?`, `-`, `S/CHAPA`, `S/PLACA`, `S/PATRIMONIO`, `S/NUMERO`, `SEM ...`
+(medido na planilha de 16/09/2026: 106 `S/CHAPA`, 54 `S/PLACA`, 30 `S/PATRIMONIO` e 406 `-` entravam
+como patrimonio real e iriam impressos na etiqueta). ON CONFLICT (`chave_import`) DO UPDATE nas colunas de atributo. Para quantificaveis,
 a chave e (material_id, local_id, tamanho) no upsert de `estoque_saldos`.
 
 ### 3.4 De-para por aba
@@ -337,6 +340,78 @@ Linhas invalidas/vazias: sem descricao E sem nenhum identificador -> pular e con
 import do Monitor faz com `semId`/`semPrefixo`/`semCoord`). Relatorio final por aba: inseridas,
 atualizadas, puladas e motivo. Cada linha de carga inicial gera sua movimentacao `entrada` (ou `baixa`
 para DESCARTE) com `usuario_id` = usuario de sistema/import, para o saldo bater com o ledger desde o dia 1.
+
+### 3.5 Avisos, conciliacao e codigos de saida (16/09/2026)
+
+O import nao corrige dado da planilha nem inventa descricao; ele torna VISIVEL o que antes se perdia
+calado, num bloco `AVISOS` ao final:
+
+| Aviso | Quando |
+| --- | --- |
+| `item_sem_descricao` | linha sem descricao mas com etiqueta lida (CONFIRMACAO DO CODIGO) ou com marca/modelo/serie: item fisico real que ficou de fora |
+| `chave_repetida` | duas linhas com a mesma `chave_import` na mesma carga: a segunda sobrescreve a primeira e uma unidade some |
+| `identificador_repetido` | mesmo PAT DAEE ou OUTROS PAT em unidades diferentes (inclusive entre abas) |
+| `leitura_diferente_do_codigo` | leitura do leitor nao bate com o codigo (caixa nao conta) |
+| `descricao_suspeita` / `quantidade_vazia` | quantificavel com link no lugar do item, ou sem quantidade |
+| `coluna_sem_cabecalho` | coluna com valores e sem cabecalho reconhecido (ignorada) |
+
+Conciliacao: saldos AGREGADOS por (material, local) contra a soma das entradas do ledger (o ledger
+nao carrega tamanho). Saida: `0` ok; `1` erro ou divergencia de conciliacao; `2` com `--estrito` e
+pelo menos um aviso. Planilha de 16/09/2026: 814 unidades, 119 saldos (1.664), 89 pares conciliados,
+27 avisos (7 motores de popa de Araraquara sem descricao, IMEI 359911030501121 repetido nos MODENS,
+bloco de medidores CIASEY das linhas 991 a 996 presente nas duas abas GERAL, entre outros).
+
+### 3.6 Etiqueta por codigo de barras (16/09/2026)
+
+A pedido do orgao, a etiqueta troca o QR code por codigo de barras do campo `codigo`. As etiquetas
+coladas pelo orgao antes do sistema foram lidas com leitor (coluna CONFIRMACAO DO CODIGO): Araraquara
+voltou em maiusculas (`001SPA26ARARA` para `001SPA26Arara`), por isso a busca por codigo e EXATA e sem
+diferenciar caixa (`GET /api/estoque/unidades?codigo=`), nunca a `busca` por substring
+(`1SPA26PENHA` casaria com `11SPA26PENHA`). Unidade sem `codigo` (modems, descarte, cadastro manual)
+nao recebe barras.
+
+### 3.7 Desconformidades da carga (16/09/2026)
+
+Pedido do Rafael: o que o importador não tem como saber vira uma aba onde o operador vê e resolve.
+Cada aviso da seção 3.5 é gravado em `estoque_desconformidades` (migration 0071), além de continuar
+impresso no console. `--estrito` segue igual (saída `2` com qualquer aviso).
+
+**Tabela.** `tipo` (os 7 da seção 3.5), `origem` (`importacao_planilha`), `aba`, `linha`, `detalhe`
+(texto do aviso), `dados` (jsonb objeto, campos estruturados por tipo), `chave` única, `status`
+(`aberta`, `resolvida`, `ignorada`), `nota`, `unidade_id` (FK para `estoque_unidades`, `ON DELETE SET
+NULL`), `resolvida_por`, `resolvida_em`, `detectada_em`, `ultima_deteccao_em`. CHECKs de coerência:
+aberta não carrega nota, unidade, quem nem quando; resolvida ou ignorada exige nota não vazia, quem e
+quando. Índice `(status, tipo)`. RLS ligada sem policy (o backend conecta com BYPASSRLS).
+
+**Chave.** `tipo:` mais sha256 de `[tipo, aba, linha, sujeito]` normalizados. O `detalhe` NÃO entra na
+chave: se entrasse, corrigir parte do problema na planilha criaria um registro novo e deixaria o antigo
+aberto e órfão. `sujeito` separa dois avisos do mesmo tipo na mesma linha (`coluna N`, a `chave_import`,
+`campo:valor`). `identificador_repetido` usa só `[tipo, campo:valor]`, sem posição, porque o problema
+é o valor repetido e não uma linha.
+
+**Reimportação.** `INSERT ... ON CONFLICT (chave) DO UPDATE SET detalhe, dados, aba, linha,
+ultima_deteccao_em = NOW()`, numa transação só. Status, nota, unidade e `resolvida_*` nunca são
+tocados: o que o operador resolveu ou ignorou não reabre. Aviso que deixou de ser detectado continua
+como está; `ultima_deteccao_em` anterior à última carga mostra isso. O importador recusa começar se a
+0071 não estiver aplicada.
+
+**`dados` por tipo** (termo de busca da tela sem extrair do texto): `identificador_repetido` traz
+`campo`, `valor` e `ocorrencias` (aba, linha); `chave_repetida` traz `unidade`, `chaveImport`,
+`codigo`, `numeroSerie`, `identificador` (o valor que formou a chave; `codigo` é nulo quando a chave
+veio da série, caso do IMEI dos MODENS), `descricao`, `abaAnterior`, `linhaAnterior`;
+`item_sem_descricao` traz os valores brutos da linha; `coluna_sem_cabecalho` traz `coluna` e
+`valoresIgnorados`.
+
+**API.**
+
+| Rota | Auth e limite | Contrato |
+| --- | --- | --- |
+| `GET /api/estoque/desconformidades` | `exigirUsuario`, `leituraEstoque` | query `status`, `tipo`, `pagina`, `porPagina` (1 a 200, padrão 50); resposta `{ itens, total, pagina, porPagina, contagem: { aberta, resolvida, ignorada } }`; `contagem` ignora o filtro de status e respeita o de tipo; ordem aberta primeiro, depois tipo, aba e linha; query inválida é 400 `consulta_invalida` |
+| `PATCH /api/estoque/desconformidades/[id]` | `exigirGestorEstoque`, `movimentacaoEstoque` | corpo `{ status, nota?, unidadeId? }`; nota aparada e com 3 a 500 caracteres, obrigatória para resolver ou ignorar; quem decide vem do auth; reabrir limpa nota, unidade e `resolvida_*` (e descarta o que vier no corpo); 400 `corpo_invalido`, 404 `desconformidade_nao_encontrada`, 404 `unidade_nao_encontrada`; log `estoque.desconformidades.decidida` com status anterior e novo, sem a nota |
+
+**Lição do jsonb.** Com postgres-js, `${JSON.stringify(obj)}::jsonb` grava uma STRING jsonb, não um
+objeto (o driver serializa de novo). O CHECK `jsonb_typeof(dados) = 'object'` pegou isso na primeira
+carga. O caminho certo é `${sql.json(obj)}`.
 
 ---
 

@@ -1,8 +1,11 @@
 import 'server-only';
 import type { EstoqueMateriaisRepository } from '@/application/ports/estoque-materiais-repository';
 import type { Material, Natureza } from '@/domain/estoque/material';
-import { FalhaRepositorio, MaterialNaoEncontrado } from '@/domain/errors';
+import { FalhaRepositorio, MaterialDuplicado, MaterialNaoEncontrado } from '@/domain/errors';
 import { sql } from './client';
+import { violouUnicidade } from './violacao-unicidade';
+
+const INDICE_DEDUP = 'uq_estoque_materiais_dedup';
 
 type LinhaMaterial = {
   id: string;
@@ -95,6 +98,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       `;
       return mapear(linhas[0]!);
     } catch (e) {
+      if (violouUnicidade(e, INDICE_DEDUP)) throw new MaterialDuplicado();
       throw new FalhaRepositorio('estoqueMateriais.criar', e);
     }
   },
@@ -126,6 +130,7 @@ export const estoqueMateriaisRepository: EstoqueMateriaisRepository = {
       return mapear(linhas[0]);
     } catch (e) {
       if (e instanceof MaterialNaoEncontrado) throw e;
+      if (violouUnicidade(e, INDICE_DEDUP)) throw new MaterialDuplicado();
       throw new FalhaRepositorio('estoqueMateriais.atualizar', e);
     }
   },

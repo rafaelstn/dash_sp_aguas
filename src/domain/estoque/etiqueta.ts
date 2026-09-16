@@ -1,5 +1,5 @@
 /**
- * Regras PURAS da etiqueta/QR de patrimonio (sem I/O). A pagina de impressao
+ * Regras PURAS da etiqueta de patrimonio (sem I/O). A pagina de impressao
  * renderiza UMA etiqueta por unidade serializada do filtro atual; para isso
  * precisa de um JSON enxuto, so com os campos que a etiqueta imprime. Este
  * modulo define esse shape minimo e a transformacao a partir da linha
@@ -19,7 +19,7 @@ import type { UnidadeExport } from './export';
  */
 export const TETO_ETIQUETAS = 2000;
 
-/** Campos MINIMOS que a etiqueta/QR imprime por unidade. Sem PII, sem peso. */
+/** Campos MINIMOS que a etiqueta imprime por unidade. Sem PII, sem peso. */
 export interface ItemEtiqueta {
   id: string;
   codigo: string | null;

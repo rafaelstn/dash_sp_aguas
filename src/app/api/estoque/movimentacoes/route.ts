@@ -3,7 +3,7 @@ import {
   estoqueMovimentacoesRepository,
   usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
-import { exigirUsuario, exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { registrarMovimentacao } from '@/application/use-cases/estoque/registrar-movimentacao';
@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const auth = await exigirUsuario();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
 
   try {
@@ -76,13 +76,13 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/estoque/movimentacoes — registra movimentacao (nucleo transacional).
- * Escrita: exigirAdmin. usuario_id do ledger vem SEMPRE do auth (nunca do corpo).
+ * Escrita: exigirGestorEstoque. usuario_id do ledger vem SEMPRE do auth (nunca do corpo).
  * Erros de negocio: 409 saldo_insuficiente/transicao_invalida, 404 alvo, 400 payload.
  */
 export async function POST(request: NextRequest) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('movimentacaoEstoque', auth.id, request);
   if (resposta) return resposta;
 
   let corpo: unknown;

@@ -19,6 +19,7 @@ import {
 import type { ConferenciaDTO, ConferenciaItemDTO } from '../conferencia-dtos';
 import type { Resolvedores } from './resolvedores';
 import { BadgeSituacaoItem } from './BadgeConferencia';
+import { LeitorCodigo } from './LeitorCodigo';
 
 interface Props {
   conferencia: ConferenciaDTO;
@@ -190,6 +191,16 @@ export function ContagemPanel({
           {itens.length.toLocaleString('pt-BR')} primeiros. O progresso acima considera apenas os
           itens listados. Abra conferências com escopo por local para contar o inventário inteiro.
         </Alerta>
+      ) : null}
+
+      {podeGerenciar ? (
+        <LeitorCodigo
+          conferenciaId={conferenciaId}
+          itens={itens}
+          listaParcial={carga.parcial}
+          resolvedores={resolvedores}
+          aoContar={aoContar}
+        />
       ) : null}
 
       {/* Filtro de vista */}

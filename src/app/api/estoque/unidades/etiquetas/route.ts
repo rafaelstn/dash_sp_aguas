@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/estoque/unidades/etiquetas — conjunto de serializados do FILTRO ATUAL,
- * SEM paginacao, em JSON enxuto para a pagina de impressao de etiquetas/QR de
+ * SEM paginacao, em JSON enxuto para a pagina de impressao de etiquetas de
  * patrimonio (uma etiqueta por unidade). Leitura: exigirUsuario. Rate-limit:
  * leituraEstoque.
  *
@@ -27,7 +27,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const auth = await exigirUsuario();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
 
   try {

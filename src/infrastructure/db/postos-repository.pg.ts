@@ -15,6 +15,7 @@ import {
   PostoRemovido,
   PrefixoDuplicado,
 } from '@/domain/errors';
+import type { JSONValue } from 'postgres';
 import { sql } from './client';
 
 type LinhaPosto = {
@@ -369,8 +370,8 @@ export const postosRepository: PostosRepository = {
             ${antes[0].id},
             'atualizado',
             ${ator.usuarioId},
-            ${JSON.stringify(extrairCamposAuditados(valoresAntes, campos))}::jsonb,
-            ${JSON.stringify(campos)}::jsonb,
+            ${sql.json(extrairCamposAuditados(valoresAntes, campos) as JSONValue)},
+            ${sql.json(campos)},
             ${ator.origemEvento ?? 'ui_edicao'},
             ${ator.referenciaExternaId ?? null}::uuid,
             ${ator.observacao ?? null},
@@ -476,7 +477,7 @@ export const postosRepository: PostosRepository = {
             'criado',
             ${ator.usuarioId},
             NULL,
-            ${JSON.stringify(dados)}::jsonb,
+            ${sql.json(dados)},
             ${ator.origemEvento ?? 'ui_edicao'},
             ${ator.referenciaExternaId ?? null}::uuid,
             ${ator.observacao ?? null},
@@ -513,7 +514,7 @@ export const postosRepository: PostosRepository = {
             (posto_id, evento, ator_id, valores_antes, origem_evento, observacao, ip, user_agent)
           VALUES (
             ${linhas[0].id}, 'removido', ${ator.usuarioId},
-            ${JSON.stringify(mapear(linhas[0]))}::jsonb,
+            ${sql.json(mapear(linhas[0]) as unknown as JSONValue)},
             ${ator.origemEvento ?? 'ui_edicao'},
             ${ator.observacao ?? null}, ${ator.ip}::inet, ${ator.userAgent}
           )

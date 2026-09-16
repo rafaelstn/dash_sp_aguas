@@ -394,6 +394,44 @@ export class ItemSemDivergencia extends Error {
   }
 }
 
+// ── Unicidade do cadastro do estoque (HTTP 409) ──────────────────────────────
+// Violação de índice único é conflito com o que já existe, não falha de
+// armazenamento: repetir a mesma operação nunca dá certo. O adapter pg traduz o
+// 23505 PELO NOME DO ÍNDICE (outro índice da mesma tabela continua sendo
+// FalhaRepositorio) e o mock espelha a mesma chave.
+
+/** Código de etiqueta já usado por outra unidade, sem diferenciar caixa (uq_estoque_unidades_codigo). */
+export class CodigoUnidadeDuplicado extends Error {
+  constructor(public readonly codigo: string) {
+    super(`Já existe um item com o código ${codigo}.`);
+    this.name = 'CodigoUnidadeDuplicado';
+  }
+}
+
+/** Nome de categoria já usado, sem diferenciar caixa (uq_estoque_categorias_nome). */
+export class CategoriaDuplicada extends Error {
+  constructor(public readonly nome: string) {
+    super(`Já existe uma categoria com o nome ${nome}.`);
+    this.name = 'CategoriaDuplicada';
+  }
+}
+
+/** Mesma unidade, sala, prateleira e armário de outro local (uq_estoque_locais_chave). */
+export class LocalDuplicado extends Error {
+  constructor(public readonly rotulo: string) {
+    super(`Já existe o local ${rotulo}.`);
+    this.name = 'LocalDuplicado';
+  }
+}
+
+/** Mesma natureza, descrição, marca e modelo de outro material (uq_estoque_materiais_dedup). */
+export class MaterialDuplicado extends Error {
+  constructor() {
+    super('Já existe um material com a mesma descrição, marca e modelo nesta natureza.');
+    this.name = 'MaterialDuplicado';
+  }
+}
+
 /** Já existe uma conferência aberta no mesmo escopo (unidade + natureza + local). HTTP 409. */
 export class EscopoConferenciaEmAberto extends Error {
   constructor(

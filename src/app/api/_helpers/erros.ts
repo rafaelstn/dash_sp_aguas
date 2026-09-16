@@ -34,6 +34,10 @@ import {
   ConferenciaFechada,
   ConferenciaNaoConcluida,
   EscopoConferenciaEmAberto,
+  CodigoUnidadeDuplicado,
+  CategoriaDuplicada,
+  LocalDuplicado,
+  MaterialDuplicado,
   EscritaIndisponivel,
   FalhaRepositorio,
 } from '@/domain/errors';
@@ -255,6 +259,27 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
       { erro: 'escopo_conferencia_em_aberto', mensagem: erro.message },
       { status: 409 },
     );
+  }
+  if (erro instanceof CodigoUnidadeDuplicado) {
+    return NextResponse.json(
+      { erro: 'codigo_duplicado', mensagem: erro.message, codigo: erro.codigo },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof CategoriaDuplicada) {
+    return NextResponse.json(
+      { erro: 'categoria_duplicada', mensagem: erro.message, nome: erro.nome },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof LocalDuplicado) {
+    return NextResponse.json(
+      { erro: 'local_duplicado', mensagem: erro.message, rotulo: erro.rotulo },
+      { status: 409 },
+    );
+  }
+  if (erro instanceof MaterialDuplicado) {
+    return NextResponse.json({ erro: 'material_duplicado', mensagem: erro.message }, { status: 409 });
   }
   if (erro instanceof PostoRemovido) {
     return NextResponse.json({ erro: 'posto_removido', mensagem: erro.message }, { status: 409 });

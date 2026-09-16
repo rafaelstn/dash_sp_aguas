@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FormDialog, CampoTextoForm } from './FormDialog';
+import { FormDialog, CampoTextoForm, ErroDeCampo } from './FormDialog';
 import { atualizarCategoria, criarCategoria } from './api';
 import type { CategoriaDTO } from './dtos';
 
@@ -24,7 +24,7 @@ export function CategoriaForm({ aberto, categoria, aoFechar, aoConcluir }: Props
 
   async function salvar() {
     if (nome.trim().length < 1) {
-      throw new Error('Informe o nome da categoria.');
+      throw new ErroDeCampo('nome', 'Informe o nome da categoria.');
     }
     if (editando) {
       await atualizarCategoria(categoria.id, nome.trim());
@@ -42,7 +42,7 @@ export function CategoriaForm({ aberto, categoria, aoFechar, aoConcluir }: Props
       aoSalvar={salvar}
       aoFechar={aoFechar}
     >
-      <CampoTextoForm rotulo="Nome" valor={nome} aoMudar={setNome} obrigatorio />
+      <CampoTextoForm rotulo="Nome" campo="nome" valor={nome} aoMudar={setNome} obrigatorio />
     </FormDialog>
   );
 }

@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { NATUREZAS } from '@/domain/estoque/material';
-import { FormDialog, CampoNumeroForm, CampoSelectForm, CampoTextoForm } from './FormDialog';
+import {
+  FormDialog,
+  CampoNumeroForm,
+  CampoSelectForm,
+  CampoTextoForm,
+  ErroDeCampo,
+} from './FormDialog';
 import { atualizarMaterial, criarMaterial } from './api';
 import { ROTULO_NATUREZA } from './rotulos';
 import type { UpsertMaterial } from '@/domain/estoque/material';
@@ -62,7 +68,7 @@ export function MaterialForm({
 
   async function salvar() {
     if (descricao.trim().length < 1) {
-      throw new Error('Informe a descrição do material.');
+      throw new ErroDeCampo('descricao', 'Informe a descrição do material.');
     }
     const dados: UpsertMaterial = {
       descricao: descricao.trim(),
@@ -80,7 +86,8 @@ export function MaterialForm({
       } else {
         const n = Number(bruto);
         if (!Number.isInteger(n) || n < 0) {
-          throw new Error(
+          throw new ErroDeCampo(
+            'quantidadeMinima',
             'A quantidade mínima deve ser um número inteiro igual ou maior que zero.',
           );
         }
@@ -105,7 +112,13 @@ export function MaterialForm({
       aoSalvar={salvar}
       aoFechar={aoFechar}
     >
-      <CampoTextoForm rotulo="Descrição" valor={descricao} aoMudar={setDescricao} obrigatorio />
+      <CampoTextoForm
+        rotulo="Descrição"
+        campo="descricao"
+        valor={descricao}
+        aoMudar={setDescricao}
+        obrigatorio
+      />
       {editando ? (
         <p className="text-2xs text-app-fg-muted">
           Natureza: <span className="font-medium">{ROTULO_NATUREZA[natureza]}</span> (não pode ser
@@ -141,6 +154,7 @@ export function MaterialForm({
       {ehQuantificavel ? (
         <CampoNumeroForm
           rotulo="Quantidade mínima (reposição)"
+          campo="quantidadeMinima"
           valor={quantidadeMinima}
           aoMudar={setQuantidadeMinima}
           min={0}

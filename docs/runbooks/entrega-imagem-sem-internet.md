@@ -11,6 +11,86 @@ Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trá
 
 ---
 
+## 0. Checklist da próxima subida (estoque com código de barras, migrations 0070 a 0072)
+
+**Preparado em 16/09/2026, sem VPN e sem acesso ao servidor.** No ar desde
+10/09/2026: `sha-5ff93c7` (registro de entregas). Esta subida leva o estoque com
+etiqueta Code 39, a carga da planilha, as migrations 0070, 0071 e 0072, e a
+escrita no estoque liberada na janela sem identidade (adendo 3.2.1 do ADR-0024).
+
+Executar **em ordem**. Cada passo aponta a seção que tem o comando e a
+conferência; nenhum passo segue com a conferência anterior fora do esperado.
+
+**Na bancada, com internet**
+
+1. **A 0072 está pronta.** `supabase/migrations/0072_jsonb_gravado_como_string.sql`
+   (do Lucas; apareceu no disco em 16/09/2026, ainda não commitada) aplicada
+   **duas vezes** num banco de ensaio com código 0 nas duas, porque o `migrate`
+   reaplica todas as migrations a cada `up` (seção 6.2), e a hipótese da linha
+   dela na seção 7.2.1 confirmada. Sem isso, não segue.
+2. **Tudo commitado e CI verde no commit que vai subir.** A construção parte de
+   `git archive HEAD`, que leva só o que está commitado: migration fora do commit
+   não entra na imagem, e o `migrate` encerra com código 0 sem ela.
+
+   ```bash
+   git status --porcelain                                    # espera: vazio
+   git ls-files supabase/migrations | grep -cE '/007[012]_'  # espera: 3
+   git ls-files ops/producao/Dockerfile.carga-estoque \
+     ops/producao/Dockerfile.carga-estoque.dockerignore \
+     scripts/estoque/importar-inventario.mjs | wc -l          # espera: 3
+   ```
+3. Exportar a árvore para disco local (seção 2) e construir **as três imagens**
+   com a mesma tag, **sem** argumento de build do Supabase (seção 3).
+4. Conferências antes de transportar: seção 3 (inclusive as três migrations
+   dentro da imagem `migrate`) e seção 2.1 de `carga-inicial-estoque.md`.
+5. Empacotar as quatro referências e tirar o `sha256` (seção 4). Tirar também o
+   `sha256` da planilha: espera
+   `88299ad2411c715cf0986a80313f3ae18f023cd21d0727e5928449edc9ed4874`
+   (seção 3 de `carga-inicial-estoque.md`). Outro valor exige novo ensaio.
+
+**No servidor, com VPN**
+
+6. `sha256` do pacote e da planilha iguais aos da origem, e `docker load`
+   (seções 5 e 6.2, passo 1).
+7. **Anotar a tag que está no ar**, que é o destino do rollback:
+   `grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env` (espera `IMAGEM_TAG=sha-5ff93c7`).
+   Diferente disso: parar e perguntar antes de seguir.
+8. **Conferir o `app.env` sem imprimir valor**: seção 8 de
+   `ops/producao/ambiente-producao.exemplo`. Faltando qualquer `SQLSERVER_*`,
+   **parar**: a aplicação nova responde 500 no `/api/health` e em todas as rotas
+   (seção 2.1 do modelo traz as opções).
+9. **Nginx com os cabeçalhos de IP** (seção 8). É pré-requisito do limite de
+   requisições por IP na janela sem identidade; sem ele o limite do estoque não
+   separa quem está usando.
+10. **Dump antes da migração** (seção 7.3), com os dois códigos 0 e a contagem de
+    `TABLE DATA` maior que zero. Este dump é de um banco **sem** a 0070, e só
+    restaura pelo contorno da seção 8.2 de `carga-inicial-estoque.md`.
+11. Trocar a `IMAGEM_TAG` e `up -d` (seção 6.2). O `migrate` aplica 0070, 0071 e
+    0072 nesta subida.
+12. Conferir que subiu (seção 6.3): três linhas `-> 007x_` no log do `migrate`,
+    41 tabelas, `estoque_desconformidades` presente, `/api/health` com `ok`.
+13. Prova do limite por IP pela borda (seção 8, teste do `X-RateLimit-Remaining`).
+14. **Carga do estoque**: `carga-inicial-estoque.md`, seções 4 a 7, com `SHA`
+    igual à tag nova. Aceite por contagem: 814 unidades (626 com código), 119
+    saldos somando 1.664, ledger 916 entradas e 16 baixas, **27
+    desconformidades abertas**; na reexecução, `novas 0 | ja registradas 27`.
+15. Registrar em `docs/runbooks/registro-de-entregas.md`: tag anterior e nova,
+    `sha256`, códigos de saída, a tabela de contagens, e a data de revisão da
+    janela combinada com o órgão (hoje `2026-12-01`, não confirmada).
+16. Remover do servidor a planilha e o `carga-estoque.env`
+    (seção 8.3 de `carga-inicial-estoque.md`).
+
+**Se der errado**
+
+| Onde parou | O que fazer |
+|---|---|
+| `migrate` com código diferente de 0 (site em 502) | voltar a tag anotada no passo 7 e `up -d` (seção 7.1). O `migrate` antigo reaplica 0001 a 0069 e sobe o app antigo. Ler a seção 7.2.1 antes |
+| `app` de pé com `/api/health` 500 | `docker compose -f docker-compose.prod.yml logs app \| tail -50`. Causa esperada é variável do `app.env`; corrigir e `up -d app`. Sem correção possível, seção 7.1 |
+| Carga fora do esperado | seção 8.2 de `carga-inicial-estoque.md` (dump tirado antes da carga, já com a 0070, restaura direto) |
+| Precisa desfazer o esquema | seção 7.2, com o dump do passo 10 e o contorno da seção 8.2 de `carga-inicial-estoque.md` |
+
+---
+
 ## 1. Por que este runbook é diferente do normal
 
 **MEDIDO:** o servidor não tem saída **direta** para a internet. O DNS não
@@ -76,14 +156,19 @@ trilha de auditoria, favoritos, diagramas e fotos.
 
    ```bash
    git status --porcelain     # tem que sair vazio
-   git rev-parse --short HEAD # anote: esta é a TAG das duas imagens
+   git rev-parse --short HEAD # anote: esta é a TAG das três imagens
    ```
 
-2. Ter as variáveis de build decididas. Três delas são embutidas no pacote do
-   navegador e **não** podem ser trocadas depois sem reconstruir a imagem:
+2. Ter as variáveis de build decididas. `NEXT_PUBLIC_*` é embutida no pacote e
+   **não** pode ser trocada depois sem reconstruir a imagem:
 
-   - `NEXT_PUBLIC_APP_URL` = `https://dmo.spaguas.sp.gov.br`
-   - as duas variáveis da camada de identidade (ver bloqueio 9.2)
+   1. `NEXT_PUBLIC_APP_URL` = `https://dmo.spaguas.sp.gov.br`
+   2. **Nenhuma variável do Supabase.** Corrigido em 16/09/2026: o texto
+      anterior mandava passar `NEXT_PUBLIC_SUPABASE_URL` e
+      `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Com a janela sem identidade isso é
+      proibido: o valor fica gravado no pacote, e o `env.ts` recusa as duas
+      coisas juntas (o `next build`, que roda com a janela de fachada do
+      `Dockerfile`, ou o container, na primeira requisição). Ver bloqueio 9.2.
 
 3. Construir num computador com internet. **Nunca** construir a partir do disco
    de rede: a instalação de dependências em SMB não conclui. Exportar a árvore
@@ -99,20 +184,19 @@ trilha de auditoria, favoritos, diagramas e fotos.
 
 ---
 
-## 3. Construir as duas imagens
+## 3. Construir as três imagens
 
-As duas levam **a mesma tag de commit**, e isso não é estética: é o que impede a
-aplicação de um commit rodar com as migrations de outro.
+As três levam **a mesma tag de commit**, e isso não é estética: é o que impede a
+aplicação de um commit rodar com as migrations de outro, e a carga do estoque de
+procurar colunas que o esquema no ar não tem.
 
 ```bash
 cd /c/tmp/dmo-build
 SHA=$(git -C "<repositorio>" rev-parse --short HEAD)
 
-# 1. Aplicação
+# 1. Aplicação (sem argumento do Supabase: ver seção 2, item 2)
 DOCKER_BUILDKIT=1 docker build \
   --build-arg NEXT_PUBLIC_APP_URL=https://dmo.spaguas.sp.gov.br \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL="<valor decidido>" \
-  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="<valor decidido>" \
   -t spaguas/dashboard:sha-$SHA .
 
 # 2. Migrations (o SQL viaja junto do código)
@@ -120,7 +204,12 @@ DOCKER_BUILDKIT=1 docker build \
   -f ops/producao/Dockerfile.migrate \
   -t spaguas/migrate:sha-$SHA .
 
-# 3. Garantir que a imagem do banco está no disco local para viajar junto
+# 3. Carga do estoque (ignore próprio, por permissão; detalhes em carga-inicial-estoque.md)
+DOCKER_BUILDKIT=1 docker build \
+  -f ops/producao/Dockerfile.carga-estoque \
+  -t spaguas/carga-estoque:sha-$SHA .
+
+# 4. Garantir que a imagem do banco está no disco local para viajar junto
 docker pull postgis/postgis:16-3.4-alpine
 ```
 
@@ -146,7 +235,30 @@ docker image inspect spaguas/dashboard:sha-$SHA --format '{{.Config.User}}'
 # 3. Nenhum arquivo de ambiente entrou na imagem.
 docker run --rm --entrypoint sh spaguas/dashboard:sha-$SHA -c 'ls -a /app | grep -c "^\.env" || true'
 #    espera: 0
+
+# 4. Nenhuma planilha em nenhuma das três imagens. Espera: 0, 0 e 0
+for img in dashboard migrate carga-estoque; do
+  docker run --rm --entrypoint sh spaguas/$img:sha-$SHA -c \
+    'find / -xdev \( -iname "*.xlsx" -o -iname "*.xls" \) 2>/dev/null | wc -l'
+done
+
+# 5. As migrations novas estão DENTRO da imagem migrate, e a última é a 0072.
+docker run --rm --entrypoint sh spaguas/migrate:sha-$SHA -c \
+  'ls /migrations | grep -cE "^007[012]_"; ls /migrations | sort | tail -1'
+#    espera: 3, e depois o nome do arquivo 0072_...
+
+# 6. Nenhuma chave anônima do Supabase gravada no pacote da aplicação. Espera: 0
+docker run --rm --entrypoint sh spaguas/dashboard:sha-$SHA -c \
+  'grep -rlE "eyJhbGciOi[A-Za-z0-9_-]{10,}\.eyJ" /app/.next /app/server.js 2>/dev/null | wc -l'
 ```
+
+**HIPÓTESE, conferir na primeira vez:** a verificação 6 procura um token JWT
+literal, que é a forma da `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Ela não procura o
+domínio `supabase.co` de propósito: a política de segurança em
+`src/middleware.ts` cita esse domínio, e a busca por ele daria positivo sempre.
+Pela leitura do `env.ts`, passar os dois argumentos já faria o `next build`
+falhar na coleta de dados das páginas; a verificação é a segunda barreira, e não
+foi exercitada.
 
 ---
 
@@ -156,11 +268,21 @@ docker run --rm --entrypoint sh spaguas/dashboard:sha-$SHA -c 'ls -a /app | grep
 docker save \
   spaguas/dashboard:sha-$SHA \
   spaguas/migrate:sha-$SHA \
+  spaguas/carga-estoque:sha-$SHA \
   postgis/postgis:16-3.4-alpine \
   | gzip -6 -c > dmo-sha-$SHA.tar.gz
+echo "codigos: ${PIPESTATUS[*]}"
+#    espera: 0 0   (o primeiro é o docker save)
 
 ls -l dmo-sha-$SHA.tar.gz
+sha256sum dmo-sha-$SHA.tar.gz   # anotar para a conferência no destino
 ```
+
+**HIPÓTESE sobre o tamanho com a carga no mesmo pacote:** a imagem de carga
+parte de `node:24-alpine`, a mesma base da aplicação, e o `docker save` grava
+cada camada uma vez por arquivo. O acréscimo esperado fica perto dos 47 MB
+exclusivos dela, e não dos 62,2 MiB medidos com ela sozinha
+(`carga-inicial-estoque.md`, seção 2.2). Medir com `ls -l` e registrar.
 
 **MEDIDO em 27/08/2026**, a partir de `34417b7`:
 
@@ -315,19 +437,36 @@ O sintoma de divergência é o container da aplicação subir bem por fora e o
 ### 6.2 Carregar e subir
 
 ```bash
-# 1. Carregar as imagens (as três de uma vez, do mesmo arquivo)
+# 1. Carregar as imagens (as quatro de uma vez, do mesmo arquivo)
 docker load -i dmo-sha-$SHA.tar.gz
-docker images | grep -E 'spaguas/(dashboard|migrate)|postgis'
+docker images | grep -E "spaguas/(dashboard|migrate|carga-estoque) +sha-$SHA|postgis"
+#    espera: três linhas spaguas com sha-$SHA, mais a do postgis
 
-# 2. Apontar a versão. Esta é a única linha que muda entre uma entrega e outra.
+# 2. Anotar a versão que está no ar ANTES de trocar. É o destino do rollback.
+grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env | tee -a ~/tag-anterior-$(date -u +%Y%m%d).txt
+
+# 3. Conferir o ambiente da aplicação sem imprimir valor:
+#    seção 8 de ops/producao/ambiente-producao.exemplo. Qualquer linha fora do
+#    esperado para aqui.
+
+# 4. Dump do banco ANTES de as migrations novas rodarem (seção 7.3).
+#    Entrega que mexe no esquema não sobe sem ele.
+
+# 5. Apontar a versão. Esta é a única linha que muda entre uma entrega e outra.
 sudo sed -i "s/^IMAGEM_TAG=.*/IMAGEM_TAG=sha-$SHA/" /opt/spaguas-dmo/.env
 sudo grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env
 
-# 3. Subir. A ordem está no compose, não em script:
+# 6. Subir. A ordem está no compose, não em script:
 #    banco saudável -> migrations com sucesso -> aplicação.
 cd /opt/spaguas-dmo
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+> **O `migrate` reaplica TODAS as migrations a cada `up`**, porque
+> `db/migrate.sh` não tem tabela de controle: percorre `/migrations/*.sql` em
+> ordem alfabética, com `ON_ERROR_STOP`. Toda migration precisa ser idempotente
+> na reaplicação. Foi exatamente a 0045 não idempotente que derrubou a subida de
+> 10/09/2026 (registro de entregas).
 
 > **Depois de reiniciar o host, rodar `up -d` de novo.** A ordem entre serviços
 > vale no `up`, e não na política de reinício do Docker: num reboot o Docker
@@ -348,12 +487,27 @@ docker compose -f docker-compose.prod.yml logs migrate | tail -5
 #    a última linha tem que ser "[migrate] concluído."
 docker inspect spaguas-dmo-migrate --format '{{.State.ExitCode}}'
 #    espera: 0
+docker compose -f docker-compose.prod.yml logs migrate | grep -cE -- '-> 007[012]_'
+#    espera: 3   (0070, 0071 e 0072 passaram por esta subida)
+docker compose -f docker-compose.prod.yml logs migrate | grep -E '\[0072\] .*convertidas='
+#    espera: nove linhas, uma por coluna, com CONTAGENS (nunca conteúdo).
+#    Registrar os números no registro de entregas: é o único rastro do que a
+#    0072 converteu em produção. `mantidas_como_string` maior que zero não é
+#    erro, mas vai para o Lucas.
 
 # c. O banco tem o esquema, e o PostGIS está instalado.
 docker compose -f docker-compose.prod.yml exec -T db \
   psql -U spaguas -d spaguas -tAc \
   "select count(*) from information_schema.tables where table_schema='public'"
-#    espera: 40   (medido em 27/08/2026, a partir de 34417b7)
+#    espera: 41   (40 medido em produção em 10/09/2026, mais a tabela
+#                  estoque_desconformidades da 0071; 41 MEDIDO no banco de
+#                  ensaio com a 0071 em 16/09/2026. A 0072 só corrige dado e
+#                  não cria tabela)
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U spaguas -d spaguas -tAc \
+  "select to_regclass('public.estoque_desconformidades') is not null,
+          (select count(*) from pg_proc where proname='f_unaccent' and prosrc like '%.unaccent(%')"
+#    espera: t|1   (tabela da 0071; função qualificada pela 0070)
 docker compose -f docker-compose.prod.yml exec -T db \
   psql -U spaguas -d spaguas -tAc "select extversion from pg_extension where extname='postgis'"
 #    espera: 3.4.3
@@ -416,9 +570,15 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate
 **Tempo esperado: menos de um minuto**, porque nada é transferido. **HIPÓTESE
 até ser cronometrado no servidor.**
 
-Note que o passo 2 troca a tag das **duas** imagens de uma vez, então o serviço
+Note que o passo 2 troca a tag das imagens de uma vez, então o serviço
 `migrate` volta a rodar com o SQL daquele commit. Como as migrations são
 idempotentes, reaplicá-las é seguro. O que elas **não** fazem é desfazer.
+
+**Não voltar para antes de `sha-5ff93c7` por este caminho.** O `migrate` das tags
+anteriores aborta na 0045 (índice único de `prefixo` contra 363 duplicatas
+legítimas), e o `app` não sobe: foi o incidente de 10/09/2026. Se for
+indispensável, subir só a aplicação com `up -d --no-deps app`, sabendo que o
+esquema fica o novo.
 
 ### 7.2 Com mudança de esquema: não é trivial, e precisa estar escrito antes
 
@@ -454,6 +614,21 @@ migração, apontar a tag anterior, subir. Isso **perde** o que foi gravado entr
 backup e a parada, e por isso precisa ser decisão consciente com o órgão, e não
 improviso de plantão.
 
+### 7.2.1 Frase de volta da subida do estoque (0070, 0071 e 0072)
+
+Escrita em 16/09/2026 para a volta de `sha-<nova>` para `sha-5ff93c7`.
+
+| Migration | O código anterior funciona com ela? | O que desfaz |
+|---|---|---|
+| 0070 (`f_unaccent` com esquema qualificado) | sim: mesma assinatura e mesmo resultado (`f_unaccent('Ação São Joaquim')` devolve `Acao Sao Joaquim` antes e depois, MEDIDO no ensaio) | nada a fazer. **Atenção:** o `migrate` de `sha-5ff93c7` reaplica a 0001, que recria `f_unaccent` **sem** qualificar. A volta desfaz a 0070 sozinha, e todo dump tirado depois dela volta a precisar do contorno da seção 8.2 de `carga-inicial-estoque.md` |
+| 0071 (tabela `estoque_desconformidades`) | sim: tabela nova, que o código anterior não cita (linha "tabela nova" da tabela acima) | não desfazer na volta de código. Se for preciso: `DROP TABLE estoque_desconformidades;` depois de dump, porque apaga os registros e as decisões de revisão |
+| 0072 (`0072_jsonb_gravado_como_string.sql`, do Lucas) | **só dado, sem mudança de esquema** (lido no arquivo em 16/09/2026): nas linhas em que um `jsonb` foi gravado como string, desembrulha para objeto ou array em nove colunas (`diagramas`, `fichas_visita`, `fichas_triagem` e quatro tabelas de trilha). Não cria tabela, não troca tipo, não acrescenta restrição. HIPÓTESE a confirmar com o Lucas: o código de `sha-5ff93c7` lê o valor convertido sem quebrar (o defeito corrigido era justamente ele receber string). Depois da volta, o código antigo volta a gravar string, e a próxima subida da 0072 corrige de novo | **não há SQL que desfaça**: o próprio arquivo declara que não se distingue linha convertida sem fotografia. A volta do dado é pelo dump do passo 10 do checklist, com a perda do que foi gravado depois |
+
+**HIPÓTESE, conferir junto da 0072:** reaplicar as migrations 0001 a 0069 de
+`sha-5ff93c7` sobre um esquema que já tem 0070 a 0072 não foi exercitado. Antes da
+subida, ensaiar a volta: banco de ensaio com a tag nova migrada, depois o
+`migrate` de `sha-5ff93c7` contra ele, esperando código 0.
+
 ### 7.3 Backup: o que torna tudo isso possível
 
 O rollback de código é barato porque a imagem antiga está no disco. **O rollback
@@ -461,14 +636,28 @@ de dado só existe se houver backup, e backup só conta como backup depois de um
 restauração testada.** Sem um restore que funcionou, o que existe é um arquivo
 com nome de backup.
 
-Gerar um dump antes de qualquer entrega que mexa no banco:
+Gerar um dump antes de qualquer entrega que mexa no banco, **com a tag antiga
+ainda no ar** (passo 4 da seção 6.2):
 
 ```bash
 cd /opt/spaguas-dmo
+sudo install -d -m 0700 -o root -g root /var/backups/spaguas-dmo
+DUMP_MIGRACAO=/var/backups/spaguas-dmo/antes-de-sha-$SHA-$(date -u +%Y%m%dT%H%M%SZ).dump
+
 docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U spaguas -d spaguas --format=custom \
-  > /var/backups/spaguas-dmo/antes-de-sha-$SHA.dump
+  pg_dump -U spaguas -d spaguas --format=custom | sudo tee "$DUMP_MIGRACAO" > /dev/null
+echo "codigos: ${PIPESTATUS[*]}"
+#    espera: 0 0   (o primeiro é o pg_dump; o código do tee sozinho não prova nada)
+sudo chmod 0600 "$DUMP_MIGRACAO"
+
+# O dump é legível e tem dado. Espera: número maior que zero.
+sudo cat "$DUMP_MIGRACAO" \
+  | docker compose -f docker-compose.prod.yml exec -T db pg_restore --list | grep -c 'TABLE DATA'
 ```
+
+Corrigido em 16/09/2026: a versão anterior redirecionava com `>` sem `sudo` para
+um diretório que é `0700` de root, e o redirecionamento falharia antes de o
+`pg_dump` rodar.
 
 **E o aviso que não pode faltar:** este arquivo está no **mesmo disco da VM**.
 Se a VM se perder, ele se perde junto, e ele não é backup de nada. O backup de
@@ -483,6 +672,13 @@ docker compose -f docker-compose.prod.yml exec -T db \
   pg_restore -U spaguas -d spaguas_restore_teste --clean --if-exists \
   < /var/backups/spaguas-dmo/antes-de-sha-$SHA.dump
 ```
+
+**Dump de banco sem a migration 0070 não restaura por este comando** (MEDIDO em
+16/09/2026 no ensaio): o `pg_restore` zera o `search_path`, e a `f_unaccent`
+anterior à 0070 chamava `unaccent` sem esquema, então a criação de `postos`
+falha com `function unaccent(unknown, text) does not exist`. Dump tirado com a
+0070 aplicada restaura direto. Para dump antigo, o contorno está na seção 8.2 de
+`carga-inicial-estoque.md`.
 
 **Registrar a data do último restore testado neste runbook.** Backup cuja
 restauração nunca foi exercitada é a forma mais cara de falsa segurança que
@@ -524,6 +720,63 @@ Resumo do que muda: sai `try_files $uri $uri/ =404` (que hoje faria toda
 requisição terminar em 404 antes de chegar ao `proxy_pass`), saem as quatro
 linhas de cache compartilhado, e entra o `proxy_pass` com os cabeçalhos de
 origem, `proxy_cache off`, `client_max_body_size 12m` e os tempos.
+
+### 8.1 Cabeçalhos de IP: pré-requisito do limite por IP na janela sem identidade
+
+Revisão do André, 16/09/2026. Na janela todos os acessos são o mesmo usuário
+institucional, então o limite de requisições do estoque usa o **IP de origem**
+como chave, lido **só** de `X-Real-IP` (`src/app/api/estoque/_rl.ts`). Isso só é
+verdade atrás **deste** Nginx, que:
+
+1. **sobrescreve** `X-Real-IP` com `$remote_addr` (`proxy_set_header` troca o
+   valor, não anexa);
+2. **apaga** `X-Vercel-Forwarded-For` (`proxy_set_header X-Vercel-Forwarded-For "";`),
+   que o cliente forjaria e que o código lê antes dos outros em `extrairIp`;
+3. **sobrescreve** `X-Forwarded-For` com `$remote_addr`. Antes era
+   `$proxy_add_x_forwarded_for`, que anexa ao valor do cliente, e três rotas
+   gravam na trilha de auditoria o **primeiro** item desse cabeçalho, ou seja o
+   valor forjado.
+
+Sem este Nginx, ou com o bloco antigo, o limite ou junta todo mundo num balde só
+(`unknown`) ou deixa o cliente escolher o próprio IP. **Pré-condição, HIPÓTESE
+até conferir:** este Nginx é o primeiro salto. Se houver balanceador ou proxy do
+órgão na frente, `$remote_addr` é o IP dele, e a correção passa a ser o módulo
+`realip` (comentário no arquivo).
+
+```bash
+# a. Primeiro salto? IPs variados de clientes, e não um só endereço do órgão.
+sudo tail -n 50 /var/log/nginx/access.log | awk '{print $1}' | sort | uniq -c
+
+# b. Aplicar o bloco versionado e validar antes de recarregar.
+sudo nginx -t && sudo systemctl reload nginx
+
+# c. Todo location que chega à aplicação tem as linhas. Os três números IGUAIS
+#    (hoje 1 cada, porque só o location / faz proxy_pass para a aplicação).
+#    O filtro de comentário é obrigatório: o bloco colado traz comentários que
+#    citam estas mesmas diretivas, e sem ele cada contagem sobe.
+sudo nginx -T 2>/dev/null | grep -vE '^\s*#' > /tmp/nginx-vivo.txt
+grep -c 'proxy_pass http://127.0.0.1:3000' /tmp/nginx-vivo.txt
+grep -c 'proxy_set_header X-Vercel-Forwarded-For ""' /tmp/nginx-vivo.txt
+grep -cE 'proxy_set_header X-Real-IP +\$remote_addr;' /tmp/nginx-vivo.txt
+grep -cE 'proxy_set_header X-Forwarded-For +\$remote_addr;' /tmp/nginx-vivo.txt
+#    Nos sites deste servidor que fazem proxy para a aplicação, não pode sobrar:
+grep -c 'proxy_add_x_forwarded_for' /tmp/nginx-vivo.txt   # espera: 0, ou só em outro site do órgão
+rm /tmp/nginx-vivo.txt
+
+# d. Prova pelo EFEITO, depois do up -d: dois pedidos pela borda com IP forjado
+#    diferente. Se o forjado fosse a chave, os dois mostrariam o balde cheio.
+for falso in 203.0.113.1 203.0.113.2; do
+  curl -sS -o /dev/null -D - --resolve dmo.spaguas.sp.gov.br:443:127.0.0.1 \
+    -H "X-Vercel-Forwarded-For: $falso" -H "X-Real-IP: $falso" \
+    https://dmo.spaguas.sp.gov.br/api/estoque/categorias | grep -i '^x-ratelimit-remaining'
+done
+#    espera: o segundo valor MENOR que o primeiro (mesmo balde, o do IP real)
+```
+
+O teste **d** é HIPÓTESE de procedimento: foi escrito pela leitura do código
+(balde de 200 por minuto em `leituraEstoque`, com recarga contínua), e não
+exercitado. Se os dois valores vierem iguais, repetir com cinco pedidos antes de
+concluir: a recarga pode repor um token entre dois pedidos lentos.
 
 ---
 
@@ -1049,7 +1302,8 @@ removidas de propósito, para que ninguém as embarque por engano.
 
 | | |
 |---|---|
-| Imagens | `spaguas/dashboard:sha-<commit>` e `spaguas/migrate:sha-<commit>`, mesma tag |
+| Imagens | `spaguas/dashboard`, `spaguas/migrate` e `spaguas/carga-estoque`, as três com `sha-<commit>` igual |
+| Checklist da subida | seção 0 |
 | Banco | `postgis/postgis:16-3.4-alpine`, container na própria máquina |
 | Compose de produção | `docker-compose.prod.yml` (db, migrate, app) |
 | Versão no ar | `/opt/spaguas-dmo/.env`, modelo em `ops/producao/versao-no-ar.exemplo` |
@@ -1057,11 +1311,11 @@ removidas de propósito, para que ninguém as embarque por engano.
 | Ambiente da aplicação | `/etc/spaguas-dmo/app.env`, modelo em `ops/producao/ambiente-producao.exemplo` |
 | Ordem de subida | banco saudável, migrations com sucesso, aplicação |
 | Portas | app em `127.0.0.1:3000`; **banco não publica nada** |
-| Nginx | `ops/producao/nginx-dmo.spaguas.sp.gov.br.conf` |
+| Nginx | `ops/producao/nginx-dmo.spaguas.sp.gov.br.conf`; pré-requisito do limite por IP (seção 8.1) |
 | Saúde | `curl http://127.0.0.1:3000/api/health` |
 | Rollback de código | trocar `IMAGEM_TAG` e `up -d --force-recreate` |
 | Rollback com esquema | só sobe com a frase de volta escrita (seção 7.2) |
 | Estado a preservar | volume `spaguas-dmo-pg-data` |
 | Pacote por entrega | cerca de 225 MiB |
-| Retenção de imagem | 3 versões, removidas **por nome** |
+| Retenção de imagem | 3 versões, removidas **por nome**; rollback nunca para antes de `sha-5ff93c7` (seção 7.1) |
 | Proibido | `docker system prune -a`, `docker volume prune`, tag `latest`, publicar em `0.0.0.0` |

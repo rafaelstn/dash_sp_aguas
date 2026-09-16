@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { estoqueConferenciasRepository } from '@/infrastructure/repositories';
-import { exigirAdmin } from '@/app/api/_helpers/auth';
+import { exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import {
@@ -27,9 +27,9 @@ export async function PATCH(
   request: NextRequest,
   ctx: { params: Promise<{ id: string; itemId: string }> },
 ) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const params = await ctx.params;
@@ -87,12 +87,12 @@ export async function PATCH(
  * reconciliado.
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: { params: Promise<{ id: string; itemId: string }> },
 ) {
-  const auth = await exigirAdmin();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
-  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id);
+  const { headers, resposta } = checarRateLimit('conferenciaEstoque', auth.id, request);
   if (resposta) return resposta;
 
   const params = await ctx.params;

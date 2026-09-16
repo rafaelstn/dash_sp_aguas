@@ -61,6 +61,14 @@
 # valor nenhum: ver o rodape de ops/producao/banco.exemplo.
 #
 # Formato:  postgresql://<usuario>:<senha>@db:5432/<banco>
+#
+# SEM ASPAS. O env_file do Compose remove aspas, mas o --env-file do
+# `docker run` NAO remove (medido em 16/09/2026), e a carga do estoque copia
+# esta linha para um arquivo lido pelo `docker run`: com
+# `DATABASE_URL="postgresql://..."` a carga recebe a string com as aspas dentro
+# e a conexao falha (secao 4.6 de docs/runbooks/carga-inicial-estoque.md).
+# Caractere especial na senha (@ : / ? # %) vai codificado em URL (%40 para @).
+#   sudo grep -c '^DATABASE_URL="' /etc/spaguas-dmo/app.env   # espera: 0
 DATABASE_URL=
 
 # -----------------------------------------------------------------------------
@@ -73,11 +81,37 @@ DATABASE_URL=
 # passam a ler `Dbfch.dbo.Postos` diretamente, sem copia, sem espelho e sem
 # cache. O PostgreSQL da secao 2 continua guardando o que e SO NOSSO.
 #
-# ESQUECER ESTA SECAO NAO PRODUZ ERRO, e por isso ela esta escrita em voz alta:
-# sem as variaveis, a aplicacao cai no adaptador PostgreSQL, cuja tabela
-# `postos` esta VAZIA (0 linhas, medido em 02/09/2026). O sintoma e a busca nao
-# retornar nada, que e exatamente o defeito que esta entrega existe para
-# corrigir, e ele nao aparece em log nenhum.
+# OBRIGATORIAS EM PRODUCAO desde 03/09/2026 (src/infrastructure/config/env.ts,
+# bloco "Cadastro de posto sem origem em producao"). HOST, USUARIO, SENHA e
+# BANCO precisam estar preenchidas; PORTA tem padrao 1433.
+#
+# O que acontece se faltar uma delas (medido pelo Matheus em 16/09/2026): o
+# container SOBE e fica de pe, mas a leitura do ambiente acontece na primeira
+# requisicao e recusa. Resultado: /api/health e TODAS as rotas respondem 500,
+# inclusive o estoque, que nao usa o SQL Server. O log do container traz
+# "Cadastro de posto sem origem em producao: falta ..." com os nomes.
+# (Antes de 03/09 a falta era silenciosa: a busca de posto voltava vazia.)
+#
+# Se o servidor nao tiver estas credenciais na hora da subida, NAO inventar
+# valor. Opcoes, em ordem de preferencia:
+#   1. Preencher com a credencial SOMENTE LEITURA que o orgao ja concedeu
+#      (a entrega de 10/09/2026, sha-5ff93c7, ja exigia estas variaveis e
+#      respondeu health 200, entao elas deveriam estar neste arquivo).
+#   2. Nao trocar a IMAGEM_TAG e manter a versao no ar ate o orgao fornecer.
+#   3. Valor de fachada (host inalcancavel) faz o boot passar, o estoque
+#      funcionar e a busca de posto e a ficha tecnica quebrarem por timeout.
+#      So com decisao escrita do Rafael, e registrada no registro de entregas.
+#
+# Conferir sem imprimir valor (cada linha deve terminar em 1):
+#   for k in SQLSERVER_HOST SQLSERVER_USUARIO SQLSERVER_SENHA SQLSERVER_BANCO; do
+#     printf '%s %s\n' "$k" "$(sudo grep -cE "^$k=.+" /etc/spaguas-dmo/app.env)"
+#   done
+#
+# Exemplo de FORMA (valores ficticios, nao copiar):
+#   SQLSERVER_HOST=10.0.0.10
+#   SQLSERVER_USUARIO=usuario_leitura_exemplo
+#   SQLSERVER_SENHA=<fornecida pelo orgao>
+#   SQLSERVER_BANCO=Dbfch
 #
 # Alcance: e endereco INTERNO do orgao, ja listado no NO_PROXY da secao 5.1.
 # Medido em 02/09/2026 de dentro do container: 10.20.40.62:1433 responde. Se a
@@ -147,21 +181,47 @@ SQLSERVER_TRUST_CERT=sim
 # fazer isso troca "qualquer um na rede consulta" por "qualquer um na rede
 # aprova ficha e administra usuarios".
 #
+# EXCECAO DECLARADA, adendo 3.2.1 do ADR-0024 (16/09/2026): a ESCRITA NO ESTOQUE
+# fica liberada para o usuario institucional enquanto a janela vale (cadastro,
+# movimentacao, conferencia com leitor de codigo de barras, desconformidades).
+# O criterio mora em src/infrastructure/auth/permissao-estoque.ts e NAO mexe no
+# papel: triagem, fichas e usuarios continuam 403. O alcance do que um anonimo
+# pode apagar ou reconciliar esta na tabela do adendo; ler antes de ligar.
+#
+# LIMITE DE REQUISICOES POR IP: na janela todos sao o mesmo usuario, entao o
+# limite das rotas do estoque usa o cabecalho X-Real-IP como chave
+# (src/app/api/estoque/_rl.ts). PRE-REQUISITO: o Nginx de
+# ops/producao/nginx-dmo.spaguas.sp.gov.br.conf instalado, que sobrescreve
+# X-Real-IP com o IP da conexao e apaga X-Vercel-Forwarded-For. Sem ele (acesso
+# direto a porta 3000, ou Nginx antigo), ou todo mundo divide um balde so
+# ("unknown") ou o cliente escolhe o proprio IP.
+#
 # Fail-closed: so a palavra `sim`, exata, liga a janela. `true`, `1` e `yes` NAO
 # ligam, de proposito, para que ninguem a abra por reflexo de digitacao.
 #
 # Nao convive com Supabase: se as variaveis do Supabase estiverem preenchidas
 # junto com esta, a aplicacao RECUSA subir. E o que impede esta configuracao de
-# ser copiada para um ambiente que alcanca a internet.
+# ser copiada para um ambiente que alcanca a internet. Isso vale tambem para o
+# BUILD: NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY passadas como
+# --build-arg ficam gravadas no pacote, e o `next build` (que roda com a janela
+# de fachada) ou o container recusam. Nesta entrega elas NAO existem em lugar
+# nenhum: nem aqui, nem no build.
+#   sudo grep -cE '^NEXT_PUBLIC_SUPABASE_' /etc/spaguas-dmo/app.env   # espera: 0
+#   sudo grep -cx 'ACESSO_SEM_IDENTIDADE=sim' /etc/spaguas-dmo/app.env # espera: 1
 ACESSO_SEM_IDENTIDADE=sim
 
 # Por que a autenticacao esta suspensa. Minimo de 10 caracteres, e a aplicacao
 # recusa subir sem isto: suspensao sem justificativa escrita e como uma
-# suspensao temporaria vira permanente.
+# suspensao temporaria vira permanente. Uma linha so.
 ACESSO_SEM_IDENTIDADE_MOTIVO=Servidor do orgao sem saida para a internet, e a API de login do orgao ainda nao foi fornecida.
 
 # Data (AAAA-MM-DD) em que a suspensao deve ser reavaliada com o orgao. Combinar
-# o prazo real na entrega, este valor e apenas um ponto de partida.
+# o prazo real na entrega, este valor e apenas um ponto de partida. Formato
+# diferente de AAAA-MM-DD (01/12/2026, por exemplo) faz a aplicacao recusar e
+# responder 500 como na secao 2.1.
+#
+# PENDENTE ATE A SUBIDA: 2026-12-01 ainda nao foi confirmada com o orgao. Anotar
+# no registro de entregas a data combinada e quem combinou.
 #
 # Passada a data, a aplicacao CONTINUA no ar e registra alerta severo a cada
 # subida. Ela nao derruba o sistema de proposito: este servidor nao tem internet
@@ -255,7 +315,6 @@ NO_PROXY=localhost,127.0.0.1,::1,db,10.20.40.62,dmo.spaguas.sp.gov.br
 # externo teria de passar por decisao de dado do orgao, e cada tentativa que
 # falha custa 2 s de espera por evento. O log fica no json-file do Docker, com
 # a rotacao definida no compose.
-# O log fica no json-file do Docker, com a rotacao definida no compose.
 LOG_DRAIN_URL=
 LOG_DRAIN_TOKEN=
 LOG_DRAIN_MIN_SEVERITY=
@@ -270,7 +329,28 @@ LOG_DRAIN_MIN_SEVERITY=
 #   DEV_PAPEL_USUARIO          forca o papel do usuario (RBAC, ADR-0022)
 #   DEV_APROVADOR_USUARIO_ID   forca o aprovador da triagem
 #   SPAGUAS_PWA_FORCE_ENABLE   so existe para depuracao local do PWA
+#   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+#   SUPABASE_SERVICE_ROLE_KEY  nao convivem com a janela da secao 3.1
+#
+# Sem efeito nesta imagem (nao preencher; aparecem no codigo so para bancada):
+#   PYTHON_BIN, CAMINHO_MODULO_INDEXER, CHROME_BIN, CHROMIUM_BIN
 #
 # Conferir no servidor antes de subir:
-#   sudo grep -cE "^(DEV_|SPAGUAS_PWA_FORCE_ENABLE)" /etc/spaguas-dmo/app.env
+#   sudo grep -cE "^(DEV_|SPAGUAS_PWA_FORCE_ENABLE|NEXT_PUBLIC_SUPABASE_|SUPABASE_)" /etc/spaguas-dmo/app.env
 #   # espera: 0
+#
+# -----------------------------------------------------------------------------
+# 8. Conferencia completa do app.env ANTES de trocar a IMAGEM_TAG
+# -----------------------------------------------------------------------------
+# Imprime so NOME e CONTAGEM, nunca valor. Cada linha deve terminar em 1.
+#   for k in DATABASE_URL SQLSERVER_HOST SQLSERVER_USUARIO SQLSERVER_SENHA \
+#            SQLSERVER_BANCO ACESSO_SEM_IDENTIDADE_MOTIVO \
+#            ACESSO_SEM_IDENTIDADE_REVISAR_EM AUTH_ALLOWED_EMAIL_DOMAINS \
+#            NEXT_PUBLIC_APP_URL; do
+#     printf '%s %s\n' "$k" "$(sudo grep -cE "^$k=.+" /etc/spaguas-dmo/app.env)"
+#   done
+#   sudo grep -cx 'ACESSO_SEM_IDENTIDADE=sim' /etc/spaguas-dmo/app.env       # 1
+#   sudo grep -cE '^ACESSO_SEM_IDENTIDADE_REVISAR_EM=[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
+#     /etc/spaguas-dmo/app.env                                              # 1
+#   sudo grep -c $'\r' /etc/spaguas-dmo/app.env                              # 0
+#   sudo grep -c '^DATABASE_URL="' /etc/spaguas-dmo/app.env                  # 0

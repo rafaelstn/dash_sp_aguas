@@ -3,16 +3,32 @@ import { randomUUID } from 'node:crypto';
 import type { EstoqueUnidadesRepository } from '@/application/ports/estoque-unidades-repository';
 import type { FiltrosUnidade, Unidade } from '@/domain/estoque/unidade';
 import { TETO_EXPORT, type UnidadeExport } from '@/domain/estoque/export';
-import { UnidadeNaoEncontrada } from '@/domain/errors';
+import { CodigoUnidadeDuplicado, UnidadeNaoEncontrada } from '@/domain/errors';
 import { estoqueStore } from './estoque-store.mock';
+
+/**
+ * Espelha `uq_estoque_unidades_codigo` (migration 0073): único quando preenchido,
+ * sem diferenciar caixa, como a busca e o leitor da conferência comparam.
+ */
+function garantirCodigoLivre(codigo: string | null | undefined, ignorarId?: string): void {
+  if (!codigo) return;
+  const alvo = codigo.toLowerCase();
+  for (const u of estoqueStore.unidades.values()) {
+    if (u.id !== ignorarId && u.codigo?.toLowerCase() === alvo) throw new CodigoUnidadeDuplicado(codigo);
+  }
+}
 
 function contemBusca(u: Unidade, busca: string): boolean {
   const alvo = busca.toLowerCase();
+  const compacto = alvo.replace(/\s+/g, '');
+  const identificador = (v: string | null | undefined) =>
+    v?.toLowerCase().replace(/\s+/g, '').includes(compacto) ?? false;
   return (
     u.descricao.toLowerCase().includes(alvo) ||
-    (u.numeroSerie?.toLowerCase().includes(alvo) ?? false) ||
-    (u.codigoSpaguas?.toLowerCase().includes(alvo) ?? false) ||
-    (u.patDaee?.toLowerCase().includes(alvo) ?? false) ||
+    identificador(u.numeroSerie) ||
+    identificador(u.codigoSpaguas) ||
+    identificador(u.patDaee) ||
+    identificador(u.outrosPat) ||
     (u.codigo?.toLowerCase().includes(alvo) ?? false)
   );
 }
@@ -31,6 +47,10 @@ function filtrarOrdenar(filtros: FiltrosUnidade): Unidade[] {
   if (filtros.estado) itens = itens.filter((u) => u.estado === filtros.estado);
   if (filtros.status) itens = itens.filter((u) => u.status === filtros.status);
   if (filtros.materialId) itens = itens.filter((u) => u.materialId === filtros.materialId);
+  if (filtros.codigo) {
+    const alvo = filtros.codigo.toLowerCase();
+    itens = itens.filter((u) => u.codigo?.toLowerCase() === alvo);
+  }
   if (filtros.busca) itens = itens.filter((u) => contemBusca(u, filtros.busca as string));
   itens.sort((a, b) => a.descricao.localeCompare(b.descricao));
   return itens;
@@ -64,6 +84,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
   },
 
   async criar(dados) {
+    garantirCodigoLivre(dados.codigo);
     const agora = new Date();
     const nova: Unidade = {
       id: randomUUID(),
@@ -93,6 +114,7 @@ export const estoqueUnidadesRepository: EstoqueUnidadesRepository = {
   async atualizar(id, dados) {
     const atual = estoqueStore.unidades.get(id);
     if (!atual) throw new UnidadeNaoEncontrada(id);
+    garantirCodigoLivre(dados.codigo, id);
     const chaves: (keyof typeof dados)[] = [
       'materialId', 'codigo', 'codigoSpaguas', 'patDaee', 'outrosPat',
       'numeroSerie', 'helice', 'descricao', 'marca', 'modelo', 'estado',

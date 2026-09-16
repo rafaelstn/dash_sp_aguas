@@ -24,6 +24,7 @@ import {
   FichaTriagemNaoEncontrada,
   LockRevisaoNegado,
 } from '@/domain/errors';
+import type { JSONValue } from 'postgres';
 import { sql } from './client';
 
 type LinhaTriagem = {
@@ -166,7 +167,7 @@ export const triagemRepository: TriagemRepository = {
             ${entrada.longitudeCapturada},
             ${entrada.precisaoGpsM},
             ${entrada.observacoes},
-            ${JSON.stringify(entrada.dados)}::jsonb,
+            ${sql.json(entrada.dados as JSONValue)},
             ${entrada.origem ?? 'app_campo'},
             'pendente',
             ${entrada.fichaOrigemId ?? null},
@@ -184,7 +185,7 @@ export const triagemRepository: TriagemRepository = {
           ) VALUES (
             ${inserida.id}::uuid, 'submetida', NULL, 'pendente',
             ${entrada.tecnicoId}::uuid,
-            ${JSON.stringify({ origem: inserida.origem, idempotencyKey: inserida.idempotency_key })}::jsonb,
+            ${sql.json({ origem: inserida.origem, idempotencyKey: inserida.idempotency_key })},
             ${metadata.ip}::inet,
             ${metadata.userAgent}
           )
@@ -230,7 +231,7 @@ export const triagemRepository: TriagemRepository = {
             ${entrada.longitudeCapturada},
             ${entrada.precisaoGpsM},
             ${entrada.observacoes},
-            ${JSON.stringify(entrada.dados)}::jsonb,
+            ${sql.json(entrada.dados as JSONValue)},
             ${entrada.origem ?? 'app_campo'},
             'pendente',
             ${fichaOrigemId}::uuid,
@@ -248,7 +249,7 @@ export const triagemRepository: TriagemRepository = {
           ) VALUES (
             ${inserida.id}::uuid, 'reenvio_apos_devolucao', NULL, 'pendente',
             ${entrada.tecnicoId}::uuid,
-            ${JSON.stringify({ fichaOrigemId })}::jsonb,
+            ${sql.json({ fichaOrigemId })},
             ${metadata.ip}::inet,
             ${metadata.userAgent}
           )
@@ -501,7 +502,7 @@ export const triagemRepository: TriagemRepository = {
             ${ficha.latitude_capturada},
             ${ficha.longitude_capturada},
             ${ficha.observacoes},
-            ${JSON.stringify(ficha.dados)}::jsonb,
+            ${sql.json(ficha.dados as JSONValue)},
             'app_campo',
             'aprovada'
           )
@@ -531,7 +532,7 @@ export const triagemRepository: TriagemRepository = {
           ) VALUES (
             ${triagemId}::uuid, 'aprovada', 'em_revisao', 'aprovada',
             ${aprovadorId}::uuid,
-            ${JSON.stringify({ fichaVisitaId })}::jsonb,
+            ${sql.json({ fichaVisitaId })},
             ${metadata.ip}::inet,
             ${metadata.userAgent}
           )
@@ -629,7 +630,7 @@ export const triagemRepository: TriagemRepository = {
           ${entrada.estadoNovo},
           ${entrada.atorId}::uuid,
           ${entrada.motivo ?? null},
-          ${entrada.payload ? JSON.stringify(entrada.payload) : null}::jsonb,
+          ${entrada.payload ? sql.json(entrada.payload as JSONValue) : null},
           ${entrada.ip ?? null}::inet,
           ${entrada.userAgent ?? null}
         )
@@ -668,7 +669,7 @@ export const triagemRepository: TriagemRepository = {
         VALUES (
           ${job},
           ${duracaoMs},
-          ${payload ? JSON.stringify(payload) : null}::jsonb
+          ${payload ? sql.json(payload as JSONValue) : null}
         )
       `;
       // Limpeza de retenção: descarta heartbeats > 7 dias do MESMO job.

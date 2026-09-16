@@ -3,11 +3,18 @@ import { randomUUID } from 'node:crypto';
 import type { EstoqueLocaisRepository } from '@/application/ports/estoque-locais-repository';
 import type { Local } from '@/domain/estoque/local';
 import { normalizarLocal, montarRotulo } from '@/domain/estoque/local';
-import { LocalEmUso, LocalNaoEncontrado } from '@/domain/errors';
+import { LocalDuplicado, LocalEmUso, LocalNaoEncontrado } from '@/domain/errors';
 import { estoqueStore } from './estoque-store.mock';
 
 function chaveDe(l: Pick<Local, 'unidade' | 'sala' | 'prateleira' | 'armario'>): string {
   return `${l.unidade}|${l.sala ?? ''}|${l.prateleira ?? ''}|${l.armario ?? ''}`;
+}
+
+/** Espelha `uq_estoque_locais_chave`: unidade e os três campos normalizados. */
+function garantirChaveLivre(chave: string, rotulo: string, ignorarId?: string): void {
+  for (const l of estoqueStore.locais.values()) {
+    if (l.id !== ignorarId && chaveDe(l) === chave) throw new LocalDuplicado(rotulo);
+  }
 }
 
 export const estoqueLocaisRepository: EstoqueLocaisRepository = {
@@ -23,6 +30,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
 
   async criar(dados) {
     const norm = normalizarLocal(dados);
+    garantirChaveLivre(norm.chave, norm.rotulo);
     const novo: Local = {
       id: randomUUID(),
       unidade: norm.unidade,
@@ -47,6 +55,7 @@ export const estoqueLocaisRepository: EstoqueLocaisRepository = {
       armario: dados.armario !== undefined ? dados.armario : atual.armario,
     };
     const norm = normalizarLocal(combinado);
+    garantirChaveLivre(norm.chave, norm.rotulo, id);
     const atualizado: Local = {
       ...atual,
       unidade: norm.unidade,

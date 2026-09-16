@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { QRCodeSVG } from 'qrcode.react';
 import { Package, Printer } from 'lucide-react';
 import { Alerta } from '@/components/ui/Alerta';
 import { EstadoVazio } from '@/components/ui/EstadoVazio';
 import { SkeletonGrupo } from '@/components/ui/Skeleton';
 import { listarEtiquetas, type FiltrosEtiquetasUI, type RespostaEtiquetas } from './api';
 import { ErroEstoque } from './erros';
+import { CodigoBarrasEtiqueta } from './CodigoBarrasEtiqueta';
 import type { ItemEtiqueta } from '@/domain/estoque/etiqueta';
 
 interface Props {
@@ -22,22 +22,15 @@ type Carga =
   | { fase: 'ok'; dados: RespostaEtiquetas };
 
 /**
- * Visao de impressao das etiquetas/QR de patrimonio do conjunto filtrado. Cada
- * etiqueta traz um QR que aponta para a pagina do item no proprio sistema
- * (`/estoque/patrimonio/<id>`), lido pela camera nativa do celular. O QR e SVG
- * inline (qrcode.react), sem rede, compativel com a CSP. No papel: `@media
- * print` esconde o chrome e imprime so a grade (ver globals.css, classe
- * `etiquetas-print` no body). Leitura: qualquer usuario logado imprime.
+ * Visão de impressão das etiquetas de patrimônio do conjunto filtrado. Cada
+ * etiqueta traz o código de barras do `codigo` da unidade (pedido do órgão, que
+ * lê com leitor USB; simbologia em `@/lib/codigo-barras`), em SVG inline, sem
+ * rede, compatível com a CSP. No papel: `@media print` esconde o chrome e
+ * imprime só a grade (ver globals.css, classe `etiquetas-print` no body).
+ * Leitura: qualquer usuário logado imprime.
  */
 export function VisaoEtiquetas({ filtros }: Props) {
   const [carga, setCarga] = useState<Carga>({ fase: 'carregando' });
-  // origin resolvido no cliente (deploy atual). Vazio no 1o paint (SSR) para
-  // nao divergir na hidratacao; o QR so renderiza quando ja temos o origin.
-  const [origin, setOrigin] = useState('');
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   // Marca o body para o CSS de impressao esconder o chrome e imprimir so a grade.
   useEffect(() => {
@@ -88,8 +81,8 @@ export function VisaoEtiquetas({ filtros }: Props) {
           <h1 className="text-xl font-semibold text-app-fg">Etiquetas de patrimônio</h1>
           <p className="mt-0.5 text-xs text-app-fg-muted">
             {carga.fase === 'ok'
-              ? `${total.toLocaleString('pt-BR')} ${total === 1 ? 'etiqueta' : 'etiquetas'} no filtro atual. Imprima e cole no equipamento; o QR abre a ficha do item.`
-              : 'Gere e imprima as etiquetas com QR do conjunto filtrado.'}
+              ? `${total.toLocaleString('pt-BR')} ${total === 1 ? 'etiqueta' : 'etiquetas'} no filtro atual.${total > 0 ? ' Imprima e cole no equipamento.' : ''}`
+              : 'Gere e imprima as etiquetas com código de barras do conjunto filtrado.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -153,7 +146,7 @@ export function VisaoEtiquetas({ filtros }: Props) {
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 print:grid-cols-3 print:gap-2">
           {carga.dados.itens.map((item) => (
-            <Etiqueta key={item.id} item={item} origin={origin} />
+            <Etiqueta key={item.id} item={item} />
           ))}
         </ul>
       )}
@@ -161,41 +154,13 @@ export function VisaoEtiquetas({ filtros }: Props) {
   );
 }
 
-/** Uma etiqueta imprimivel: QR (link para a ficha) + texto legivel, com borda. */
-function Etiqueta({ item, origin }: { item: ItemEtiqueta; origin: string }) {
-  const url = origin ? `${origin}/estoque/patrimonio/${item.id}` : '';
+/** Uma etiqueta imprimível: código de barras do `codigo` + texto legível, com borda. */
+function Etiqueta({ item }: { item: ItemEtiqueta }) {
   const patrimonio = item.patDaee ?? item.codigo;
-  const rotuloAcessivel = [
-    'QR do item',
-    item.descricao,
-    patrimonio ? `patrimônio ${patrimonio}` : null,
-  ]
-    .filter(Boolean)
-    .join(' ');
 
   return (
-    <li className="flex break-inside-avoid items-center gap-3 rounded border border-app-border-input bg-white p-3">
-      <div className="shrink-0">
-        {url ? (
-          <QRCodeSVG
-            value={url}
-            size={112}
-            level="M"
-            marginSize={2}
-            bgColor="#ffffff"
-            fgColor="#000000"
-            title={rotuloAcessivel}
-            role="img"
-            aria-label={rotuloAcessivel}
-          />
-        ) : (
-          // Placeholder ate resolver o origin (evita QR vazio/invalido no 1o paint).
-          <div
-            className="h-[112px] w-[112px] rounded bg-app-surface-2"
-            aria-hidden="true"
-          />
-        )}
-      </div>
+    <li className="flex break-inside-avoid flex-col gap-2 rounded border border-app-border-input bg-white p-3">
+      <CodigoBarrasEtiqueta codigo={item.codigo} />
       <div className="min-w-0 flex-1 text-black">
         <p className="line-clamp-2 text-sm font-semibold leading-tight" title={item.descricao}>
           {item.descricao}
