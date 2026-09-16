@@ -3,50 +3,68 @@
 **Sistema:** SP Águas - DMO (dashboard Next.js + PostgreSQL próprio)
 **Servidor:** `10.199.43.27`, `dmo.spaguas.sp.gov.br`, Ubuntu 24.04.1 em VM VMware
 **Escrito em:** 27/08/2026
-**Estado:** preparação. **Nenhum passo deste runbook foi executado no servidor.**
-Ordem do Rafael em 27/08: preparar o container, não fazer o deploy.
+**Estado:** em uso. Executado no servidor em 10/09/2026 (`sha-5ff93c7`) e em
+16/09/2026 (`sha-7c8c04a`, estoque com código de barras); os números medidos
+nesta última estão no registro de entregas e nas notas "MEDIDO em 16/09/2026".
+A frase original de 27/08 ("nenhum passo executado", ordem de preparar sem fazer
+o deploy) valia só até a primeira subida.
+
+**Nome do banco em produção: `spaguas_dmo`** (MEDIDO em 16/09/2026, chave
+`POSTGRES_DB` do `db.env`; usuário `spaguas`). O `banco.exemplo` traz `spaguas`,
+e todo comando deste runbook usava `-d spaguas`: contra produção, o `pg_dump`
+assim sai com erro e um arquivo de **0 bytes**. Os comandos abaixo já estão
+corrigidos.
+
+**`exec -T` dentro de script ou heredoc consome o resto do script como entrada.**
+Medido na mesma data: um `ssh 'bash -s' <<EOF` com `docker compose exec -T`
+executou só o primeiro comando. Rodar o script como arquivo e pôr `</dev/null`
+em todo `exec -T` e `docker run` que não leia entrada.
 
 Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trás) ou
 **HIPÓTESE** (raciocínio ainda não confirmado no ambiente real).
 
 ---
 
-## 0. Checklist da próxima subida (estoque com código de barras, migrations 0070 a 0072)
+## 0. Checklist da subida do estoque com código de barras (migrations 0070 a 0073)
 
-**Preparado em 16/09/2026, sem VPN e sem acesso ao servidor.** No ar desde
-10/09/2026: `sha-5ff93c7` (registro de entregas). Esta subida leva o estoque com
-etiqueta Code 39, a carga da planilha, as migrations 0070, 0071 e 0072, e a
+**EXECUTADO em 16/09/2026 com `sha-7c8c04a`, sem falha e sem rollback.** Antes
+disso, no ar desde 10/09/2026: `sha-5ff93c7`. A subida levou o estoque com
+etiqueta Code 39, a carga da planilha, as migrations 0070, 0071, 0072 e 0073, e a
 escrita no estoque liberada na janela sem identidade (adendo 3.2.1 do ADR-0024).
+Os valores "espera" abaixo foram conferidos contra a medição daquele dia; o
+checklist serve de modelo para a próxima subida que traga migration nova.
 
 Executar **em ordem**. Cada passo aponta a seção que tem o comando e a
 conferência; nenhum passo segue com a conferência anterior fora do esperado.
 
 **Na bancada, com internet**
 
-1. **A 0072 está pronta.** `supabase/migrations/0072_jsonb_gravado_como_string.sql`
-   (do Lucas; apareceu no disco em 16/09/2026, ainda não commitada) aplicada
+1. **A 0072 e a 0073 estão prontas.** Imagem `migrate` da tag nova aplicada
    **duas vezes** num banco de ensaio com código 0 nas duas, porque o `migrate`
-   reaplica todas as migrations a cada `up` (seção 6.2), e a hipótese da linha
-   dela na seção 7.2.1 confirmada. Sem isso, não segue.
+   reaplica todas as migrations a cada `up` (seção 6.2), e a volta da seção
+   7.2.1 ensaiada. Sem isso, não segue. MEDIDO em 16/09/2026: códigos 0 e 0; na
+   segunda, a 0073 respondeu "nada a fazer" com o mesmo OID do índice.
 2. **Tudo commitado e CI verde no commit que vai subir.** A construção parte de
    `git archive HEAD`, que leva só o que está commitado: migration fora do commit
    não entra na imagem, e o `migrate` encerra com código 0 sem ela.
 
    ```bash
    git status --porcelain                                    # espera: vazio
-   git ls-files supabase/migrations | grep -cE '/007[012]_'  # espera: 3
+   git ls-files supabase/migrations | grep -cE '/007[0123]_' # espera: 4
    git ls-files ops/producao/Dockerfile.carga-estoque \
      ops/producao/Dockerfile.carga-estoque.dockerignore \
      scripts/estoque/importar-inventario.mjs | wc -l          # espera: 3
    ```
 3. Exportar a árvore para disco local (seção 2) e construir **as três imagens**
    com a mesma tag, **sem** argumento de build do Supabase (seção 3).
-4. Conferências antes de transportar: seção 3 (inclusive as três migrations
+4. Conferências antes de transportar: seção 3 (inclusive as quatro migrations
    dentro da imagem `migrate`) e seção 2.1 de `carga-inicial-estoque.md`.
 5. Empacotar as quatro referências e tirar o `sha256` (seção 4). Tirar também o
    `sha256` da planilha: espera
    `88299ad2411c715cf0986a80313f3ae18f023cd21d0727e5928449edc9ed4874`
    (seção 3 de `carga-inicial-estoque.md`). Outro valor exige novo ensaio.
+   MEDIDO em 16/09/2026: pacote de 254.779.338 bytes (imagens de 370 MB,
+   627 MB e 282 MB mais o postgis), transportado por `scp`.
 
 **No servidor, com VPN**
 
@@ -65,10 +83,12 @@ conferência; nenhum passo segue com a conferência anterior fora do esperado.
 10. **Dump antes da migração** (seção 7.3), com os dois códigos 0 e a contagem de
     `TABLE DATA` maior que zero. Este dump é de um banco **sem** a 0070, e só
     restaura pelo contorno da seção 8.2 de `carga-inicial-estoque.md`.
-11. Trocar a `IMAGEM_TAG` e `up -d` (seção 6.2). O `migrate` aplica 0070, 0071 e
-    0072 nesta subida.
-12. Conferir que subiu (seção 6.3): três linhas `-> 007x_` no log do `migrate`,
+11. Trocar a `IMAGEM_TAG` e `up -d` (seção 6.2). O `migrate` aplica 0070, 0071,
+    0072 e 0073 nesta subida.
+12. Conferir que subiu (seção 6.3): quatro linhas `-> 007x_` no log do `migrate`,
     41 tabelas, `estoque_desconformidades` presente, `/api/health` com `ok`.
+    Depois, reaplicar **só a 0073** e esperar "nada a fazer" com o OID do índice
+    igual antes e depois (seção 6.3, item i).
 13. Prova do limite por IP pela borda (seção 8, teste do `X-RateLimit-Remaining`).
 14. **Carga do estoque**: `carga-inicial-estoque.md`, seções 4 a 7, com `SHA`
     igual à tag nova. Aceite por contagem: 814 unidades (626 com código), 119
@@ -84,7 +104,7 @@ conferência; nenhum passo segue com a conferência anterior fora do esperado.
 
 | Onde parou | O que fazer |
 |---|---|
-| `migrate` com código diferente de 0 (site em 502) | voltar a tag anotada no passo 7 e `up -d` (seção 7.1). O `migrate` antigo reaplica 0001 a 0069 e sobe o app antigo. Ler a seção 7.2.1 antes |
+| `migrate` com código diferente de 0 (site em 502) | voltar a tag anotada no passo 7 e `up -d` (seção 7.1). O `migrate` antigo reaplica 0001 a 0069 e sobe o app antigo (ensaiado com código 0 em 16/09/2026). Ler a seção 7.2.1 antes |
 | `app` de pé com `/api/health` 500 | `docker compose -f docker-compose.prod.yml logs app \| tail -50`. Causa esperada é variável do `app.env`; corrigir e `up -d app`. Sem correção possível, seção 7.1 |
 | Carga fora do esperado | seção 8.2 de `carga-inicial-estoque.md` (dump tirado antes da carga, já com a 0070, restaura direto) |
 | Precisa desfazer o esquema | seção 7.2, com o dump do passo 10 e o contorno da seção 8.2 de `carga-inicial-estoque.md` |
@@ -242,10 +262,12 @@ for img in dashboard migrate carga-estoque; do
     'find / -xdev \( -iname "*.xlsx" -o -iname "*.xls" \) 2>/dev/null | wc -l'
 done
 
-# 5. As migrations novas estão DENTRO da imagem migrate, e a última é a 0072.
+# 5. As migrations novas estão DENTRO da imagem migrate, e a última é a 0073.
 docker run --rm --entrypoint sh spaguas/migrate:sha-$SHA -c \
-  'ls /migrations | grep -cE "^007[012]_"; ls /migrations | sort | tail -1'
-#    espera: 3, e depois o nome do arquivo 0072_...
+  'ls /migrations | grep -cE "^007[0123]_"; ls /migrations | sort | tail -1'
+#    espera: 4, e depois 0073_estoque_unidades_codigo_sem_caixa.sql
+#    (MEDIDO em 16/09/2026: 73 arquivos na imagem, e o hash do SQL concatenado
+#    igual ao da árvore exportada)
 
 # 6. Nenhuma chave anônima do Supabase gravada no pacote da aplicação. Espera: 0
 docker run --rm --entrypoint sh spaguas/dashboard:sha-$SHA -c \
@@ -487,30 +509,37 @@ docker compose -f docker-compose.prod.yml logs migrate | tail -5
 #    a última linha tem que ser "[migrate] concluído."
 docker inspect spaguas-dmo-migrate --format '{{.State.ExitCode}}'
 #    espera: 0
-docker compose -f docker-compose.prod.yml logs migrate | grep -cE -- '-> 007[012]_'
-#    espera: 3   (0070, 0071 e 0072 passaram por esta subida)
+docker compose -f docker-compose.prod.yml logs migrate | grep -cE -- '-> 007[0123]_'
+#    espera: 4   (0070, 0071, 0072 e 0073 passaram por esta subida)
+#    MEDIDO em 16/09/2026: 73 linhas "->" no total, 0 linhas com ERROR
 docker compose -f docker-compose.prod.yml logs migrate | grep -E '\[0072\] .*convertidas='
 #    espera: nove linhas, uma por coluna, com CONTAGENS (nunca conteúdo).
+#    MEDIDO em 16/09/2026: diagramas.elementos convertidas=1,
+#    cron_heartbeats.payload convertidas=1998, as outras sete 0; todas com
+#    mantidas_como_string=0.
+docker compose -f docker-compose.prod.yml logs migrate | grep -E '0073:'
+#    na primeira subida: "recriado sobre lower(codigo)"; nas seguintes: "nada a fazer"
 #    Registrar os números no registro de entregas: é o único rastro do que a
 #    0072 converteu em produção. `mantidas_como_string` maior que zero não é
 #    erro, mas vai para o Lucas.
 
 # c. O banco tem o esquema, e o PostGIS está instalado.
 docker compose -f docker-compose.prod.yml exec -T db \
-  psql -U spaguas -d spaguas -tAc \
+  psql -U spaguas -d spaguas_dmo -tAc \
   "select count(*) from information_schema.tables where table_schema='public'"
-#    espera: 41   (40 medido em produção em 10/09/2026, mais a tabela
-#                  estoque_desconformidades da 0071; 41 MEDIDO no banco de
-#                  ensaio com a 0071 em 16/09/2026. A 0072 só corrige dado e
-#                  não cria tabela)
+#    espera: 41   (MEDIDO em produção em 16/09/2026. A 0072 só corrige dado e
+#                  a 0073 só recria índice; nenhuma das duas cria tabela)
 docker compose -f docker-compose.prod.yml exec -T db \
-  psql -U spaguas -d spaguas -tAc \
+  psql -U spaguas -d spaguas_dmo -tAc \
   "select to_regclass('public.estoque_desconformidades') is not null,
           (select count(*) from pg_proc where proname='f_unaccent' and prosrc like '%.unaccent(%')"
 #    espera: t|1   (tabela da 0071; função qualificada pela 0070)
 docker compose -f docker-compose.prod.yml exec -T db \
-  psql -U spaguas -d spaguas -tAc "select extversion from pg_extension where extname='postgis'"
+  psql -U spaguas -d spaguas_dmo -tAc "select extversion from pg_extension where extname='postgis'"
 #    espera: 3.4.3
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U spaguas -d spaguas_dmo -tAc "select pg_get_indexdef('public.uq_estoque_unidades_codigo'::regclass)" </dev/null
+#    espera: índice único sobre lower(codigo) WHERE (codigo IS NOT NULL)   (0073)
 
 # d. O banco NÃO publica porta nenhuma no host, e a aplicação só em loopback.
 docker inspect spaguas-dmo-db  --format '{{.NetworkSettings.Ports}}'
@@ -541,7 +570,32 @@ docker inspect spaguas-dmo-db spaguas-dmo-app --format '{{.Name}} {{.HostConfig.
 
 # h. Pela borda, já com o Nginx configurado.
 curl -sSI https://dmo.spaguas.sp.gov.br/ | head -20
+
+# i. A 0073 é idempotente em produção: reaplicada sozinha, não mexe no índice.
+#    A comparação dela é por pg_get_indexdef contra um literal; se o texto do
+#    Postgres divergisse do literal, ela recriaria o índice a cada up.
+Q() { docker compose -f docker-compose.prod.yml exec -T db \
+        psql -U spaguas -d spaguas_dmo -tAc "$1" </dev/null; }
+Q "select oid from pg_class where relname='uq_estoque_unidades_codigo'"
+docker run --rm --network spaguas-dmo --env-file /etc/spaguas-dmo/db.env \
+  --cap-drop ALL --security-opt no-new-privileges:true --memory 256m \
+  --entrypoint sh spaguas/migrate:sha-$SHA \
+  -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /migrations/0073_estoque_unidades_codigo_sem_caixa.sql' </dev/null
+echo "codigo: $?"
+Q "select oid from pg_class where relname='uq_estoque_unidades_codigo'"
+#    espera: código 0, NOTICE "... nada a fazer", e o mesmo OID antes e depois
 ```
+
+**MEDIDO em 16/09/2026, `sha-7c8c04a`:**
+
+- **a.** app healthy 15 s depois do `up`, migrate Exited (0), db healthy (não
+  recriado, porque a imagem do postgis é a mesma).
+- **d.** Nada publicado no host além de `127.0.0.1:3000`.
+- **e.** `{"status":"ok","db":"ok"}`.
+- **f.** Valores idênticos aos comentários acima.
+- **g.** `json-file` com 10m x 5 nos dois.
+- **h.** 200.
+- **i.** Código 0, "nada a fazer", OID 25323 antes e depois.
 
 ---
 
@@ -614,7 +668,7 @@ migração, apontar a tag anterior, subir. Isso **perde** o que foi gravado entr
 backup e a parada, e por isso precisa ser decisão consciente com o órgão, e não
 improviso de plantão.
 
-### 7.2.1 Frase de volta da subida do estoque (0070, 0071 e 0072)
+### 7.2.1 Frase de volta da subida do estoque (0070, 0071, 0072 e 0073)
 
 Escrita em 16/09/2026 para a volta de `sha-<nova>` para `sha-5ff93c7`.
 
@@ -624,10 +678,13 @@ Escrita em 16/09/2026 para a volta de `sha-<nova>` para `sha-5ff93c7`.
 | 0071 (tabela `estoque_desconformidades`) | sim: tabela nova, que o código anterior não cita (linha "tabela nova" da tabela acima) | não desfazer na volta de código. Se for preciso: `DROP TABLE estoque_desconformidades;` depois de dump, porque apaga os registros e as decisões de revisão |
 | 0072 (`0072_jsonb_gravado_como_string.sql`, do Lucas) | **só dado, sem mudança de esquema** (lido no arquivo em 16/09/2026): nas linhas em que um `jsonb` foi gravado como string, desembrulha para objeto ou array em nove colunas (`diagramas`, `fichas_visita`, `fichas_triagem` e quatro tabelas de trilha). Não cria tabela, não troca tipo, não acrescenta restrição. HIPÓTESE a confirmar com o Lucas: o código de `sha-5ff93c7` lê o valor convertido sem quebrar (o defeito corrigido era justamente ele receber string). Depois da volta, o código antigo volta a gravar string, e a próxima subida da 0072 corrige de novo | **não há SQL que desfaça**: o próprio arquivo declara que não se distingue linha convertida sem fotografia. A volta do dado é pelo dump do passo 10 do checklist, com a perda do que foi gravado depois |
 
-**HIPÓTESE, conferir junto da 0072:** reaplicar as migrations 0001 a 0069 de
-`sha-5ff93c7` sobre um esquema que já tem 0070 a 0072 não foi exercitado. Antes da
-subida, ensaiar a volta: banco de ensaio com a tag nova migrada, depois o
-`migrate` de `sha-5ff93c7` contra ele, esperando código 0.
+| 0073 (índice único `uq_estoque_unidades_codigo` sobre `lower(codigo)`) | sim: o código anterior grava e lê `codigo` como antes; o índice só passa a recusar código repetido com caixa diferente | nada a fazer. O `migrate` de `sha-5ff93c7` não recria o índice antigo: MEDIDO no ensaio, o índice sobre `lower(codigo)` continua depois da volta |
+
+**MEDIDO em 16/09/2026 no ensaio da bancada** (antes, HIPÓTESE): banco de ensaio
+com `sha-7c8c04a` migrado duas vezes (códigos 0 e 0), depois o `migrate` de
+`sha-5ff93c7` contra ele com código 0, o índice sobre `lower(codigo)` mantido e a
+`f_unaccent` de volta à forma sem esquema, e de novo `sha-7c8c04a` com a 0073
+respondendo "nada a fazer". Não medido: o tempo de uma volta real em produção.
 
 ### 7.3 Backup: o que torna tudo isso possível
 
@@ -645,9 +702,11 @@ sudo install -d -m 0700 -o root -g root /var/backups/spaguas-dmo
 DUMP_MIGRACAO=/var/backups/spaguas-dmo/antes-de-sha-$SHA-$(date -u +%Y%m%dT%H%M%SZ).dump
 
 docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U spaguas -d spaguas --format=custom | sudo tee "$DUMP_MIGRACAO" > /dev/null
+  pg_dump -U spaguas -d spaguas_dmo --format=custom </dev/null | sudo tee "$DUMP_MIGRACAO" > /dev/null
 echo "codigos: ${PIPESTATUS[*]}"
 #    espera: 0 0   (o primeiro é o pg_dump; o código do tee sozinho não prova nada)
+#    MEDIDO em 16/09/2026: 0 0, 2.085.051 bytes, 43 TABLE DATA. Arquivo de
+#    0 bytes é o sinal do nome de banco errado.
 sudo chmod 0600 "$DUMP_MIGRACAO"
 
 # O dump é legível e tem dado. Espera: número maior que zero.
@@ -679,6 +738,12 @@ anterior à 0070 chamava `unaccent` sem esquema, então a criação de `postos`
 falha com `function unaccent(unknown, text) does not exist`. Dump tirado com a
 0070 aplicada restaura direto. Para dump antigo, o contorno está na seção 8.2 de
 `carga-inicial-estoque.md`.
+
+**Último restore testado: 16/09/2026**, em banco temporário do mesmo container,
+apagado em seguida. O dump de antes da migração (sem a 0070) restaurou pelo
+contorno da seção 8.2 com códigos 0 0 0 e as 36 tabelas com contagem idêntica; o
+dump de antes da carga (com a 0070) restaurou direto com `--single-transaction`,
+código 0, 37 tabelas idênticas. Nenhum dos dois foi restaurado sobre o banco real.
 
 **Registrar a data do último restore testado neste runbook.** Backup cuja
 restauração nunca foi exercitada é a forma mais cara de falsa segurança que
@@ -720,6 +785,14 @@ Resumo do que muda: sai `try_files $uri $uri/ =404` (que hoje faria toda
 requisição terminar em 404 antes de chegar ao `proxy_pass`), saem as quatro
 linhas de cache compartilhado, e entra o `proxy_pass` com os cabeçalhos de
 origem, `proxy_cache off`, `client_max_body_size 12m` e os tempos.
+
+**Corrigido em 16/09/2026:** o parágrafo acima descreve um estado antigo. O
+`location /` encontrado naquele dia já tinha `proxy_pass` e cache desligado, sem
+`try_files`, e `client_max_body_size 25m`. O bloco versionado foi aplicado sobre
+ele com backup (`/root/entrega-7c8c04a/nginx-default.bak-antes-sha-7c8c04a`),
+`nginx -t` OK e reload com código 0. O limite caiu de 25m para 12m, conferido no
+código: a foto da ficha vai em data URL de até 7 MB, uma por envio, e a rota de
+arquivos não tem POST.
 
 ### 8.1 Cabeçalhos de IP: pré-requisito do limite por IP na janela sem identidade
 
@@ -777,6 +850,23 @@ O teste **d** é HIPÓTESE de procedimento: foi escrito pela leitura do código
 (balde de 200 por minuto em `leituraEstoque`, com recarga contínua), e não
 exercitado. Se os dois valores vierem iguais, repetir com cinco pedidos antes de
 concluir: a recarga pode repor um token entre dois pedidos lentos.
+
+**MEDIDO em 16/09/2026, pela VPN** (o DNS de `dmo.spaguas.sp.gov.br` aponta
+para `10.199.43.27`):
+
+- **a.** O log de acesso mostra IPs públicos variados: este Nginx é o primeiro
+  salto, e o `realip` não é necessário.
+- **c.** As contagens foram `proxy_pass` 1, `X-Vercel-Forwarded-For ""` 1,
+  `X-Real-IP` **2**, `X-Forwarded-For $remote_addr` 1 e
+  `proxy_add_x_forwarded_for` 1.
+  - O 2 e o 1 vêm do `location` do Portainer do órgão, no mesmo arquivo, que
+    não chega à aplicação e não foi mexido.
+  - Contar o `X-Real-IP` só dentro do `location /`.
+- **d.** Com os três cabeçalhos forjados (`X-Vercel-Forwarded-For`, `X-Real-IP`
+  e `X-Forwarded-For`) e um IP falso diferente por pedido, quatro pedidos
+  devolveram 199, 198, 198 e 197. É o mesmo balde, e o 198 repetido é a recarga
+  descrita acima.
+- `/api/health` e Portainer responderam 200 antes e depois do reload.
 
 ---
 

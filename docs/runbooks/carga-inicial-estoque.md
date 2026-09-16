@@ -1,9 +1,17 @@
 # Runbook: carga inicial do estoque no servidor do órgão (sem internet)
 
-**Sistema:** SP Águas, DMO (módulo de estoque, migrations 0054 a 0065, 0070 e 0071)
+**Sistema:** SP Águas, DMO (módulo de estoque, migrations 0054 a 0065 e 0070 a 0073)
 **Servidor:** `10.199.43.27`, `dmo.spaguas.sp.gov.br`
 **Escrito em:** 16/09/2026
-**Estado:** preparado e ensaiado localmente. **Nenhum passo deste runbook foi executado no servidor.**
+**Estado:** **executado no servidor em 16/09/2026** com `sha-7c8c04a`, aceite
+aprovado na primeira execução e na reexecução, sem reversão. A medição real está
+na seção 10; as notas "MEDIDO em 16/09/2026" ao longo do texto são de produção
+quando dizem "no servidor", e de ensaio quando dizem "no ensaio".
+
+**Nome do banco em produção: `spaguas_dmo`**, e não `spaguas` (chave
+`POSTGRES_DB` do `db.env`). Os comandos abaixo já estão corrigidos. Todo
+`exec -T` e `docker run` rodado de dentro de script leva `</dev/null`, senão
+consome o resto do script como entrada (seção 0 do runbook de entrega).
 
 Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trás) ou
 **HIPÓTESE** (raciocínio ainda não confirmado no ambiente real).
@@ -176,7 +184,8 @@ sudo sha256sum /var/lib/spaguas-dmo/carga-estoque/planilha-inicial.xlsx
 rm planilha-inicial.xlsx
 ```
 
-**Permissão da planilha (HIPÓTESE, não exercitada em Linux):** o processo da
+**Permissão da planilha (MEDIDO no servidor em 16/09/2026:** diretório 750
+root:docker, arquivo 644, carga leu sem `EACCES`**):** o processo da
 carga roda como uid 1000 dentro do container e lê o arquivo pela montagem. O
 diretório com 0750 impede que usuário fora do grupo `docker` leia a planilha no
 host, e o arquivo com 0644 deixa o uid 1000 do container ler. Se a carga
@@ -188,20 +197,21 @@ terminar com `ERRO: EACCES`, o problema é esta permissão, e não o script.
 docker compose -f docker-compose.prod.yml ps -a
 #    espera: db healthy, migrate Exited (0), app healthy
 
-docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas -tAc \
+docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas_dmo -tAc \
   "select count(*) from information_schema.columns where table_name='estoque_movimentacoes' and column_name='conferencia_id'"
 #    espera: 1   (coluna da migration 0064; 0 significa migrations atrasadas)
 
-docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas -tAc \
+docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas_dmo -tAc \
   "select count(*) from pg_proc where proname='f_unaccent' and prosrc like '%.unaccent(%'"
 #    espera: 1   (migration 0070; sem ela o dump da seção 5 não restaura, ver 8.2)
 
-docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas -tAc \
+docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas_dmo -tAc \
   "select count(*) from pg_class where oid = to_regclass('public.estoque_desconformidades')"
 #    espera: 1   (migration 0071; com 0 a carga sai com código 1 antes de gravar)
 
-docker compose -f docker-compose.prod.yml logs migrate | grep -cE -- '-> 007[012]_'
-#    espera: 3   (0070, 0071 e 0072 passaram pelo migrate desta tag)
+docker compose -f docker-compose.prod.yml logs migrate | grep -cE -- '-> 007[0123]_'
+#    espera: 4   (0070, 0071, 0072 e 0073 passaram pelo migrate desta tag)
+#    MEDIDO no servidor em 16/09/2026: 1, 1, 1 e 4; seção 4.5 com 0 nas oito
 ```
 
 ### 4.5 As tabelas do estoque estão vazias
@@ -210,7 +220,7 @@ Esta é uma carga **inicial**. Se alguma tabela já tiver linha, parar aqui e
 reportar: o procedimento deixa de ser este.
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas -tA <<'SQL'
+docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas_dmo -tA <<'SQL'
 select 'estoque_locais', count(*) from estoque_locais
 union all select 'estoque_categorias', count(*) from estoque_categorias
 union all select 'estoque_materiais', count(*) from estoque_materiais
@@ -266,7 +276,7 @@ docker network ls --filter name=^spaguas-dmo$ --format '{{.Name}}'
 
 Este é o **segundo** dump da subida, e não substitui o primeiro. O primeiro foi
 tirado antes da migração (passo 10 do checklist do runbook de entrega), sem a
-0070, e é o que desfaz o esquema. Este é tirado com 0070 a 0072 aplicadas e o
+0070, e é o que desfaz o esquema. Este é tirado com 0070 a 0073 aplicadas e o
 estoque vazio, e é o que desfaz só a carga, restaurando direto (seção 8.2).
 
 ```bash
@@ -275,9 +285,10 @@ CARIMBO=$(date -u +%Y%m%dT%H%M%SZ)
 DUMP=/var/backups/spaguas-dmo/antes-da-carga-estoque-sha-$SHA-$CARIMBO.dump
 
 docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U spaguas -d spaguas --format=custom | sudo tee "$DUMP" > /dev/null
+  pg_dump -U spaguas -d spaguas_dmo --format=custom </dev/null | sudo tee "$DUMP" > /dev/null
 echo "codigos: ${PIPESTATUS[*]}"
 #    espera: 0 0   (o primeiro é o pg_dump; o código do tee sozinho não prova nada)
+#    MEDIDO em 16/09/2026: 0 0, 2.090.722 bytes, 44 TABLE DATA
 sudo chmod 0600 "$DUMP"
 
 # O arquivo existe, tem tamanho e é um dump legível. Espera: número maior que zero.
@@ -292,7 +303,7 @@ da infraestrutura do órgão (seção 10.8 do runbook de entrega).
 ### 5.1 Fotografia de linhas por tabela, para comparar numa eventual reversão
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas -tA <<'SQL' \
+docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas_dmo -tA <<'SQL' \
   | sudo tee /var/backups/spaguas-dmo/linhas-antes-da-carga-$CARIMBO.txt
 select table_name, (xpath('/row/c/text()', query_to_xml(
          'select count(*) as c from public.' || quote_ident(table_name), false, true, '')))[1]::text
@@ -340,9 +351,7 @@ grep '^    aba' "$LOG1"        # detalhe de cada aviso, para registro
    `descricao_suspeita: 1`, `quantidade_vazia: 1`, `chave_repetida: 1`,
    `item_sem_descricao: 7` e `identificador_repetido: 13` (MEDIDO no ensaio);
 4. `desconformidades gravadas: 27 (novas 27 | ja registradas 0; status e nota preservados)`
-   (HIPÓTESE: a linha foi lida no código, e a contagem de 27 registros por tipo
-   foi MEDIDA na tabela do banco de ensaio; a primeira execução sobre tabela
-   vazia com esta imagem não foi exercitada);
+   (MEDIDO no servidor em 16/09/2026, primeira execução sobre tabela vazia);
 5. `conciliacao OK: 89 par(es) material/local, saldo == soma do ledger.`;
 6. a última linha é `modo estrito: ha avisos, saindo com codigo 2.`
 
@@ -364,7 +373,7 @@ foi feita quando o código 2 aparece.
 O código de saída sozinho não aceita a carga. Aceita a contagem.
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas -tA <<'SQL'
+docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d spaguas_dmo -tA <<'SQL'
 \echo '1. unidades por unidade fisica e status'
 select coalesce(l.unidade, '(sem local)'), u.status, count(*)
   from estoque_unidades u left join estoque_locais l on l.id = u.local_id
@@ -379,11 +388,16 @@ select tipo, count(*) from estoque_movimentacoes group by tipo order by tipo;
 select tipo, status, count(*) from estoque_desconformidades group by 1, 2 order by 1, 2;
 \echo '6. desconformidades: total e com dados em objeto jsonb'
 select count(*), count(*) filter (where jsonb_typeof(dados) = 'object') from estoque_desconformidades;
+\echo '7. materiais, locais e categorias'
+select (select count(*) from estoque_materiais), (select count(*) from estoque_locais), (select count(*) from estoque_categorias);
+\echo '8. codigos repetidos sem caixa (0073)'
+select count(*) from (select lower(codigo) from estoque_unidades where codigo is not null group by 1 having count(*) > 1) r;
 SQL
 ```
 
-Valores esperados para a planilha de 16/09/2026 (MEDIDO no ensaio, com estas
-mesmas consultas):
+Valores esperados para a planilha de 16/09/2026 (MEDIDOS no ensaio e
+**confirmados no servidor em 16/09/2026**, com estas mesmas consultas, na
+primeira execução e depois da reexecução):
 
 | Consulta | Esperado |
 |---|---|
@@ -393,6 +407,8 @@ mesmas consultas):
 | 4 | `baixa|16` e `entrada|916` (nenhum outro tipo) |
 | 5 | `chave_repetida|aberta|1`, `coluna_sem_cabecalho|aberta|4`, `descricao_suspeita|aberta|1`, `identificador_repetido|aberta|13`, `item_sem_descricao|aberta|7`, `quantidade_vazia|aberta|1` (seis linhas, nenhuma `resolvida` nem `ignorada`) |
 | 6 | `27|27` (27 registros, todos com `dados` em objeto) |
+| 7 | `85|116|0` (85 materiais, 116 locais, nenhuma categoria: a planilha não traz categoria, e o cadastro fica para a tela) |
+| 8 | `0` (nenhum código repetido com caixa diferente) |
 
 **Sobre as consultas 5 e 6, MEDIDO em 16/09/2026 no banco de ensaio** (que já
 tinha a carga e uso de tela): os mesmos 27 registros com a mesma distribuição
@@ -423,12 +439,13 @@ echo "codigo de saida: $?"
 grep -E '^aba |^TOTAL|^desconformidades|^conciliacao' "$LOG2"
 ```
 
-Resultado esperado (MEDIDO no ensaio, exceto o item 3):
+Resultado esperado (MEDIDO no ensaio e confirmado no servidor em 16/09/2026,
+inclusive o item 3):
 
 1. código de saída **0**;
 2. `inseridas 0` em todas as abas com dado, e `TOTAL: inseridas 0 | atualizadas 934 | puladas 1372`;
 3. `desconformidades gravadas: 27 (novas 0 | ja registradas 27; status e nota preservados)`
-   (HIPÓTESE, lida no código: o `ON CONFLICT (chave)` não reabre nem duplica);
+   (o `ON CONFLICT (chave)` não reabre nem duplica);
 4. `conciliacao OK: 89 par(es) material/local, saldo == soma do ledger.`;
 5. as consultas da seção 7, rodadas de novo, devolvem **exatamente** os mesmos
    números.
@@ -502,11 +519,11 @@ sudo diff /var/backups/spaguas-dmo/linhas-antes-da-carga-$CARIMBO.txt /tmp/linha
 
 # 4. Trocar os nomes (exige zero conexões nos dois bancos)
 docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d postgres -tAc \
-  "select datname, count(*) from pg_stat_activity where datname in ('spaguas','spaguas_revertido') group by 1"
+  "select datname, count(*) from pg_stat_activity where datname in ('spaguas_dmo','spaguas_revertido') group by 1"
 #    espera: nenhuma linha
 docker compose -f docker-compose.prod.yml exec -T db psql -U spaguas -d postgres -v ON_ERROR_STOP=1 \
-  -c "ALTER DATABASE spaguas RENAME TO spaguas_carga_revertida_$CARIMBO" \
-  -c "ALTER DATABASE spaguas_revertido RENAME TO spaguas"
+  -c "ALTER DATABASE spaguas_dmo RENAME TO spaguas_carga_revertida_$CARIMBO" \
+  -c "ALTER DATABASE spaguas_revertido RENAME TO spaguas_dmo"
 
 # 5. Subir a aplicação e conferir a saúde
 docker compose -f docker-compose.prod.yml up -d app
@@ -517,7 +534,7 @@ curl -sS http://127.0.0.1:3000/api/health
 Sobre o passo 2: os dois códigos precisam ser zero, e o `diff` do passo 3
 confirma o conteúdo. Os códigos se leem na linha imediatamente seguinte. Se
 qualquer passo
-falhar antes do 4, o banco `spaguas` não foi tocado: basta `docker compose up -d
+falhar antes do 4, o banco `spaguas_dmo` não foi tocado: basta `docker compose up -d
 app` e apagar `spaguas_revertido`.
 
 Dado gravado pelos usuários entre o backup e a reversão se perde com ela. Por
@@ -567,4 +584,36 @@ imagem (o ensaio partiu de um banco que já tinha a carga); a troca de nomes da
 seção 8.2 com a aplicação conectada até o momento anterior; as linhas
 `desconformidades gravadas` das duas execuções com a versão atual do script
 (seções 6 e 7.1, lidas no código); a carga depois da 0072, que ainda não existia
-em 16/09/2026.
+em 16/09/2026. Todos esses pontos, exceto a troca de nomes da seção 8.2, foram
+medidos no servidor no mesmo dia (seção 10).
+
+---
+
+## 10. Execução no servidor (16/09/2026, `sha-7c8c04a`)
+
+Executado pelo Rodrigo (DevOS) via SSH com VPN, com autorização do Rafael. A
+pilha tinha subido minutos antes pelo checklist do runbook de entrega.
+
+| Verificação | Resultado |
+|---|---|
+| Planilha no servidor | 193.908 bytes, `sha256` `88299ad2...` igual ao da origem; diretório 750 root:docker, arquivo 644 |
+| Seção 4.4 | `conferencia_id` 1, `f_unaccent` qualificada 1, `estoque_desconformidades` 1, quatro linhas `-> 007x_` |
+| Seção 4.5 | 0 nas oito tabelas |
+| Seção 4.6 | formato da `DATABASE_URL` 1; arquivo reduzido com 1 linha; rede `spaguas-dmo` |
+| Seção 5 | dump com códigos 0 0, 2.090.722 bytes, 44 `TABLE DATA`; fotografia com 37 tabelas; restauração de prova num banco temporário com `--single-transaction`, código 0, 37 tabelas idênticas, banco apagado |
+| Carga `--estrito` | código 2; `TOTAL: inseridas 933 \| atualizadas 1 \| puladas 1372` (GERAL PENHA 521 inseridas e 478 puladas, QUANTIFICAVEIS PENHA 119, MODENS 172 inseridas e 1 atualizada, DESCARTE PENHA 16, GERAL ARARAQUARA 105 inseridas e 894 puladas, QUANTIFICAVEIS ARARAQUARA vazia); `AVISOS: 27` com a distribuição da seção 6; `novas 27 \| ja registradas 0`; conciliação OK com 89 pares |
+| Aceite (seção 7) | as oito consultas com os valores da tabela, sem exceção |
+| Reexecução | código 0; `TOTAL: inseridas 0 \| atualizadas 934 \| puladas 1372`; `novas 0 \| ja registradas 27`; conciliação OK; aceite idêntico ao da primeira execução |
+| Pela borda | `/estoque` 200; `/api/estoque/unidades` total 814; `/api/estoque/desconformidades` total 27 com a mesma distribuição; saldos 119; materiais 85; locais 116 |
+| Seção 8.3 | planilha e `carga-estoque.env` removidos; busca por `*.xlsx` no servidor: 0 |
+
+Logs: `/var/backups/spaguas-dmo/carga-estoque-{estrito,reexecucao}-20260916T193014Z.log`
+(0600). Dump: `/var/backups/spaguas-dmo/antes-da-carga-estoque-sha-7c8c04a-20260916T193014Z.dump`.
+
+O `1 atualizada` da aba MODENS na primeira execução, com tabela vazia, é
+HIPÓTESE ainda não conferida no log: seria a linha repetida que gerou o aviso
+`chave_repetida`, com a segunda ocorrência regravando a primeira. O aceite por
+contagem não depende dela.
+
+Não medido: a reversão da seção 8.2 sobre o banco real (só a restauração de prova
+em banco temporário); o uso do módulo em tela por usuário do órgão.

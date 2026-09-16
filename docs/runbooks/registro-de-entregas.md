@@ -17,6 +17,102 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
+## 16/09/2026, `sha-7c8c04a`
+
+| Campo | Valor |
+|---|---|
+| Versão que entrou | `sha-7c8c04a` (branch `chore/preparar-container-prodesp-offline`, CI verde no run 35139659247) |
+| Versão anterior | `sha-5ff93c7` |
+| Autorizado por | Rafael Damasceno, nesta data, repassado pelo Matheus |
+| Executado por | Rodrigo (DevOS), via SSH com VPN |
+| Transporte | imagem por arquivo, 254.779.338 bytes, `scp` (dashboard, migrate, carga-estoque e postgis) |
+| Integridade | `sha256` conferido nas duas pontas: `82d59ceed71e3c8a4e93e1cc13d9807cfaff81ee598663081d910c97cea49358` |
+| Janela sem identidade | revisão prevista para `2026-12-01`, **não confirmada com o órgão** |
+
+**O que entrou.** O estoque com etiqueta Code 39 e a carga inicial da planilha,
+as migrations 0070 (`f_unaccent` qualificada), 0071 (`estoque_desconformidades`),
+0072 (`jsonb` gravado como string) e 0073 (código da unidade único sem distinção
+de caixa), a escrita no estoque na janela sem identidade e o bloco do Nginx com os
+cabeçalhos de IP.
+
+**Antes de subir.**
+
+- **Ensaio na bancada:**
+  - O `migrate` da tag nova rodou duas vezes, com código 0 nas duas.
+  - A volta para `sha-5ff93c7` deu código 0.
+  - A ida seguinte teve a 0073 com "nada a fazer".
+- **Dump de antes da migração:** `/var/backups/spaguas-dmo/antes-de-sha-7c8c04a-20260916T192658Z.dump`.
+  - Códigos 0 0 e 43 `TABLE DATA`.
+  - Restaurado pelo contorno do `sed` num banco temporário (a origem não tinha a
+    0070): 36 tabelas idênticas.
+- **`app.env`:** conferido sem imprimir valor.
+- **Nginx:** backup e `nginx -t` OK.
+  - `client_max_body_size` passou de 25m para 12m.
+
+**Conferido depois de subir.**
+
+- **Serviços:**
+  - `migrate` com exit 0: 73 migrations aplicadas, 4 da série 007x e 0 `ERROR`.
+  - `app` healthy 15 s depois do `up`.
+  - `db` não foi recriado.
+- **Esquema:** 41 tabelas e PostGIS 3.4.3.
+- **Isolamento e recursos:** portas só em `127.0.0.1:3000`; limites e rotação de
+  log aplicados.
+- **Pela borda:** 200 com `{"status":"ok","db":"ok"}`.
+- **0072, contagens do NOTICE:**
+  - `diagramas.elementos` convertidas=1.
+  - `cron_heartbeats.payload` convertidas=1998.
+  - As outras sete colunas com 0.
+  - `mantidas_como_string=0` em todas.
+- **0073:**
+  - Na subida, recriou o índice sobre `lower(codigo)`.
+  - Reaplicada sozinha em seguida: código 0, "nada a fazer", OID 25323 antes e
+    depois.
+- **Limite por IP:** os três cabeçalhos forjados com IPs diferentes caíram no
+  mesmo balde (199, 198, 198, 197).
+
+**Carga do estoque** (runbook `carga-inicial-estoque.md`, seção 10).
+
+- **Dump de antes da carga:** códigos 0 0 e 44 `TABLE DATA`. Restaurado direto
+  com `--single-transaction`: 37 tabelas idênticas.
+
+| Execução | Código | Totais | Desconformidades |
+|---|---|---|---|
+| `--estrito` | 2 | inseridas 933, atualizadas 1, puladas 1372, 27 avisos | novas 27, já registradas 0 |
+| reexecução | 0 | inseridas 0, atualizadas 934, puladas 1372 | novas 0, já registradas 27 |
+
+| Aceite | Valor |
+|---|---|
+| Unidades | 814 (626 com código): PENHA 667 ativo, 26 defeito, 16 descarte; ARARAQUARA 105 |
+| Saldos | 119 somando 1.664 |
+| Ledger | 916 entradas, 16 baixas |
+| Desconformidades | 27 abertas |
+| Materiais, locais, categorias | 85, 116, 0 |
+| Conciliação | OK, 89 pares |
+
+As mesmas contagens pela API na borda. Planilha e `carga-estoque.env` removidos
+do servidor.
+
+**O que deu errado.** O primeiro dump saiu com **0 bytes**, por dois motivos:
+
+- O banco de produção se chama `spaguas_dmo`, e os runbooks diziam `spaguas`.
+- O `exec -T` dentro de um heredoc consumiu o resto do script.
+
+O arquivo foi apagado e o dump foi refeito e provado antes de seguir. Os dois
+runbooks foram corrigidos. O serviço não saiu do ar por causa disso.
+
+**Rollback disponível:** `sha-5ff93c7` no disco, com a volta ensaiada na bancada.
+Não foi necessário.
+
+**Pendente:**
+
+- Arquivos antigos `app.env.bak-crlf` e `db.env.bak-crlf` em `/etc/spaguas-dmo`,
+  que contêm segredo. Decidir se saem.
+- Tempo de rollback real não medido.
+- Uso do módulo em tela pelo órgão não medido.
+
+---
+
 ## 10/09/2026 — `sha-5ff93c7`
 
 | Campo | Valor |
