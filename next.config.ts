@@ -85,6 +85,17 @@ const nextConfig: NextConfig = {
   // Ou seja, sem esta linha o build mente por omissão. Guarda de declaração em
   // `tests/unit/drivers-externos-do-bundle.test.ts`.
   serverExternalPackages: ['postgres', 'mssql', 'tedious'],
+  // Otimizador de imagem restrito ao único arquivo que a aplicação serve por
+  // ele. `/_next/image` está fora do matcher de `src/middleware.ts` (senão
+  // todo asset dispararia redirect para /login), então respondia sem sessão a
+  // qualquer caminho local que alguém pedisse. Medido em 22/09/2026: os três
+  // `<Image>` do projeto (login, ChromeDashboard, MenuMobile) apontam para
+  // `/logo-spaguas-header.png` e todos passam `unoptimized`, ou seja, nenhum
+  // deles chega a usar o endpoint. Com a lista, um caminho fora dela responde
+  // 400 em vez de ser processado pelo sharp.
+  images: {
+    localPatterns: [{ pathname: '/logo-spaguas-header.png', search: '' }],
+  },
   // typedRoutes desabilitado: Turbopack (Next 15.5) ainda não suporta.
   // Reativar quando o Turbopack estabilizar; até lá, o typecheck normal do tsc
   // cobre os href <Link> suficientemente.
