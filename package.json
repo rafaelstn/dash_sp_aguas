@@ -22,9 +22,7 @@
     "pwa:audit": "npx --yes lighthouse http://localhost:3000/app --only-categories=pwa,accessibility,performance,best-practices --chrome-flags=--headless --output=html --output-path=./docs/relatorios/lighthouse-pwa.html"
   },
   "dependencies": {
-    "@capacitor/android": "^8.4.2",
     "@capacitor/app": "^8.1.0",
-    "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
     "@serwist/next": "^9.5.11",
     "@supabase/ssr": "^0.12.3",
@@ -38,7 +36,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^1.27.0",
     "mssql": "^12.7.0",
-    "next": "^15.5.22",
+    "next": "^15.5.26",
     "postgres": "3.4.9",
     "react": "19.2.7",
     "react-dom": "19.2.7",
@@ -48,6 +46,8 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
     "@types/mssql": "^12.3.0",
     "@types/node": "22.20.1",
     "@types/react": "19.2.17",
@@ -55,7 +55,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "10.5.4",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^15.5.22",
+    "eslint-config-next": "^15.5.26",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "fake-indexeddb": "^6.2.5",
     "marked": "^14.1.4",
