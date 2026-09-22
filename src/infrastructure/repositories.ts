@@ -27,6 +27,10 @@ import {
 import { painelCadastroRepositoryMssql } from './db/painel-cadastro-repository.mssql';
 import { seriesMedicaoRepositoryMssql } from './db/series-medicao-repository.mssql';
 import { seriesMedicaoRepositoryMock } from './mock/series-medicao-repository.mock';
+import { mapaPostosRepositoryMssql } from './db/mapa-postos-repository.mssql';
+import { mapaPostosRepositoryMock } from './mock/mapa-postos-repository.mock';
+import { vazaoPostoRepositoryMssql } from './db/vazao-posto-repository.mssql';
+import { vazaoPostoRepositoryMock } from './mock/vazao-posto-repository.mock';
 import { comporPainelRepository } from './db/painel-repository.composto';
 import { diagramasRepository as diagramasPg } from './db/diagramas-repository.pg';
 import { inventarioAnaExportRepository as inventarioAnaExportPg } from './db/inventario-ana-export-repository.pg';
@@ -185,6 +189,23 @@ export const seriesMedicaoRepository = demo
   ? seriesMedicaoRepositoryMock
   : mssqlConfigurado()
     ? seriesMedicaoRepositoryMssql
+    : null;
+
+/**
+ * Pontos do mapa da tela Postos e dados de vazão por posto (fusão com o
+ * Monitor). Mesma regra de `seriesMedicaoRepository`: leem o `Dbfch` ao vivo e,
+ * sem `SQLSERVER_*` fora do demo, ficam indisponíveis (`null`, a rota responde 501).
+ */
+export const mapaPostosRepository = demo
+  ? mapaPostosRepositoryMock
+  : mssqlConfigurado()
+    ? mapaPostosRepositoryMssql
+    : null;
+
+export const vazaoPostoRepository = demo
+  ? vazaoPostoRepositoryMock
+  : mssqlConfigurado()
+    ? vazaoPostoRepositoryMssql
     : null;
 
 // Modulo Estoque (almoxarifado / patrimonio, ADR 0020): 6 repositorios atras de

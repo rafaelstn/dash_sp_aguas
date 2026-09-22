@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   Inbox,
   Workflow,
-  CloudRain,
+  MapPin,
   Users,
   Boxes,
   type LucideIcon,
@@ -29,7 +29,7 @@ const ICONES = {
   alert: AlertTriangle,
   inbox: Inbox,
   workflow: Workflow,
-  rain: CloudRain,
+  map: MapPin,
   users: Users,
   estoque: Boxes,
 } as const satisfies Record<string, LucideIcon>;

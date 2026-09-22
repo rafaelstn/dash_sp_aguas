@@ -96,11 +96,11 @@ rodar('resumo das séries do posto', () => {
     expect(chuva?.leituras).toBe(LEITURAS_E3_036);
   });
 
-  it('devolve SEMPRE as cinco séries, inclusive as que não existem no posto', async () => {
+  it('devolve SEMPRE as seis séries, inclusive as que não existem no posto', async () => {
     // Omitir a série vazia faria a tela não distinguir "este posto não mede rio"
     // de "não conseguimos consultar o rio". As duas pedem ação diferente.
     const r = await (await porta()).resumoPorPosto(POSTO_GRANDE);
-    expect(r).toHaveLength(5);
+    expect(r).toHaveLength(6);
     expect(r?.map((s) => s.serie).sort()).toEqual(
       [
         'chuva_logger',
@@ -108,15 +108,17 @@ rodar('resumo das séries do posto', () => {
         'cota_rio',
         'piezo_eletronico',
         'piezo_manual',
+        'vazao_rio',
       ].sort(),
     );
-    // O `E3-036` só tem chuva manual: as outras quatro voltam zeradas e
+    // O `E3-036` só tem chuva manual: as outras cinco voltam zeradas e
     // explícitas, com as datas nulas.
     for (const s of r ?? []) {
       if (s.serie === 'chuva_manual') continue;
       expect(s.leituras).toBe(0);
       expect(s.primeiraData).toBeNull();
       expect(s.ultimaData).toBeNull();
+      expect(s.ultimaDataComValor).toBeNull();
     }
   });
 
@@ -175,6 +177,39 @@ rodar('resumo das séries do posto', () => {
     // posto. Um adaptador que descartasse tudo passaria no `toBe` acima se a
     // conferência também estivesse errada.
     expect(cota!.leituras).toBeGreaterThan(cota!.leiturasSemValor);
+  });
+
+  it('a vazão conta só linha com vazão gravada, e a última data com valor é a do banco', async () => {
+    // A linha de cota com `VazaoMainframe` nula é cota sem vazão calculada, e
+    // não entra na série. A sentinela entra e é contada como sem valor.
+    const r = await (await porta()).resumoPorPosto(POSTO_COTA);
+    const vazao = r?.find((s) => s.serie === 'vazao_rio');
+
+    const comVazaoNoBanco = await contar(
+      `SELECT n = COUNT(*) FROM dbo.CotaEscalaFluviometricas m
+        WHERE m.Excluido = 0 AND m.PostoId = ${ID_DO_POSTO} AND m.VazaoMainframe IS NOT NULL`,
+      POSTO_COTA,
+    );
+    const sentinelaNoBanco = await contar(
+      `SELECT n = COUNT(*) FROM dbo.CotaEscalaFluviometricas m
+        WHERE m.Excluido = 0 AND m.PostoId = ${ID_DO_POSTO} AND m.VazaoMainframe = 99999.999`,
+      POSTO_COTA,
+    );
+    const { consultarMssql, TiposMssql } = await import('@/infrastructure/db/mssql-client');
+    const ultima = await consultarMssql<{ d: string | null }>(
+      `SELECT d = CONVERT(char(10), MAX(m.Data), 23) FROM dbo.CotaEscalaFluviometricas m
+        WHERE m.Excluido = 0 AND m.PostoId = ${ID_DO_POSTO}
+          AND m.Data <= GETDATE() AND m.VazaoMainframe IS NOT NULL
+          AND m.VazaoMainframe <> 99999.999`,
+      [{ nome: 'prefixo', tipo: TiposMssql.texto, valor: POSTO_COTA }],
+    );
+
+    expect(comVazaoNoBanco).toBeGreaterThan(0);
+    expect(vazao?.leituras).toBe(comVazaoNoBanco);
+    expect(vazao?.leiturasSemValor).toBe(sentinelaNoBanco);
+    expect(vazao?.ultimaDataComValor).toBe(ultima.recordset[0]?.d ?? null);
+    // MEDIDO em 17/09/2026: nenhuma vazão com valor depois de 31/12/2023.
+    expect(vazao!.ultimaDataComValor! <= '2023-12-31').toBe(true);
   });
 
   it('as duas séries de piezômetro aparecem separadas, com contagens próprias', async () => {
@@ -440,17 +475,18 @@ rodar('resumo diário', () => {
   });
 });
 
-rodar('as cinco séries respondem, cada uma no seu pior posto', () => {
+rodar('as seis séries respondem, cada uma no seu pior posto', () => {
   const CASOS: ReadonlyArray<[SerieMedicao, string]> = [
     ['chuva_manual', POSTO_GRANDE],
     ['chuva_logger', POSTO_LOGGER],
     ['cota_rio', POSTO_COTA],
+    ['vazao_rio', POSTO_COTA],
     ['piezo_manual', POSTO_PIEZO],
     ['piezo_eletronico', POSTO_PIEZO],
   ];
 
   it.each(CASOS)('%s tem leitura no posto %s', async (serie, prefixo) => {
-    // Sem este bloco, um erro de nome de coluna numa das cinco passaria: os
+    // Sem este bloco, um erro de nome de coluna numa das seis passaria: os
     // outros casos deste arquivo exercitam duas séries, e as outras três só
     // apareceriam no dia em que alguém abrisse aquele posto na tela.
     const resumo = await (await porta()).resumoPorPosto(prefixo);

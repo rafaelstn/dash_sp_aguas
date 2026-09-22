@@ -3,7 +3,7 @@
 import { useId } from 'react';
 import type { ResumoSerie } from '@/application/ports/series-medicao-repository';
 import type { SerieMedicao } from '@/domain/monitor/serie-medicao';
-import { fmtDia, fmtInteiro, percentual } from './formato';
+import { fimComValor, fmtDia, fmtInteiro, percentual, rotuloUnidade } from './formato';
 
 /**
  * As cinco séries do posto como cartões de resumo, e o seletor de qual delas
@@ -158,12 +158,22 @@ function CartaoSerie({
 
             <span className="text-xs text-app-fg-muted tabular">
               {resumo.primeiraData && resumo.ultimaData
-                ? `${fmtDia(resumo.primeiraData)} a ${fmtDia(resumo.ultimaData)}`
+                ? `${fmtDia(resumo.primeiraData)} a ${fmtDia(fimComValor(resumo))}`
                 : 'Período indisponível'}
             </span>
 
+            {/* A base segue com linha de sentinela depois do último valor (a
+                vazão para em 12/2023 e tem linha em 2024). O período acima já
+                termina no último valor; esta frase diz que depois dele há linha
+                sem medida, para ninguém ler o fim como série interrompida. */}
+            {resumo.ultimaData && fimComValor(resumo) < resumo.ultimaData ? (
+              <span className="text-xs text-app-fg-muted tabular">
+                Sem valor gravado após {fmtDia(fimComValor(resumo))}
+              </span>
+            ) : null}
+
             <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
-              <Pastilha tom="neutro">{resumo.unidade}</Pastilha>
+              <Pastilha tom="neutro">{rotuloUnidade(resumo.unidade)}</Pastilha>
               {resumo.unidadeInferida ? (
                 <Pastilha tom="atencao">unidade não confirmada</Pastilha>
               ) : null}

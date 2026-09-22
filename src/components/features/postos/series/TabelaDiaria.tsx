@@ -2,7 +2,7 @@
 
 import type { DiaDaSerie } from '@/application/ports/series-medicao-repository';
 import type { DefinicaoSerie } from '@/domain/monitor/serie-medicao';
-import { fmtDia, fmtInteiro, fmtNumero, type Janela } from './formato';
+import { fmtDia, fmtInteiro, fmtNumero, rotuloUnidade, type Janela } from './formato';
 
 /**
  * Equivalente textual do `GraficoSerie` (e-MAG 3.5 recomendação 3.6, WCAG 1.1.1).
@@ -50,7 +50,7 @@ export function TabelaDiaria({
         <table className="w-full border-collapse text-sm tabular">
           <caption className="sr-only">
             {definicao.rotulo} por dia, de {fmtDia(janela.desde)} a{' '}
-            {fmtDia(janela.ate)}, em {definicao.unidade}, em ordem crescente de
+            {fmtDia(janela.ate)}, em {rotuloUnidade(definicao.unidade)}, em ordem crescente de
             data. Equivalente textual do gráfico acima. Dias sem nenhum registro
             na origem não aparecem como linha.
           </caption>
@@ -58,7 +58,7 @@ export function TabelaDiaria({
             <tr>
               <Cabecalho alinhamento="esquerda">Dia</Cabecalho>
               <Cabecalho alinhamento="direita">
-                {rotuloValor} ({definicao.unidade})
+                {rotuloValor} ({rotuloUnidade(definicao.unidade)})
               </Cabecalho>
               {ehMedia ? (
                 <>

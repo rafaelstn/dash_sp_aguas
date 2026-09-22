@@ -15,8 +15,8 @@ interface DrawerProps {
 
 /**
  * Painel lateral (drawer) em `<dialog>` nativo: `showModal()` entrega
- * focus-trap, modalidade e Esc de graca, mesmo padrao do ConfirmDialog e do
- * PainelDetalheEstacao. No mobile ocupa a tela inteira; no desktop desliza da
+ * focus-trap, modalidade e Esc de graca, mesmo padrao do ConfirmDialog.
+ * No mobile ocupa a tela inteira; no desktop desliza da
  * direita. A11y: aria-labelledby, foco inicial no fechar, region rolavel.
  */
 export function Drawer({ aberto, titulo, subtitulo, acoes, aoFechar, children }: DrawerProps) {

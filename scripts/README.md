@@ -73,6 +73,15 @@ Diagnóstico de estado. Não alteram dados.
 | `gerar-pdf-relatorio.mjs` | Gera o PDF de relatório. |
 | `gerar_xlsx_final.ts` | Gera a planilha XLSX final. |
 
+## `geo/`: Geometria estática do mapa
+
+A tela Postos não consulta WFS ao vivo. A geometria é baixada por este script,
+simplificada e versionada em `public/geo/`. Rodar de novo só quando a fonte mudar.
+
+| Script | Finalidade |
+|--------|-----------|
+| `gerar-geometria-postos.mjs` | Baixa as 22 UGRHIs do GeoServer do SIBH (feição a feição, com nova tentativa) e o limite de SP da malha do IBGE; grava `public/geo/ugrhis-sp.json` e `public/geo/limite-sp.json`. Os nomes das UGRHIs saem da lista oficial do script, e divergência do servidor é avisada no console. `node scripts/geo/gerar-geometria-postos.mjs` |
+
 ## Raiz
 
 | Script | Finalidade |

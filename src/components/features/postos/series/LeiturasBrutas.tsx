@@ -9,6 +9,7 @@ import {
   fmtInteiro,
   fmtMomento,
   fmtNumero,
+  rotuloUnidade,
   type Janela,
 } from './formato';
 
@@ -203,7 +204,7 @@ export function LeiturasBrutas({
         <table className="w-full border-collapse text-sm tabular">
           <caption className="sr-only">
             Medições registradas de {fmtDia(janela.desde)} a {fmtDia(janela.ate)}
-            . A coluna Valor traz a leitura em {definicao.unidade}; a coluna
+            . A coluna Valor traz a leitura em {rotuloUnidade(definicao.unidade)}; a coluna
             Gravado traz o número exatamente como está no banco do órgão,
             inclusive o marcador que a origem usa para dizer que não houve
             leitura.
@@ -214,7 +215,7 @@ export function LeiturasBrutas({
                 {comHora ? 'Momento' : 'Dia'}
               </Cabecalho>
               <Cabecalho alinhamento="direita">
-                Valor ({definicao.unidade})
+                Valor ({rotuloUnidade(definicao.unidade)})
               </Cabecalho>
               <Cabecalho alinhamento="direita">Gravado</Cabecalho>
               {ehCota ? <Cabecalho alinhamento="direita">Vazão (m³/s)</Cabecalho> : null}

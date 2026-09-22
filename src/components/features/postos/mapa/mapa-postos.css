@@ -1,0 +1,38 @@
+/* Tela Postos: o que o Leaflet cria fora do React e o Tailwind não alcança. */
+
+/* Fundo em cinza e atenuado: o mapa de rua é contexto, os postos são o assunto. */
+.mapa-postos .mapa-postos-fundo {
+  filter: grayscale(1) contrast(0.82) brightness(1.06);
+  opacity: 0.62;
+}
+
+.mapa-postos.leaflet-container {
+  background: #f4f6f8;
+  font: inherit;
+}
+
+.mapa-postos .leaflet-control-attribution {
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.mapa-postos-rotulo {
+  pointer-events: none;
+}
+
+.mapa-postos-rotulo span {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(30, 58, 138, 0.62);
+  text-shadow: 0 0 2px #fff, 0 0 3px #fff, 0 0 4px #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.mapa-postos-rotulo span[data-nome='sim'] {
+  font-size: 11.5px;
+  font-weight: 550;
+  color: rgba(30, 58, 138, 0.7);
+}

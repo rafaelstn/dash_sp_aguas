@@ -6,6 +6,7 @@ import {
   MAX_DIAS_JANELA_TELA,
   diasNaJanela,
   extensaoDaSerie,
+  fimComValor,
   fmtDia,
   fmtInteiro,
   janelaPadrao,
@@ -81,6 +82,9 @@ export function SeletorJanela({
     setErro(null);
   }, [janela.desde, janela.ate]);
 
+  // Fim útil: o último dia com valor. Linhas vazias no fim da série não são
+  // período consultável, e mostrar a data delas promete dado que não existe.
+  const fim = resumo.ultimaData ? fimComValor(resumo) : null;
   const extensao = extensaoDaSerie(resumo);
   const serieInteiraCabe = extensao !== null && extensao <= MAX_DIAS_JANELA_TELA;
 
@@ -94,8 +98,8 @@ export function SeletorJanela({
   }
 
   function aplicarSerieInteira() {
-    if (!resumo.primeiraData || !resumo.ultimaData) return;
-    const proposta = { desde: resumo.primeiraData, ate: resumo.ultimaData };
+    if (!resumo.primeiraData || !fim) return;
+    const proposta = { desde: resumo.primeiraData, ate: fim };
     setErro(null);
     setDesde(proposta.desde);
     setAte(proposta.ate);
@@ -121,7 +125,7 @@ export function SeletorJanela({
           rotulo="De"
           valor={desde}
           min={resumo.primeiraData ?? undefined}
-          max={resumo.ultimaData ?? undefined}
+          max={fim ?? undefined}
           invalido={erro !== null}
           descritoPor={erro ? idErro : idAjuda}
           onChange={setDesde}
@@ -131,7 +135,7 @@ export function SeletorJanela({
           rotulo="Até"
           valor={ate}
           min={resumo.primeiraData ?? undefined}
-          max={resumo.ultimaData ?? undefined}
+          max={fim ?? undefined}
           invalido={erro !== null}
           descritoPor={erro ? idErro : idAjuda}
           onChange={setAte}
@@ -175,9 +179,9 @@ export function SeletorJanela({
         </p>
       ) : (
         <p id={idAjuda} className="text-xs text-app-fg-muted tabular">
-          {resumo.primeiraData && resumo.ultimaData ? (
+          {resumo.primeiraData && fim ? (
             <>
-              Série de {fmtDia(resumo.primeiraData)} a {fmtDia(resumo.ultimaData)}
+              Série de {fmtDia(resumo.primeiraData)} a {fmtDia(fim)}
               {extensao !== null ? ` (${fmtInteiro(extensao)} dias)` : ''}.
               {serieInteiraCabe
                 ? ''

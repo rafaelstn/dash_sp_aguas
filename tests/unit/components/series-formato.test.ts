@@ -5,6 +5,7 @@ import {
   MAX_DIAS_JANELA_TELA,
   diasNaJanela,
   extensaoDaSerie,
+  fimComValor,
   fmtDia,
   fmtDiaLongo,
   fmtMomento,
@@ -33,6 +34,7 @@ function resumo(parcial: Partial<ResumoSerie> = {}): ResumoSerie {
     leituras: 22_584,
     primeiraData: '1971-01-01',
     ultimaData: '2001-11-30',
+    ultimaDataComValor: '2001-11-30',
     leiturasComDataFutura: 0,
     leiturasSemValor: 32,
     ...parcial,
@@ -72,6 +74,34 @@ describe('janela padrão', () => {
     const janela = janelaPadrao(curta);
     expect(janela?.desde).toBe('2001-11-20');
     expect(janela?.ate).toBe('2001-11-30');
+  });
+
+  it('ancora no último dia com valor quando a base segue gravando sentinela depois dele', () => {
+    // MEDIDO em 17/09/2026: a vazão termina com valor em 31/12/2023 e tem linha
+    // de sentinela em 2024. Ancorar em `ultimaData` abriria 90 dias sem medida.
+    const vazao = resumo({
+      primeiraData: '1971-01-01',
+      ultimaData: '2024-12-31',
+      ultimaDataComValor: '2023-12-31',
+    });
+    expect(janelaPadrao(vazao)?.ate).toBe('2023-12-31');
+    expect(fimComValor(vazao)).toBe('2023-12-31');
+  });
+
+  it('a extensão da série termina no último dia com valor, e não na linha de sentinela', () => {
+    // O defeito: "Série de 01/01/1971 a 31/01/2024" com a vazão parada em 12/2023.
+    const vazao = resumo({
+      primeiraData: '2023-01-01',
+      ultimaData: '2024-01-31',
+      ultimaDataComValor: '2023-12-31',
+    });
+    expect(extensaoDaSerie(vazao)).toBe(365);
+    expect(extensaoDaSerie(resumo({ primeiraData: '2023-01-01', ultimaData: '2023-01-10', ultimaDataComValor: null }))).toBe(10);
+  });
+
+  it('sem nenhum valor, cai no último dia com linha', () => {
+    const soSentinela = resumo({ ultimaDataComValor: null });
+    expect(janelaPadrao(soSentinela)?.ate).toBe('2001-11-30');
   });
 
   it('devolve nulo quando a série não tem leitura, para a tela não pedir período de nada', () => {
@@ -155,6 +185,8 @@ describe('ausência nunca vira zero', () => {
     expect(fmtValor(0, 'mm')).toBe('0 mm');
     expect(fmtValor(13.4, 'mm')).toBe('13,4 mm');
     expect(fmtValor(126.5, 'cm')).toBe('126,5 cm');
+    // O identificador `m3/s` nunca chega à tela como está gravado.
+    expect(fmtValor(23.815, 'm3/s')).toBe('23,82 m³/s');
   });
 });
 

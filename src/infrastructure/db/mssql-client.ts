@@ -268,6 +268,13 @@ const PADROES_DE_ESCRITA: ReadonlyArray<readonly [RegExp, string]> = VERBOS_PROI
  * motivos: a ordem de grandeza é outra (27,2 milhões de linhas só na chuva
  * manual) e o efeito não é uma linha a mais numa lista, é um NÚMERO diferente
  * num gráfico, que ninguém confere de olho.
+ *
+ * As cinco últimas entraram em 17/09/2026, com o mapa de postos, as medições de
+ * vazão e a curva-chave. `AparelhoPostos` e `Aparelhos` já eram lidas com o
+ * filtro nos três lugares que as consultam; a guarda passa a cobrar isso de
+ * quem vier depois. `\b` depois do nome separa `Aparelhos` de `AparelhoPostos`
+ * e `CurvaChaveFluviometricas` de `EquacoesCurvaChaveFluviometricas` (que não
+ * começa por `dbo.CurvaChave`).
  */
 const TABELAS_COM_EXCLUIDO: readonly string[] = [
   'Postos',
@@ -276,6 +283,11 @@ const TABELAS_COM_EXCLUIDO: readonly string[] = [
   'CotaEscalaFluviometricas',
   'LeituraManualPiezometricas',
   'LeituraEletronicaPiezometricas',
+  'AparelhoPostos',
+  'Aparelhos',
+  'ResumoMedicaoVazoes',
+  'CurvaChaveFluviometricas',
+  'EquacoesCurvaChaveFluviometricas',
 ];
 
 const FILTRO_DE_EXCLUIDOS = /\bExcluido\s*=\s*0\b/i;

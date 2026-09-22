@@ -14,10 +14,9 @@ const ATALHOS_GERAIS: AtalhoItem[] = [
   { tecla: 'F', acao: 'Ir para Favoritos (ou alternar favorito na ficha)' },
   { tecla: 'D', acao: 'Ir para Desconformidades' },
   { tecla: 'T', acao: 'Ir para Triagem' },
-  { tecla: 'M', acao: 'Ir para Monitor (mapa pluviométrico)' },
   { tecla: 'E', acao: 'Ir para Estoque (almoxarifado e patrimônio)' },
-  { tecla: 'H', acao: 'Ir para Home (busca de postos)' },
-  { tecla: 'Esc', acao: 'Limpar filtros (na home)' },
+  { tecla: 'H', acao: 'Ir para Postos (mapa e lista)' },
+  { tecla: 'Esc', acao: 'Fechar o posto aberto (na tela Postos)' },
   { tecla: '?', acao: 'Abrir/fechar esta ajuda' },
 ];
 

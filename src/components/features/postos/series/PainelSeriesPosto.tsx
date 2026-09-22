@@ -13,7 +13,13 @@ import { LeiturasBrutas } from './LeiturasBrutas';
 import { SeletorJanela } from './SeletorJanela';
 import { SeletorSerie } from './SeletorSerie';
 import { TabelaDiaria } from './TabelaDiaria';
-import { diasNaJanela, fmtDia, janelaPadrao, type Janela } from './formato';
+import {
+  diasNaJanela,
+  fmtDia,
+  janelaPadrao,
+  rotuloUnidade,
+  type Janela,
+} from './formato';
 
 /**
  * Séries históricas do posto: o que existe, o histórico do período escolhido, a
@@ -179,7 +185,7 @@ export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
           Séries históricas de medição
         </h2>
         <p className="text-xs text-app-fg-muted">
-          Chuva, cota do rio e piezômetro lidos ao vivo do banco do órgão.
+          Chuva, cota e vazão do rio e piezômetro lidos ao vivo do banco do órgão.
           Escolha uma série para ver o histórico e conferir com o SIBH.
         </p>
       </header>
@@ -192,7 +198,7 @@ export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
 
       {!temAlgumaSerie ? (
         <p className="rounded-gov-card bg-app-surface-2 p-3 text-xs text-app-fg-muted">
-          Nenhuma das cinco séries tem leitura para este posto no banco do órgão.
+          Nenhuma série tem leitura para este posto no banco do órgão.
         </p>
       ) : null}
 
@@ -218,6 +224,7 @@ export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
                 comparativo={estado.dados.comparativo}
                 carregando={comparando}
                 onComparar={compararComSibh}
+                semEquivalente={SERIES_MEDICAO[pedido.serie].grandeza === 'vazao'}
               />
 
               <LeiturasBrutas
@@ -298,7 +305,7 @@ function BlocoHistorico({
     <div className="space-y-4">
       {definicao.unidadeInferida ? (
         <p className="rounded-gov-card bg-amber-50 p-2.5 text-xs text-gov-alerta">
-          A unidade desta série ({definicao.unidade}) não foi confirmada pelo
+          A unidade desta série ({rotuloUnidade(definicao.unidade)}) não foi confirmada pelo
           órgão. O valor é exibido como está gravado, sem conversão.
         </p>
       ) : null}

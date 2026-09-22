@@ -72,11 +72,10 @@ export async function obterItensNav(): Promise<ResultadoNav> {
 
   const itens: ItemNav[] = [
     { href: '/painel', rotulo: 'Painel', icone: 'dashboard', contador: null, atalho: 'P' },
-    { href: '/', rotulo: 'Buscar postos', icone: 'search', contador: null, atalho: '/' },
+    { href: '/', rotulo: 'Postos', icone: 'map', contador: null, atalho: 'H' },
     { href: '/favoritos', rotulo: 'Favoritos', icone: 'star', contador: totalFavoritos, atalho: 'F' },
     { href: '/desconformidades', rotulo: 'Desconformidades', icone: 'alert', contador: totalDesconformidades, atalho: 'D' },
     { href: '/diagramas', rotulo: 'Diagramas', icone: 'workflow', contador: null, atalho: 'G' },
-    { href: '/monitor', rotulo: 'Monitor', icone: 'rain', contador: null, atalho: 'M' },
     { href: '/estoque', rotulo: 'Estoque', icone: 'estoque', contador: null, atalho: 'E' },
   ];
   if (ehAprovador) {

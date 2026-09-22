@@ -16,7 +16,7 @@ import type {
  * O DESENHO É GOVERNADO POR UM NÚMERO: 41.002
  * ─────────────────────────────────────────────────────────────────────────
  * É quanto o posto `E3-036` (LUZ) tem de leituras de chuva, de 1888 a 2004. O
- * pior caso somando as cinco séries é `F383C5B5` com 78.978. Abrir a ficha
+ * pior caso somando as cinco primeiras séries é `F383C5B5` com 78.978. Abrir a ficha
  * carregando isso é inviável, e foi por isso que o proprietário pediu, com
  * estas palavras: "caso eu queira carregar todas as medições do dia eu consiga,
  * mas ela não precisa abrir de cara para não pesar o processamento".
@@ -69,6 +69,18 @@ export interface ResumoSerie {
    */
   readonly primeiraData: string | null;
   readonly ultimaData: string | null;
+
+  /**
+   * Último dia, em 'YYYY-MM-DD', com leitura que tem VALOR (nem sentinela, nem
+   * data futura). `null` quando a série não tem valor nenhum.
+   *
+   * Existe porque `ultimaData` conta a sentinela, e a sentinela não é medida.
+   * MEDIDO em 17/09/2026 na vazão: a última vazão gravada é de 31/12/2023, e
+   * em 2024 ainda há 2.166 linhas com a sentinela. Sem este campo a tela
+   * anunciaria série "até 2024" e não teria de onde tirar a frase "sem vazão
+   * gravada após 12/2023".
+   */
+  readonly ultimaDataComValor: string | null;
 
   /**
    * Quantas leituras têm data no futuro. Não some com elas em silêncio: some
@@ -124,7 +136,8 @@ export interface LeituraSerie {
   readonly validacao: number | null;
   /**
    * Vazão em m³/s, só na série `cota_rio`, e `null` nas outras. Também `null`
-   * quando a origem gravou a sentinela de vazão.
+   * quando a origem gravou a sentinela de vazão. Na série `vazao_rio` a vazão
+   * já é o `valor`, e este campo fica `null` para não duplicar.
    */
   readonly vazaoM3s: number | null;
 }
@@ -168,9 +181,9 @@ export interface DiaDaSerie {
  */
 export interface SeriesMedicaoRepository {
   /**
-   * Retrato das CINCO séries do posto, sem carregar leitura nenhuma.
+   * Retrato das SEIS séries do posto, sem carregar leitura nenhuma.
    *
-   * Devolve sempre as cinco, inclusive as que têm zero leitura, e é deliberado:
+   * Devolve sempre as seis, inclusive as que têm zero leitura, e é deliberado:
    * omitir a série vazia faria a tela não distinguir "este posto não mede rio"
    * de "não conseguimos consultar o rio". As duas frases pedem ação diferente.
    *

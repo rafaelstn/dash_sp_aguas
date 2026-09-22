@@ -56,16 +56,22 @@
  * depois de alguém já ter tomado decisão em cima dele.
  */
 
-/** As cinco séries de medição ligadas ao posto por `PostoId`. */
+/** As seis séries de medição ligadas ao posto por `PostoId`. */
 export type SerieMedicao =
   | 'chuva_manual'
   | 'chuva_logger'
   | 'cota_rio'
   | 'piezo_manual'
-  | 'piezo_eletronico';
+  | 'piezo_eletronico'
+  | 'vazao_rio';
 
-/** Grandeza física, que decide como o dia se agrega. */
-export type GrandezaSerie = 'chuva' | 'nivel';
+/**
+ * Grandeza física, que decide como o dia se agrega.
+ *
+ * `vazao` é grandeza instantânea como o nível (média do dia), mas é separada
+ * dele porque não tem equivalente no SIBH e porque a unidade não é inferida.
+ */
+export type GrandezaSerie = 'chuva' | 'nivel' | 'vazao';
 
 /**
  * Unidade em que o valor é entregue, SEM conversão.
@@ -114,7 +120,7 @@ export interface DefinicaoSerie {
 }
 
 /**
- * Catálogo das cinco séries. Fonte única: adaptador, caso de uso e tela leem
+ * Catálogo das seis séries. Fonte única: adaptador, caso de uso e tela leem
  * daqui, para que rótulo, unidade e critério não divirjam entre camadas.
  *
  * As duas séries de piezômetro NÃO são a mesma série com origens diferentes, e
@@ -177,18 +183,41 @@ export const SERIES_MEDICAO: Readonly<Record<SerieMedicao, DefinicaoSerie>> = {
     valorSentinela: null,
     origem: 'automatica',
   },
+  /**
+   * Vazão calculada pelo órgão e gravada na MESMA linha da cota
+   * (`CotaEscalaFluviometricas.VazaoMainframe`), por isso é uma série do posto
+   * fluviométrico e não uma tabela própria.
+   *
+   * MEDIDO em 17/09/2026: 10.986.575 linhas, 99.203 nulas, 1.996.948 com a
+   * sentinela e 8.890.424 com vazão. A última vazão gravada é de 31/12/2023;
+   * de 2024 em diante as linhas de cota chegam com a vazão nula. A linha nula é
+   * cota sem vazão calculada, e não leitura de vazão faltando: o adaptador a
+   * deixa fora da série, e a sentinela segue a regra geral (conta como leitura
+   * sem valor).
+   */
+  vazao_rio: {
+    serie: 'vazao_rio',
+    rotulo: 'Vazão do rio',
+    grandeza: 'vazao',
+    unidade: 'm3/s',
+    unidadeInferida: false,
+    criterioDiario: 'media',
+    valorSentinela: 99999.999,
+    origem: 'manual',
+  },
 };
 
-/** As cinco séries na ordem em que a tela as apresenta. */
+/** As seis séries na ordem em que a tela as apresenta. */
 export const TODAS_AS_SERIES: readonly SerieMedicao[] = [
   'chuva_manual',
   'chuva_logger',
   'cota_rio',
+  'vazao_rio',
   'piezo_manual',
   'piezo_eletronico',
 ];
 
-/** `true` quando o texto é uma das cinco séries. Usado na fronteira HTTP. */
+/** `true` quando o texto é uma das seis séries. Usado na fronteira HTTP. */
 export function eSerieMedicao(valor: string): valor is SerieMedicao {
   return (TODAS_AS_SERIES as readonly string[]).includes(valor);
 }
@@ -213,13 +242,17 @@ export const VAZAO_SEM_LEITURA = 99999.999;
  * coluna (`decimal(6,1)`), então ela não pode capturar uma leitura vizinha.
  */
 export function valorUtil(serie: SerieMedicao, bruto: number | null): number | null {
+  if (serie === 'vazao_rio') return vazaoUtil(bruto);
   if (bruto === null || !Number.isFinite(bruto)) return null;
   const sentinela = SERIES_MEDICAO[serie].valorSentinela;
   if (sentinela !== null && Math.abs(bruto - sentinela) < 0.005) return null;
   return bruto;
 }
 
-/** Mesma regra para a vazão, que só existe na série de cota. */
+/**
+ * Mesma regra para a vazão. A tolerância é menor porque a coluna tem três
+ * casas decimais (`99999.998` é leitura).
+ */
 export function vazaoUtil(bruto: number | null): number | null {
   if (bruto === null || !Number.isFinite(bruto)) return null;
   if (Math.abs(bruto - VAZAO_SEM_LEITURA) < 0.0005) return null;

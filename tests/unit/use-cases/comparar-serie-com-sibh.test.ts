@@ -241,6 +241,29 @@ describe('os quatro estados', () => {
     });
   });
 
+  it('vazão não tem equivalente no SIBH e não é comparada com nível, nem consulta o SIBH', async () => {
+    // O posto casa com uma estação fluviométrica que tem nível no mesmo dia.
+    // Sem a guarda, a vazão seria dividida por 100 e comparada com metros, e o
+    // resultado sairia como `dado_dos_dois_lados` com diferença inventada.
+    const sibh = gateway({
+      listarEstacoes: vi.fn(async () => [estacao('3D-006', 'fluviometrico')]),
+      serieNivelPorPrefixo: vi.fn(async () => [
+        { momento: '2025/03/01 12:00', nivelM: 1.5 } satisfies PontoNivelSibh,
+      ]),
+    });
+    const series = repositorio([dia('2025-03-01', 12.4)]);
+    const r = await compararSerieComSibh(
+      series,
+      sibh,
+      { prefixo: '3D-006', prefixoAna: null },
+      'vazao_rio',
+      JANELA,
+    );
+    expect(r).toEqual({ estado: 'sem_correspondencia', motivo: 'serie_sem_equivalente_no_sibh' });
+    expect(sibh.listarEstacoes).not.toHaveBeenCalled();
+    expect(series.agregarPorDia).not.toHaveBeenCalled();
+  });
+
   it('identificador que o SIBH não conhece é outro motivo, e a distinção importa', async () => {
     // "Este posto não tem identificador" é problema de cadastro; "tem e o SIBH
     // não conhece" é problema de vocabulário entre os dois sistemas. São

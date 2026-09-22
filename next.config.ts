@@ -89,6 +89,12 @@ const nextConfig: NextConfig = {
   // Reativar quando o Turbopack estabilizar; até lá, o typecheck normal do tsc
   // cobre os href <Link> suficientemente.
   // Cabeçalho de idioma pt-BR é requisito WCAG / e-MAG.
+  // O Monitor foi fundido na tela Postos (17/09/2026). Link salvo e favorito do
+  // navegador continuam chegando: 308 permanente para a tela nova. O Next roda
+  // os redirects antes do middleware, então nem a sessão é consultada.
+  async redirects() {
+    return [{ source: '/monitor', destination: '/', permanent: true }];
+  },
   async headers() {
     // Content-Security-Policy NÃO é setada aqui, é montada dinamicamente
     // por request no `src/middleware.ts` com nonce único (substitui o

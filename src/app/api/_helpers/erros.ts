@@ -99,6 +99,28 @@ function camposDeProtocolo(causa: unknown): Record<string, unknown> {
   return saida;
 }
 
+/**
+ * Falha do banco numa CONSULTA não fala em gravar nem em dado preenchido: a
+ * pessoa só abriu uma tela. A escrita mantém o texto que o formulário já mostra.
+ *
+ * O método sai do rótulo da rota, que em todas as chamadas começa pelo verbo
+ * HTTP (`'GET /api/postos/mapa'`); `tests/unit/api/resposta-de-erro-repositorio`
+ * varre `src/` e reprova rótulo sem verbo. Rótulo sem GET nem HEAD fica com a
+ * mensagem de escrita, que é a que protege quem tem dado não salvo na tela.
+ */
+export const MENSAGEM_FALHA_LEITURA =
+  'Não foi possível consultar agora: o banco de dados não respondeu. ' +
+  'Tente de novo em alguns instantes e, se continuar, informe o código abaixo ao suporte.';
+
+export const MENSAGEM_FALHA_ESCRITA =
+  'Não foi possível gravar agora: o banco de dados recusou a operação. ' +
+  'Os dados preenchidos continuam nesta tela. Tente enviar de novo em ' +
+  'alguns instantes e, se continuar, informe o código abaixo ao suporte.';
+
+export function rotaDeLeitura(rota: string): boolean {
+  return /\b(GET|HEAD)\b/.test(rota);
+}
+
 export function respostaDeErro(rota: string, contexto: Record<string, unknown>, erro: unknown) {
   // ── 400 Bad Request ──────────────────────────────────────────────────────
   if (erro instanceof DadosFichaInvalidos) {
@@ -374,10 +396,7 @@ export function respostaDeErro(rota: string, contexto: Record<string, unknown>, 
     return NextResponse.json(
       {
         erro: 'falha_repositorio',
-        mensagem:
-          'Não foi possível gravar agora: o banco de dados recusou a operação. ' +
-          'Os dados preenchidos continuam nesta tela. Tente enviar de novo em ' +
-          'alguns instantes e, se continuar, informe o código abaixo ao suporte.',
+        mensagem: rotaDeLeitura(rota) ? MENSAGEM_FALHA_LEITURA : MENSAGEM_FALHA_ESCRITA,
         correlationId: correlationIdRepo,
       },
       { status: 500 },

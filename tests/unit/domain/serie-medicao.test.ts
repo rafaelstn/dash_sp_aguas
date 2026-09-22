@@ -21,8 +21,8 @@ import {
 } from '@/domain/monitor/serie-medicao';
 
 describe('catálogo das séries', () => {
-  it('descreve exatamente as cinco séries do banco do órgão', () => {
-    expect(TODAS_AS_SERIES).toHaveLength(5);
+  it('descreve exatamente as seis séries do banco do órgão', () => {
+    expect(TODAS_AS_SERIES).toHaveLength(6);
     expect(Object.keys(SERIES_MEDICAO).sort()).toEqual([...TODAS_AS_SERIES].sort());
   });
 
@@ -43,17 +43,26 @@ describe('catálogo das séries', () => {
     }
   });
 
-  it('só a unidade de chuva é afirmada; a de nível é declarada como inferida', () => {
+  it('só a unidade de nível é declarada como inferida', () => {
     // Se alguém marcar a cota como unidade confirmada sem o órgão ter
     // confirmado, este caso reprova, e é o objetivo: a tela usa essa marca para
-    // dizer a quem lê que o eixo é inferência.
+    // dizer a quem lê que o eixo é inferência. Chuva (mm) e vazão (m³/s) têm a
+    // unidade dada pela natureza da coluna.
     for (const serie of TODAS_AS_SERIES) {
       const def = SERIES_MEDICAO[serie];
-      expect(def.unidadeInferida).toBe(def.grandeza !== 'chuva');
+      expect(def.unidadeInferida).toBe(def.grandeza === 'nivel');
     }
   });
 
-  it('reconhece as cinco séries e recusa qualquer outra coisa', () => {
+  it('a vazão do rio é média do dia, em m³/s, lida da mesma tabela da cota', () => {
+    const def = SERIES_MEDICAO.vazao_rio;
+    expect(def.grandeza).toBe('vazao');
+    expect(def.unidade).toBe('m3/s');
+    expect(def.criterioDiario).toBe('media');
+    expect(def.valorSentinela).toBe(VAZAO_SEM_LEITURA);
+  });
+
+  it('reconhece as seis séries e recusa qualquer outra coisa', () => {
     for (const serie of TODAS_AS_SERIES) expect(eSerieMedicao(serie)).toBe(true);
     expect(eSerieMedicao('chuva')).toBe(false);
     expect(eSerieMedicao('')).toBe(false);
@@ -124,6 +133,15 @@ describe('sentinela da vazão', () => {
     expect(vazaoUtil(1234.5)).toBe(1234.5);
     // Um dígito abaixo da sentinela continua sendo leitura.
     expect(vazaoUtil(99999.998)).toBe(99999.998);
+  });
+
+  it('a série vazao_rio aplica a sentinela da vazão, com a tolerância de três casas', () => {
+    // A tolerância da régua geral (meio centésimo) comeria `99999.998`, que é
+    // leitura na coluna `decimal(11,3)`.
+    expect(valorUtil('vazao_rio', 99999.999)).toBeNull();
+    expect(valorUtil('vazao_rio', 99999.998)).toBe(99999.998);
+    expect(valorUtil('vazao_rio', 0.001)).toBe(0.001);
+    expect(valorUtil('vazao_rio', null)).toBeNull();
   });
 
   it('vazão ausente é nula, e não zero', () => {

@@ -167,7 +167,7 @@ function formatarSubUgrhi(codigo: number | null): string | null {
  * vocabulário de vazão tem cinco variantes com pontuação inconsistente, e uma
  * sexta que o órgão cadastre amanhã entraria sozinha.
  */
-const DESIGNACOES = {
+export const DESIGNACOES = {
   telemetrico: new Set(['PLUVIOMETRO TELEMETRICO', 'LIMNIGRAFO TELEMETRICO']),
   loggerEqp: new Set([
     'PLUVIOMETRO COM GRAVACAO LOCAL',
@@ -178,7 +178,7 @@ const DESIGNACOES = {
   convencional: new Set(['PLUVIOMETRO', 'PLUVIOGRAFO', 'PLUVIOMETRO TOTALIZADOR']),
 } as const;
 
-const PREFIXOS_VAZAO = ['CURVA-CHAVE', 'MEDICAO DE VAZAO'] as const;
+export const PREFIXOS_VAZAO = ['CURVA-CHAVE', 'MEDICAO DE VAZAO'] as const;
 
 function ehVazao(designacao: string): boolean {
   return PREFIXOS_VAZAO.some((p) => designacao.startsWith(p));
@@ -374,7 +374,7 @@ const CAMPOS_BUSCA = [
   'oper.Nome',
 ] as const;
 
-class ConstrutorFiltro {
+export class ConstrutorFiltro {
   readonly condicoes: string[] = [];
   readonly parametros: ParametroMssql[] = [];
   private contador = 0;
@@ -401,8 +401,8 @@ class ConstrutorFiltro {
  * devolver nada", e o chamador devolve resultado vazio SEM ir ao servidor do
  * órgão (caso do usuário que pede só favoritos e não tem nenhum).
  */
-function montarFiltro(
-  params: ParametrosPesquisa,
+export function montarFiltro(
+  params: Omit<ParametrosPesquisa, 'pagina' | 'porPagina'>,
   prefixosFavoritos: readonly string[] | null,
 ): ConstrutorFiltro | null {
   const f = new ConstrutorFiltro();
@@ -749,7 +749,7 @@ export const postosRepository: PostosRepository = {
  * Favoritos por usuário ficam no nosso banco por determinação do ADR §0: é uma
  * das funcionalidades que não têm tabela correspondente no banco do órgão.
  */
-async function prefixosFavoritosDoUsuario(
+export async function prefixosFavoritosDoUsuario(
   usuarioId: string | null,
 ): Promise<readonly string[] | null> {
   if (!usuarioId) return null;

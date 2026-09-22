@@ -211,6 +211,32 @@ describe('guarda: as cinco tabelas de medição também filtram Excluido = 0', (
     expect(motivo).toContain(tabela);
   });
 
+  it.each([
+    'AparelhoPostos',
+    'Aparelhos',
+    'ResumoMedicaoVazoes',
+    'CurvaChaveFluviometricas',
+    'EquacoesCurvaChaveFluviometricas',
+  ])('cadastro de aparelho, medição de vazão e curva-chave: dbo.%s também é cobrada', (tabela) => {
+    // Entraram em 17/09/2026, com o mapa de postos e as telas de vazão.
+    const semFiltro = recusa(`SELECT t.Id FROM dbo.${tabela} t WHERE t.PostoId = @p`);
+    expect(semFiltro).toContain('Excluido = 0');
+    expect(semFiltro).toContain(`dbo.${tabela} `);
+    expect(recusa(`SELECT t.Id FROM dbo.${tabela} t WHERE t.Excluido = 0`)).toBeNull();
+  });
+
+  it('a curva filtrada não cobre a equação sem filtro na mesma consulta', () => {
+    // Os nomes se contêm (`CurvaChaveFluviometricas` dentro de
+    // `EquacoesCurvaChaveFluviometricas`), e é exatamente o par em que uma
+    // régua por substring se confundiria.
+    const motivo = recusa(`
+      SELECT c.Id, e.CoeficienteK
+        FROM dbo.CurvaChaveFluviometricas c
+        JOIN dbo.EquacoesCurvaChaveFluviometricas e ON e.CurvaChaveId = c.Id
+       WHERE c.Excluido = 0`);
+    expect(motivo).toContain('EquacoesCurvaChaveFluviometricas (apelido "e")');
+  });
+
   it.each(TABELAS)('aceita SELECT em dbo.%s com o filtro', (tabela) => {
     expect(
       recusa(

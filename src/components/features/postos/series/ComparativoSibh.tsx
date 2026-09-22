@@ -59,13 +59,31 @@ interface ComparativoSibhProps {
   comparativo: ResultadoComparativo | null;
   carregando: boolean;
   onComparar: () => void;
+  /**
+   * A série não existe no SIBH para posto nenhum (hoje, a vazão). A API já
+   * responde `serie_sem_equivalente_no_sibh` sem consultar o SIBH, e oferecer o
+   * botão só faria a pessoa clicar para ler a mesma frase.
+   */
+  semEquivalente?: boolean;
 }
 
 export function ComparativoSibh({
   comparativo,
   carregando,
   onComparar,
+  semEquivalente = false,
 }: ComparativoSibhProps) {
+  if (semEquivalente) {
+    return (
+      <section aria-labelledby="cmp-sibh" className="space-y-2">
+        <h4 id="cmp-sibh" className="text-sm font-semibold text-app-fg">
+          Conferência com o SIBH
+        </h4>
+        <SemEquivalente />
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby="cmp-sibh" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -105,6 +123,9 @@ function Resultado({
 }) {
   switch (comparativo.estado) {
     case 'sem_correspondencia':
+      if (comparativo.motivo === 'serie_sem_equivalente_no_sibh') {
+        return <SemEquivalente />;
+      }
       return (
         <Aviso tom="atencao" titulo="Este posto não tem estação correspondente no SIBH">
           {comparativo.motivo === 'posto_sem_identificador' ? (
@@ -306,6 +327,19 @@ function BotaoComparar({ rotulo, onClick }: { rotulo: string; onClick: () => voi
  * Aviso de estado. Usa fundo pastel com o texto no token de status
  * correspondente, os mesmos pares já medidos em `globals.css` como AA.
  */
+/**
+ * Sem tom de alerta: não é divergência de cadastro nem falha, é a série que o
+ * SIBH não publica. Pintar de âmbar sugeriria algo a cobrar do órgão.
+ */
+function SemEquivalente() {
+  return (
+    <p role="status" className="rounded-gov-card bg-app-surface-2 p-3 text-xs text-app-fg-muted">
+      O SIBH publica chuva e nível, e não vazão. Esta série não tem com o que ser
+      conferida lá.
+    </p>
+  );
+}
+
 function Aviso({
   tom,
   titulo,

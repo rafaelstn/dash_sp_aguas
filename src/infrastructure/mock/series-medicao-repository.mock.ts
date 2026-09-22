@@ -18,7 +18,7 @@ import {
 /**
  * Séries históricas em memória, para o MODO DEMO.
  *
- * O que este mock existe para reproduzir NÃO é volume, é FORMA: as cinco séries
+ * O que este mock existe para reproduzir NÃO é volume, é FORMA: as seis séries
  * sempre presentes, a série que existe e a que não existe, o valor sentinela
  * virando `null` sem sumir da contagem, e o dia inteiro sem medida. São
  * justamente os estados que a tela precisa distinguir e que um mock "bonito",
@@ -54,6 +54,16 @@ function cotaDoDia(i: number): number {
   return 380 + ((i * 13) % 90);
 }
 
+/**
+ * Vazão do dia `i`, em m³/s. Os últimos dez dias são só sentinela, que é o
+ * retrato da base real (vazão parada em 12/2023 e sentinela depois), para que
+ * `ultimaDataComValor` fique ANTES de `ultimaData` também em demonstração.
+ */
+function vazaoDoDia(i: number): number {
+  if (i >= DIAS - 10 || i % 13 === 0) return 99999.999;
+  return 1.2 + ((i * 7) % 40) / 10;
+}
+
 function seriesDoPosto(prefixo: string): Map<SerieMedicao, number[]> {
   const p = prefixo.trim().toUpperCase();
   const series = new Map<SerieMedicao, number[]>();
@@ -70,6 +80,10 @@ function seriesDoPosto(prefixo: string): Map<SerieMedicao, number[]> {
     series.set(
       'cota_rio',
       Array.from({ length: DIAS }, (_, i) => cotaDoDia(i)),
+    );
+    series.set(
+      'vazao_rio',
+      Array.from({ length: DIAS }, (_, i) => vazaoDoDia(i)),
     );
   }
   return series;
@@ -101,13 +115,25 @@ function resumoDaSerie(serie: SerieMedicao, valores: number[] | undefined): Resu
     leiturasComDataFutura: 0,
   };
   if (!valores || valores.length === 0) {
-    return { ...base, leituras: 0, primeiraData: null, ultimaData: null, leiturasSemValor: 0 };
+    return {
+      ...base,
+      leituras: 0,
+      primeiraData: null,
+      ultimaData: null,
+      ultimaDataComValor: null,
+      leiturasSemValor: 0,
+    };
   }
+  let ultimoComValor = -1;
+  valores.forEach((v, i) => {
+    if (valorUtil(serie, v) !== null) ultimoComValor = i;
+  });
   return {
     ...base,
     leituras: valores.length,
     primeiraData: diaIso(INICIO),
     ultimaData: diaIso(INICIO + (valores.length - 1) * MS_DIA),
+    ultimaDataComValor: ultimoComValor < 0 ? null : diaIso(INICIO + ultimoComValor * MS_DIA),
     leiturasSemValor: valores.filter((v) => valorUtil(serie, v) === null).length,
   };
 }
@@ -172,7 +198,12 @@ export const seriesMedicaoRepositoryMock: SeriesMedicaoRepository = {
         const util = valorUtil(serie, bruto);
         return {
           dia: diaIso(ms),
-          valor: util === null ? null : Math.round(util * 100) / 100,
+          valor:
+            util === null
+              ? null
+              : SERIES_MEDICAO[serie].grandeza === 'vazao'
+                ? Math.round(util * 1000) / 1000
+                : Math.round(util * 100) / 100,
           leituras: 1,
           leiturasSemValor: util === null ? 1 : 0,
           minimo: util,

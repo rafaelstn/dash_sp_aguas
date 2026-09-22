@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { lerEstado } from '@/components/features/postos/mapa/estado-url';
 
 /**
  * O cartão de telemetria fala de APARELHO INSTALADO, e nunca de transmissão.
@@ -70,13 +71,14 @@ describe('cartão de telemetria', () => {
   });
 
   it('leva para o filtro que realmente existe', () => {
-    // `tem_telem=1` é lido em `app/(dashboard)/page.tsx`. Rótulo de ação com
-    // destino inexistente é o defeito que `acao-sem-destino.test.ts` guarda.
+    // A tela Postos (`app/(dashboard)/page.tsx`) lê a URL por `lerEstado`.
+    // Rótulo de ação com destino inexistente é o defeito que
+    // `acao-sem-destino.test.ts` guarda; aqui se mede pelo EFEITO: o link do
+    // cartão abre a tela com o filtro de telemétricos ligado.
     expect(blocoDoCartao()).toContain('href="/?tem_telem=1"');
-    const busca = readFileSync(
-      path.resolve(__dirname, '..', '..', '..', '..', 'src', 'app', '(dashboard)', 'page.tsx'),
-      'utf-8',
-    );
-    expect(busca).toContain("sp.tem_telem === '1'");
+    const estado = lerEstado(new URLSearchParams('tem_telem=1'));
+    expect(estado.transmissoes).toEqual(['telemetrico']);
+    // Controle: sem o parâmetro, o filtro não liga sozinho.
+    expect(lerEstado(new URLSearchParams('')).transmissoes).toEqual([]);
   });
 });

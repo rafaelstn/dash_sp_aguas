@@ -19,6 +19,8 @@
  * âncora de presença junto: asserção que só afirma o que NÃO está no corpo fica
  * verde sobre qualquer resposta de erro, inclusive a errada.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FalhaRepositorio } from '@/domain/errors';
 
@@ -35,7 +37,17 @@ vi.mock('@/infrastructure/logging/logger', () => ({
   },
 }));
 
-const { respostaDeErro } = await import('@/app/api/_helpers/erros');
+const { respostaDeErro, rotaDeLeitura, MENSAGEM_FALHA_LEITURA, MENSAGEM_FALHA_ESCRITA } =
+  await import('@/app/api/_helpers/erros');
+
+function listarTs(dir: string, saida: string[] = []): string[] {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) listarTs(p, saida);
+    else if (/\.tsx?$/.test(e.name)) saida.push(p);
+  }
+  return saida;
+}
 
 /** Valor que jamais pode sair do servidor: é o dado de um titular. */
 const DADO_DE_TITULAR = 'fulano.silva@orgao.sp.gov.br';
@@ -140,6 +152,70 @@ describe('respostaDeErro/FalhaRepositorio', () => {
     expect(corpo.erro).toBe('falha_repositorio');
     const [, contexto] = registros.chamadas[0] as [string, Record<string, unknown>];
     expect(contexto.causaClasse).toBe('string');
+  });
+
+  it('consulta que falha fala em consultar; escrita mantém o texto de dado preenchido', async () => {
+    const leitura = await respostaDeErro(
+      'GET /api/postos/mapa',
+      {},
+      new FalhaRepositorio('listarPontosMapa', 'timeout'),
+    ).json();
+    const escrita = await respostaDeErro(
+      'POST /api/postos/[prefixo]/fichas',
+      {},
+      new FalhaRepositorio('fichasVisita.criar', erroDoDriver()),
+    ).json();
+
+    // Presença: as duas respostas são deste ramo, com slug e código.
+    expect(leitura.erro).toBe('falha_repositorio');
+    expect(escrita.erro).toBe('falha_repositorio');
+    expect(leitura.correlationId).toBeTruthy();
+
+    expect(leitura.mensagem).toBe(MENSAGEM_FALHA_LEITURA);
+    expect(leitura.mensagem).toContain('consultar');
+    expect(leitura.mensagem.toLowerCase()).toContain('tente');
+    expect(leitura.mensagem).not.toContain('gravar');
+    expect(leitura.mensagem).not.toContain('preenchidos');
+
+    expect(escrita.mensagem).toBe(MENSAGEM_FALHA_ESCRITA);
+    expect(escrita.mensagem).toContain('Os dados preenchidos continuam nesta tela');
+  });
+
+  it('o verbo decide, nos formatos de rótulo que existem no código', () => {
+    expect(rotaDeLeitura('GET /api/postos/mapa')).toBe(true);
+    expect(rotaDeLeitura('HEAD /api/postos')).toBe(true);
+    expect(rotaDeLeitura('api triagem GET')).toBe(true);
+    expect(rotaDeLeitura('POST /api/postos')).toBe(false);
+    expect(rotaDeLeitura('PATCH /api/fichas/[id]')).toBe(false);
+    expect(rotaDeLeitura('DELETE /api/fichas/[id]')).toBe(false);
+    // Palavra que contém GET não é o verbo.
+    expect(rotaDeLeitura('POST /api/budget/GETTER')).toBe(false);
+    // Sem verbo: fica com a mensagem de escrita, a que não faz perder dado.
+    expect(rotaDeLeitura('rota')).toBe(false);
+  });
+
+  it('todo rótulo passado a respostaDeErro em src/ é literal e começa pelo verbo HTTP', () => {
+    const arquivos = listarTs(path.resolve(process.cwd(), 'src'));
+    const chamadas: { arquivo: string; rotulo: string | null }[] = [];
+    for (const arquivo of arquivos) {
+      const texto = fs.readFileSync(arquivo, 'utf8');
+      for (const m of texto.matchAll(/respostaDeErro\(/g)) {
+        const resto = texto.slice(m.index + m[0].length);
+        // A própria declaração da função.
+        if (/^\s*rota\s*:/.test(resto)) continue;
+        const literal = resto.match(/^\s*(['"`])([^'"`$]*)\1\s*,/);
+        chamadas.push({ arquivo, rotulo: literal ? literal[2]! : null });
+      }
+    }
+    // Presença: medido em 17/09/2026, 85 chamadas. Menos que isso é a varredura
+    // que parou de achar, e não o código que mudou.
+    expect(chamadas.length).toBeGreaterThanOrEqual(80);
+    const indecidiveis = chamadas.filter((c) => c.rotulo === null);
+    expect(indecidiveis).toEqual([]);
+    const semVerbo = chamadas.filter(
+      (c) => !/^(GET|HEAD|POST|PUT|PATCH|DELETE) |\b(GET|HEAD|POST|PUT|PATCH|DELETE)$/.test(c.rotulo!),
+    );
+    expect(semVerbo).toEqual([]);
   });
 
   it('erro que não é FalhaRepositorio continua no genérico', async () => {

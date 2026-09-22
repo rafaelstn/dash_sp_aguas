@@ -16,9 +16,8 @@ import { DialogAjudaAtalhos } from './DialogAjudaAtalhos';
  *   `f`   → /favoritos   (exceto em /postos/<prefixo>, onde alterna favorito)
  *   `d`   → /desconformidades
  *   `t`   → /triagem  (visível pra aprovadores; tela bloqueia caso contrário)
- *   `m`   → /monitor  (mapa do monitor pluviométrico)
- *   `h`   → / (home / busca de postos)
- *   `Esc` → limpa filtros (na home) / fecha diálogo
+ *   `h`   → / (tela Postos: mapa, filtros e lista)
+ *   `Esc` → fecha diálogo; na tela Postos, fecha o posto aberto (tratado lá)
  *   `?`   → abre/fecha modal de ajuda
  */
 export function AtalhosTeclado() {
@@ -81,8 +80,8 @@ export function AtalhosTeclado() {
           focarBusca();
           return;
         case 'Escape':
-          // Limpar filtros só faz sentido na home.
-          if (pathname === '/') router.push('/');
+          // Na tela Postos o Esc fecha o posto aberto, e quem trata é a própria
+          // tela. Navegar para `/` aqui apagaria o estado do mapa na URL.
           return;
         case 'p':
           e.preventDefault();
@@ -96,10 +95,6 @@ export function AtalhosTeclado() {
         case 't':
           e.preventDefault();
           router.push('/triagem');
-          return;
-        case 'm':
-          e.preventDefault();
-          router.push('/monitor');
           return;
         case 'e':
           e.preventDefault();

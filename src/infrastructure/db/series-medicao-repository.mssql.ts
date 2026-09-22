@@ -97,7 +97,7 @@ import { CI_AI } from './postos-dbfch-sql';
  */
 
 // ─────────────────────────────────────────────────────────────────────────
-// Mapa das cinco séries para o schema do órgão
+// Mapa das seis séries para o schema do órgão
 // ─────────────────────────────────────────────────────────────────────────
 
 interface OrigemSerie {
@@ -109,6 +109,14 @@ interface OrigemSerie {
   readonly temValidacao: boolean;
   /** A tabela tem `VazaoMainframe`? Só a de cota tem. */
   readonly temVazao: boolean;
+  /**
+   * Condição que decide quais linhas da tabela PERTENCEM à série, somada ao
+   * `WHERE` de toda consulta dela. `null` quando a série é a tabela inteira.
+   *
+   * Só a vazão usa: ela mora na tabela de cota, e a linha com `VazaoMainframe`
+   * nula é cota sem vazão calculada, e não leitura de vazão.
+   */
+  readonly condicaoDaSerie: string | null;
 }
 
 /**
@@ -125,30 +133,43 @@ const ORIGEM: Readonly<Record<SerieMedicao, OrigemSerie>> = {
     colunaValor: 'Medicao',
     temValidacao: true,
     temVazao: false,
+    condicaoDaSerie: null,
   },
   chuva_logger: {
     tabela: 'MedicaoLoggerPluviograficas',
     colunaValor: 'Medicao',
     temValidacao: false,
     temVazao: false,
+    condicaoDaSerie: null,
   },
   cota_rio: {
     tabela: 'CotaEscalaFluviometricas',
     colunaValor: 'Valor',
     temValidacao: true,
     temVazao: true,
+    condicaoDaSerie: null,
   },
   piezo_manual: {
     tabela: 'LeituraManualPiezometricas',
     colunaValor: 'Valor',
     temValidacao: false,
     temVazao: false,
+    condicaoDaSerie: null,
   },
   piezo_eletronico: {
     tabela: 'LeituraEletronicaPiezometricas',
     colunaValor: 'Valor',
     temValidacao: false,
     temVazao: false,
+    condicaoDaSerie: null,
+  },
+  vazao_rio: {
+    tabela: 'CotaEscalaFluviometricas',
+    colunaValor: 'VazaoMainframe',
+    temValidacao: true,
+    // A vazão já é o valor; repetir em `vazaoM3s` duplicaria o número.
+    temVazao: false,
+    condicaoDaSerie: 'm.VazaoMainframe IS NOT NULL',
   },
 };
 
@@ -173,6 +194,12 @@ function condicaoSentinela(serie: SerieMedicao, apelido: string): string {
     throw new Error(`Sentinela inválida na definição da série ${serie}.`);
   }
   return `${apelido}.${ORIGEM[serie].colunaValor} = ${sentinela}`;
+}
+
+/** Trecho `AND ...` da condição de pertença à série, ou vazio. */
+function eDaSerie(serie: SerieMedicao): string {
+  const condicao = ORIGEM[serie].condicaoDaSerie;
+  return condicao === null ? '' : ` AND ${condicao}`;
 }
 
 /**
@@ -224,6 +251,16 @@ function duasCasas(valor: number): number {
 }
 
 /**
+ * Arredondamento do valor diário. A vazão fica com três casas, que é a
+ * resolução da coluna: há córrego com vazão de milésimos de m³/s, e duas casas
+ * transformariam a média dele em zero.
+ */
+function arredondarDiario(serie: SerieMedicao, valor: number): number {
+  if (SERIES_MEDICAO[serie].grandeza !== 'vazao') return duasCasas(valor);
+  return Math.round(valor * 1000) / 1000;
+}
+
+/**
  * Fim EXCLUSIVO da janela.
  *
  * A porta promete `ate` inclusivo no DIA, e a coluna é `datetime` com hora. Um
@@ -253,7 +290,7 @@ function fimExclusivo(ate: Date): Date {
  * `CI_AI` pelo mesmo motivo do adaptador de cadastro: a collation do banco é
  * sensível a acento, e quem digita o prefixo em minúscula quer o mesmo posto.
  */
-async function idDoPosto(prefixo: string): Promise<string | null> {
+export async function idDoPosto(prefixo: string): Promise<string | null> {
   const r = await consultarMssql<{ Id: string }>(
     `SELECT TOP 1 p.Id
        FROM dbo.Postos p
@@ -274,6 +311,7 @@ interface LinhaResumo {
   ultima: Date | null;
   futuras: number;
   semValor: number;
+  ultimaComValor: Date | null;
 }
 
 /**
@@ -290,15 +328,20 @@ interface LinhaResumo {
 function sqlResumo(): string {
   return TODAS_AS_SERIES.map((serie) => {
     const origem = ORIGEM[serie];
+    const sentinela = condicaoSentinela(serie, 'm');
     return `
       SELECT serie = '${serie}',
              leituras = COUNT(*),
              primeira = MIN(CASE WHEN m.Data <= @agora THEN m.Data END),
              ultima   = MAX(CASE WHEN m.Data <= @agora THEN m.Data END),
              futuras  = SUM(CASE WHEN m.Data > @agora THEN 1 ELSE 0 END),
-             semValor = SUM(CASE WHEN ${condicaoSentinela(serie, 'm')} THEN 1 ELSE 0 END)
+             semValor = SUM(CASE WHEN ${sentinela} THEN 1 ELSE 0 END),
+             ultimaComValor = MAX(CASE WHEN m.Data <= @agora
+                                        AND m.${origem.colunaValor} IS NOT NULL
+                                        AND NOT (${sentinela})
+                                       THEN m.Data END)
         FROM dbo.${origem.tabela} m
-       WHERE m.PostoId = @posto AND m.Excluido = 0`;
+       WHERE m.PostoId = @posto AND m.Excluido = 0${eDaSerie(serie)}`;
   }).join('\n      UNION ALL\n');
 }
 
@@ -313,6 +356,7 @@ function resumoVazio(serie: SerieMedicao): ResumoSerie {
     leituras: 0,
     primeiraData: null,
     ultimaData: null,
+    ultimaDataComValor: null,
     leiturasComDataFutura: 0,
     leiturasSemValor: 0,
   };
@@ -348,6 +392,7 @@ export const seriesMedicaoRepositoryMssql: SeriesMedicaoRepository = {
           leituras: Number(linha.leituras),
           primeiraData: diaIso(linha.primeira),
           ultimaData: diaIso(linha.ultima),
+          ultimaDataComValor: diaIso(linha.ultimaComValor),
           leiturasComDataFutura: Number(linha.futuras ?? 0),
           leiturasSemValor: Number(linha.semValor ?? 0),
         };
@@ -373,7 +418,7 @@ export const seriesMedicaoRepositoryMssql: SeriesMedicaoRepository = {
         { nome: 'de', tipo: TiposMssql.dataHora, valor: janela.desde },
         { nome: 'ate', tipo: TiposMssql.dataHora, valor: fimExclusivo(janela.ate) },
       ];
-      const onde = `m.PostoId = @posto AND m.Excluido = 0
+      const onde = `m.PostoId = @posto AND m.Excluido = 0${eDaSerie(serie)}
                       AND m.Data >= @de AND m.Data < @ate`;
 
       // Colunas ausentes na origem viram NULL literal, e não campo omitido:
@@ -465,7 +510,7 @@ export const seriesMedicaoRepositoryMssql: SeriesMedicaoRepository = {
                 Minimo = MIN(${util}),
                 Maximo = MAX(${util})
            FROM dbo.${origem.tabela} m
-          WHERE m.PostoId = @posto AND m.Excluido = 0
+          WHERE m.PostoId = @posto AND m.Excluido = 0${eDaSerie(serie)}
             AND m.Data >= @de AND m.Data < @ate
           GROUP BY CAST(m.Data AS date)
           ORDER BY CAST(m.Data AS date)`,
@@ -485,7 +530,7 @@ export const seriesMedicaoRepositoryMssql: SeriesMedicaoRepository = {
         return [
           {
             dia,
-            valor: bruto === null ? null : duasCasas(bruto),
+            valor: bruto === null ? null : arredondarDiario(serie, bruto),
             leituras: Number(l.Leituras),
             leiturasSemValor: Number(l.SemValor ?? 0),
             minimo: numero(l.Minimo),

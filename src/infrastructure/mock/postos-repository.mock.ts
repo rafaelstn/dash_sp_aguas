@@ -14,13 +14,13 @@ import { POSTOS_FIXTURES } from './fixtures';
  * Comportamento equivalente ao .pg, sem tocar em banco.
  */
 
-function normalizar(texto: string): string {
+export function normalizar(texto: string): string {
   // Remove marcas de acentuação (diacríticos Unicode) sem depender de caracteres
   // combinantes literais no source, que ficam frágeis em sistemas Windows.
   return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 }
 
-function combinaTermo(posto: Posto, termoNormalizado: string): boolean {
+export function combinaTermo(posto: Posto, termoNormalizado: string): boolean {
   const campos = [
     posto.prefixo,
     posto.prefixoAna,

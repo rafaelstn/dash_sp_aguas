@@ -22,6 +22,7 @@ import {
   fmtInteiro,
   fmtValor,
   msParaDia,
+  rotuloUnidade,
   type Janela,
 } from './formato';
 
@@ -72,7 +73,7 @@ import {
  * O recharts desenha em SVG fora do fluxo de classes do Tailwind, então precisa
  * do valor resolvido. Os literais abaixo são os mesmos tokens de `globals.css`
  * (`--gov-azul`, `--status-warn`, `--border-subtle`, `--fg-subtle`), no mesmo
- * padrão já adotado por `GraficoChuva` e `GraficoNivel`. Quando o tema escuro
+ * padrão dos gráficos da comparação de chuva. Quando o tema escuro
  * for ligado (o bloco `[data-theme="dark"]` está comentado em `globals.css`),
  * estes quatro valores são o que precisa sair para variável de CSS lida em
  * tempo de execução.
@@ -225,7 +226,7 @@ export function GraficoSerie({ definicao, dias, janela }: GraficoSerieProps) {
 
       <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-app-fg-muted">
         <Chave cor={COR_SERIE} forma={ehChuva ? 'barra' : 'linha'}>
-          {definicao.rotulo} ({definicao.unidade})
+          {definicao.rotulo} ({rotuloUnidade(definicao.unidade)})
           {ehChuva ? ', com toco na base quando o dia foi medido em zero' : ''}
         </Chave>
         {semMedida > 0 ? (
@@ -461,7 +462,7 @@ function montarDescricao({
     definicao.criterioDiario === 'soma' ? 'total do dia' : 'média do dia, com faixa de mínimo e máximo';
 
   const partes = [
-    `Gráfico de ${forma} de ${definicao.rotulo.toLowerCase()} em ${definicao.unidade},`,
+    `Gráfico de ${forma} de ${definicao.rotulo.toLowerCase()} em ${rotuloUnidade(definicao.unidade)},`,
     `por ${criterio}, de ${fmtDia(janela.desde)} a ${fmtDia(janela.ate)},`,
     `${fmtInteiro(totalDias)} dias de período.`,
     `${fmtInteiro(comValor)} dias com medida.`,

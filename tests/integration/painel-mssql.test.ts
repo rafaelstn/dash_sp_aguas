@@ -215,7 +215,11 @@ rodar('painel composto sobre o Dbfch', () => {
       p.classesDesconformidade(),
       p.rankingUGRHI(),
     ]);
-    expect(resumo.desconformidadesPostos).toBe(0);
+    // `null`, e NUNCA `0`: desde 7952d55 (04/09/2026) a origem DECLARA que não
+    // classifica conformidade, em vez de entregar um zero que o painel não
+    // consegue distinguir de uma base genuinamente limpa. Quem trocar por `0`
+    // aqui está reintroduzindo a heurística que aquele commit removeu.
+    expect(resumo.desconformidadesPostos).toBeNull();
     expect(classes).toEqual([]);
     for (const u of ugrhis) {
       expect(u.desconformes).toBe(0);

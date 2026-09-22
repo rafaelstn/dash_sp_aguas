@@ -139,7 +139,16 @@ export function fmtValor(valor: number | null, unidade: string): string {
   return `${valor.toLocaleString('pt-BR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  })} ${unidade}`;
+  })} ${rotuloUnidade(unidade)}`;
+}
+
+/**
+ * Unidade como se lê, e não como se grava. O domínio guarda `m3/s` porque é
+ * identificador; na tela o expoente é o que se escreve em qualquer relatório
+ * hidrológico. As outras unidades passam como estão.
+ */
+export function rotuloUnidade(unidade: string): string {
+  return unidade === 'm3/s' ? 'm³/s' : unidade;
 }
 
 /** Só o número, sem unidade. Para coluna de tabela que já tem a unidade no cabeçalho. */
@@ -194,13 +203,32 @@ export interface Janela {
  */
 export function janelaPadrao(resumo: ResumoSerie, dias = 90): Janela | null {
   if (!resumo.ultimaData || !resumo.primeiraData) return null;
-  const ate = resumo.ultimaData;
+  // Ancora no último dia com VALOR quando ele existe. Na vazão a base segue
+  // gravando a sentinela depois de 12/2023, e ancorar em `ultimaData` abriria a
+  // série numa janela inteira sem medida.
+  const ate = fimComValor(resumo);
   const recuo = somarDias(ate, -(dias - 1));
   return { desde: maiorDia(recuo, resumo.primeiraData), ate };
 }
 
-/** Extensão total da série em dias, ou `null` quando não há série. */
+/**
+ * Último dia útil da série: o último com valor, e na falta dele o último com
+ * linha. Nunca passa de `ultimaData` nem recua antes de `primeiraData`.
+ */
+export function fimComValor(resumo: ResumoSerie): string {
+  const ultima = resumo.ultimaData ?? '';
+  const comValor = resumo.ultimaDataComValor;
+  if (!comValor || comValor > ultima) return ultima;
+  if (resumo.primeiraData && comValor < resumo.primeiraData) return ultima;
+  return comValor;
+}
+
+/**
+ * Extensão útil da série em dias, do primeiro dia ao último COM VALOR, ou
+ * `null` quando não há série. Linha vazia no fim não conta: é ela que fazia a
+ * tela dizer que a série ia até um mês depois do último dado.
+ */
 export function extensaoDaSerie(resumo: ResumoSerie): number | null {
   if (!resumo.primeiraData || !resumo.ultimaData) return null;
-  return diasNaJanela(resumo.primeiraData, resumo.ultimaData);
+  return diasNaJanela(resumo.primeiraData, fimComValor(resumo));
 }

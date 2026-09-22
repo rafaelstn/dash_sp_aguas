@@ -159,7 +159,13 @@ export type ResultadoComparativo =
  */
 export type MotivoSemCorrespondencia =
   | 'posto_sem_identificador'
-  | 'identificador_nao_esta_no_sibh';
+  | 'identificador_nao_esta_no_sibh'
+  /**
+   * A série não tem equivalente no SIBH, qualquer que seja o posto. É o caso da
+   * vazão (`vazao_rio`): o SIBH publica chuva e nível, e comparar vazão com
+   * nível convertido produziria uma diferença sem significado físico.
+   */
+  | 'serie_sem_equivalente_no_sibh';
 
 /** Normaliza código para comparação: sem espaço nas pontas e em caixa alta. */
 function chave(valor: string): string {
@@ -319,7 +325,7 @@ async function ladoDoSibh(
  * @param series    Porta das séries históricas (lado do órgão).
  * @param sibh      Gateway do SIBH (lado telemétrico).
  * @param posto     Posto alvo, com o código ANA que faz o casamento.
- * @param serie     Qual das cinco séries comparar.
+ * @param serie     Qual das seis séries comparar.
  * @param janela    Período, `ate` inclusivo.
  * @param onErroSibh Observabilidade opcional quando o SIBH falha.
  */
@@ -331,6 +337,12 @@ export async function compararSerieComSibh(
   janela: JanelaPeriodo,
   onErroSibh?: (erro: unknown) => void,
 ): Promise<ResultadoComparativo> {
+  // Vai antes de tudo: não depende do posto, e não deve custar uma chamada ao
+  // SIBH para chegar a uma resposta que já se sabe.
+  if (SERIES_MEDICAO[serie].grandeza === 'vazao') {
+    return { estado: 'sem_correspondencia', motivo: 'serie_sem_equivalente_no_sibh' };
+  }
+
   // Sem NENHUM identificador não há o que procurar. Até 04/09/2026 esta guarda
   // exigia o código ANA e retornava antes de tentar qualquer coisa: um posto
   // sem código ANA e com prefixo que casa perfeitamente jamais era comparado.
