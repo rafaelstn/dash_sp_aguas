@@ -33,9 +33,16 @@ import {
  * O TETO É MOSTRADO ANTES DE SER COBRADO
  * ─────────────────────────────────────────────────────────────────────────
  * A API recusa janela maior que `MAX_DIAS_JANELA` com 400. O atalho de série
- * inteira, quando a série é maior que isso, aparece DESABILITADO com o motivo
- * escrito ao lado, em vez de estar clicável para devolver erro. A validação de
- * borda continua do lado do servidor: a daqui existe para não fazer a pessoa
+ * inteira, quando a série é maior que isso, aparece IMPEDIDO com o motivo
+ * junto, em vez de estar clicável para devolver erro. Impedido por regra é
+ * `aria-disabled` e não `disabled`: o botão continua na ordem de foco, porque
+ * saber POR QUE não dá para clicar é parte da informação, e quem navega por
+ * teclado não tem como passar o mouse para ler um `title`.
+ *
+ * A mesma ideia vale para o período digitado. A régua de envio recusa antes da
+ * requisição o que a tela já sabe que não existe: período inteiro fora da
+ * extensão da série, além da janela maior que o teto. A validação de borda
+ * continua do lado do servidor: a daqui existe para não fazer a pessoa
  * descobrir o limite errando.
  */
 
@@ -68,6 +75,7 @@ export function SeletorJanela({
   const idAte = `${idBase}-ate`;
   const idAjuda = `${idBase}-ajuda`;
   const idErro = `${idBase}-erro`;
+  const idMotivoSerieInteira = `${idBase}-motivo-serie-inteira`;
 
   const [desde, setDesde] = useState(janela.desde);
   const [ate, setAte] = useState(janela.ate);
@@ -108,7 +116,7 @@ export function SeletorJanela({
 
   function enviar(evento: React.FormEvent) {
     evento.preventDefault();
-    const motivo = validar(desde, ate);
+    const motivo = validar(desde, ate, { primeira: resumo.primeiraData, fim });
     if (motivo) {
       setErro(motivo);
       return;
@@ -162,8 +170,9 @@ export function SeletorJanela({
         ))}
         <BotaoAtalho
           onClick={aplicarSerieInteira}
-          desabilitado={carregando || !serieInteiraCabe}
-          titulo={
+          desabilitado={carregando}
+          idMotivo={idMotivoSerieInteira}
+          motivo={
             serieInteiraCabe
               ? undefined
               : `A série tem ${fmtInteiro(extensao ?? 0)} dias e o máximo por consulta é ${fmtInteiro(MAX_DIAS_JANELA_TELA)}.`
@@ -194,16 +203,37 @@ export function SeletorJanela({
   );
 }
 
+/** Extensão da série consultada, para a régua saber o que existe. */
+interface LimitesDaSerie {
+  readonly primeira: string | null;
+  readonly fim: string | null;
+}
+
 /**
- * Mesma régua da API, aplicada antes do envio.
+ * Mesma régua da API, aplicada antes do envio, mais a que só a tela tem como
+ * aplicar.
  *
  * Não substitui a validação do servidor, que continua sendo a que vale: existe
  * para que o erro apareça no campo, ao lado do que a pessoa digitou, em vez de
  * voltar como falha de requisição.
+ *
+ * O limite da SÉRIE é o caso que só daqui se enxerga. Os campos declaram `min`
+ * e `max`, e o formulário é `noValidate` (o navegador não cobra nada), então
+ * pedir 2010 numa série que parou em 2004 passava direto: a consulta ia até o
+ * banco do órgão, voltava vazia e a tela respondia "a origem não tem nenhuma
+ * linha", que descreve buraco no dado e não o que de fato houve. Dias de
+ * calendário se comparam como texto porque `AAAA-MM-DD` ordena assim, que é a
+ * mesma aritmética que o resto deste arquivo usa.
+ *
+ * Período que encosta na série, ainda que só em parte, PASSA: ali existe dado,
+ * e recusar seria a tela negar uma consulta que responde.
  */
-function validar(desde: string, ate: string): string | null {
+function validar(desde: string, ate: string, serie: LimitesDaSerie): string | null {
   if (!desde || !ate) return 'Informe as duas datas do período.';
   if (desde > ate) return 'O início do período não pode ser depois do fim.';
+  if (serie.primeira && serie.fim && (ate < serie.primeira || desde > serie.fim)) {
+    return `O período pedido está fora da série, que vai de ${fmtDia(serie.primeira)} a ${fmtDia(serie.fim)}.`;
+  }
   const dias = diasNaJanela(desde, ate);
   if (dias > MAX_DIAS_JANELA_TELA) {
     return `O período tem ${fmtInteiro(dias)} dias e o máximo por consulta é ${fmtInteiro(MAX_DIAS_JANELA_TELA)}.`;
@@ -254,26 +284,57 @@ function CampoData({
   );
 }
 
+/**
+ * Atalho de período.
+ *
+ * `desabilitado` é a espera da consulta em curso, e passa ela some sozinha.
+ * `motivo` é impedimento por REGRA, e aí o botão continua alcançável pelo
+ * teclado com `aria-disabled`, em vez de sair da ordem de foco: o motivo viaja
+ * no `aria-describedby` e é anunciado ao chegar no botão.
+ *
+ * Antes ele morava só no atributo `title`, que aparece ao passar o mouse e mais
+ * nada: quem navega por teclado ou por leitor de tela via um botão apagado sem
+ * nenhuma explicação (WCAG 1.3.1 e 3.3.2 / e-MAG 6.5, e o cliente é órgão
+ * público). A frase fica `sr-only` porque na tela ela já está escrita logo
+ * abaixo, no texto de apoio do formulário.
+ */
 function BotaoAtalho({
   onClick,
   desabilitado,
-  titulo,
+  motivo,
+  idMotivo,
   children,
 }: {
   onClick: () => void;
   desabilitado: boolean;
-  titulo?: string;
+  motivo?: string;
+  idMotivo?: string;
   children: React.ReactNode;
 }) {
+  const impedido = motivo !== undefined;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={desabilitado}
-      title={titulo}
-      className="rounded bg-app-surface-2 px-2 py-1 text-xs font-medium text-app-fg-muted transition-colors hover:bg-app-surface-3 hover:text-app-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-app-surface-2 disabled:hover:text-app-fg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
-    >
-      {children}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={impedido ? undefined : onClick}
+        disabled={!impedido && desabilitado}
+        aria-disabled={impedido || undefined}
+        aria-describedby={impedido ? idMotivo : undefined}
+        className={[
+          'rounded bg-app-surface-2 px-2 py-1 text-xs font-medium text-app-fg-muted transition-colors',
+          'hover:bg-app-surface-3 hover:text-app-fg',
+          'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-app-surface-2 disabled:hover:text-app-fg-muted',
+          'aria-disabled:cursor-not-allowed aria-disabled:opacity-40 aria-disabled:hover:bg-app-surface-2 aria-disabled:hover:text-app-fg-muted',
+          'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul',
+        ].join(' ')}
+      >
+        {children}
+      </button>
+      {impedido ? (
+        <span id={idMotivo} className="sr-only">
+          {motivo}
+        </span>
+      ) : null}
+    </>
   );
 }
