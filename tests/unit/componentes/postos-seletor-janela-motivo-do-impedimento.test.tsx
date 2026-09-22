@@ -16,7 +16,7 @@
  * Medir a existência do `aria-describedby` seria medir a forma: descrição
  * apontando para elemento vazio, ou para outro botão, passaria igual.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -110,6 +110,41 @@ describe('atalho de série inteira impedido pelo teto por consulta', () => {
     await userEvent.keyboard('{Enter}');
 
     expect(onAplicar).not.toHaveBeenCalled();
+  });
+
+  it('o motivo visual não some quando o formulário recusa', async () => {
+    // A frase `sr-only` do botão existe porque o motivo JÁ está escrito na tela,
+    // no texto de apoio do formulário. Enquanto esse texto era o ramo `else` do
+    // erro, qualquer recusa o apagava: quem enxerga ficava com o atalho apagado
+    // e nenhuma explicação visível, que é o achado 3 de volta para metade das
+    // pessoas, e some justamente no momento em que alguém está errando o
+    // período. Junto ia a única frase que diz a extensão da série, que é o que
+    // se precisa para corrigir o período recusado.
+    const { container } = renderizar(LONGA);
+    const campoDe = screen.getByLabelText('De');
+
+    // Âncora de presença: a frase está na tela ANTES da recusa. Sem ela, este
+    // caso passaria numa tela que nunca mostrou motivo nenhum.
+    expect(screen.getByText(/Máximo de 3\.660 dias por consulta/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // Qualquer recusa serve: o que se mede é o que a recusa apaga.
+    fireEvent.change(campoDe, { target: { value: '2005-06-30' } });
+    fireEvent.change(screen.getByLabelText('Até'), { target: { value: '2005-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ver período' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'O início do período não pode ser depois do fim.',
+    );
+    expect(screen.getByText(/Máximo de 3\.660 dias por consulta/)).toBeInTheDocument();
+    expect(atalhoDaSerieInteira()).toHaveAccessibleDescription(MOTIVO);
+
+    // Os campos passam a ser descritos pelos dois, nesta ordem: o que houve de
+    // errado primeiro, o apoio depois. Trocar um pelo outro é o defeito.
+    expect(campoDe).toHaveAccessibleDescription(
+      /não pode ser depois do fim[\s\S]*Máximo de 3\.660 dias por consulta/,
+    );
+    expect(await violacoesEmLinha(container)).toEqual([]);
   });
 
   it('com a série cabendo no teto, o atalho é um botão comum que consulta', async () => {

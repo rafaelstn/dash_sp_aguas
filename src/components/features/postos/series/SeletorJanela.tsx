@@ -96,6 +96,23 @@ export function SeletorJanela({
   const extensao = extensaoDaSerie(resumo);
   const serieInteiraCabe = extensao !== null && extensao <= MAX_DIAS_JANELA_TELA;
 
+  // A frase de apoio diz a extensão da série e o teto por consulta, e só existe
+  // quando há série com começo e fim. Fora disso o parágrafo sairia vazio, e um
+  // `aria-describedby` apontando para parágrafo vazio é descrição que não
+  // descreve nada.
+  const inicio = resumo.primeiraData;
+  const temAjuda = inicio !== null && fim !== null;
+
+  // Erro e apoio convivem: quem pede um período fora da série recebe a recusa E
+  // continua vendo qual é a série, que é exatamente o que ele precisa para
+  // corrigir o período. Enquanto a ajuda era o ramo `else` do erro, a recusa
+  // apagava a única frase da tela que dizia o intervalo disponível e o teto de
+  // dias, e o motivo do atalho impedido perdia a versão visual dele.
+  // Sem erro e sem série, o `aria-describedby` sai do campo em vez de apontar
+  // para lugar nenhum: atributo vazio é referência quebrada, não ausência.
+  const descricaoDosCampos =
+    [erro ? idErro : null, temAjuda ? idAjuda : null].filter(Boolean).join(' ') || undefined;
+
   function aplicarAtalho(dias: number) {
     const proposta = janelaPadrao(resumo, dias);
     if (!proposta) return;
@@ -135,7 +152,7 @@ export function SeletorJanela({
           min={resumo.primeiraData ?? undefined}
           max={fim ?? undefined}
           invalido={erro !== null}
-          descritoPor={erro ? idErro : idAjuda}
+          descritoPor={descricaoDosCampos}
           onChange={setDesde}
         />
         <CampoData
@@ -145,7 +162,7 @@ export function SeletorJanela({
           min={resumo.primeiraData ?? undefined}
           max={fim ?? undefined}
           invalido={erro !== null}
-          descritoPor={erro ? idErro : idAjuda}
+          descritoPor={descricaoDosCampos}
           onChange={setAte}
         />
         <button
@@ -186,19 +203,16 @@ export function SeletorJanela({
         <p id={idErro} role="alert" className="text-xs font-medium text-gov-perigo">
           {erro}
         </p>
-      ) : (
+      ) : null}
+      {temAjuda ? (
         <p id={idAjuda} className="text-xs text-app-fg-muted tabular">
-          {resumo.primeiraData && fim ? (
-            <>
-              Série de {fmtDia(resumo.primeiraData)} a {fmtDia(fim)}
-              {extensao !== null ? ` (${fmtInteiro(extensao)} dias)` : ''}.
-              {serieInteiraCabe
-                ? ''
-                : ` Máximo de ${fmtInteiro(MAX_DIAS_JANELA_TELA)} dias por consulta.`}
-            </>
-          ) : null}
+          Série de {fmtDia(inicio)} a {fmtDia(fim)}
+          {extensao !== null ? ` (${fmtInteiro(extensao)} dias)` : ''}.
+          {serieInteiraCabe
+            ? ''
+            : ` Máximo de ${fmtInteiro(MAX_DIAS_JANELA_TELA)} dias por consulta.`}
         </p>
-      )}
+      ) : null}
     </form>
   );
 }
@@ -257,7 +271,7 @@ function CampoData({
   min?: string;
   max?: string;
   invalido: boolean;
-  descritoPor: string;
+  descritoPor?: string;
   onChange: (valor: string) => void;
 }) {
   return (
@@ -296,7 +310,11 @@ function CampoData({
  * nada: quem navega por teclado ou por leitor de tela via um botão apagado sem
  * nenhuma explicação (WCAG 1.3.1 e 3.3.2 / e-MAG 6.5, e o cliente é órgão
  * público). A frase fica `sr-only` porque na tela ela já está escrita logo
- * abaixo, no texto de apoio do formulário.
+ * abaixo, no texto de apoio do formulário, que é mostrado sempre que existe
+ * série: enquanto esse texto era o ramo alternativo do erro, qualquer recusa no
+ * formulário apagava a versão visual deste motivo, e este comentário passava a
+ * mentir. O caso "o motivo visual não some quando o formulário recusa" guarda
+ * essa dependência.
  */
 function BotaoAtalho({
   onClick,
