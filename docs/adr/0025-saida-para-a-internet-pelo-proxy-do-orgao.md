@@ -105,8 +105,24 @@ Varridos todos os destinos externos citados no código:
 | `db`, `localhost`, `127.0.0.1` | servidor | **não**, entram no `NO_PROXY` |
 
 O ponto do navegador tem consequência visível e precisa ser dito ao órgão: se as
-estações não alcançarem as camadas de mapa, o mapa do módulo Monitor aparece em
-branco, **sem mensagem de erro**.
+estações não alcançarem as camadas de mapa, o mapa aparece em branco, **sem
+mensagem de erro**.
+
+**Atualização de 22/09/2026, medida no código.** A tabela acima continua valendo
+como a varredura do dia da decisão, mas duas linhas dela envelheceram:
+
+- O navegador **não consulta mais** `geodados.daee.sp.gov.br`. As geometrias do
+  limite de São Paulo e das UGRHIs são geradas fora da aplicação por
+  `scripts/geo/gerar-geometria-postos.mjs` (que é quem fala com aquele WFS, na
+  máquina de quem gera) e viajam prontas em `public/geo/*.json`, servidas pela
+  própria aplicação. Sobrou um único destino externo no navegador:
+  `tile.openstreetmap.org`, que é o que a CSP em `src/middleware.ts` libera em
+  `img-src`. Por construção, os pontos, o limite estadual e as UGRHIs são
+  camadas separadas do fundo de tiles, então a expectativa é que continuem
+  desenhando sem ele; isso **não foi medido** com a rede bloqueada na estação e
+  precisa ser confirmado no piloto do órgão.
+- O **módulo Monitor deixou de existir** como rota: desde a fusão pedida pelo
+  órgão na reunião de 16/09/2026, o mapa mora na tela de Postos.
 
 ## 4. Um defeito que esta mudança desenterrou, e que já bloqueava a entrega
 
