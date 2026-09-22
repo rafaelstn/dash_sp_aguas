@@ -158,23 +158,41 @@ export function TelaPostos() {
   // Estações do SIBH: uma carga só, compartilhada entre a camada "outras redes"
   // e o botão de comparar chuva.
   const estacoesPedidas = useRef(false);
+  const cargaEmCurso = useRef<AbortController | null>(null);
   const carregarEstacoes = useCallback(() => {
     if (estacoesPedidas.current) return;
     estacoesPedidas.current = true;
+    const c = new AbortController();
+    cargaEmCurso.current = c;
     setCargaEstacoes({ situacao: 'carregando' });
-    fetch('/api/monitor/estacoes', { headers: { Accept: 'application/json' } })
+    fetch('/api/monitor/estacoes', {
+      headers: { Accept: 'application/json' },
+      signal: c.signal,
+    })
       .then(async (r) => {
         if (!r.ok) throw new Error(String(r.status));
         const corpo = (await r.json()) as { itens?: Estacao[] };
         if (!Array.isArray(corpo.itens)) throw new Error('corpo');
+        if (c.signal.aborted) return;
         setCargaEstacoes({ situacao: 'pronta', estacoes: corpo.itens });
       })
       .catch(() => {
+        // Sair da tela não é falha da origem: cancelada, a carga não pinta erro
+        // nem se anuncia como repetível, porque não há mais tela para tentar.
+        if (c.signal.aborted) return;
         // Falha libera nova tentativa ao religar a camada ou abrir outro posto.
         estacoesPedidas.current = false;
         setCargaEstacoes({ situacao: 'erro' });
       });
   }, []);
+
+  // Esta é a única requisição da tela que nasce de INTERAÇÃO (ligar a camada de
+  // outras redes, abrir um posto pluviométrico) e não do corpo de um efeito,
+  // então não existe `return` de efeito onde o cancelamento caiba: sem isto ela
+  // é a única da tela que sobrevive à saída. O catálogo do SIBH é a resposta
+  // mais pesada da tela, e quem abre um posto e volta em seguida deixava a
+  // conexão ocupada com dado que ninguém mais ia ler.
+  useEffect(() => () => cargaEmCurso.current?.abort(), []);
 
   const outrasRedes = useMemo<EstacaoOutraRede[] | null>(() => {
     if (!outrasRedesLigada || cargaEstacoes.situacao !== 'pronta') return null;
