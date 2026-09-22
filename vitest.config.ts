@@ -24,8 +24,19 @@ export default defineConfig({
       '@': path.resolve(root, 'src'),
     },
   },
+  // O tsconfig do Next usa `jsx: 'preserve'`, porque quem transforma o JSX lá
+  // é o SWC. Dentro do Vitest quem transforma é o oxc do Vite 8, que lê o mesmo
+  // tsconfig e por isso entregaria JSX cru ao Node ("content contains invalid
+  // JS syntax"). O bloco abaixo vale só para a execução de teste e não toca o
+  // build de produção. É `oxc` e não `esbuild`: o Vite 8 ignora o segundo e
+  // avisa que ignorou, o que deixaria o JSX quebrado do mesmo jeito.
+  oxc: {
+    jsx: {
+      runtime: 'automatic',
+      importSource: 'react',
+    },
+  },
   test: {
-    environment: 'node',
     globals: false,
     // Vitest 4 trouxe poolOptions pra top-level. Forks com singleFork=true
     // garante isolamento mas mantém estado de mocks consistente entre testes
@@ -33,8 +44,30 @@ export default defineConfig({
     // do `_resetTriagemMock` que vive em singleton de módulo).
     pool: 'forks',
     fileParallelism: false,
-    include: ['tests/**/*.test.ts'],
-    setupFiles: ['tests/setup.ts'],
+    // Dois projetos, e não um `environment` único, porque o jsdom custa caro e
+    // não serve para nada nos 1300 testes de domínio, rota e SQL. A separação é
+    // pela EXTENSÃO do arquivo: `.test.ts` roda em node, `.test.tsx` roda em
+    // jsdom. Assim ninguém precisa lembrar de cadastrar caminho novo.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['tests/**/*.test.ts'],
+          setupFiles: ['tests/setup.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'componentes',
+          environment: 'jsdom',
+          include: ['tests/**/*.test.tsx'],
+          setupFiles: ['tests/setup.ts', 'tests/setup-dom.ts'],
+        },
+      },
+    ],
     reporters: process.env.CI ? ['default', 'junit'] : ['default'],
     outputFile: {
       junit: './coverage/junit.xml',
