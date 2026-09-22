@@ -76,10 +76,25 @@ const classeChip = (ativo: boolean) =>
 const classeSelect =
   'h-8 rounded-md border border-app-border-input bg-app-surface pl-2.5 pr-8 text-sm text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gov-azul';
 
-function OpcoesUgrhi({ facetas }: { facetas: FacetasMapa | null }) {
+/**
+ * Opções de UGRHI com a contagem cruzada.
+ *
+ * A opção de resgate (`selecionadaAusente`) existe pelo mesmo motivo da de UF:
+ * enquanto `facetas` é `null` a lista não tem nenhuma UGRHI, e um `<select>`
+ * controlado com `value="7"` sem `<option>` correspondente fica com
+ * `selectedIndex = -1`, ou seja, em branco. O filtro segue aplicado, porque o
+ * estado vem da URL, e o controle mostrava o contrário: abrir `/?ugrhi=7` com a
+ * rede lenta, ou com o banco do órgão fora, deixava o campo vazio com o recorte
+ * ativo, e o leitor de tela anunciava "sem seleção". Com os dados prontos a
+ * opção marcada já vem semeada com total zero por `src/domain/mapa-postos.ts`,
+ * então esta guarda só entra em cena no estado de carga e no de erro.
+ */
+function OpcoesUgrhi({ facetas, estado }: { facetas: FacetasMapa | null; estado: EstadoTela }) {
   const lista = facetas?.ugrhi ?? [];
   const numeradas = lista.filter((u) => u.numero !== null);
   const sem = lista.find((u) => u.numero === null);
+  const selecionadaAusente =
+    typeof estado.ugrhi === 'number' && !numeradas.some((u) => u.numero === estado.ugrhi);
   return (
     <>
       <option value="">Todas as UGRHIs</option>
@@ -88,6 +103,9 @@ function OpcoesUgrhi({ facetas }: { facetas: FacetasMapa | null }) {
           {rotuloUgrhi(u.numero)} ({fmt(u.total)})
         </option>
       ))}
+      {selecionadaAusente && (
+        <option value={String(estado.ugrhi)}>{rotuloUgrhi(estado.ugrhi as number)} (0)</option>
+      )}
       <option value="sem">Sem UGRHI ({fmt(sem?.total ?? 0)})</option>
     </>
   );
@@ -385,7 +403,7 @@ export function FiltrosDesktop({ estado, facetas, aoMudar, aoLimpar }: FiltrosPo
           onChange={(e) => aoMudar({ ugrhi: lerUgrhi(e.target.value) })}
           className={`${classeSelect} max-w-[20rem] ${estado.ugrhi !== null ? 'border-gov-azul text-gov-azul-escuro' : ''}`}
         >
-          <OpcoesUgrhi facetas={facetas} />
+          <OpcoesUgrhi facetas={facetas} estado={estado} />
         </select>
         {ativos > 0 && (
           <button
@@ -557,7 +575,7 @@ export function FiltrosCelular({ estado, facetas, totalFiltrado, aoMudar, aoLimp
                 onChange={(e) => aoMudar({ ugrhi: lerUgrhi(e.target.value) })}
                 className={`${classeSelect} h-11 w-full`}
               >
-                <OpcoesUgrhi facetas={facetas} />
+                <OpcoesUgrhi facetas={facetas} estado={estado} />
               </select>
             </div>
           </div>

@@ -300,7 +300,20 @@ function SecaoSeries({ prefixo }: { prefixo: string }) {
   if (carga.situacao === 'pronto') {
     return (
       <section className="border-t border-app-border-subtle pt-5">
-        <PainelSeriesPosto key={prefixo} prefixo={prefixo} series={carga.dados.series} />
+        {/*
+          `nivelTitulo={3}` casa com o `TituloSecao` (h3) que o esqueleto de
+          carga logo abaixo usa para o MESMO texto. Sem isso o cabeçalho
+          "Séries históricas de medição" nascia h3 enquanto carregava e virava h2
+          depois de pronto, e o painel ficava irmão do posto em vez de filho:
+          nível de cabeçalho não pode depender do estado da requisição
+          (WCAG 1.3.1 / e-MAG 3.5).
+        */}
+        <PainelSeriesPosto
+          key={prefixo}
+          prefixo={prefixo}
+          series={carga.dados.series}
+          nivelTitulo={3}
+        />
       </section>
     );
   }

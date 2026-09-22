@@ -65,6 +65,12 @@ interface ComparativoSibhProps {
    * botão só faria a pessoa clicar para ler a mesma frase.
    */
   semEquivalente?: boolean;
+  /**
+   * Nível do título desta seção, herdado do painel que a contém: ela é filha da
+   * seção de séries, e não da página. Default 3. Fixar `h4` aqui pulava o nível
+   * quando o painel abria como `h2` (WCAG 1.3.1 / e-MAG 3.5).
+   */
+  nivelTitulo?: 3 | 4;
 }
 
 export function ComparativoSibh({
@@ -72,13 +78,15 @@ export function ComparativoSibh({
   carregando,
   onComparar,
   semEquivalente = false,
+  nivelTitulo = 3,
 }: ComparativoSibhProps) {
+  const Titulo = `h${nivelTitulo}` as const;
   if (semEquivalente) {
     return (
       <section aria-labelledby="cmp-sibh" className="space-y-2">
-        <h4 id="cmp-sibh" className="text-sm font-semibold text-app-fg">
+        <Titulo id="cmp-sibh" className="text-sm font-semibold text-app-fg">
           Conferência com o SIBH
-        </h4>
+        </Titulo>
         <SemEquivalente />
       </section>
     );
@@ -87,9 +95,9 @@ export function ComparativoSibh({
   return (
     <section aria-labelledby="cmp-sibh" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 id="cmp-sibh" className="text-sm font-semibold text-app-fg">
+        <Titulo id="cmp-sibh" className="text-sm font-semibold text-app-fg">
           Conferência com o SIBH
-        </h4>
+        </Titulo>
         {comparativo !== null && !carregando ? (
           <BotaoComparar rotulo="Conferir de novo" onClick={onComparar} />
         ) : null}

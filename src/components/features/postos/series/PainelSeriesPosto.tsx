@@ -60,6 +60,19 @@ import {
 interface PainelSeriesPostoProps {
   prefixo: string;
   series: readonly ResumoSerie[];
+  /**
+   * Nível do título deste painel, e base para os títulos que ele aninha. Default
+   * 2, que é o certo na rota dedicada `/postos/[prefixo]`, onde o `<h1>` é o
+   * nome do posto.
+   *
+   * Dentro do detalhe aberto no mapa o painel é FILHO do posto, cujo título já é
+   * um `<h2>`: ali o chamador passa 3. Sem essa prop o painel virava irmão do
+   * posto para quem navega por cabeçalhos, e o mesmo texto ("Séries históricas
+   * de medição") aparecia como `<h3>` enquanto carregava e como `<h2>` depois de
+   * pronto, porque o esqueleto de carga é desenhado pelo pai. Nível de cabeçalho
+   * que muda conforme o estado da requisição reprova em WCAG 1.3.1 e e-MAG 3.5.
+   */
+  nivelTitulo?: 2 | 3;
 }
 
 interface Pedido {
@@ -81,7 +94,13 @@ type EstadoDiario =
   | { situacao: 'erro'; mensagem: string }
   | { situacao: 'pronto'; dados: DadosDiario };
 
-export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
+export function PainelSeriesPosto({
+  prefixo,
+  series,
+  nivelTitulo = 2,
+}: PainelSeriesPostoProps) {
+  const Titulo = `h${nivelTitulo}` as const;
+  const TituloFilho = `h${(nivelTitulo + 1) as 3 | 4}` as const;
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [estado, setEstado] = useState<EstadoDiario>({ situacao: 'inativo' });
   // Separado do estado principal para que conferir com o SIBH não apague o
@@ -181,9 +200,9 @@ export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
   return (
     <div className="space-y-4">
       <header className="space-y-1">
-        <h2 id="sec-series" className="text-base font-semibold text-app-fg">
+        <Titulo id="sec-series" className="text-base font-semibold text-app-fg">
           Séries históricas de medição
-        </h2>
+        </Titulo>
         <p className="text-xs text-app-fg-muted">
           Chuva, cota e vazão do rio e piezômetro lidos ao vivo do banco do órgão.
           Escolha uma série para ver o histórico e conferir com o SIBH.
@@ -211,12 +230,25 @@ export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
             onAplicar={aplicarJanela}
           />
 
-          <BlocoHistorico
-            estado={estado}
-            serie={pedido.serie}
-            janela={pedido.janela}
-            onTentarDeNovo={tentarDeNovo}
-          />
+          {/*
+            As duas seções abaixo carregam título próprio, ainda que oculto: sem
+            eles, quem navega por cabeçalhos saltava do título das séries direto
+            para a conferência com o SIBH, e o gráfico do histórico e a tabela de
+            leituras ficavam sem âncora nenhuma (WCAG 1.3.1 / e-MAG 3.5). Ficam
+            `sr-only` porque na tela o seletor logo acima já diz o que é, e
+            repetir o rótulo visível só encheria a coluna.
+          */}
+          <section aria-labelledby="sec-historico">
+            <TituloFilho id="sec-historico" className="sr-only">
+              Histórico diário da série
+            </TituloFilho>
+            <BlocoHistorico
+              estado={estado}
+              serie={pedido.serie}
+              janela={pedido.janela}
+              onTentarDeNovo={tentarDeNovo}
+            />
+          </section>
 
           {estado.situacao === 'pronto' ? (
             <>
@@ -225,14 +257,20 @@ export function PainelSeriesPosto({ prefixo, series }: PainelSeriesPostoProps) {
                 carregando={comparando}
                 onComparar={compararComSibh}
                 semEquivalente={SERIES_MEDICAO[pedido.serie].grandeza === 'vazao'}
+                nivelTitulo={TituloFilho === 'h3' ? 3 : 4}
               />
 
-              <LeiturasBrutas
-                prefixo={prefixo}
-                serie={pedido.serie}
-                definicao={SERIES_MEDICAO[pedido.serie]}
-                janela={pedido.janela}
-              />
+              <section aria-labelledby="sec-leituras">
+                <TituloFilho id="sec-leituras" className="sr-only">
+                  Leituras brutas da série
+                </TituloFilho>
+                <LeiturasBrutas
+                  prefixo={prefixo}
+                  serie={pedido.serie}
+                  definicao={SERIES_MEDICAO[pedido.serie]}
+                  janela={pedido.janela}
+                />
+              </section>
             </>
           ) : null}
         </div>
