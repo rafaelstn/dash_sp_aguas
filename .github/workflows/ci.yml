@@ -1,12 +1,45 @@
 name: CI
 
 # Porta de qualidade: lint + typecheck + testes do dashboard e py_compile dos scripts Python.
-# package-lock.json é committado — CI usa `npm ci` para build determinístico.
+# package-lock.json é committado, e o CI usa `npm ci` para build determinístico.
 #
-# O Node aqui é o mesmo do Dockerfile de produção (20), então o `npm ci` roda com
-# npm 10. Um lock gerado por npm 11 (Node 22+) omite entradas aninhadas que o npm 10
-# exige e quebra o `npm ci` só no CI. Depois de mexer em dependência, regenerar com
-# `npm run lock:ci` antes do push.
+# ---------------------------------------------------------------------------
+# O NODE AQUI É 24 PORQUE 24 É O QUE VAI PARA O SERVIDOR DO ÓRGÃO.
+# ---------------------------------------------------------------------------
+# É a mesma versão dos três estágios do Dockerfile (ADR-0025) e a que o
+# `engines.node` do package.json exige (>=24.0.0).
+#
+# Até 22/09/2026 este arquivo pedia a 20, e o comentário que ficava aqui afirmava
+# que 20 era também a versão da imagem. Era falso desde a ADR-0025: a imagem já
+# estava em `node:24-alpine`. O efeito é que a porta de qualidade aprovava o
+# código num runtime que ninguém entrega, e o runtime entregue só era exercitado
+# por quem rodasse `docker build` na mão.
+#
+# Não é diferença cosmética. No lock, 20 pacotes declaram `engines.node` que a 20
+# não satisfaz, entre eles o `tedious` (driver do SQL Server do órgão, ADR-0023),
+# o `@azure/identity`, que é a autenticação dele, e o `@supabase/supabase-js`.
+# Como o projeto não tem `engine-strict`, o `npm ci` só avisa e segue: a
+# divergência era silenciosa por construção. Somado a isso, a linha 20 saiu de
+# suporte em 30/04/2026 (calendário oficial do nodejs/Release), e sistema de
+# governo não se valida em runtime que não recebe mais correção de segurança.
+#
+# Consequência prática: o CI passa a rodar com npm 11, igual à imagem. O
+# `npm run lock:ci`, que fixa o npm 10 para gerar o lock, deixa de ser
+# obrigatório, porque não sobrou ninguém rodando npm 10. O lock atual, gerado
+# pelo npm 10, foi provado em 22/09/2026 com `npm ci` sob npm 11.19.0 dentro do
+# `node:24-alpine`, exit 0.
+#
+# Ao mudar a versão do Node no Dockerfile, mudar aqui também. Não existe guarda
+# comparando os dois arquivos, e foi essa ausência que deixou a divergência
+# durar: a `tests/unit/infrastructure/proxy-saida-internet.test.ts` cobre só o
+# Dockerfile. A versão é escrita literalmente ('24') em vez de derivada do
+# `engines`, porque `>=24.0.0` resolveria para a maior versão disponível e
+# passaria da imagem no dia em que sair uma linha nova.
+#
+# Lacuna conhecida em 22/09/2026: nenhum job aqui roda `next build`. Erro que só
+# aparece na construção do pacote de produção continua sendo detectado apenas no
+# `docker build`, que é manual. Fechar isso custa minuto de Actions e a decisão
+# está em aberto.
 
 # A branch de trabalho entra no gatilho de propósito. Ela é onde o
 # desenvolvimento acontece desde 19/08/2026, e até 08/09 acumulou cerca de 35
@@ -33,7 +66,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install deps
@@ -78,7 +111,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install deps
