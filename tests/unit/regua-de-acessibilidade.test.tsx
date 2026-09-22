@@ -92,4 +92,36 @@ describe('a régua de acessibilidade', () => {
     // Prova do `afterEach` do setup: o caso anterior ligou a tela estreita.
     expect(window.matchMedia('(max-width: 767px)').matches).toBe(false);
   });
+
+  it('o dublê avisa quem ouve quando a largura muda, que é o giro do aparelho', () => {
+    // Sem esta propriedade o aparelho não distingue "mede uma vez na montagem"
+    // de "acompanha a largura", e o teste dos dois passaria: era o achado 1 do
+    // QA de 22/09/2026 escondido dentro do instrumento.
+    const lista = window.matchMedia('(max-width: 767px)');
+    const recebidos: boolean[] = [];
+    const ouvinte = (evento: MediaQueryListEvent) => recebidos.push(evento.matches);
+    lista.addEventListener('change', ouvinte);
+
+    definirMediaQueries(['(max-width: 767px)']);
+    expect(recebidos).toEqual([true]);
+    expect(lista.matches).toBe(true);
+
+    definirMediaQueries([]);
+    expect(recebidos).toEqual([true, false]);
+    expect(lista.matches).toBe(false);
+  });
+
+  it('para de avisar quem saiu de ouvir', () => {
+    // Controle do caso acima: componente desmontado remove o ouvinte no
+    // `return` do efeito, e um dublê que ignorasse a remoção deixaria passar
+    // vazamento de ouvinte no produto.
+    const lista = window.matchMedia('(max-width: 767px)');
+    const recebidos: boolean[] = [];
+    const ouvinte = (evento: MediaQueryListEvent) => recebidos.push(evento.matches);
+    lista.addEventListener('change', ouvinte);
+    lista.removeEventListener('change', ouvinte);
+
+    definirMediaQueries(['(max-width: 767px)']);
+    expect(recebidos).toEqual([]);
+  });
 });

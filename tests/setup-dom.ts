@@ -18,31 +18,74 @@ import { afterEach } from 'vitest';
 /** Lista de consultas que `matchMedia` deve responder como verdadeiras. */
 let consultasVerdadeiras: string[] = [];
 
+/** As listas entregues nesta execução, para avisá-las quando a largura mudar. */
+const listasVivas = new Set<ListaDeMidia>();
+
+/**
+ * `MediaQueryList` do dublê.
+ *
+ * O `matches` é lido na hora, e não congelado na criação: quem guarda a lista
+ * numa variável (é o que um `useEffect` faz) tem de ver a largura atual.
+ *
+ * O dublê antigo tinha `addEventListener` vazio. Isso não é neutro: componente
+ * que reage a GIRO DE APARELHO ficava indistinguível de componente que mede a
+ * largura uma vez na montagem, e o teste dos dois passava. Era exatamente o
+ * defeito do achado 1 do QA de 22/09/2026 escondido dentro do instrumento.
+ */
+class ListaDeMidia extends EventTarget {
+  onchange: ((evento: MediaQueryListEvent) => void) | null = null;
+
+  constructor(readonly media: string) {
+    super();
+    listasVivas.add(this);
+  }
+
+  get matches(): boolean {
+    return consultasVerdadeiras.includes(this.media);
+  }
+
+  /** Formas antigas da API, que o Safari só aposentou na versão 14. */
+  addListener(ouvinte: (evento: MediaQueryListEvent) => void): void {
+    this.addEventListener('change', ouvinte as EventListener);
+  }
+
+  removeListener(ouvinte: (evento: MediaQueryListEvent) => void): void {
+    this.removeEventListener('change', ouvinte as EventListener);
+  }
+
+  /** Avisa quem ouve, como o navegador faz ao girar o aparelho. */
+  notificar(): void {
+    const evento = Object.assign(new Event('change'), {
+      matches: this.matches,
+      media: this.media,
+    }) as unknown as MediaQueryListEvent;
+    this.onchange?.(evento);
+    this.dispatchEvent(evento);
+  }
+}
+
 /**
  * Liga o `matchMedia` do jsdom para as consultas informadas.
  *
  * Use no teste que precisa do caminho de tela estreita, por exemplo
  * `definirMediaQueries(['(max-width: 767px)'])`. O estado volta ao padrão
  * (tudo falso) no `afterEach`, então nenhum teste herda a largura do vizinho.
+ *
+ * Chamada DEPOIS da montagem, ela também avisa quem estiver ouvindo, que é o
+ * giro do aparelho. Como isso muda estado de componente, o teste chama dentro
+ * de `act(...)`.
  */
 export function definirMediaQueries(consultas: string[]): void {
   consultasVerdadeiras = consultas;
+  for (const lista of listasVivas) lista.notificar();
 }
 
 function instalarMatchMedia(): void {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
-    value: (consulta: string): MediaQueryList => ({
-      matches: consultasVerdadeiras.includes(consulta),
-      media: consulta,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
+    value: (consulta: string): MediaQueryList =>
+      new ListaDeMidia(consulta) as unknown as MediaQueryList,
   });
 }
 
@@ -88,4 +131,8 @@ afterEach(() => {
   // acha dois elementos com o mesmo nome acessível e reprova por engano.
   cleanup();
   consultasVerdadeiras = [];
+  // As listas do teste que acabou não recebem o aviso do próximo: ouvinte de
+  // componente já desmontado reagindo a uma largura alheia é ruído que só
+  // aparece dias depois, num arquivo que não tem relação nenhuma.
+  listasVivas.clear();
 });

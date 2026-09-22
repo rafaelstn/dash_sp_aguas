@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   SITUACOES_POSTO,
@@ -41,10 +41,30 @@ export function LegendaMapa({
 }: LegendaMapaProps) {
   const [aberta, setAberta] = useState(true);
   const idCorpo = useId();
+  const decidiuNaMao = useRef(false);
 
-  // No celular a legenda nasce recolhida: aberta, cobriria um terço do estado.
+  // No celular a legenda fica recolhida: aberta, cobriria um terço do estado.
+  //
+  // A largura é acompanhada durante a visita, e não medida uma vez na
+  // montagem. Medida só na montagem, quem abria em paisagem e girava para
+  // retrato continuava com a legenda aberta cobrindo o mapa, que é justamente
+  // o caso em que o aparelho tem menos tela (achado do QA de 22/09/2026).
+  //
+  // A largura decide enquanto ninguém decidiu: depois que a pessoa usa o botão,
+  // ela manda, e girar o aparelho ou redimensionar a janela não desfaz a
+  // escolha dela. Sem essa trava, fechar a legenda e mudar a largura a traria
+  // de volta sobre o mapa sem que nada tivesse sido pedido, que é o mesmo
+  // incômodo do achado, só que ao contrário.
   useEffect(() => {
-    if (window.matchMedia('(max-width: 767px)').matches) setAberta(false);
+    const estreita = window.matchMedia('(max-width: 767px)');
+    const aplicar = (ehEstreita: boolean) => {
+      if (decidiuNaMao.current) return;
+      setAberta(!ehEstreita);
+    };
+    aplicar(estreita.matches);
+    const aoMudar = (evento: MediaQueryListEvent) => aplicar(evento.matches);
+    estreita.addEventListener('change', aoMudar);
+    return () => estreita.removeEventListener('change', aoMudar);
   }, []);
 
   const porTipo = new Map<TipoPostoMapa, number>();
@@ -59,7 +79,10 @@ export function LegendaMapa({
         type="button"
         aria-expanded={aberta}
         aria-controls={idCorpo}
-        onClick={() => setAberta((a) => !a)}
+        onClick={() => {
+          decidiuNaMao.current = true;
+          setAberta((a) => !a);
+        }}
         className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-left font-medium text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
       >
         {aberta ? (
