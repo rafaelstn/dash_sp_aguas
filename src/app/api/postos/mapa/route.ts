@@ -45,6 +45,34 @@ function booleano(valor: string | null): boolean | undefined {
 
 const textoOpcional = z.string().trim().min(1).max(120).optional();
 
+/**
+ * Dimensão que aceita `sem` (o valor ausente) além do valor normal.
+ *
+ * O `z.union` descarta as mensagens dos ramos e reporta um `invalid_union`
+ * cru: `uf=SPX` respondia `"uf.0: Invalid input"`, em inglês, numa API de
+ * órgão público. O `errorMap` do próprio union é o que sobrevive à união, e é
+ * por isso que a frase útil mora aqui e não dentro de cada ramo.
+ */
+function ouSemValor<T extends z.ZodTypeAny>(valor: T, mensagem: string) {
+  return z.union([z.literal(SEM_VALOR).transform(() => null), valor], {
+    errorMap: () => ({ message: mensagem }),
+  });
+}
+
+/**
+ * Número de UGRHI como texto de dígitos, nunca por `z.coerce.number()`.
+ *
+ * A coerção passa pelo `Number()`, que aceita hexadecimal, notação científica
+ * e sinal: `ugrhi=0x10` respondia 200 filtrando pela UGRHI 16, e `ugrhi=1e1`
+ * pela 10, contrariando o "1 a 22" que esta mesma rota documenta. O cliente já
+ * validava assim em `estado-url.ts`.
+ */
+const numeroUgrhi = z
+  .string()
+  .regex(/^\d{1,2}$/)
+  .transform(Number)
+  .pipe(z.number().int().min(1).max(UGRHI_MAXIMA));
+
 const querySchema = z.object({
   q: z.string().trim().max(60).optional(),
   municipio: textoOpcional,
@@ -56,22 +84,17 @@ const querySchema = z.object({
   transmissao: z.array(z.enum(TRANSMISSOES)).optional(),
   vazao: z.array(z.enum(OPCOES_VAZAO)).optional(),
   ugrhi: z
-    .array(
-      z.union([
-        z.literal(SEM_VALOR).transform(() => null),
-        z.coerce.number().int().min(1).max(UGRHI_MAXIMA),
-      ]),
-    )
+    .array(ouSemValor(numeroUgrhi, `número de UGRHI, de 1 a ${UGRHI_MAXIMA}, ou "sem"`))
     .optional(),
   uf: z
     .array(
-      z.union([
-        z.literal(SEM_VALOR).transform(() => null),
+      ouSemValor(
         z
           .string()
-          .regex(/^[A-Za-z]{2}$/, 'sigla de UF com duas letras')
+          .regex(/^[A-Za-z]{2}$/)
           .transform((v) => v.toUpperCase()),
-      ]),
+        'sigla de UF com duas letras, ou "sem"',
+      ),
     )
     .optional(),
 });

@@ -96,23 +96,34 @@ export function LegendaMapa({
               </li>
             ))}
           </ul>
-          <label className="flex cursor-pointer items-center gap-2 border-t border-app-border-subtle pt-2 text-app-fg">
-            <input
-              type="checkbox"
-              checked={outrasRedes === 'ligada' || outrasRedes === 'carregando'}
-              onChange={aoAlternarOutrasRedes}
-              className="h-3.5 w-3.5 accent-gov-azul"
-            />
-            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 12 12">
-              <circle cx="6" cy="6" r="3.6" fill={COR_OUTRAS_REDES} opacity="0.7" />
-            </svg>
-            <span className="flex-1">Outras redes (SIBH)</span>
-            <span className="tabular-nums text-app-fg-muted" aria-live="polite">
+          {/*
+            O contador fica FORA do `<label>` de propósito. Dentro dele, o texto
+            entrava no nome acessível do checkbox, que passava a se chamar
+            "Outras redes (SIBH) carregando" e depois "Outras redes (SIBH) 1.234":
+            nome de controle que muda sozinho, e uma região `aria-live` aninhada
+            num rótulo, que os leitores de tela tratam de forma inconsistente.
+            Separado, o checkbox tem nome estável e a contagem é anunciada como
+            status, que é o que ela é.
+          */}
+          <div className="flex items-center gap-2 border-t border-app-border-subtle pt-2 text-app-fg">
+            <label className="flex flex-1 cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={outrasRedes === 'ligada' || outrasRedes === 'carregando'}
+                onChange={aoAlternarOutrasRedes}
+                className="h-3.5 w-3.5 accent-gov-azul"
+              />
+              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 12 12">
+                <circle cx="6" cy="6" r="3.6" fill={COR_OUTRAS_REDES} opacity="0.7" />
+              </svg>
+              <span>Outras redes (SIBH)</span>
+            </label>
+            <span className="tabular-nums text-app-fg-muted" role="status">
               {outrasRedes === 'carregando' && 'carregando'}
               {outrasRedes === 'ligada' && fmt(totalOutrasRedes)}
               {outrasRedes === 'erro' && 'indisponível'}
             </span>
-          </label>
+          </div>
         </div>
       )}
     </section>

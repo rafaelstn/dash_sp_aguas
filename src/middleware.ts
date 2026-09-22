@@ -228,6 +228,15 @@ export const config = {
   // Matcher exclui assets estáticos pra não pagar custo de middleware neles
   // E pra não disparar redirect 307 pra /login em arquivos de public/
   // (logo, ícones, fontes, etc.) acessados por usuário não autenticado.
+  //
+  // A consequência, que vale para quem colocar arquivo novo em `public/`:
+  // QUALQUER arquivo com uma dessas extensões fica público, sem sessão, para
+  // quem souber a URL. A extensão `.json` é a que mais convida ao engano, e
+  // hoje serve os dois GeoJSON de `public/geo` (limite do estado e polígonos
+  // das UGRHIs), que são divisão administrativa de bacia já divulgada pelo
+  // SIBH e pelo DAEE, sem coordenada de posto e sem dado pessoal. Dado do
+  // órgão que não seja público assim não entra em `public/`: ele é servido por
+  // rota sob `src/app/api`, que passa por `exigirUsuario`.
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|robots.txt|sw.js|manifest.json|manifest.webmanifest|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|json|webmanifest|woff|woff2|ttf|otf|eot|map|txt)$).*)',
   ],

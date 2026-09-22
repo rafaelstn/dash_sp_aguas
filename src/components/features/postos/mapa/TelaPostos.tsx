@@ -517,7 +517,28 @@ export function TelaPostos() {
               ))}
             </SkeletonGrupo>
           ) : carga.situacao === 'erro' ? (
-            <p className="p-4 text-sm text-app-fg-muted">A lista aparece quando os postos carregarem.</p>
+            /*
+              Mesma explicação e mesma ação do alerta do mapa. Antes daqui saía
+              só "A lista aparece quando os postos carregarem", que não diz que
+              houve falha nem oferece saída: em tela estreita o painel fica
+              ABAIXO do mapa, então quem rolou até a lista lia uma frase de
+              espera para uma carga que já tinha falhado. Sem `role="alert"` de
+              propósito, porque o do mapa já anuncia a mesma falha e dois
+              alertas simultâneos leem a mesma coisa duas vezes.
+            */
+            <div className="space-y-3 p-4">
+              <p className="text-sm font-medium text-app-fg">Não foi possível carregar os postos</p>
+              <p className="text-sm text-app-fg-muted">{carga.mensagem}</p>
+              {carga.status !== 401 ? (
+                <button type="button" onClick={recarregar} className={classeAcaoSecundaria}>
+                  Tentar de novo
+                </button>
+              ) : (
+                <a href="/login" className={classeAcaoSecundaria}>
+                  Entrar
+                </a>
+              )}
+            </div>
           ) : estado.posto && aberto ? (
             <DetalhePosto ponto={aberto} comparacao={comparacaoChuva} aoVoltar={fechar} />
           ) : estado.posto ? (

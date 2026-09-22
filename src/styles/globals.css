@@ -87,7 +87,19 @@
 
   /* Dark mode — NÃO habilitar agora. Ative depois aplicando
      <html data-theme="dark">. Valores iniciais abaixo são ponto de
-     partida; refinar na ativação. */
+     partida; refinar na ativação.
+
+     ANTES de descomentar, resolver o `bg-white` fixo: ele não é token e não
+     acompanha o tema. Quem ligar o dark sem isso põe `--fg-default`
+     (210 20% 96%, quase branco) sobre fundo branco, e o texto some. Os casos
+     sobre o mapa são os piores, porque a caixa é o único contraste contra os
+     tiles: legenda, aviso de mapa offline, dica do posto e o "Carregando
+     postos" da tela Postos.
+
+     A régua é o comando, não este número: `grep -rn "bg-white" src/` dava 59
+     ocorrências em 22/09/2026. O conserto é dar `<alpha-value>` aos tokens em
+     tailwind.config e trocar `bg-white` por `bg-app-surface` (hoje idêntico:
+     `--bg-surface` é `0 0% 100%`), o que torna a troca de tema neutra. */
   /*
   [data-theme="dark"] {
     --bg-app: 222 15% 8%;

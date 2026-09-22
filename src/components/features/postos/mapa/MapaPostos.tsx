@@ -110,6 +110,15 @@ function ehCelular(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
 }
 
+/**
+ * Folga base do encaixe do estado inteiro. No celular tem de ser zero: com 6 px
+ * o encaixe (zoomSnap 0,25) caía um degrau e São Paulo ocupava 83% da largura,
+ * contra 98% sem folga (medido a 390 px).
+ */
+function baseDoEstado(): number {
+  return ehCelular() ? 0 : 20;
+}
+
 async function lerGeo(nome: string): Promise<Colecao | null> {
   try {
     const r = await fetch(`/geo/${nome}`);
@@ -176,11 +185,7 @@ export function MapaPostos({
     mapaRef.current = mapa;
     mapa.attributionControl.setPrefix(false);
 
-    const folga = (): L.FitBoundsOptions =>
-      // Sem folga no celular: com 6 px o encaixe (zoomSnap 0,25) caía um degrau e
-      // o estado ocupava 83% da largura; sem folga ocupa 98% (a 390 px).
-      ehCelular() ? { padding: [0, 0] } : { padding: [20, 20] };
-    mapa.fitBounds(LIMITE_SP, { ...folga(), animate: false });
+    mapa.fitBounds(LIMITE_SP, { ...folgaDaLegenda(LIMITE_SP, baseDoEstado()), animate: false });
 
     for (const [nome, z] of [
       ['mascara', 250],
@@ -323,17 +328,31 @@ export function MapaPostos({
       const alvo = ugrhisRef.current
         ?.getLayers()
         .find((l) => codigoDaFeicao(l) === numero) as L.Polygon | undefined;
-      if (alvo) mapa.fitBounds(alvo.getBounds(), { padding: ehCelular() ? [10, 10] : [24, 24], animate: animar });
+      if (!alvo) return;
+      const limite = alvo.getBounds();
+      mapa.fitBounds(limite, {
+        ...folgaDaLegenda(limite, ehCelular() ? 10 : 24),
+        animate: animar,
+      });
     }
 
     /**
-     * Folga do enquadramento pelos pontos. A legenda aberta ocupa o canto
-     * inferior esquerdo e, medido no filtro PR a 1280 px, escondia a ponta
-     * oeste do estado. A folga desvia dela pela lateral OU por baixo, o que
-     * deixar o zoom maior; no celular a legenda nasce recolhida.
+     * Folga do enquadramento. A legenda aberta ocupa o canto inferior esquerdo
+     * e, medido no filtro PR a 1280 px, escondia a ponta oeste do estado. A
+     * folga desvia dela pela lateral OU por baixo, o que deixar o zoom maior;
+     * no celular a legenda nasce recolhida, então lá vale só a base.
+     *
+     * A `base` vem de quem chama porque cada enquadramento tem a sua, medida:
+     * o estado no celular pede 0, porque com 6 px o encaixe (zoomSnap 0,25)
+     * caía um degrau e ele passava de 98% para 83% da largura (a 390 px). Os
+     * três enquadramentos passam por aqui de propósito: quando só o dos pontos
+     * desviava da legenda, escolher uma UGRHI do oeste ou voltar para o estado
+     * inteiro punha a ponta do recorte atrás dela.
      */
-    function folgaDaLegenda(alvo: L.LatLngBounds): L.FitBoundsOptions {
-      const base = ehCelular() ? 16 : 32;
+    function folgaDaLegenda(
+      alvo: L.LatLngBounds,
+      base = ehCelular() ? 16 : 32,
+    ): L.FitBoundsOptions {
       const legenda = mapa
         .getContainer()
         .parentElement?.parentElement?.querySelector<HTMLElement>('section[aria-label="Legenda do mapa"]');
@@ -350,7 +369,10 @@ export function MapaPostos({
     function enquadrarEstado() {
       mapa.setMinZoom(ZOOM_MINIMO_SP);
       mapa.setMaxBounds(ARRASTO_SP);
-      mapa.fitBounds(LIMITE_SP, { ...folga(), animate: !preferenciaSemMovimento() });
+      mapa.fitBounds(LIMITE_SP, {
+        ...folgaDaLegenda(LIMITE_SP, baseDoEstado()),
+        animate: !preferenciaSemMovimento(),
+      });
     }
 
     const controle: ControleMapa = {

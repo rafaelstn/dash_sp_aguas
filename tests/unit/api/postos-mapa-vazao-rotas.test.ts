@@ -112,6 +112,40 @@ describe('GET /api/postos/mapa', () => {
     expect((await getMapa(req('/api/postos/mapa?ugrhi=22'))).status).toBe(200);
   });
 
+  it('ugrhi aceita só dígito decimal, e recusa a notação que o JS converteria', async () => {
+    // `z.coerce.number()` passa pelo `Number()`, que aceita hexadecimal,
+    // notação científica e sinal. A rota documenta "1 a 22" e prometia 400
+    // para o desconhecido, mas `ugrhi=0x10` respondia 200 filtrando a 16.
+    for (const invalido of ['0x10', '1e1', '+5', '2.0', 'Infinity', '0', '123']) {
+      const res = await getMapa(req(`/api/postos/mapa?ugrhi=${encodeURIComponent(invalido)}`));
+      expect(res.status, invalido).toBe(400);
+    }
+    // Controle: o que é dígito continua passando, com e sem zero à esquerda.
+    for (const valido of ['2', '02', '22']) {
+      expect((await getMapa(req(`/api/postos/mapa?ugrhi=${valido}`))).status, valido).toBe(200);
+    }
+    // `?ugrhi=` (vazio) não é valor inválido: `multiplos()` descarta o vazio e
+    // o filtro deixa de existir, que é o mesmo que não mandar a chave.
+    const vazio = await getMapa(req('/api/postos/mapa?ugrhi='));
+    expect(vazio.status).toBe(200);
+    expect((await vazio.json()).total).toBe((await (await getMapa(req('/api/postos/mapa'))).json()).total);
+  });
+
+  it('motivo de query inválida sai em português, inclusive nos ramos do union', async () => {
+    // O `z.union` descarta as mensagens dos ramos e devolve "Invalid input".
+    // Numa API de órgão público quem depura um link recebia inglês genérico.
+    for (const [caminho, esperado] of [
+      ['uf=SPX', 'sigla de UF'],
+      ['ugrhi=abc', 'UGRHI'],
+    ] as const) {
+      const res = await getMapa(req(`/api/postos/mapa?${caminho}`));
+      expect(res.status, caminho).toBe(400);
+      const motivos = (await res.json()).motivos.join(' ');
+      expect(motivos, caminho).toContain(esperado);
+      expect(motivos, caminho).not.toContain('Invalid input');
+    }
+  });
+
   it('ugrhi=sem devolve só os postos sem UGRHI, e combina com número', async () => {
     const todos = await (await getMapa(req('/api/postos/mapa'))).json();
     const semUgrhi = todos.pontos.filter((p: { ugrhi: number | null }) => p.ugrhi === null);
