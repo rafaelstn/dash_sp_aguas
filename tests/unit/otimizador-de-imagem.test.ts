@@ -1,26 +1,29 @@
 /**
- * Toda `<Image>` local do projeto tem de continuar sendo servida depois que o
- * otimizador passou a ter lista de permissão.
+ * O otimizador de imagem do Next e o sharp, que só existe por causa dele.
  *
- * POR QUE ISTO É GUARDA. `/_next/image` está fora do matcher de
- * `src/middleware.ts` (tem de estar: senão todo asset dispararia redirect para
- * `/login`), então ele respondia sem sessão a qualquer caminho local pedido, e
- * cada resposta passava pelo sharp. O `images.localPatterns` do `next.config.ts`
- * fecha isso. O preço é o defeito simétrico, e é ele que esta guarda pega:
- * quem acrescentar uma `<Image>` nova apontando para outro arquivo de `public/`
- * recebe **400 em produção**, porque o caminho não está na lista. Não há aviso
- * de build, não há erro de tipo e em desenvolvimento com `unoptimized` nada
- * aparece: o defeito nasce no servidor do órgão, com a imagem quebrada na tela.
+ * O QUE ESTA GUARDA PROTEGE. `/_next/image` está fora do matcher de
+ * `src/middleware.ts` (e tem de estar: dentro dele todo asset dispararia
+ * redirect para /login), então o endpoint respondia sem sessão a qualquer
+ * caminho local pedido, e cada resposta passava pelo sharp. Em 22/09/2026 ele
+ * foi desligado por `images.unoptimized`, e o sharp saiu do `standalone` por
+ * `outputFileTracingExcludes`. São duas linhas que dependem uma da outra, e é
+ * essa dependência que cria a armadilha:
  *
- * O que a guarda mede: a DECLARAÇÃO no `next.config.ts` contra o uso real na
- * AST dos arquivos versionados. Ela não prova que o endpoint responde 400 fora
- * da lista, e essa metade continua **não medida**: a prova exige subir o
- * servidor e pedir `/_next/image?url=...`.
+ *   religar o otimizador SEM tirar a exclusão do sharp = a primeira imagem
+ *   otimizada morre com "Cannot find module 'sharp'", dentro do servidor do
+ *   órgão, que não tem internet. Build verde, typecheck verde, lint verde.
  *
- * Medido em 22/09/2026, antes da lista existir: as três `<Image>` do projeto
- * (login, ChromeDashboard, MenuMobile) apontam todas para
- * `/logo-spaguas-header.png` e todas passam `unoptimized`, ou seja, nenhuma
- * chega a usar o endpoint hoje.
+ * Nenhuma das duas linhas é alcançável por teste de unidade comum: elas são
+ * configuração de build. Por isso a guarda lê a AST do `next.config.ts` (e não
+ * substring: os comentários do arquivo citam `unoptimized` várias vezes) e a
+ * cruza com o uso real de `<Image>` nos arquivos de `src/`.
+ *
+ * O QUE ELA NÃO MEDE: o efeito. A prova de efeito foi feita à parte em
+ * 22/09/2026, com a cópia do `standalone` FORA do repositório (rodando de
+ * dentro, o Node sobe a árvore e ainda acha o `node_modules` do projeto, o que
+ * invalidaria a medição): ali `require('sharp')` dá MODULE_NOT_FOUND, o
+ * servidor sobe, `/_next/image?url=...` responde 404 sem estourar e
+ * `/logo-spaguas-header.png` continua em 200.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -32,13 +35,85 @@ const RAIZ = path.resolve(__dirname, '..', '..');
 
 type UsoDeImagem = { arquivo: string; src: string; otimizada: boolean };
 
-/** Caminhos declarados em `images.localPatterns` no `next.config.ts`. */
-function padroesLocais(): string[] {
+/* ------------------------------------------------------------------ *
+ * Leitura do next.config.ts pela AST
+ * ------------------------------------------------------------------ */
+
+function objetoDaConfig(): ts.ObjectLiteralExpression {
   const texto = readFileSync(path.join(RAIZ, 'next.config.ts'), 'utf8');
-  const bloco = /localPatterns\s*:\s*\[([\s\S]*?)\]/.exec(texto);
-  if (!bloco) return [];
-  return [...bloco[1]!.matchAll(/pathname\s*:\s*['"]([^'"]+)['"]/g)].map((m) => m[1]!);
+  const fonte = ts.createSourceFile(
+    'next.config.ts',
+    texto,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let achado: ts.ObjectLiteralExpression | undefined;
+  const visitar = (no: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(no) &&
+      no.name.getText(fonte) === 'nextConfig' &&
+      no.initializer &&
+      ts.isObjectLiteralExpression(no.initializer)
+    ) {
+      achado = no.initializer;
+    }
+    ts.forEachChild(no, visitar);
+  };
+  visitar(fonte);
+  if (!achado) {
+    // Piso: se alguém trocar o objeto literal por uma variável montada em
+    // outro lugar, a guarda inteira passaria a medir vazio. Melhor quebrar.
+    throw new Error('next.config.ts: não achei `const nextConfig` como objeto literal');
+  }
+  return achado;
 }
+
+function propriedade(
+  objeto: ts.ObjectLiteralExpression,
+  nome: string,
+): ts.Expression | undefined {
+  for (const p of objeto.properties) {
+    if (ts.isPropertyAssignment(p) && p.name.getText() === nome) return p.initializer;
+  }
+  return undefined;
+}
+
+/** `images.unoptimized: true`, o que faz o servidor responder 404 no endpoint. */
+function otimizadorDesligado(): boolean {
+  const images = propriedade(objetoDaConfig(), 'images');
+  if (!images || !ts.isObjectLiteralExpression(images)) return false;
+  return propriedade(images, 'unoptimized')?.kind === ts.SyntaxKind.TrueKeyword;
+}
+
+/** Caminhos de `images.localPatterns`, a lista de permissão do endpoint. */
+function padroesLocais(): string[] {
+  const images = propriedade(objetoDaConfig(), 'images');
+  if (!images || !ts.isObjectLiteralExpression(images)) return [];
+  const lista = propriedade(images, 'localPatterns');
+  if (!lista || !ts.isArrayLiteralExpression(lista)) return [];
+  return lista.elements.flatMap((elemento) => {
+    if (!ts.isObjectLiteralExpression(elemento)) return [];
+    const caminho = propriedade(elemento, 'pathname');
+    return caminho && ts.isStringLiteral(caminho) ? [caminho.text] : [];
+  });
+}
+
+/** `true` quando o sharp está fora do tracing do `standalone`. */
+function sharpExcluidoDoTracing(): boolean {
+  const excluidos = propriedade(objetoDaConfig(), 'outputFileTracingExcludes');
+  if (!excluidos || !ts.isObjectLiteralExpression(excluidos)) return false;
+  return excluidos.properties.some((p) => {
+    if (!ts.isPropertyAssignment(p) || !ts.isArrayLiteralExpression(p.initializer)) return false;
+    return p.initializer.elements.some(
+      (e) => ts.isStringLiteral(e) && e.text.includes('sharp'),
+    );
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Leitura das <Image> do projeto
+ * ------------------------------------------------------------------ */
 
 /**
  * Lê as `<Image>` de um arquivo pela AST, e não por substring: `src` dentro de
@@ -105,20 +180,35 @@ function todosOsUsos(): UsoDeImagem[] {
   });
 }
 
-describe('otimizador de imagem: lista de permissão e uso real', () => {
-  it('a lista de caminhos locais está declarada e legível', () => {
-    // Sem este caso, trocar o array literal por uma variável faria toda a
-    // guarda medir vazio e passar em silêncio.
-    expect(padroesLocais().length).toBeGreaterThan(0);
+/* ------------------------------------------------------------------ */
+
+describe('otimizador de imagem e sharp', () => {
+  it('o next.config é legível como objeto literal', () => {
+    expect(objetoDaConfig().properties.length).toBeGreaterThan(0);
   });
 
-  it('todo caminho declarado existe em public/', () => {
-    for (const caminho of padroesLocais()) {
-      expect(existsSync(path.join(RAIZ, 'public', caminho)), caminho).toBe(true);
-    }
+  it('o endpoint nunca fica aberto: ou desligado, ou com lista de permissão', () => {
+    // As duas formas são aceitáveis; o que não pode é nenhuma das duas, que é
+    // o estado em que `/_next/image` processa qualquer caminho local sem sessão.
+    expect(
+      otimizadorDesligado() || padroesLocais().length > 0,
+      'declare `images.unoptimized: true` ou `images.localPatterns` no next.config.ts',
+    ).toBe(true);
   });
 
-  it('o extrator enxerga o uso que deveria reprovar', () => {
+  it('o sharp só sai do tracing enquanto o otimizador está desligado', () => {
+    // Esta é a armadilha que a mudança de 22/09/2026 criou. A direção contrária
+    // (desligado sem excluir) não é defeito: custa 20 MB na imagem, não quebra.
+    if (!sharpExcluidoDoTracing()) return;
+    expect(
+      otimizadorDesligado(),
+      'o sharp está fora do `outputFileTracingExcludes` e o otimizador voltou a ' +
+        'ligar: a primeira imagem otimizada vai morrer em produção com ' +
+        '"Cannot find module \'sharp\'". Tire a exclusão junto com o religamento',
+    ).toBe(true);
+  });
+
+  it('o extrator de <Image> enxerga o uso que deveria reprovar', () => {
     // Medidor próprio se prova com um caso que reprova e outro que passa.
     const amostra = `
       const a = <Image src="/fora-da-lista.png" width={1} height={1} />;
@@ -140,22 +230,29 @@ describe('otimizador de imagem: lista de permissão e uso real', () => {
 
   it('a varredura alcança as <Image> que o projeto tem hoje', () => {
     // Piso contra leitura vazia: se o `git ls-files` ou o parser deixarem de
-    // achar arquivo nenhum, os casos abaixo ficariam verdes sem medir nada.
-    const usos = todosOsUsos();
-    expect(usos.length).toBeGreaterThanOrEqual(3);
+    // achar arquivo nenhum, os casos de lista ficariam verdes sem medir nada.
+    expect(todosOsUsos().length).toBeGreaterThanOrEqual(3);
   });
 
-  it('nenhuma <Image> otimizada aponta para caminho fora da lista', () => {
-    const permitidos = new Set(padroesLocais());
-    const foraDaLista = todosOsUsos().filter(
-      (u) => u.otimizada && u.src.startsWith('/') && !permitidos.has(u.src),
-    );
-    // A mensagem tem de dizer o conserto, porque quem esbarrar nisto vai estar
-    // acrescentando uma imagem e não mexendo em configuração de build.
-    expect(
-      foraDaLista.map((u) => `${u.arquivo}: ${u.src}`),
-      'responderiam 400 em /_next/image. Declare o caminho em images.localPatterns ' +
-        '(next.config.ts) ou passe `unoptimized` na <Image>',
-    ).toEqual([]);
+  // Os dois casos abaixo só fazem sentido com o otimizador ligado. Ficam
+  // `skipped` e não verdes, para a suíte não fingir que mediu.
+  describe.skipIf(otimizadorDesligado())('com o otimizador ligado', () => {
+    it('todo caminho declarado existe em public/', () => {
+      for (const caminho of padroesLocais()) {
+        expect(existsSync(path.join(RAIZ, 'public', caminho)), caminho).toBe(true);
+      }
+    });
+
+    it('nenhuma <Image> otimizada aponta para caminho fora da lista', () => {
+      const permitidos = new Set(padroesLocais());
+      const foraDaLista = todosOsUsos().filter(
+        (u) => u.otimizada && u.src.startsWith('/') && !permitidos.has(u.src),
+      );
+      expect(
+        foraDaLista.map((u) => `${u.arquivo}: ${u.src}`),
+        'responderiam 400 em /_next/image. Declare o caminho em images.localPatterns ' +
+          '(next.config.ts) ou passe `unoptimized` na <Image>',
+      ).toEqual([]);
+    });
   });
 });

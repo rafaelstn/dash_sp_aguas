@@ -85,16 +85,57 @@ const nextConfig: NextConfig = {
   // Ou seja, sem esta linha o build mente por omissão. Guarda de declaração em
   // `tests/unit/drivers-externos-do-bundle.test.ts`.
   serverExternalPackages: ['postgres', 'mssql', 'tedious'],
-  // Otimizador de imagem restrito ao único arquivo que a aplicação serve por
-  // ele. `/_next/image` está fora do matcher de `src/middleware.ts` (senão
-  // todo asset dispararia redirect para /login), então respondia sem sessão a
-  // qualquer caminho local que alguém pedisse. Medido em 22/09/2026: os três
-  // `<Image>` do projeto (login, ChromeDashboard, MenuMobile) apontam para
-  // `/logo-spaguas-header.png` e todos passam `unoptimized`, ou seja, nenhum
-  // deles chega a usar o endpoint. Com a lista, um caminho fora dela responde
-  // 400 em vez de ser processado pelo sharp.
-  images: {
-    localPatterns: [{ pathname: '/logo-spaguas-header.png', search: '' }],
+  // Otimizador de imagem DESLIGADO. `/_next/image` está fora do matcher de
+  // `src/middleware.ts` (e tem de estar: dentro dele todo asset dispararia
+  // redirect para /login), então o endpoint respondia sem sessão a qualquer
+  // caminho local pedido, e cada resposta passava pelo sharp.
+  //
+  // Por que desligar, em vez de restringir por `localPatterns`. Medido em
+  // 22/09/2026:
+  //
+  //   1. Ninguém o consome. As três `<Image>` do projeto (login,
+  //      ChromeDashboard, MenuMobile) apontam para `/logo-spaguas-header.png` e
+  //      TODAS passam `unoptimized`, ou seja, já serviam o arquivo original.
+  //      Desligar não muda um pixel na tela.
+  //   2. Com esta linha o servidor responde 404 ANTES de validar parâmetro e
+  //      antes de carregar o otimizador (`next-server.js`:
+  //      `if (imagesConfig.loader !== 'default' || imagesConfig.unoptimized)`).
+  //      Com `localPatterns`, o caminho permitido continuaria chegando ao sharp.
+  //   3. Com o endpoint fechado, o sharp deixa de ter caminho de execução:
+  //      `getSharp()` é preguiçoso e só é chamado de `optimizeImage` e
+  //      `canDecodeAvif`, os dois depois do 404. É o que torna seguro excluí-lo
+  //      do tracing logo abaixo, e é onde mora a CVE do sharp 0.34.5 levantada
+  //      pelo André.
+  //
+  // O preço: imagem grande acrescentada depois vai íntegra para o navegador,
+  // sem redimensionamento no servidor. Com um logo de 178x100 isso não é custo;
+  // se um dia for, religar o otimizador exige `localPatterns` na mesma linha E
+  // desfazer a exclusão abaixo, e a guarda em
+  // `tests/unit/otimizador-de-imagem.test.ts` recusa a porta aberta (as duas
+  // ausentes) e cobra a lista quando ele voltar.
+  images: { unoptimized: true },
+  // O sharp fora da imagem do órgão.
+  //
+  // MEDIDO, e ao contrário do que eu previa: desligar o otimizador NÃO tira o
+  // pacote do `standalone`. O tracing é estático e segue o `require('sharp')`
+  // do `image-optimizer.js` do Next, que faz parte do servidor e não olha
+  // configuração. Com dois builds `DOCKER_BUILD=1`, `.next/standalone` ficou em
+  // 80 MB nos dois casos, com `sharp` e `@img` presentes (20 MB, 25% do total).
+  //
+  // Excluir é seguro PORQUE o otimizador está desligado logo acima: os únicos
+  // chamadores do sharp ficam depois do 404, e `canDecodeAvif` já trata a
+  // ausência do pacote em try/catch. Se o otimizador voltar, esta exclusão sai
+  // junto, senão a primeira imagem otimizada morre com "Cannot find module".
+  //
+  // Com a exclusão: `sharp` e `@img` AUSENTES, `.next/standalone` em 60 MB.
+  // Provado em EXECUÇÃO, não só em build, e a prova foi feita com a cópia do
+  // standalone FORA do repositório, porque rodando de dentro o Node sobe a
+  // árvore e ainda acha o `node_modules` do projeto (no container não há nada
+  // acima). Nessa cópia, `require('sharp')` dá MODULE_NOT_FOUND, o servidor
+  // sobe em 269 ms, `/_next/image?url=...` responde 404 sem estourar e
+  // `/logo-spaguas-header.png` continua em 200.
+  outputFileTracingExcludes: {
+    '*': ['node_modules/sharp/**', 'node_modules/@img/**'],
   },
   // typedRoutes desabilitado: Turbopack (Next 15.5) ainda não suporta.
   // Reativar quando o Turbopack estabilizar; até lá, o typecheck normal do tsc
