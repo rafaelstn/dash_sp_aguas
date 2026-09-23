@@ -12,8 +12,11 @@ remediação 2026-06-25.
 - [ ] `npm run test` verde (toda a suíte).
 - [ ] `npm run build` conclui sem erro.
 - [ ] **CI verde no commit que vai subir** (`gh run list --workflow=CI --branch main`).
-      Verde local não substitui: o CI roda em Linux/Node 20, o mesmo par do container
-      de produção. Se o lockfile foi tocado, confirmar que veio de `npm run lock:ci`.
+      Verde local não substitui: o CI roda em Linux/Node 24, o mesmo par do container
+      de produção (`node:24-alpine` nos três estágios do `Dockerfile`). Node 24 traz
+      npm 11 dos dois lados, então `npm run lock:ci`, que fixa o npm 10 para gerar o
+      lock, deixou de ser obrigatório em 22/09/2026: não sobrou ninguém rodando npm 10.
+      O motivo da subida está no cabeçalho de `.github/workflows/ci.yml`.
 
 ## 2. Segurança e segredos
 

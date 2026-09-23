@@ -222,7 +222,7 @@ Serviços do compose:
 | `npm test` | Suíte Vitest completa (a integração é pulada sem `TEST_DATABASE_URL`) |
 | `npm run test:integration` | Testes contra Postgres real (exige `TEST_DATABASE_URL`) |
 | `npm run db:test:up` / `db:test:schema` / `db:test:down` | Sobe, popula e derruba o Postgres de teste local |
-| `npm run lock:ci` | Regenera o `package-lock.json` compatível com o npm 10 do CI |
+| `npm run lock:ci` | Regenera o `package-lock.json` no formato do npm 10. Não é mais obrigatório: o CI roda npm 11 desde 22/09/2026 |
 
 > **Testes de integração.** Provam contra Postgres o que o mock in-memory não
 > alcança: atomicidade, idempotência sob concorrência, coluna `GENERATED`, índice
@@ -237,10 +237,15 @@ Serviços do compose:
 > migrations têm que suportar reexecução, que é como o deploy on-prem roda) e
 > executa a suíte.
 
-> **Lockfile e CI.** O CI e o Dockerfile de produção rodam Node 20, ou seja, npm 10.
-> Um `npm install` feito em Node 22+ (npm 11) grava um lock que o npm 10 recusa
-> (`npm ci` falha com `Missing: @emnapi/... from lock file`), e a quebra só aparece
-> no CI. Depois de alterar dependência, rodar `npm run lock:ci` e commitar o lock.
+> **Lockfile e CI.** Desde 22/09/2026 o CI e o Dockerfile de produção rodam Node 24,
+> ou seja, npm 11 nos dois lados. A divergência que obrigava a gerar o lock com npm
+> 10 acabou, e `npm run lock:ci` deixou de ser obrigatório: o script continua no
+> `package.json` para quem precisar reproduzir um lock naquele formato. Antes disso
+> o CI rodava Node 20 (npm 10) e um `npm install` feito em npm 11 gravava um lock
+> que o npm 10 recusava (`npm ci` falhando com `Missing: @emnapi/... from lock
+> file`), quebra que só aparecia no CI. O motivo da subida, incluindo os 20 pacotes
+> cujo `engines.node` a linha 20 não satisfazia, está no cabeçalho de
+> `.github/workflows/ci.yml`.
 
 ---
 
