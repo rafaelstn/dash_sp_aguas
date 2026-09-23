@@ -123,7 +123,15 @@ echo "psql de mentira no PATH: $resolvido"
 # do dia a dia. ANTES do conserto, todas as chamadas levavam a senha no argv.
 # ---------------------------------------------------------------------------
 novo_registro 'db-migrate-uri'
-if ! rodar_limpo "$RAIZ/scripts/db/db-migrate.sh" "postgresql://spaguas:${SENHA_NA_URI}@localhost:5432/spaguas"; then
+# `bash <script>` e nao execucao direta: e assim que o README e o
+# docs/onboarding-notebook.md mandam chamar (`bash scripts/db/db-migrate.sh`), e
+# nenhum .sh versionado deste repositorio carrega bit de execucao (todos
+# 100644, medido em 23/09/2026 com `git ls-files -s`). No Git Bash do Windows
+# isso nao aparece, porque `core.fileMode=false` deixa executar de qualquer
+# forma; no Linux do CI a execucao direta deu `Permission denied` e a regua
+# reprovou com ZERO chamada de psql, o que passou nas assercoes de AUSENCIA e
+# so foi denunciado pela assercao de PRESENCA das 73 chamadas.
+if ! rodar_limpo bash "$RAIZ/scripts/db/db-migrate.sh" "postgresql://spaguas:${SENHA_NA_URI}@localhost:5432/spaguas"; then
   reprovar "db-migrate.sh saiu com erro no caminho da URI. Saida:"
   cat "$TRABALHO/saida.txt" >&2
 fi
@@ -148,7 +156,12 @@ n_uri=$(grep '^ARGV:' "$registro" | grep -c -- '\[postgresql://spaguas@localhost
 
 # A ordem dos arquivos e o comportamento que o conserto nao podia mudar: a
 # migration 0057 depende do que a 0045 fez.
-grep '^ARGV:' "$registro" | sed -n 's/.*\[-f\] \[\(.*\)\]$/\1/p' | sed 's#.*/##' > "$TRABALHO/ordem-obtida.txt"
+# O `|| true` nao e frouxidao: com o registro VAZIO (caso 1 quebrado por qualquer
+# motivo) o `grep` sai 1, e sob `set -euo pipefail` o pipeline mata a regua aqui,
+# antes do mutante e dos outros nove casos. Foi o que aconteceu no run 35927205357:
+# a regua reprovou o que devia reprovar e nao relatou mais nada, e ferramenta que
+# morre ao relatar esconde os outros achados. A falha de verdade ja esta contada.
+grep '^ARGV:' "$registro" | sed -n 's/.*\[-f\] \[\(.*\)\]$/\1/p' | sed 's#.*/##' > "$TRABALHO/ordem-obtida.txt" || true
 find "$RAIZ/supabase/migrations" -maxdepth 1 -name '*.sql' | sed 's#.*/##' | sort > "$TRABALHO/ordem-esperada.txt"
 if cmp -s "$TRABALHO/ordem-obtida.txt" "$TRABALHO/ordem-esperada.txt"; then
   aprovar "db-migrate.sh: ordem dos $n arquivos igual a \`ls | sort\`, ON_ERROR_STOP em todas, senha so no ambiente."
@@ -170,7 +183,6 @@ fi
 FORMA_NOVA='psql "${PSQL_CONEXAO\[@\]}"'
 FORMA_ANTIGA="psql \"\$CONN\""
 sed "s#$FORMA_NOVA#$FORMA_ANTIGA#" "$RAIZ/scripts/db/db-migrate.sh" > "$MUTANTE"
-chmod +x "$MUTANTE"
 # A fronteira `(^|[[:space:]])` nao e enfeite: sem ela o proprio nome da funcao
 # `preparar_conexao_psql "$CONN"`, na linha de cima, casa como se fosse a chamada
 # do psql, a contagem da 2 e a semeadura parece errada quando esta certa.
@@ -179,7 +191,10 @@ if [ "$trocas" -ne 1 ]; then
   reprovar "o mutante nao foi semeado (esperava 1 troca, obtive $trocas). Sem a semeadura o resultado abaixo nao mede esta regua."
 else
   novo_registro 'mutante'
-  rodar_limpo "$MUTANTE" "postgresql://spaguas:${SENHA_NA_URI}@localhost:5432/spaguas" || true
+  # Tambem por `bash`, como o caso 1: o mutante mede ESTA regua, e invocar por
+  # caminho diferente do caso que ele espelha seria medir outra coisa. E por isso
+  # que a copia nao recebe bit de execucao.
+  rodar_limpo bash "$MUTANTE" "postgresql://spaguas:${SENHA_NA_URI}@localhost:5432/spaguas" || true
   n_mutante=$(com_marca)
   echo "mutante (forma antiga): $n_mutante chamadas com a senha no argv"
   if [ "$n_mutante" -gt 0 ]; then
