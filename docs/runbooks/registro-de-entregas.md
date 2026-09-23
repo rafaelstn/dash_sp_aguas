@@ -17,6 +17,101 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
+## 22/09/2026, `sha-90655b9`
+
+| Campo | Valor |
+|---|---|
+| Versão que entrou | `sha-90655b9` (branch `chore/preparar-container-prodesp-offline`) |
+| Versão anterior | `sha-7c8c04a` |
+| Autorizado por | Rafael Damasceno, nesta data |
+| Executado por | Matheus (DamaTech), via SSH com VPN |
+| Transporte | imagem por arquivo, 242.256.021 bytes, `scp` (dashboard, migrate, carga-estoque e postgis) |
+| Integridade | `sha256` conferido nas duas pontas: `29e4cb3581427e7e3c55d027805b396b19fca07d37185d0f8e0a9e9490df1d51` |
+
+**O que entrou.** A fusão do Monitor dentro de Postos (mapa, filtros e vazão na
+mesma tela), o fechamento da CVE crítica do Next e da crítica do libheif (`sharp`
+para 0.35.4), os achados de acessibilidade da tela de Postos com régua de
+renderização no Vitest, o otimizador de imagem desligado na imagem do órgão, e o
+CI alinhado ao Node 24 da imagem. **Nenhuma migration nova**: as 73 são idênticas
+às de `sha-7c8c04a`.
+
+**Dois erros nesta subida, e o segundo derrubou o serviço.**
+
+**1. O dump de antes da migração gravou a senha do sudo, em vez do banco.** No
+roteiro, o `pg_dump` ia por pipe para um `tee` com `sudo`, e a função que injeta
+a senha no `sudo` por `stdin` fez o `tee` herdar o `echo` da senha em vez da
+saída do `pg_dump`. O arquivo saiu com **12 bytes** e os códigos do pipe foram
+`255 0`. Consequências e o que foi feito:
+
+- O arquivo foi destruído no servidor com `shred -u -n 3` na mesma sessão.
+- **Não havia dump válido daquele momento.** Os backups legítimos de 16/09
+  continuam no servidor e foram o que restou como ponto de retorno.
+- **O roteiro seguiu mesmo com o código 255.** Faltava guarda de parada: dump que
+  falha tem de abortar antes de trocar o `IMAGEM_TAG`. Está registrado como
+  pendência no runbook de entrega.
+- **Recomendação ao órgão e ao Rafael: rotacionar a senha do sudo do servidor.**
+  O arquivo foi destruído, mas segredo exposto se trata por rotação, não por
+  estimativa de quem viu.
+
+**2. O `migrate` abortou na migration 0057 e o site respondeu 502.** O erro exato:
+
+    ERROR: could not create unique index "uq_estoque_unidades_codigo_spaguas"
+    DETAIL: Key (codigo_spaguas)=(SPA26) is duplicated.
+
+É o **mesmo defeito do incidente de 10/09/2026**, em outro arquivo: índice único
+transitório, criado pela 0057 e derrubado de propósito pela 0060, porque o
+invariante da 0057 está errado. `codigo_spaguas` é código de lote e projeto, não
+patrimônio por unidade: o banco tem **521 linhas** com `SPA26`, que são o lote da
+aba GERAL PENHA e são legítimas desde a 0060. O `IF NOT EXISTS` não protege,
+porque na reaplicação o índice está ausente. Como o `app` só sobe depois de o
+`migrate` encerrar com sucesso, o site saiu do ar.
+
+**Por que passou em 16/09 e não agora.** Naquela subida as migrations rodaram com
+`estoque_unidades` ainda vazia, e a carga do estoque entrou depois. Estado de
+partida vazio faz a migration certa e a errada passarem igual.
+
+- **Tempo fora do ar:** não cronometrado.
+- **Restauração:** `up -d --no-deps app`, seguro porque o esquema já estava
+  completo (41 tabelas medidas depois da falha) e esta entrega não traz migration
+  nova. A versão nova ficou no ar: `spaguas/dashboard:sha-90655b9`, app
+  `Up (healthy)`, `/api/health` com `{"status":"ok","db":"ok"}` e **200 pela
+  borda**.
+- **Correção definitiva, feita na bancada no mesmo dia:** a criação do índice na
+  0057 passou a ser guardada por catálogo, perguntando pelo índice não-único que
+  a 0060 cria no mesmo passo em que derruba este.
+- **A guarda que faltava não era régua nova, era a régua existente medindo o
+  vazio.** O CI já reaplicava todas as migrations e ficava verde, porque
+  reaplicava sobre banco vazio. Entraram dois passos entre a aplicação do zero e
+  a reaplicação: `ops/testing/regua-migrations/semear-estado-de-producao.sql`,
+  que semeia os dois casos reais e falha se não houver duplicata para medir, e
+  `conferir-reaplicacao.sql`, que confere dado preservado, índices transitórios
+  ausentes e substitutos presentes, com âncora de presença, e limpa a semeadura.
+- **Provado nos dois sentidos contra Postgres real** (`postgis/postgis:16-3.4-alpine`
+  descartável): aplicar do zero 0; semear 0 com 1 grupo duplicado em cada tabela,
+  conferido por query independente; **mutante** (a 0057 anterior à correção, pelo
+  `git show HEAD:`, sobre o mesmo estado) reprovou com exit 3 e a mensagem exata
+  de produção; controle com a versão corrigida 0; reaplicar as 73 com o dado
+  presente 0; conferência 0 e limpeza devolvendo 0 e 0.
+- **Escopo fechado por varredura:** cruzados todos os `DROP INDEX` com todos os
+  `CREATE UNIQUE INDEX` das 73 migrations. Só a 0057 estava em aberto. A 0045 já
+  tem a guarda desde `5ff93c7`, e o caso da 0073 é deliberado e documentado.
+
+**Pendente desta entrega, e é bloqueante para a próxima.**
+
+- **A imagem de `migrate` corrigida ainda não subiu.** A VPN caiu antes disso.
+  Enquanto não subir, o `docker compose up -d` do servidor **quebra**, e nenhum
+  deploy sobe pelo caminho normal. O app segue no ar porque tem
+  `restart: unless-stopped`, mas o `up -d` que o runbook manda rodar depois de
+  reboot falharia.
+- Rotação da senha do sudo (acima), decisão do Rafael.
+- Guarda de parada no roteiro de subida, entre o dump e a troca de `IMAGEM_TAG`.
+- **Retenção de imagem:** 9 versões de `dashboard` no servidor contra a política
+  de 3. Ao limpar, o rollback não pode parar antes de `sha-5ff93c7`.
+- **Disco do host com cerca de 2,3 GiB livres**, com `docker_data.vhdx` em
+  61,3 GiB. Compactar exige administrador.
+
+---
+
 ## 16/09/2026, `sha-7c8c04a`
 
 | Campo | Valor |

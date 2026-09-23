@@ -23,6 +23,27 @@ em todo `exec -T` e `docker run` que não leia entrada.
 Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trás) ou
 **HIPÓTESE** (raciocínio ainda não confirmado no ambiente real).
 
+> ### BLOQUEIO ABERTO desde 22/09/2026: a imagem de `migrate` no servidor está quebrada
+>
+> A subida de `sha-90655b9` abortou porque o `migrate` reaplica todas as
+> migrations a cada `up`, e a **0057** recria um índice único que a 0060 derruba
+> de propósito, sobre uma coluna com 521 duplicatas legítimas. Como o `app`
+> depende do `migrate` terminar com sucesso, o site respondeu **502**. Foi
+> restaurado com `up -d --no-deps app`, e a versão nova está no ar.
+>
+> **A correção existe na bancada** (guarda por catálogo na 0057, provada contra
+> Postgres real nos dois sentidos, mais os dois passos novos no CI que semeiam o
+> estado de produção antes da reaplicação), **mas ainda não foi transportada**,
+> porque a VPN caiu antes disso.
+>
+> **Enquanto a imagem de `migrate` corrigida não subir, `docker compose up -d` no
+> servidor quebra e nenhum deploy passa pelo caminho normal.** O app segue no ar
+> pelo `restart: unless-stopped`, mas um reboot seguido do `up -d` que este
+> runbook manda rodar deixaria o site fora.
+>
+> É o mesmo padrão do incidente de 10/09/2026 (migration 0045). O detalhe dos
+> dois está no `registro-de-entregas.md`.
+
 ---
 
 ## 0. Checklist da subida do estoque com código de barras (migrations 0070 a 0073)
@@ -709,14 +730,35 @@ echo "codigos: ${PIPESTATUS[*]}"
 #    0 bytes é o sinal do nome de banco errado.
 sudo chmod 0600 "$DUMP_MIGRACAO"
 
-# O dump é legível e tem dado. Espera: número maior que zero.
-sudo cat "$DUMP_MIGRACAO" \
-  | docker compose -f docker-compose.prod.yml exec -T db pg_restore --list | grep -c 'TABLE DATA'
+# GUARDA DE PARADA. Sem ela a subida segue sobre um backup que não existe, e foi
+# isso que aconteceu em 22/09/2026 (o dump saiu com 12 bytes e o roteiro seguiu).
+# Nada troca o IMAGEM_TAG antes destas três linhas passarem.
+TAMANHO=$(sudo stat -c %s "$DUMP_MIGRACAO")
+TABELAS=$(sudo cat "$DUMP_MIGRACAO" \
+  | docker compose -f docker-compose.prod.yml exec -T db pg_restore --list | grep -c 'TABLE DATA')
+if [ "$TAMANHO" -lt 100000 ] || [ "$TABELAS" -lt 30 ]; then
+  echo "ABORTAR: dump com $TAMANHO bytes e $TABELAS TABLE DATA (16/09/2026: 2.085.051 e 43)"
+  exit 9
+fi
+echo "dump válido: $TAMANHO bytes, $TABELAS TABLE DATA"
 ```
 
 Corrigido em 16/09/2026: a versão anterior redirecionava com `>` sem `sudo` para
 um diretório que é `0700` de root, e o redirecionamento falharia antes de o
 `pg_dump` rodar.
+
+**Se o `sudo` desta linha receber a senha por `stdin`, o dump vira a senha.**
+MEDIDO em 22/09/2026: num roteiro onde o `sudo` era chamado por uma função do
+tipo `echo "$SENHA" | sudo -S -p '' "$@"`, o `tee` dentro do pipe herdou o `echo`
+da senha em vez da saída do `pg_dump`. O arquivo saiu com **12 bytes contendo a
+senha do sudo**, os códigos foram `255 0`, e como não havia a guarda de parada
+acima a subida seguiu sem backup. O arquivo foi destruído com `shred -u -n 3` e
+**a senha do servidor precisa ser rotacionada**.
+
+A regra que evita isso: **a senha do `sudo` nunca entra num comando que já está
+dentro de um pipe**. Ou o `sudo` desta linha roda sem `-S` (sessão com `sudo`
+já autenticado), ou o dump é escrito num diretório do próprio usuário e movido
+depois com `sudo mv`, fora de qualquer pipe.
 
 **E o aviso que não pode faltar:** este arquivo está no **mesmo disco da VM**.
 Se a VM se perder, ele se perde junto, e ele não é backup de nada. O backup de
