@@ -364,7 +364,27 @@ function Aviso({
   return (
     <div role="status" className={`rounded-gov-card p-3 ${classes}`}>
       <p className="text-sm font-semibold">{titulo}</p>
-      <div className="mt-1 text-xs">{children}</div>
+      {/*
+        Corpo do aviso MEDIDO em navegador real (Chrome 151, 23/09/2026), nas
+        duas larguras em que este painel é usado: 412 px (Pixel 7, o mesmo
+        viewport do `startApp.ps1`) e 1280 px.
+
+        `max-w-prose` é o mesmo limite das telas de erro do app
+        (`app/(dashboard)/error.tsx`). A seção das séries ocupa a largura inteira
+        da página: a 1280 px o texto de "O SIBH não respondeu" vinha numa ÚNICA
+        linha de 915 px, 173 caracteres, mais que o dobro da medida em que se lê
+        sem perder a linha de volta. No celular o limite não alcança (a coluna
+        tem 322 px), então a tela estreita não muda por causa dele.
+
+        `text-balance` porque o limite acima, sozinho, troca a linha comprida por
+        uma viúva: o aviso de posto sem estação passava a quebrar em 411, 402 e
+        48 px, com "medição." sozinha no fim. Balanceado, saem 276, 291 e 294 px.
+        A 412 px ele resolve a viúva que já existia antes desta mudança: as
+        linhas de "O SIBH não respondeu" saíam 310, 235, 315 e 44 px, com
+        "internet." sozinha, e passam a 239, 228, 228 e 211 px. Onde o navegador
+        não implementar a propriedade, a quebra é a de hoje, e nada piora.
+      */}
+      <div className="mt-1 max-w-prose text-balance text-xs">{children}</div>
     </div>
   );
 }
