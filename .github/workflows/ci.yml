@@ -144,6 +144,58 @@ jobs:
       - name: Testes de integração
         run: npx vitest run tests/integration
 
+      # Este job fica verde com seis arquivos inteiros pulados, porque eles falam
+      # com o SQL Server do órgão e isso exige a VPN, que o runner nunca terá.
+      # Verde silencioso sobre teste que não rodou é boa notícia falsa: o passo
+      # abaixo diz, no log, o que este verde NÃO mediu, e reprova se algum
+      # arquivo que fala com o SQL Server esquecer a guarda de skip (sem ela o
+      # job quebraria tentando conectar).
+      - name: Anunciar o que este verde NAO mediu (precisa da VPN do orgao)
+        run: |
+          # O `|| true` não é descuido: o Actions roda com `set -e`, e sem ele um
+          # grep sem resultado aborta o passo AQUI, antes da mensagem do piso lá
+          # embaixo. Reprovaria mudo, e log de CI que reprova sem dizer o motivo
+          # é pior que ausente.
+          COM_GUARDA=$(grep -lE 'process\.env\.SQLSERVER_HOST.*\? describe : describe\.skip' tests/integration/*.test.ts | sort || true)
+          QTD_ARQ=$(printf '%s\n' "$COM_GUARDA" | grep -c '^tests/' || true)
+          # `[.(]` em vez de `\(` porque `it.each(...)` também é caso, e a âncora de
+          # início de linha é o que impede `.test(p)` de um regex entrar na conta.
+          #
+          # A contagem é estática de propósito, e é um PISO, não o total: em
+          # 23/09/2026 ela dá 67 e o número real é 72, porque um `it.each` gera
+          # vários casos. Contar pela ferramenta não é opção: medido no mesmo dia,
+          # `vitest list` devolve zero caso para estes arquivos e 3 para todo
+          # `tests/integration`, porque ele lista só o que rodaria, e o que eu
+          # quero contar é exatamente o que ele pula. O total exato aparece no log
+          # do passo anterior, nas linhas `↓ arquivo (N tests | N skipped)`.
+          QTD_CASOS=$(grep -hoE '^[[:space:]]*(it|test)[.(]' $COM_GUARDA | wc -l || true)
+
+          # Piso contra leitura vazia. Em 23/09/2026 são 6 arquivos; zero aqui não
+          # quer dizer que a dívida acabou, quer dizer que a expressão parou de
+          # casar com o código, e daí este passo viraria enfeite verde.
+          if [ "$QTD_ARQ" -lt 1 ]; then
+            echo "::error title=Regua quebrada::nenhum arquivo casou a guarda de SQLSERVER_HOST. O padrao no codigo mudou: corrigir a expressao deste passo."
+            exit 1
+          fi
+
+          echo "::notice title=Medicao pendente::$QTD_ARQ arquivo(s) e ao menos $QTD_CASOS caso(s) de integracao NAO rodaram aqui: falam com o SQL Server do orgao e exigem a VPN, que este runner nao tem. Medir na bancada com a VPN ligada."
+          echo "Arquivos que este job NAO mediu:"
+          printf '%s\n' "$COM_GUARDA"
+
+          # Quem fala com o SQL Server sem a guarda não pula: tenta conectar e
+          # derruba o job. Esta metade reprova de verdade.
+          FALTANDO=""
+          for arquivo in tests/integration/*mssql*.test.ts; do
+            [ -e "$arquivo" ] || continue
+            if ! printf '%s\n' "$COM_GUARDA" | grep -qxF "$arquivo"; then
+              FALTANDO="$FALTANDO $arquivo"
+            fi
+          done
+          if [ -n "$FALTANDO" ]; then
+            echo "::error title=Guarda de skip ausente::falam com o SQL Server sem guarda de SQLSERVER_HOST:$FALTANDO"
+            exit 1
+          fi
+
   python:
     name: Python — sintaxe
     runs-on: ubuntu-latest
