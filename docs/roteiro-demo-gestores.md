@@ -66,10 +66,15 @@ corrige em lote.** A correção do dado de origem é do técnico do órgão, com
 individual registrada na trilha. Isso foi decisão de arquitetura registrada (ADR-0003), não
 limitação.
 
-## 5. Monitor hidrológico (5 minutos)
+## 5. Dado hidrológico do SIBH, dentro da tela Postos (5 minutos)
 
-> **Leia antes de demonstrar este módulo.** A carga do SIBH está incompleta: cerca de 159 estações
-> com transmissão nas últimas 24 horas, contra as aproximadamente 1.957 que a fonte reporta.
+> **Não existe mais um módulo "Monitor".** Ele foi fundido na tela Postos em 17/09/2026, e o endereço
+> antigo `/monitor` só redireciona. Se este roteiro for lido por quem não acompanhou a fusão: o menu
+> tem `Postos`, com atalho `H`, e não existe atalho `M`. Medido no código em 23/09/2026
+> (`src/components/layout/nav-itens.ts`).
+
+> **Leia antes de demonstrar.** A carga do SIBH está incompleta: cerca de 159 estações com
+> transmissão nas últimas 24 horas, contra as aproximadamente 1.957 que a fonte reporta.
 > **Não cite números absolutos de estações online.** A sincronização passou a rodar sozinha uma vez
 > por dia, às 06:00 no horário de Brasília, e foi otimizada em 18/08/2026 para caber na janela de
 > execução, mas a primeira carga completa só acontece na próxima execução automática.
@@ -77,17 +82,24 @@ limitação.
 > Se o assunto vier à tona, a resposta honesta e que sustenta: a integração com o SIBH funciona e
 > traz dado do dia, e a atualização é automática e diária.
 
-Caminho: `Monitor` no menu (atalho de teclado `M`).
+Caminho: `Postos` no menu (atalho `H`), que é a tela inicial.
 
-Mostre o mapa com os três tipos de estação, abra o detalhe de uma estação com série de nível, e use
-a comparação de múltiplas estações. A integração com o SIBH busca leitura sob demanda.
+O que mostrar, nesta ordem:
 
-O mapa abre filtrado pelas estações que estão transmitindo, e a barra de contagem informa quantas
-ficaram de fora, com um clique para ver a rede inteira. Vale mostrar os dois estados: o filtrado
-responde "o que está no ar agora" e o completo responde "qual o tamanho da rede".
+1. **Ligar a camada `Outras redes (SIBH)` na legenda do mapa.** Ela nasce desligada de propósito: o
+   mapa abre com a rede do órgão, e as estações de outras redes entram quando o gestor pede. Ao
+   ligar, a própria legenda mostra a contagem de estações que vieram.
+2. **Abrir um posto e percorrer o detalhe:** séries de medição, leituras brutas, medições de vazão e
+   curvas-chave, cada seção com o seu próprio estado de carregamento e de erro.
+3. **Comparar chuva entre estações pluviométricas.** No detalhe de um posto pluviométrico existe o
+   botão `Comparar chuva`, que joga a estação numa cesta; com duas ou mais, o painel de comparação
+   abre com gráfico e tabela.
 
-Se uma estação não trouxer leitura, não é defeito de tela: o sistema distingue "sem dado" de "fonte
-indisponível" e informa qual dos dois. Vale mostrar isso se acontecer, em vez de fugir.
+**O que NÃO prometer nesta demonstração:** a tela de detalhe de uma estação do SIBH com série de
+nível saiu do ar junto com a fusão, e a decisão sobre restaurar ou descontinuar está com o órgão
+(medido em 23/09/2026: a rota `/api/monitor/estacoes/[id]/nivel` não tem mais nenhum chamador na
+interface). Se perguntarem por nível de rio estação por estação, a resposta é que o dado do SIBH hoje
+entra pelo mapa e pela comparação de chuva, e o detalhe por estação depende dessa decisão.
 
 ## 6. Estoque e patrimônio: o módulo mais recente (7 minutos)
 
@@ -177,9 +189,13 @@ Sim, é o plano registrado (ADR-0015). Sobe em contêiner com banco próprio, e 
 tem um ponto único de troca preparado para isso.
 
 **"Quanto do trabalho está testado?"**
-720 testes automatizados, e a cadeia de integração aplica as 65 migrations do zero duas vezes, para
-provar que o mesmo procedimento funciona numa instalação nova, que é como o deploy on-premise roda.
+A cada mudança, a integração contínua roda lint, verificação de tipos e a suíte automatizada, e
+depois aplica as 73 migrations num banco vazio, semeia o estado real de produção, reaplica tudo por
+cima e confere que nenhum dado se perdeu. É o mesmo procedimento do deploy on-premise, e é ele que
+prova que uma instalação nova nasce igual à que está no ar. O número de testes do dia sai de
+`npm test` no repositório, e não vale de cabeça.
 
 **"E se o SIBH cair?"**
-O monitor distingue ausência de dado de indisponibilidade da fonte e informa qual é o caso, em vez
-de mostrar tela vazia.
+A tela não vai embora com ele: a legenda do mapa marca a camada de outras redes como
+`indisponível`, e no detalhe do posto cada seção tem o seu próprio estado de erro, para uma origem
+fora do ar não apagar as outras. O dado do órgão continua na tela, porque vem do banco próprio.
