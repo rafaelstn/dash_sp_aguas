@@ -142,10 +142,20 @@ const nextConfig: NextConfig = {
   // cobre os href <Link> suficientemente.
   // Cabeçalho de idioma pt-BR é requisito WCAG / e-MAG.
   // O Monitor foi fundido na tela Postos (17/09/2026). Link salvo e favorito do
-  // navegador continuam chegando: 308 permanente para a tela nova. O Next roda
-  // os redirects antes do middleware, então nem a sessão é consultada.
+  // navegador continuam chegando, então `/monitor` redireciona para a tela nova.
+  // O Next roda os redirects antes do middleware, então nem a sessão é
+  // consultada: quem não tem sessão cai em `/` e é o middleware de lá que manda
+  // ao login.
+  //
+  // **307 e não 308 (mudado em 23/09/2026).** O 308 é permanente e o navegador o
+  // guarda em cache sem nova consulta ao servidor. Enquanto o detalhe por estação
+  // do SIBH está com decisão pendente no órgão (restaurar ou descontinuar), um
+  // 308 que já circulou impediria `/monitor` de voltar a servir tela própria,
+  // inclusive para quem nunca limpou o cache. O 307 diz a mesma coisa ao usuário
+  // e mantém a porta aberta. Trocar para 308 quando a descontinuação estiver
+  // decidida por escrito. A régua está em `tests/unit/domain/redirect-monitor.test.ts`.
   async redirects() {
-    return [{ source: '/monitor', destination: '/', permanent: true }];
+    return [{ source: '/monitor', destination: '/', permanent: false }];
   },
   async headers() {
     // Content-Security-Policy NÃO é setada aqui, é montada dinamicamente

@@ -50,6 +50,11 @@ describe('rotaPublica: o que NÃO pode passar sem sessão', () => {
   const protegidas = [
     '/',
     '/painel',
+    // `/monitor` não é mais página desde a fusão na tela Postos (17/09/2026): o
+    // Next resolve o redirect ANTES do middleware, então na prática esta linha
+    // nunca é exercitada em produção. Ela fica como defesa em profundidade, para
+    // o caminho não virar público se o redirect sair. Quem cobre o redirect em si
+    // é `tests/unit/domain/redirect-monitor.test.ts`.
     '/monitor',
     '/estoque',
     '/triagem',
