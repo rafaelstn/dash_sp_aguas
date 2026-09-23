@@ -2,6 +2,18 @@
 
 Este documento contém o prompt completo para o **Claude Code no notebook do Rafael** (que tem acesso à VPN/HD de rede do DAEE). Copiar o bloco abaixo e colar como primeira mensagem na sessão do Claude Code depois de clonar o repo.
 
+> **Registro histórico, escrito em 22/04/2026 e já executado.** O prompt abaixo
+> descreve o repositório daquela data, e o texto foi mantido como estava de
+> propósito: o que ele chama de "estado atual" é o estado de abril, não o de
+> hoje. As Partes A e B foram concluídas (o banco real está populado, o modo demo
+> saiu do caminho principal e o Modelo B está coberto), e o CI já roda em modo
+> rigoroso, com `npm ci` e `package-lock.json` versionado. **O estado vigente do
+> projeto é `docs/estado-e-proximas-etapas.md`**, e o roteiro de banco que vale é
+> o `scripts/db/db-migrate.sh` com o `README.md` da raiz. O único trecho abaixo
+> que continua sendo instrução válida é o do passo A.3 sobre não passar a senha
+> na linha de comando do `psql`, provado pela régua em
+> `ops/testing/regua-psql/medir-argv.sh`.
+
 ---
 
 ## Como usar
@@ -44,7 +56,7 @@ Leia **nesta ordem** antes de agir:
 
 ## Estado atual
 
-- 15 migrations SQL prontas em `supabase/migrations/0001..0015_*.sql`
+- 15 migrations SQL prontas em `supabase/migrations/0001..0015_*.sql` (contagem de abril de 2026; hoje a série passa de setenta, e quem quiser o número do dia mede com `ls supabase/migrations/*.sql | wc -l`)
 - Importer Python idempotente em `ops/importer/import_csv.py`
 - Indexer Python em `ops/indexer/index_fs.py` — **atualmente cobre apenas o Modelo A** (pastas por prefixo tipo `Fluviometria\1D-008\...`). Precisa ser estendido para o Modelo B (ver §2 abaixo).
 - Dashboard Next.js 15 + App Router + Tailwind + WCAG AA
@@ -62,11 +74,11 @@ Leia **nesta ordem** antes de agir:
 
 2. **Copiar `.env.example` para `.env.local`** e preencher **apenas** as variáveis de DB.
 
-3. **Aplicar as 15 migrations** ao Supabase. Duas opções:
+3. **Aplicar as migrations** ao Supabase (eram 15 em abril de 2026). Duas opções:
    - `bash scripts/db/db-migrate.sh` (se o bash do Git estiver instalado)
    - Ou via Supabase SQL Editor (copiar e colar cada migration na ordem)
    - Ou com `psql`, **sem a senha na linha de comando**: `export PGPASSWORD=<senha>` e depois `for f in supabase/migrations/*.sql; do psql -h <host> -p <porta> -U <usuario> -d <banco> -v ON_ERROR_STOP=1 -f "$f"; done`. Até 23/09/2026 esta linha ensinava a passar a connection string inteira como argumento, e argv é legível por qualquer processo da máquina (`ps`): quem seguisse a receita expunha a senha do banco durante toda a aplicação das migrations. O `scripts/db/db-migrate.sh` faz essa separação sozinho.
-   - Validar que as 8 tabelas (`postos`, `arquivos_indexados`, `arquivos_orfaos`, `acesso_ficha`, `import_log`, `indexacao_log`, `tipos_documento`, `tipos_dado`, `revisoes_desconformidade`) + a view `v_postos_desconformes` foram criadas.
+   - Validar que as tabelas daquela série (`postos`, `arquivos_indexados`, `arquivos_orfaos`, `acesso_ficha`, `import_log`, `indexacao_log`, `tipos_documento`, `tipos_dado`, `revisoes_desconformidade`, nove nomes apesar de o texto original dizer oito) + a view `v_postos_desconformes` foram criadas. O schema de hoje tem bem mais que isso, e se conta no catálogo, não nesta lista.
 
 4. **Importar o CSV oficial:**
    ```bash
