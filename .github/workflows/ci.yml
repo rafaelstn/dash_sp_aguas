@@ -258,7 +258,17 @@ jobs:
             exit 1
           }
 
-          awk -v a="$ANCORA" 'index($0, a) == 1 { print "RUN mkdir -p /app/node_modules/pacote-aninhado/node_modules/sharp" } { print }' Dockerfile > Dockerfile.mutante-sharp
+          # O caminho semeado sai de UMA variável, usada tanto para criar o
+          # diretório quanto para procurar a mensagem no log. Isso não é estilo:
+          # o texto `SHARP NA IMAGEM` aparece DUAS vezes no log de um build,
+          # porque o buildkit imprime o comando do `RUN` antes de executá-lo, e o
+          # comando contém o `echo`. Procurar só a frase casa com o comando e
+          # aprova qualquer reprovação, inclusive a de âncora quebrada; procurar a
+          # frase mais o caminho separa o eco do efeito, porque no comando está
+          # `$achado` e só na saída está o caminho resolvido.
+          SEMEADO='/app/node_modules/pacote-aninhado/node_modules/sharp'
+
+          awk -v a="$ANCORA" -v s="$SEMEADO" 'index($0, a) == 1 { print "RUN mkdir -p " s } { print }' Dockerfile > Dockerfile.mutante-sharp
 
           # Uma linha a mais, e exatamente uma. Derivação que não derivou faria o
           # build mutante passar, e o passo reprovaria dizendo que a guarda está
@@ -277,9 +287,14 @@ jobs:
           fi
 
           # Reprovar não basta: um build pode falhar por falta de espaço, por
-          # rede ou por sintaxe, e eu leria isso como guarda funcionando.
-          if ! grep -q 'SHARP NA IMAGEM' mutante.log; then
-            echo "::error title=Reprovou pelo motivo errado::o build mutante falhou sem imprimir a mensagem da guarda. Nao e prova de que ela pegou o sharp."
+          # rede, por sintaxe ou pela PRÓPRIA âncora da guarda, e eu leria isso
+          # como guarda funcionando. Medido na bancada em 23/09/2026 com um
+          # segundo mutante que apaga o `server.js`: ele reprova com "GUARDA
+          # QUEBRADA", e a busca só pela frase `SHARP NA IMAGEM` casava com o eco
+          # do comando e dava verde. Com o caminho semeado, aquele log deixa de
+          # casar e o log do mutante legítimo continua casando.
+          if ! grep -qF "SHARP NA IMAGEM: $SEMEADO" mutante.log; then
+            echo "::error title=Reprovou pelo motivo errado::o build mutante falhou sem imprimir a mensagem da guarda com o caminho semeado. Nao e prova de que ela pegou o sharp."
             tail -30 mutante.log
             exit 1
           fi
@@ -291,6 +306,6 @@ jobs:
           # medição. Esta linha imprime o que a guarda disse, com o caminho que
           # ela achou, que é o mesmo que o awk semeou logo acima.
           echo "Linha que a guarda imprimiu dentro do build mutante:"
-          grep -m1 'SHARP NA IMAGEM' mutante.log
+          grep -m1 -F "SHARP NA IMAGEM: $SEMEADO" mutante.log
 
           echo "::notice title=Guarda do sharp provada::o build com sharp aninhado reprovou pela mensagem da propria guarda, e o build da entrega passou."
