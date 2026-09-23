@@ -20,6 +20,19 @@ out/
 dist/
 build/
 
+# Service worker gerado pelo serwist (`swDest` do next.config.ts) a cada
+# `next build`. Versionado ate 23/09/2026, quando foi medido que a copia do
+# repositorio nunca e a que roda: o `next build` reescreve o arquivo dentro do
+# estagio builder e o `COPY --from=builder /app/public ./public` leva o
+# regenerado. Como nao existe `generateBuildId` no next.config.ts, o buildId e
+# aleatorio por build, e os tres que medi naquele dia foram diferentes entre si
+# (`UcjWm95DJs5GBEBTViZyv` no arquivo versionado, `rCzivoFB8jhRgm8yPG8kw` na
+# imagem de entrega, `-QrH6xHBVjFbMwBZZMrvS` no build feito sem o arquivo no
+# contexto). Artefato derivado no git envelhece por construcao e faz o leitor
+# achar que aquele precache e o que o navegador instala.
+public/sw.js
+public/sw.js.map
+
 # Test coverage (Vitest output)
 coverage/
 

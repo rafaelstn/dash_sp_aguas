@@ -525,8 +525,12 @@ vai produzi-los de novo:
 - `eslint-plugin-jsx-a11y` parecia órfão porque o config o cita como
   `plugin:jsx-a11y/recommended`, e não pelo nome do pacote.
 - `public/logo-spaguas.png` tem zero referência em código **e está no precache do
-  `public/sw.js`**: removê-lo quebraria a instalação do service worker, ou seja a
-  PWA inteira.
+  service worker**: removê-lo quebraria a instalação do service worker, ou seja a
+  PWA inteira. Desde 23/09/2026 quem prova isso é o `sw.js` que o `next build`
+  gera (o arquivo saiu do versionamento por apontar sempre um buildId velho); a
+  medição se refaz extraindo `/app/public/sw.js` da imagem e procurando o nome do
+  arquivo entre as entradas de precache, que o serwist compila com aspas
+  simples (`'url':'/logo-spaguas.png'`).
 - **`.next/types/` faz TODA rota parecer referenciada.** O Next gera
   `routes.d.ts` e `validator.ts` a partir do sistema de arquivos, então eles
   listam as 68 rotas por construção, chamadas ou não. São SAÍDA, e não
