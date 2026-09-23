@@ -22,6 +22,23 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 const rodar = process.env.SQLSERVER_HOST ? describe : describe.skip;
 
+/**
+ * Teto de tempo por caso, porque o padrão do vitest (5s) não cabe nesta suíte.
+ *
+ * Medido em 22/09/2026, na primeira execução real desta régua contra o banco do
+ * órgão, pela VPN: "base inteira" levou 5012ms e reprovou por estouro, e na
+ * repetição imediata levou 2661ms; "postos fora de SP" fez 4581ms e depois
+ * 1376ms. Os dois vivem no fio do teto padrão, então a régua reprovaria por
+ * latência de rede e não por defeito, de forma intermitente, que é o pior tipo
+ * de vermelho: ensina quem roda a repetir até passar.
+ *
+ * O número é folgado de propósito. Ele não serve para medir desempenho, e sim
+ * para que a suíte só fique vermelha quando o DADO estiver errado. Quem quiser
+ * régua de desempenho põe asserção sobre o tempo medido, que é o que o próprio
+ * caso "base inteira" já faz com o array `tempos`.
+ */
+const TEMPO_LIMITE_MS = 60_000;
+
 /** Diagnóstico de 17/09/2026. */
 const MEDIDO = {
   postos: 5790,
@@ -302,7 +319,7 @@ rodar('mapa de postos', () => {
     const semTipo = r.pontos.filter((p) => p.tipo === null).length;
     expect(somaTipos + semTipo).toBe(MEDIDO.qualquerVazao);
   });
-});
+}, TEMPO_LIMITE_MS);
 
 rodar('medições de vazão e curvas-chave', () => {
   it('medições: total do posto com mais medições é o COUNT do banco', async () => {
@@ -388,4 +405,4 @@ rodar('medições de vazão e curvas-chave', () => {
     ).toBeNull();
     expect(await vazaoPostoRepositoryMssql.listarCurvasChave('ZZ-999')).toBeNull();
   });
-});
+}, TEMPO_LIMITE_MS);

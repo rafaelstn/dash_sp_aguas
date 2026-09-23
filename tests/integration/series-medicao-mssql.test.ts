@@ -53,6 +53,47 @@ const LEITURAS_E3_036 = 41002;
  */
 const TETO_RESUMO_MS = 5000;
 
+/**
+ * Teto de tempo do RUNNER, que não é régua de desempenho e não deve ser lido
+ * como uma.
+ *
+ * Quem mede desempenho aqui é o `TETO_RESUMO_MS` acima, por asserção. Este
+ * número existe para que a asserção chegue a rodar: o padrão do vitest é 5 s, e
+ * o resumo por posto passa MUITO dele quando o dado está frio no servidor do
+ * órgão. Com o padrão, o runner mataria o caso antes da asserção e escreveria
+ * "test timed out", que é a mensagem errada: acusa o teste e esconde o defeito.
+ *
+ * O valor é maior de propósito que o `requestTimeout` de 30 s do nosso cliente
+ * (`src/infrastructure/db/mssql-client.ts`), e um caso chega a disparar três
+ * consultas em sequência. Assim quem corta é sempre o driver ou a asserção, que
+ * dizem QUAL posto e QUANTO tempo, e nunca o runner, que só diz que desistiu.
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * SINTOMA MEDIDO EM 22/09/2026, E O CONTROLE QUE O SEPARA
+ * ─────────────────────────────────────────────────────────────────────────
+ * Primeira execução desta suíte contra o banco do órgão pela VPN: oito casos
+ * estouraram o `requestTimeout` de 30 s. Segunda execução, com o bloco do pior
+ * posto isolado: `C5-125` levou 24.711 ms e `4C-506Z` 20.809 ms, ambos passando.
+ * Terceira, logo em seguida e com a suíte inteira: os MESMOS postos levaram
+ * 700 ms e 379 ms, e os trinta casos passaram.
+ *
+ * O controle apareceu sozinho: o único caso lento da terceira execução foi o do
+ * `B6-026`, com 21.359 ms, e ele é justamente o único dos lentos que a segunda
+ * execução não tinha exercitado. Quem foi aquecido ficou rápido, quem não foi
+ * continuou lento, o que aponta para leitura FRIA no servidor (páginas em disco
+ * ou plano ainda não compilado) e não para posto ou série específica.
+ *
+ * O que NÃO foi medido: o plano de execução e as esperas dentro do SQL Server,
+ * que exigem acesso de diagnóstico ao banco do órgão. Enquanto isso não for
+ * medido, o parágrafo acima é a causa mais provável, não a causa provada.
+ *
+ * Consequência que importa fora daqui: o primeiro acesso do dia a um posto pode
+ * levar dezenas de segundos na tela, ou morrer no teto de 30 s do cliente. Por
+ * isso o `TETO_RESUMO_MS` NÃO foi afrouxado: ele é o alarme, e vermelho
+ * intermitente aqui é o sintoma verdadeiro, não defeito da régua.
+ */
+const TEMPO_LIMITE_MS = 120_000;
+
 async function porta(): Promise<SeriesMedicaoRepository> {
   const m = await import('@/infrastructure/db/series-medicao-repository.mssql');
   return m.seriesMedicaoRepositoryMssql;
@@ -248,7 +289,7 @@ rodar('resumo das séries do posto', () => {
       expect(r?.some((s) => s.leituras > 0)).toBe(true);
     }
   });
-});
+}, TEMPO_LIMITE_MS);
 
 rodar('leituras paginadas', () => {
   const JANELA_1950 = {
@@ -376,7 +417,7 @@ rodar('leituras paginadas', () => {
     );
     for (const i of p.itens) expect(i.vazaoM3s).toBeNull();
   });
-});
+}, TEMPO_LIMITE_MS);
 
 rodar('resumo diário', () => {
   it('a soma dos dias de chuva é a soma das leituras COM medida, do banco', async () => {
@@ -473,7 +514,7 @@ rodar('resumo diário', () => {
     );
     expect(dias).toHaveLength(0);
   });
-});
+}, TEMPO_LIMITE_MS);
 
 rodar('as seis séries respondem, cada uma no seu pior posto', () => {
   const CASOS: ReadonlyArray<[SerieMedicao, string]> = [
@@ -504,4 +545,4 @@ rodar('as seis séries respondem, cada uma no seu pior posto', () => {
     });
     expect(pagina.total).toBeGreaterThan(0);
   });
-});
+}, TEMPO_LIMITE_MS);

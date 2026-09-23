@@ -2,8 +2,16 @@
  * Painel composto (cadastro no `Dbfch`, operação no nosso PostgreSQL) contra o
  * SQL SERVER REAL do órgão.
  *
- * Roda apenas com `SQLSERVER_HOST` definido e a VPN ligada. Somente leitura. Se
- * a VPN cair o sintoma é TIMEOUT, e não erro de credencial.
+ * Roda apenas com `SQLSERVER_HOST` E `DATABASE_URL` definidos, e a VPN ligada.
+ * Somente leitura. Se a VPN cair o sintoma é TIMEOUT, e não erro de credencial.
+ *
+ * As DUAS variáveis são exigidas porque o painel é composto: todo caso daqui
+ * passa pelo repositório composto, e cinco deles chegam a tocar o PostgreSQL.
+ * Até 22/09/2026 a guarda olhava só o `SQLSERVER_HOST`, e rodar com o Postgres
+ * fora do ar produzia o pior resultado possível: cinco casos verdes e cinco
+ * vermelhos com a mensagem "Tentativa de abrir conexão PostgreSQL em modo demo",
+ * que tem cara de defeito do produto e é falta de pré-condição. Suíte sem o que
+ * precisa para afirmar o que promete pula inteira, e o verde parcial não aparece.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * A RÉGUA DESTE ARQUIVO É CONTAGEM, E O NÚMERO ESPERADO VEM DO BANCO
@@ -23,7 +31,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { PainelRepository } from '@/application/ports/painel-repository';
 import type { PostosRepository } from '@/application/ports/postos-repository';
 
-const rodar = process.env.SQLSERVER_HOST ? describe : describe.skip;
+const rodar =
+  process.env.SQLSERVER_HOST && process.env.DATABASE_URL ? describe : describe.skip;
 
 /** Contagem de `dbo.Postos` com `Excluido = 0`, MEDIDA em 03/09/2026. */
 const POSTOS_ATIVOS = 5790;
