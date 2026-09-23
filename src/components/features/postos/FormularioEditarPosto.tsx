@@ -209,18 +209,18 @@ export function FormularioEditarPosto({ posto }: Props) {
       </Secao>
 
       <Secao titulo="Datas de medição ANA (Meta I.6)">
-        <Campo label="Escala — início" valor={form.anaEscalaInicio} onChange={(v) => set('anaEscalaInicio', v)} type="date" />
-        <Campo label="Escala — fim" valor={form.anaEscalaFim} onChange={(v) => set('anaEscalaFim', v)} type="date" />
-        <Campo label="Descarga líquida — início" valor={form.anaDescargaLiquidaInicio} onChange={(v) => set('anaDescargaLiquidaInicio', v)} type="date" />
-        <Campo label="Descarga líquida — fim" valor={form.anaDescargaLiquidaFim} onChange={(v) => set('anaDescargaLiquidaFim', v)} type="date" />
-        <Campo label="Sedimentos — início" valor={form.anaSedimentosInicio} onChange={(v) => set('anaSedimentosInicio', v)} type="date" />
-        <Campo label="Sedimentos — fim" valor={form.anaSedimentosFim} onChange={(v) => set('anaSedimentosFim', v)} type="date" />
-        <Campo label="Qualidade da água — início" valor={form.anaQualidadeInicio} onChange={(v) => set('anaQualidadeInicio', v)} type="date" />
-        <Campo label="Qualidade da água — fim" valor={form.anaQualidadeFim} onChange={(v) => set('anaQualidadeFim', v)} type="date" />
-        <Campo label="Pluviômetro — início" valor={form.anaPluviometroInicio} onChange={(v) => set('anaPluviometroInicio', v)} type="date" />
-        <Campo label="Pluviômetro — fim" valor={form.anaPluviometroFim} onChange={(v) => set('anaPluviometroFim', v)} type="date" />
-        <Campo label="Telemetria — início" valor={form.anaTelemetriaInicio} onChange={(v) => set('anaTelemetriaInicio', v)} type="date" />
-        <Campo label="Telemetria — fim" valor={form.anaTelemetriaFim} onChange={(v) => set('anaTelemetriaFim', v)} type="date" />
+        <Campo label="Escala (início)" valor={form.anaEscalaInicio} onChange={(v) => set('anaEscalaInicio', v)} type="date" />
+        <Campo label="Escala (fim)" valor={form.anaEscalaFim} onChange={(v) => set('anaEscalaFim', v)} type="date" />
+        <Campo label="Descarga líquida (início)" valor={form.anaDescargaLiquidaInicio} onChange={(v) => set('anaDescargaLiquidaInicio', v)} type="date" />
+        <Campo label="Descarga líquida (fim)" valor={form.anaDescargaLiquidaFim} onChange={(v) => set('anaDescargaLiquidaFim', v)} type="date" />
+        <Campo label="Sedimentos (início)" valor={form.anaSedimentosInicio} onChange={(v) => set('anaSedimentosInicio', v)} type="date" />
+        <Campo label="Sedimentos (fim)" valor={form.anaSedimentosFim} onChange={(v) => set('anaSedimentosFim', v)} type="date" />
+        <Campo label="Qualidade da água (início)" valor={form.anaQualidadeInicio} onChange={(v) => set('anaQualidadeInicio', v)} type="date" />
+        <Campo label="Qualidade da água (fim)" valor={form.anaQualidadeFim} onChange={(v) => set('anaQualidadeFim', v)} type="date" />
+        <Campo label="Pluviômetro (início)" valor={form.anaPluviometroInicio} onChange={(v) => set('anaPluviometroInicio', v)} type="date" />
+        <Campo label="Pluviômetro (fim)" valor={form.anaPluviometroFim} onChange={(v) => set('anaPluviometroFim', v)} type="date" />
+        <Campo label="Telemetria (início)" valor={form.anaTelemetriaInicio} onChange={(v) => set('anaTelemetriaInicio', v)} type="date" />
+        <Campo label="Telemetria (fim)" valor={form.anaTelemetriaFim} onChange={(v) => set('anaTelemetriaFim', v)} type="date" />
       </Secao>
 
       <div className="flex flex-wrap gap-2">

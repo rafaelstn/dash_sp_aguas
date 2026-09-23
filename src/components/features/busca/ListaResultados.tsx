@@ -107,7 +107,7 @@ export function ListaResultados({
       render: (p) =>
         (p.telemetrico ?? '').trim().length > 0 ? (
           <span
-            title="Telemetria — sim"
+            title="Telemetria: sim"
             className="inline-flex h-5 items-center justify-center rounded border border-gov-azul/30 bg-gov-azul-claro px-2 text-2xs font-semibold text-gov-azul"
           >
             Sim
@@ -117,7 +117,7 @@ export function ListaResultados({
             <span aria-hidden="true" className="text-app-fg-subtle">
               —
             </span>
-            <span className="sr-only">Telemetria — não</span>
+            <span className="sr-only">Telemetria: não</span>
           </>
         ),
     },
