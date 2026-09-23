@@ -284,4 +284,13 @@ jobs:
             exit 1
           fi
 
+          # A evidência vai no VERDE, e não só na falha. Até aqui o log do job
+          # guardava a saída do mutante em arquivo e só a imprimia quando dava
+          # errado, então o passo verde afirmava por conta própria que a guarda
+          # pegou o sharp: quem auditasse o run leria uma frase minha, não a
+          # medição. Esta linha imprime o que a guarda disse, com o caminho que
+          # ela achou, que é o mesmo que o awk semeou logo acima.
+          echo "Linha que a guarda imprimiu dentro do build mutante:"
+          grep -m1 'SHARP NA IMAGEM' mutante.log
+
           echo "::notice title=Guarda do sharp provada::o build com sharp aninhado reprovou pela mensagem da propria guarda, e o build da entrega passou."
