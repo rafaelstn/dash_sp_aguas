@@ -211,3 +211,77 @@ jobs:
         run: |
           python -m py_compile ops/importer/import_csv.py
           python -m py_compile ops/indexer/index_fs.py
+
+  imagem:
+    name: 'Imagem: docker build da entrega offline'
+    runs-on: ubuntu-latest
+    # Até 23/09/2026 nenhum job construía a imagem, e a entrega ao órgão É uma
+    # imagem. Lint, typecheck e 1407 testes ficam verdes sobre um Dockerfile que
+    # não constrói, porque nenhum deles olha para ele: quem pega COPY de caminho
+    # que deixou de existir, estágio que perdeu dependência de sistema e guarda
+    # que mede o artefato é o `docker build` real, e ele só rodava na bancada, na
+    # véspera da entrega.
+    #
+    # O que este job NÃO mede: a imagem não é levantada, então nada aqui prova
+    # que o servidor responde. Isso exige Postgres de pé, porque `/api/health`
+    # faz SELECT 1, e é prova de outro job.
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Construir a imagem como ela é entregue
+        # Sem `--build-arg`, e isto não é esquecimento. O Supabase saiu da
+        # entrega, os dois `NEXT_PUBLIC_SUPABASE_*` são opcionais tratados por
+        # `vazioComoAusente` em src/infrastructure/config/env.ts, e o Dockerfile
+        # já carrega `ACESSO_SEM_IDENTIDADE=sim` de fachada para o build. Passar
+        # valor de faz de conta seria pior do que não passar: `NEXT_PUBLIC_*` é
+        # substituído em tempo de build e fica GRAVADO no pacote, vencendo a
+        # variável de ambiente do container em produção.
+        run: docker build --progress=plain -t dmo-ci:${{ github.sha }} .
+
+      - name: Provar que a guarda do sharp reprova quando ele está presente
+        # Guarda de ausência que nunca reprovou é enfeite verde: ela fica igual
+        # se o `find` parar de alcançar o que deveria. O mutante semeia
+        # exatamente a cópia que o `outputFileTracingExcludes` não alcança, uma
+        # aninhada em node_modules/<pacote>/node_modules/sharp.
+        #
+        # Ele só custa segundos por causa de uma linha no `.dockerignore`, e isso
+        # foi medido na bancada em 23/09/2026: o estágio `builder` faz `COPY . .`,
+        # então um arquivo novo no contexto muda o hash da camada, derruba o cache
+        # e refaz o `npm run build` inteiro (277,1s e 288,9s em duas execuções).
+        # Com `Dockerfile.mutante-sharp` ignorado, os dois builds veem o MESMO
+        # contexto e o segundo sai com `COPY . . CACHED`. Quem mexer naquela linha
+        # do `.dockerignore` dobra o tempo deste job sem mudar o que ele prova.
+        run: |
+          ANCORA='RUN test -f /app/server.js'
+          grep -qF "$ANCORA" Dockerfile || {
+            echo "::error title=Ancora perdida::a primeira linha da guarda do sharp mudou de forma no Dockerfile. Corrigir a ancora deste passo, senao ele deixa de medir."
+            exit 1
+          }
+
+          awk -v a="$ANCORA" 'index($0, a) == 1 { print "RUN mkdir -p /app/node_modules/pacote-aninhado/node_modules/sharp" } { print }' Dockerfile > Dockerfile.mutante-sharp
+
+          # Uma linha a mais, e exatamente uma. Derivação que não derivou faria o
+          # build mutante passar, e o passo reprovaria dizendo que a guarda está
+          # inerte quando o problema seria o `awk`: motivo errado não prova nada.
+          ESPERADO=$(( $(wc -l < Dockerfile) + 1 ))
+          OBTIDO=$(wc -l < Dockerfile.mutante-sharp)
+          if [ "$OBTIDO" -ne "$ESPERADO" ]; then
+            echo "::error title=Mutante nao foi semeado::esperava $ESPERADO linhas e obtive $OBTIDO. Sem a semeadura o resultado abaixo nao mede a guarda."
+            exit 1
+          fi
+
+          if docker build --progress=plain -f Dockerfile.mutante-sharp -t dmo-ci-mutante-sharp . > mutante.log 2>&1; then
+            echo "::error title=Guarda inerte::o build passou com sharp aninhado dentro da imagem. A guarda do Dockerfile nao esta medindo o artefato."
+            tail -30 mutante.log
+            exit 1
+          fi
+
+          # Reprovar não basta: um build pode falhar por falta de espaço, por
+          # rede ou por sintaxe, e eu leria isso como guarda funcionando.
+          if ! grep -q 'SHARP NA IMAGEM' mutante.log; then
+            echo "::error title=Reprovou pelo motivo errado::o build mutante falhou sem imprimir a mensagem da guarda. Nao e prova de que ela pegou o sharp."
+            tail -30 mutante.log
+            exit 1
+          fi
+
+          echo "::notice title=Guarda do sharp provada::o build com sharp aninhado reprovou pela mensagem da propria guarda, e o build da entrega passou."

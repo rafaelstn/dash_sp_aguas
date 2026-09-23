@@ -68,3 +68,11 @@ supabase/.temp
 *.log
 npm-debug.log*
 README.md
+
+# Dockerfile derivado que o job `imagem` do CI gera para provar que a guarda do
+# sharp reprova (ele semeia uma copia aninhada e espera o build falhar). Ele fica
+# fora do contexto por CUSTO, e o numero e medido: sem esta linha o arquivo novo
+# muda o hash do contexto, o `COPY . .` do estagio `builder` perde o cache e o
+# `npm run build` refaz inteiro, 277,1s na bancada em 23/09/2026. Com a linha, os
+# dois builds do job veem o MESMO contexto e o mutante custa segundos.
+Dockerfile.mutante-sharp

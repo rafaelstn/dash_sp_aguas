@@ -164,6 +164,32 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# O sharp não pode existir na imagem entregue ao órgão: ele carrega libvips e
+# libheif (GHSA-f88m-g3jw-g9cj e GHSA-rgj7-g3m4-5g8c) e nenhum código do produto
+# o usa, porque `/_next/image` está fechado. O `outputFileTracingExcludes` do
+# next.config.ts já o tira do standalone, e isso foi medido (60 MB sem ele,
+# contra 80 MB com), mas aquele mecanismo é por caminho LITERAL e não alcança
+# uma cópia aninhada em node_modules/<pacote>/node_modules/sharp. Esta guarda
+# mede o ARTEFATO, depois dos três COPY, então mudança de config, hoisting do
+# npm ou COPY novo não a contornam.
+#
+# A âncora de presença na primeira linha não é zelo: asserção de ausência sobre
+# um caminho errado aprova tudo em silêncio, e esta guarda passaria a vida
+# inteira verde se o COPY do standalone mudasse de forma. Quando isso acontecer,
+# o que precisa ser dito é que a varredura deixou de medir, não que não achou
+# sharp. A âncora é o `server.js` do standalone, o mesmo arquivo do CMD.
+RUN test -f /app/server.js || { \
+      echo "GUARDA QUEBRADA: /app/server.js ausente. O COPY do standalone mudou de forma e a varredura abaixo nao mede mais nada: corrigir a ancora."; \
+      exit 1; \
+    }; \
+    achado=$(find /app -type d \( -name sharp -o -name '@img' \) -print -quit); \
+    if [ -n "$achado" ]; then \
+      echo "SHARP NA IMAGEM: $achado"; \
+      echo "Ele carrega libvips e libheif (GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c) e nenhum codigo do produto o usa."; \
+      echo "Conferir o outputFileTracingExcludes do next.config.ts, inclusive para copia aninhada em node_modules/<pacote>/node_modules/sharp."; \
+      exit 1; \
+    fi
+
 USER nextjs
 EXPOSE 3000
 
