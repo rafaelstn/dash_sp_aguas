@@ -114,8 +114,19 @@
     --border-strong: 218 11% 55%;
     --gov-azul: 217 91% 65%;
     --gov-azul-claro: 217 33% 22%;
+    --status-warn: 33 90% 62%;
   }
   */
+  /* Por que --status-warn entrou na lista acima, em 23/09/2026: os gráficos de
+     série e de comparação deixaram de repetir hexadecimal à mão e passaram a ler
+     --border-subtle, --fg-subtle, --gov-azul e --status-warn. Os três primeiros
+     já tinham ponto de partida aqui; o âmbar não, e no claro ele é escuro
+     (28 84% 31%), porque nasceu para TEXTO sobre fundo claro. Desenhado sobre
+     superfície escura, esse âmbar quase desaparece, e a marca de "dia sem
+     medida" do GraficoSerie é exatamente o que não pode desaparecer: é ela que
+     separa "o posto não reportou" de "o posto reportou que não mediu". O valor
+     acima é ponto de partida a refinar na ativação, com o contraste medido
+     contra --bg-surface, não contra branco. */
 
   html {
     scroll-behavior: smooth;

@@ -14,8 +14,17 @@ import type { DiaComparacao } from './useLeiturasMultiplas';
 import { corComparacao } from './cores-comparacao';
 import { fmtDataCurta, fmtDataLonga } from './estatisticas-leituras';
 
-const COR_GRID = '#E5E7EB';
-const COR_EIXO = '#5F6572';
+/*
+ * O recharts recebe cor como string, fora do fluxo de classes do Tailwind, e
+ * `hsl(var(--token))` é resolvido pelo navegador dentro do SVG (MEDIDO no DOM
+ * renderizado, Chrome 151, 23/09/2026). Escolha pela FUNÇÃO: grade e linha de
+ * eixo são borda, rótulo de eixo é texto de apoio. As cores das SÉRIES são outra
+ * história e continuam em `./cores-comparacao`, que é a paleta qualitativa do
+ * painel oficial do órgão: ali a cor identifica a estação e não carrega
+ * significado de tema.
+ */
+const COR_GRID = 'hsl(var(--border-subtle))';
+const COR_EIXO = 'hsl(var(--fg-subtle))';
 
 interface GraficoComparacaoProps {
   /** Série diária unificada (ordem cronológica crescente). */

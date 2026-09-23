@@ -68,21 +68,36 @@ import {
  * inclusive as contagens de lacuna e de dia sem medida.
  *
  * ─────────────────────────────────────────────────────────────────────────
- * CORES EM HEXADECIMAL, E POR QUÊ
+ * AS CORES SAEM DE TOKEN, E COMO ISSO FUNCIONA EM SVG
  * ─────────────────────────────────────────────────────────────────────────
- * O recharts desenha em SVG fora do fluxo de classes do Tailwind, então precisa
- * do valor resolvido. Os literais abaixo são os mesmos tokens de `globals.css`
- * (`--gov-azul`, `--status-warn`, `--border-subtle`, `--fg-subtle`), no mesmo
- * padrão dos gráficos da comparação de chuva. Quando o tema escuro
- * for ligado (o bloco `[data-theme="dark"]` está comentado em `globals.css`),
- * estes quatro valores são o que precisa sair para variável de CSS lida em
- * tempo de execução.
+ * O recharts desenha em SVG fora do fluxo de classes do Tailwind, e recebe cada
+ * cor como STRING, então aqui não há classe utilitária. Isso não obriga a
+ * hexadecimal: `hsl(var(--token))` num atributo de apresentação do SVG é
+ * resolvido pelo navegador igual a qualquer outra propriedade de cor. MEDIDO em
+ * Chrome 151, 23/09/2026, lendo o `stroke` e o `fill` no DOM renderizado: as
+ * quatro cores abaixo chegam como `rgb(...)` válido, e não como cor inválida
+ * caída para preto.
+ *
+ * Até 23/09/2026 estes quatro valores eram literais hexadecimais que REPETIAM à
+ * mão o que o token já dizia. Com o token, o dia em que o tema escuro for ligado
+ * (o bloco `[data-theme="dark"]` está comentado em `src/styles/globals.css`) não
+ * depende de alguém lembrar deste arquivo.
+ *
+ * A escolha de cada token é pela FUNÇÃO, não pela coincidência do hexadecimal
+ * que estava aqui: a grade e a linha do eixo são borda, o rótulo do eixo é texto
+ * de apoio, a série é a cor da marca do órgão e a marca de "dia sem medida" é um
+ * estado de atenção, o mesmo `--status-warn` que está atrás da classe
+ * `text-gov-alerta` usada nos avisos desta feature.
  */
 
-const COR_SERIE = '#1E40AF';
-const COR_SEM_MEDIDA = '#92400E';
-const COR_GRID = '#E5E7EB';
-const COR_EIXO = '#5F6572';
+/** `--gov-azul`: a série medida, na cor da marca. */
+const COR_SERIE = 'hsl(var(--gov-azul))';
+/** `--status-warn`: "o dia existe e não tem medida" é estado de atenção. */
+const COR_SEM_MEDIDA = 'hsl(var(--status-warn))';
+/** `--border-subtle`: grade, linha do eixo e cursor do tooltip são borda. */
+const COR_GRID = 'hsl(var(--border-subtle))';
+/** `--fg-subtle`: o rótulo do eixo é texto de apoio. */
+const COR_EIXO = 'hsl(var(--fg-subtle))';
 
 /**
  * Fatia do eixo vertical reservada, abaixo do menor valor, para a faixa de

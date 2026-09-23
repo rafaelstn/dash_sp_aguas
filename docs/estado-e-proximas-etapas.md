@@ -547,9 +547,29 @@ regular.
 8. **Navegação por setas entre séries não foi exercitada:** foram sondados 86
    prefixos e nenhum posto alcançável tem duas séries com dado ao mesmo tempo. O
    comportamento é o nativo do componente e não está afirmado.
-9. **Contraste medido num tema só.** O tema escuro está comentado no
-   `globals.css` com "não habilitar agora"; as quatro cores do gráfico precisam
-   virar variável de CSS no dia em que ele ligar.
+9. **Contraste medido num tema só, e as cores do gráfico já saíram do
+   hexadecimal.** Em 23/09/2026 as **seis** constantes de cor dos gráficos (eram
+   quatro em `GraficoSerie.tsx` e duas em `GraficoComparacao.tsx`, não quatro no
+   total) passaram a ler token: `hsl(var(--border-subtle))` na grade e na linha
+   do eixo, `hsl(var(--fg-subtle))` no rótulo do eixo, `hsl(var(--gov-azul))` na
+   série e `hsl(var(--status-warn))` na marca de dia sem medida. MEDIDO no DOM
+   renderizado (Chrome 151): 75 atributos `stroke`/`fill` com token, zero caído
+   para preto por cor inválida. O arquivo dos tokens é `src/styles/globals.css`,
+   e o bloco `[data-theme="dark"]` continua comentado, agora com ponto de partida
+   para `--status-warn`, que faltava.
+
+   O que **continua** pendente: o contraste segue medido só no tema claro, e
+   ligar o escuro ainda depende do `bg-white` fixo, pré-requisito escrito no
+   comentário que fica logo acima do bloco comentado. E ficou um achado da
+   troca: os comentários do `globals.css` nomeiam hexadecimais que o HSL ao lado
+   NÃO produz. Medido com
+   `getComputedStyle`: `--status-warn` resolve `rgb(145, 75, 13)` e o comentário
+   diz `#92400E` (`rgb(146, 64, 14)`, 11 unidades de verde de diferença, 6,5:1 em
+   vez dos 7,4:1 anotados, ambos AA); `--fg-muted` resolve `rgb(84, 89, 100)`
+   contra `#4B5563`; `--gov-azul-escuro` resolve `rgb(20, 53, 144)` contra
+   `#1E3A8A`; `--gov-azul`, `--status-danger` e `--status-success` erram por uma
+   unidade. Decidir qual lado é o certo (o HSL ou o comentário) é decisão de
+   paleta, com a tabela de contraste a refazer, e não entrou nesta mudança.
 
 ### 3.4 Operação
 
