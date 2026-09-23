@@ -236,21 +236,23 @@ export function TelaPostos() {
     return m;
   }, [cargaEstacoes]);
 
-  let comparacaoChuva: ComparacaoChuva = { situacao: 'indisponivel' };
+  let comparacaoChuva: ComparacaoChuva = { situacao: 'nao-se-aplica' };
   if (aberto?.tipo === 'plu') {
     if (cargaEstacoes.situacao === 'carregando' || cargaEstacoes.situacao === 'ociosa') {
       comparacaoChuva = { situacao: 'carregando' };
+    } else if (cargaEstacoes.situacao === 'erro') {
+      comparacaoChuva = { situacao: 'origem-indisponivel', tentarDeNovo: carregarEstacoes };
     } else {
       const estacao = chuvaPorPrefixo.get(aberto.prefixo);
-      if (estacao) {
-        comparacaoChuva = {
-          situacao: 'pronta',
-          estacao,
-          naCesta: comparacao.estaSelecionada(estacao.id),
-          podeAdicionar: comparacao.podeAdicionar,
-          alternar: () => comparacao.alternar(estacao),
-        };
-      }
+      comparacaoChuva = estacao
+        ? {
+            situacao: 'pronta',
+            estacao,
+            naCesta: comparacao.estaSelecionada(estacao.id),
+            podeAdicionar: comparacao.podeAdicionar,
+            alternar: () => comparacao.alternar(estacao),
+          }
+        : { situacao: 'sem-estacao' };
     }
   }
 

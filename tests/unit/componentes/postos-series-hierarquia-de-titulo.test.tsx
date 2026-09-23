@@ -137,7 +137,7 @@ describe('o nível do título das séries dentro do detalhe do posto', () => {
     render(
       <DetalhePosto
         ponto={PONTO}
-        comparacao={{ situacao: 'indisponivel' }}
+        comparacao={{ situacao: 'nao-se-aplica' }}
         aoVoltar={() => {}}
       />,
     );
@@ -174,7 +174,7 @@ describe('o nível do título das séries dentro do detalhe do posto', () => {
     const { container } = render(
       <DetalhePosto
         ponto={PONTO}
-        comparacao={{ situacao: 'indisponivel' }}
+        comparacao={{ situacao: 'nao-se-aplica' }}
         aoVoltar={() => {}}
       />,
     );

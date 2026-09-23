@@ -29,8 +29,10 @@ import { mensagemDeLeitura } from './useMapaPostos';
  */
 
 export type ComparacaoChuva =
-  | { readonly situacao: 'indisponivel' }
+  | { readonly situacao: 'nao-se-aplica' }
   | { readonly situacao: 'carregando' }
+  | { readonly situacao: 'sem-estacao' }
+  | { readonly situacao: 'origem-indisponivel'; readonly tentarDeNovo: () => void }
   | {
       readonly situacao: 'pronta';
       readonly estacao: Estacao;
@@ -228,13 +230,35 @@ function Fato({ termo, children }: { termo: string; children: React.ReactNode })
 }
 
 function BotaoComparar({ comparacao }: { comparacao: ComparacaoChuva }) {
-  if (comparacao.situacao === 'indisponivel') return null;
+  if (comparacao.situacao === 'nao-se-aplica') return null;
   if (comparacao.situacao === 'carregando') {
     return (
       <button type="button" disabled className={`${classeAcaoSecundaria} opacity-60`}>
         <BarChart3 className="h-4 w-4" aria-hidden="true" />
         Comparar chuva
       </button>
+    );
+  }
+  if (comparacao.situacao === 'sem-estacao') {
+    return (
+      <p role="status" className="inline-flex h-9 items-center px-1 text-sm text-app-fg-muted">
+        Sem estação de chuva do SIBH para comparar.
+      </p>
+    );
+  }
+  if (comparacao.situacao === 'origem-indisponivel') {
+    return (
+      <p role="status" className="inline-flex h-9 flex-wrap items-center gap-1.5 px-1 text-sm text-app-fg-muted">
+        <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+        Não foi possível verificar a comparação de chuva.
+        <button
+          type="button"
+          onClick={comparacao.tentarDeNovo}
+          className="font-medium text-gov-azul underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+        >
+          Tentar de novo
+        </button>
+      </p>
     );
   }
   const bloqueado = !comparacao.naCesta && !comparacao.podeAdicionar;
