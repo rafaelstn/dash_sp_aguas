@@ -558,18 +558,36 @@ regular.
    e o bloco `[data-theme="dark"]` continua comentado, agora com ponto de partida
    para `--status-warn`, que faltava.
 
+   O achado da troca, os comentários do `globals.css` nomeando hexadecimais que
+   o HSL ao lado NÃO produz, foi FECHADO no mesmo dia, no commit `cbe18b0`. A
+   varredura completa dos 38 tokens que citam hexadecimal encontrou **23 cores e
+   6 ratios** divergentes, e não os poucos que a medição por `getComputedStyle`
+   tinha visto: os piores erravam 9, 10 e 11 unidades de um canal, e o
+   `--status-warn` prometia 7,4:1 entregando 6,53:1. Nenhum caía abaixo de AA,
+   por isso lint, typecheck, build e suíte ficavam verdes sobre a divergência.
+   O lado certo é o **hexadecimal**, porque é ele que nomeia a cor pretendida
+   (paleta do Tailwind na base, computed style do SIBH nas cores do painel do
+   DAEE), e o HSL é só a forma de escrever, exigida pelo alpha em utilitário
+   arbitrário; a exceção é o `--border-input`, escolhido pelo contraste mínimo
+   de 3:1 da WCAG 1.4.11, e o comentário passou a dizer isso. A régua que impede
+   a volta é `tests/unit/regua-de-cores-dos-tokens.test.ts`, que a suíte e o CI
+   já rodam, provada com três mutantes (cor divergente, ratio divergente e
+   hexadecimal apagado do comentário). A auditoria
+   `docs/acessibilidade/auditoria-e-mag-wcag-2026-06-26.md` foi conferida contra
+   os valores remedidos e NÃO precisou de correção.
+
    O que **continua** pendente: o contraste segue medido só no tema claro, e
    ligar o escuro ainda depende do `bg-white` fixo, pré-requisito escrito no
-   comentário que fica logo acima do bloco comentado. E ficou um achado da
-   troca: os comentários do `globals.css` nomeiam hexadecimais que o HSL ao lado
-   NÃO produz. Medido com
-   `getComputedStyle`: `--status-warn` resolve `rgb(145, 75, 13)` e o comentário
-   diz `#92400E` (`rgb(146, 64, 14)`, 11 unidades de verde de diferença, 6,5:1 em
-   vez dos 7,4:1 anotados, ambos AA); `--fg-muted` resolve `rgb(84, 89, 100)`
-   contra `#4B5563`; `--gov-azul-escuro` resolve `rgb(20, 53, 144)` contra
-   `#1E3A8A`; `--gov-azul`, `--status-danger` e `--status-success` erram por uma
-   unidade. Decidir qual lado é o certo (o HSL ou o comentário) é decisão de
-   paleta, com a tabela de contraste a refazer, e não entrou nesta mudança.
+   comentário que fica logo acima do bloco comentado. Sobre hexadecimal fora do
+   `globals.css`, a medição de 23/09/2026 encontrou **104 ocorrências em 19
+   arquivos** de `src/`, e a maioria tem razão declarada no próprio arquivo:
+   `global-error.tsx` precisa ser autocontido sem o CSS do app,
+   `html-relatorio.ts` e `TemplateImpressao.tsx` geram documento para impressão,
+   `cores-comparacao.ts` reproduz as 30 cores do painel oficial por fidelidade,
+   os dois `layout.tsx` declaram `theme-color`, e o canvas do mapa precisa do
+   valor resolvido. A pendência real, portanto, não é a contagem: é percorrer
+   arquivo a arquivo e separar o que tem token equivalente e não o usa. Não está
+   feito, e trocar em massa pela contagem seria piorar o produto pela régua.
 
 ### 3.4 Operação
 
