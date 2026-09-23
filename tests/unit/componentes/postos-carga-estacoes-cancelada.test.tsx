@@ -125,7 +125,20 @@ async function telaComOPostoAberto() {
   // abortado por não existir.
   const botao = await screen.findByRole('button', { name: 'Comparar chuva' });
   expect(botao).toBeDisabled();
-  expect(sinal, 'a tela não pediu o catálogo de estações').toBeDefined();
+
+  // A espera é pelo SINAL, e não pela chegada do botão, porque os dois não são o
+  // mesmo instante: o botão desabilitado já é desenhado com a carga em `ociosa`
+  // (TelaPostos monta `comparacaoChuva: 'carregando'` nesse estado), e a
+  // requisição só sai no `useEffect` que roda DEPOIS desse commit. Encontrado o
+  // botão, `sinal` ainda pode estar indefinido por um tique.
+  //
+  // MEDIDO em 23/09/2026: falhou uma vez na suíte inteira sob carga
+  // ("expected undefined to be defined", nesta linha), e passou na execução
+  // seguinte e sozinho. A régua não afrouxa: se a tela realmente não pedir o
+  // catálogo, o `waitFor` estoura no tempo limite e o caso continua reprovando.
+  await waitFor(() => {
+    expect(sinal, 'a tela não pediu o catálogo de estações').toBeDefined();
+  });
   expect(sinal?.aborted).toBe(false);
 
   return resultado;
