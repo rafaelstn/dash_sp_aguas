@@ -124,12 +124,22 @@ jobs:
             psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$arquivo"
           done
 
+      # Sem este passo a reaplicação abaixo roda sobre banco VAZIO, e banco vazio
+      # faz a migration certa e a errada passarem igual. Foi assim que dois
+      # índices transitórios chegaram à produção e derrubaram o serviço
+      # (0045 em 10/09/2026, 0057 em 22/09/2026).
+      - name: Semear o estado real de produção (a régua sem isto mede o vazio)
+        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/testing/regua-migrations/semear-estado-de-producao.sql
+
       - name: Reaplicar tudo (as migrations têm que ser idempotentes)
         run: |
           psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
           for arquivo in $(ls supabase/migrations/*.sql | sort); do
             psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$arquivo"
           done
+
+      - name: Conferir a reaplicação e limpar a semeadura
+        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/testing/regua-migrations/conferir-reaplicacao.sql
 
       - name: Testes de integração
         run: npx vitest run tests/integration

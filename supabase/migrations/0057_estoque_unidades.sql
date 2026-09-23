@@ -46,8 +46,49 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_unidades_chave_import
   ON estoque_unidades (chave_import) WHERE chave_import IS NOT NULL;
 
 -- unicidade de patrimonio quando existir (integridade real do inventario).
-CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_unidades_codigo_spaguas
-  ON estoque_unidades (codigo_spaguas) WHERE codigo_spaguas IS NOT NULL;
+--
+-- ESTE INDICE E TRANSITORIO, e por isso a criacao e guardada. A migration 0060
+-- o DERRUBA (`DROP INDEX IF EXISTS uq_estoque_unidades_codigo_spaguas`), porque
+-- o invariante aqui esta ERRADO: `codigo_spaguas` (CODIGOSPAGUAS da planilha) e
+-- codigo de LOTE/projeto, nao patrimonio por unidade. No estado final ele NAO
+-- existe, e a chave real por unidade e `codigo` (uq_estoque_unidades_codigo).
+--
+-- MEDIDO em 22/09/2026, em PRODUCAO, e custou o servico no ar: reaplicar este
+-- arquivo abortou com
+--   ERROR: could not create unique index "uq_estoque_unidades_codigo_spaguas"
+--   DETAIL: Key (codigo_spaguas)=(SPA26) is duplicated.
+-- e como o `app` so sobe depois de o `migrate` encerrar com sucesso, o site
+-- respondeu 502 ate ser restaurado com `up -d --no-deps app`. O banco tinha 521
+-- linhas com codigo_spaguas = 'SPA26', que sao LEGITIMAS desde a 0060: e o lote
+-- da aba GERAL PENHA. Apagar seria destruir inventario para satisfazer um
+-- indice que a proxima migration remove.
+--
+-- Em 16/09/2026 isto passou por VACUIDADE: as migrations rodaram com a tabela
+-- ainda vazia, e a carga do estoque so entrou depois. Estado de partida vazio
+-- faz o certo e o errado passarem igual.
+--
+-- O `IF NOT EXISTS` nao protege, exatamente como na 0045 (incidente de
+-- 10/09/2026, commit 5ff93c7): a 0060 removeu o indice, entao ele esta ausente,
+-- o CREATE passa da guarda de existencia e morre na duplicata. A condicao
+-- pergunta pelo indice NAO-unico `idx_estoque_unidades_codigo_spaguas`, que a
+-- 0060 cria no mesmo passo em que derruba este: se ele existe, aquela migration
+-- ja rodou e este indice nao deve voltar. Do zero ele ainda nao existe neste
+-- ponto e o indice e criado normalmente, preservando a historia do schema.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE c.relname = 'idx_estoque_unidades_codigo_spaguas'
+       AND c.relkind = 'i'
+       AND n.nspname = 'public'
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_estoque_unidades_codigo_spaguas
+      ON estoque_unidades (codigo_spaguas) WHERE codigo_spaguas IS NOT NULL;
+  END IF;
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_estoque_unidades_local
   ON estoque_unidades (local_id) WHERE local_id IS NOT NULL;
