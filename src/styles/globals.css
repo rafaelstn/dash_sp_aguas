@@ -16,64 +16,78 @@
     --bg-surface-2: 220 14% 96%;     /* #F3F4F6 — header tabela, hover */
     --bg-surface-3: 220 13% 91%;     /* #E5E7EB — zebra */
 
-    /* Textos */
-    --fg-default: 221 39% 11%;       /* #111827 — 16.9:1 */
-    --fg-muted: 220 9% 36%;          /* #4B5563 — 7.5:1 */
+    /* Textos.
+       O HSL de cada token abaixo é a conversão EXATA do hexadecimal citado ao
+       lado, com a casa decimal que o round-trip exige: medido em 23/09/2026, o
+       HSL arredondado à mão não devolvia a cor declarada em 23 dos 38 tokens,
+       e `--fg-muted` errava 9 de um canal. Quem manda é o hexadecimal, porque é
+       ele que nomeia a cor pretendida (paleta do Tailwind aqui, computed style
+       do SIBH mais abaixo); o HSL é a forma de escrever, exigida pelo alpha em
+       utilitário arbitrário. Os ratios são calculados, não estimados, e a régua
+       que confere as duas coisas é
+       tests/unit/regua-de-cores-dos-tokens.test.ts. */
+    --fg-default: 221 39% 11%;       /* #111827 — 17.7:1 */
+    --fg-muted: 215 14% 34%;         /* #4B5563 — 7.6:1 */
     --fg-subtle: 220 9% 41%;         /* #5F6572 — 5.8:1 branco / 4.7:1 sobre zebra (AA texto pequeno) */
 
     /* Bordas */
     --border-subtle: 220 13% 91%;    /* #E5E7EB */
     --border-default: 216 12% 84%;   /* #D1D5DB */
-    --border-strong: 218 11% 65%;    /* #9CA3AF */
+    --border-strong: 217.9 10.6% 64.9%; /* #9CA3AF */
     /* Borda de controle de formulário (input/select/textarea). Escurecida para
-       atingir >= 3:1 com o fundo (WCAG 1.4.11, componentes de interface). */
-    --border-input: 220 9% 54%;      /* ~#868C95 — 3.7:1 sobre branco */
+       atingir >= 3:1 com o fundo (WCAG 1.4.11, componentes de interface). Único
+       token em que o HSL é a fonte e o hexadecimal é a anotação, porque o valor
+       foi escolhido pelo contraste e não por uma cor de paleta: por isso o
+       hexadecimal ao lado é o que este HSL renderiza, e não o contrário. */
+    --border-input: 220 9% 54%;      /* #7F8694 — 3.7:1 sobre branco */
 
     /* Marca */
-    --gov-azul: 226 71% 40%;         /* #1E40AF — 8.6:1 */
-    --gov-azul-escuro: 224 76% 32%;  /* #1E3A8A */
-    --gov-azul-claro: 214 95% 93%;   /* #DBEAFE — fundo de pílula */
+    --gov-azul: 225.9 70.7% 40.2%;   /* #1E40AF — 8.7:1 */
+    --gov-azul-escuro: 224.4 64.3% 32.9%; /* #1E3A8A */
+    --gov-azul-claro: 214.3 94.6% 92.7%; /* #DBEAFE — fundo de pílula */
 
     /* Semântica. Ratios calculados sobre #FFFFFF; sobre bg-red-50 / bg-amber-50
-       / bg-emerald-50 (próximo de branco) o ratio cai ~0.1, mantendo AA. */
-    --status-danger: 0 70% 35%;      /* #991B1B, 8.7:1 branco, 8.6:1 sobre bg-red-50 */
-    --status-success: 142 64% 24%;   /* #166534, 6.3:1 branco, 6.2:1 sobre bg-emerald-50 */
-    --status-warn: 28 84% 31%;       /* #92400E, 7.4:1 branco, 7.3:1 sobre bg-amber-50 */
+       / bg-emerald-50 o ratio cai até 0,7 (não 0,1 como dizia esta linha até
+       23/09/2026, quando a queda foi medida token a token), mantendo AA. */
+    --status-danger: 0 70% 35.3%;    /* #991B1B, 8.3:1 branco, 7.6:1 sobre bg-red-50 */
+    --status-success: 142.8 64.2% 24.1%; /* #166534, 7.1:1 branco, 6.8:1 sobre bg-emerald-50 */
+    --status-warn: 22.7 82.5% 31.4%; /* #92400E, 7.1:1 branco, 6.8:1 sobre bg-amber-50 */
 
     /* Status hidrológico (diagramas unifilares / monitor). Escala de 5 níveis
        do mais calmo ao mais crítico, contraste AA sobre branco. Consumidos
        pelo STATUS_COLORS do domínio src/domain/diagramas. */
-    --status-hidro-normal: 142 64% 24%;        /* verde  — #166534 */
-    --status-hidro-atencao: 28 84% 31%;        /* âmbar  — #92400E */
-    --status-hidro-alerta: 18 80% 36%;         /* laranja— #A8420D */
-    --status-hidro-emergencia: 0 70% 35%;      /* vermelho #991B1B */
-    --status-hidro-extravasamento: 300 45% 30%;/* vinho  — #6F2C6F */
+    --status-hidro-normal: 142.8 64.2% 24.1%;  /* verde  — #166534 */
+    --status-hidro-atencao: 22.7 82.5% 31.4%;  /* âmbar  — #92400E */
+    --status-hidro-alerta: 20.5 85.6% 35.5%;   /* laranja— #A8420D */
+    --status-hidro-emergencia: 0 70% 35.3%;    /* vermelho #991B1B */
+    --status-hidro-extravasamento: 300 43.2% 30.4%; /* vinho  — #6F2C6F */
 
     /* ── Fidelidade SIBH/DAEE (editor de diagramas unifilares) ──────────
        Cores extraídas do site oficial cth.daee.sp.gov.br/sibh (computed
        styles reais), pra o editor ficar idêntico ao SIBH. Texto dos cards
-       usa --fg-default (#111827, 16:1 sobre os fundos pastel = AA/AAA).
+       usa --fg-default (#111827, 11.7:1 no pior dos fundos pastel, o vermelho
+       claro #ffc4bd, e 16.4:1 no melhor: AAA nos quatro).
        Os pares borda/fundo de status batem com os do SIBH. */
     --sibh-rio: 201 100% 70%;                  /* faixa do rio #66c9ff */
     --sibh-rio-rotulo: 0 0% 100%;              /* rótulo branco sobre a faixa */
-    --sibh-reservatorio: 208 98% 43%;          /* círculo do reservatório #0275d8 */
-    --sibh-tendencia: 344 91% 64%;             /* seta/“=” de tendência #f74f78 */
-    --sibh-unidade-nivel: 162 80% 44%;         /* badge “m” verde água #16c995 */
-    --sibh-chuva: 219 85% 69%;                 /* “mm”, “Chuva” e borda da chuva #6a9bf4 */
+    --sibh-reservatorio: 207.8 98.2% 42.7%;    /* círculo do reservatório #0275d8 */
+    --sibh-tendencia: 345.4 91.3% 63.9%;       /* seta/“=” de tendência #f74f78 */
+    --sibh-unidade-nivel: 162.6 80.3% 43.7%;   /* badge “m” verde água #16c995 */
+    --sibh-chuva: 218.7 86.3% 68.6%;           /* “mm”, “Chuva” e borda da chuva #6a9bf4 */
     /* Cards de nível por status (fundo + borda), espelhando o SIBH */
     --sibh-card-normal-fundo: 0 0% 100%;       /* branco */
     --sibh-card-normal-borda: 216 12% 84%;     /* cinza fino #D1D5DB */
-    --sibh-card-atencao-fundo: 53 100% 86%;    /* amarelo claro #fff8ba */
-    --sibh-card-atencao-borda: 52 99% 37%;     /* #bda501 */
-    --sibh-card-alerta-fundo: 38 100% 78%;     /* laranja claro #ffdb91 */
-    --sibh-card-alerta-borda: 39 100% 50%;     /* #ffa500 */
-    --sibh-card-emergencia-fundo: 9 100% 87%;  /* vermelho claro #ffc4bd */
+    --sibh-card-atencao-fundo: 53.9 100% 86.5%; /* amarelo claro #fff8ba */
+    --sibh-card-atencao-borda: 52.3 98.9% 37.3%; /* #bda501 */
+    --sibh-card-alerta-fundo: 40.4 100% 78.4%; /* laranja claro #ffdb91 */
+    --sibh-card-alerta-borda: 38.8 100% 50%;   /* #ffa500 */
+    --sibh-card-emergencia-fundo: 6.4 100% 87.1%; /* vermelho claro #ffc4bd */
     --sibh-card-emergencia-borda: 0 100% 45%;  /* #e60000 */
     --sibh-card-extravasamento-fundo: 0 100% 90%; /* #ffcccc */
     --sibh-card-extravasamento-borda: 0 100% 40%; /* #cc0000 */
     /* Legenda “Lista de Status” (quadradinhos do SIBH) */
     --sibh-legenda-atencao: 60 100% 50%;       /* amarelo #ffff00 */
-    --sibh-legenda-alerta: 39 100% 50%;        /* laranja #ffa500 */
+    --sibh-legenda-alerta: 38.8 100% 50%;      /* laranja #ffa500 */
     --sibh-legenda-extravasamento: 0 100% 50%; /* vermelho #ff0000 */
 
     /* Focus ring */
