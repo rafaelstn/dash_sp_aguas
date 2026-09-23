@@ -457,7 +457,7 @@ export function TelaPostos() {
           <button
             type="button"
             onClick={() => setEstado((e) => ({ ...e, escopo: ESTADO_PADRAO.escopo }))}
-            className="rounded px-1.5 text-sm font-medium text-gov-azul underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+            className="inline-flex min-h-11 items-center rounded px-1.5 text-sm font-medium text-gov-azul underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul md:min-h-6"
           >
             Ver todos os postos
           </button>

@@ -247,7 +247,7 @@ function MenuTransmissao({
     const fora = (e: PointerEvent) => {
       if (raiz.current && !raiz.current.contains(e.target as Node)) setAberto(false);
     };
-    // Escape no documento, em captura, para o atalho global nao agir antes; so vale com o foco dentro do menu.
+    // Escape no documento, em captura, para o atalho global não agir antes; só vale com o foco dentro do menu.
     const escape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (!raiz.current?.contains(document.activeElement)) return;
@@ -409,7 +409,7 @@ export function FiltrosDesktop({ estado, facetas, aoMudar, aoLimpar }: FiltrosPo
           <button
             type="button"
             onClick={aoLimpar}
-            className="rounded px-1.5 text-sm text-gov-azul underline underline-offset-2 hover:text-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+            className="inline-flex h-8 items-center rounded px-1.5 text-sm text-gov-azul underline underline-offset-2 hover:text-gov-azul-escuro focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
           >
             Limpar filtros
           </button>

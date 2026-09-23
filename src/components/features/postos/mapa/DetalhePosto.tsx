@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BarChart3, FileText, TriangleAlert } from 'lucide-react';
 import type { ResumoSerie } from '@/application/ports/series-medicao-repository';
@@ -10,6 +10,7 @@ import { Skeleton, SkeletonGrupo } from '@/components/ui/Skeleton';
 import { PainelSeriesPosto } from '@/components/features/postos/series/PainelSeriesPosto';
 import { fmtDia, fmtMomento } from '@/components/features/postos/series/formato';
 import type { Estacao } from '@/components/features/monitor/tipos';
+import { MAX_COMPARACAO } from '@/components/features/monitor/useComparacao';
 import { GlifoPosto } from './GlifoPosto';
 import { ROTULO_SITUACAO, ROTULO_TRANSMISSAO, ROTULO_VAZAO, estiloDoTipo } from './simbolos';
 import { rotuloUgrhi } from './ugrhis';
@@ -40,6 +41,17 @@ export type ComparacaoChuva =
       readonly podeAdicionar: boolean;
       readonly alternar: () => void;
     };
+
+/**
+ * Motivo do impedimento do botão de comparar, quando a cesta já está cheia.
+ *
+ * O número sai de `MAX_COMPARACAO`, que é quem realmente recusa a inclusão:
+ * escrever "8" aqui criaria uma segunda verdade que diverge na primeira vez que
+ * o teto mudar.
+ */
+const MOTIVO_CESTA_CHEIA =
+  `A comparação de chuva já tem o máximo de ${MAX_COMPARACAO} estações. ` +
+  'Remova uma estação da comparação para incluir esta.';
 
 interface DetalhePostoProps {
   readonly ponto: PontoMapaPosto;
@@ -229,7 +241,27 @@ function Fato({ termo, children }: { termo: string; children: React.ReactNode })
   );
 }
 
+/**
+ * Botão que põe e tira a estação de chuva da cesta de comparação.
+ *
+ * O impedimento por REGRA (a cesta já está cheia) é anunciado em vez de apagar
+ * o botão: `aria-disabled` mantém ele na ordem de foco e o motivo viaja no
+ * `aria-describedby`, que é lido ao chegar nele. Antes o motivo morava no
+ * atributo `title` de um botão `disabled`, e essa é a pior combinação possível:
+ * `title` só aparece ao parar o mouse em cima, e botão `disabled` nem recebe
+ * foco, então quem navega por teclado ou por leitor de tela via um botão
+ * apagado sem nenhuma explicação (WCAG 1.3.1 e 3.3.2 / e-MAG 6.5, e o cliente é
+ * órgão público). É o mesmo desenho que `BotaoAtalho`, em `series/SeletorJanela`,
+ * já usa desde o QA de 22/09/2026.
+ *
+ * A frase fica `sr-only` porque não há, nesta faixa de ações, texto visível
+ * dizendo o teto. Quem enxerga tem o contador da cesta de comparação.
+ *
+ * `carregando` continua com `disabled` de propósito: ali não é regra, é espera,
+ * e ela some sozinha quando a lista de estações chega.
+ */
 function BotaoComparar({ comparacao }: { comparacao: ComparacaoChuva }) {
+  const idMotivo = useId();
   if (comparacao.situacao === 'nao-se-aplica') return null;
   if (comparacao.situacao === 'carregando') {
     return (
@@ -261,21 +293,28 @@ function BotaoComparar({ comparacao }: { comparacao: ComparacaoChuva }) {
       </p>
     );
   }
-  const bloqueado = !comparacao.naCesta && !comparacao.podeAdicionar;
+  const impedido = !comparacao.naCesta && !comparacao.podeAdicionar;
   return (
-    <button
-      type="button"
-      aria-pressed={comparacao.naCesta}
-      onClick={comparacao.alternar}
-      disabled={bloqueado}
-      title={bloqueado ? 'A comparação já tem o máximo de estações' : undefined}
-      className={`${classeAcaoSecundaria} disabled:cursor-not-allowed disabled:opacity-50 ${
-        comparacao.naCesta ? 'border-gov-azul bg-gov-azul-claro text-gov-azul-escuro' : ''
-      }`}
-    >
-      <BarChart3 className="h-4 w-4" aria-hidden="true" />
-      {comparacao.naCesta ? 'Na comparação de chuva' : 'Comparar chuva'}
-    </button>
+    <>
+      <button
+        type="button"
+        aria-pressed={comparacao.naCesta}
+        onClick={impedido ? undefined : comparacao.alternar}
+        aria-disabled={impedido || undefined}
+        aria-describedby={impedido ? idMotivo : undefined}
+        className={`${classeAcaoSecundaria} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${
+          comparacao.naCesta ? 'border-gov-azul bg-gov-azul-claro text-gov-azul-escuro' : ''
+        }`}
+      >
+        <BarChart3 className="h-4 w-4" aria-hidden="true" />
+        {comparacao.naCesta ? 'Na comparação de chuva' : 'Comparar chuva'}
+      </button>
+      {impedido ? (
+        <span id={idMotivo} className="sr-only">
+          {MOTIVO_CESTA_CHEIA}
+        </span>
+      ) : null}
+    </>
   );
 }
 

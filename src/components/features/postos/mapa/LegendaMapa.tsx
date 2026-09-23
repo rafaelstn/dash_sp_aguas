@@ -129,7 +129,15 @@ export function LegendaMapa({
             status, que é o que ela é.
           */}
           <div className="flex items-center gap-2 border-t border-app-border-subtle pt-2 text-app-fg">
-            <label className="flex flex-1 cursor-pointer items-center gap-2">
+            {/*
+              A altura mínima é do ALVO DE TOQUE, e não do desenho: sem ela a
+              linha tinha a altura da própria letra, uns 16 px, e este é o único
+              controle do corpo da legenda, que no celular abre por cima do mapa
+              e é usado em campo, com o dedo. 44 px no toque e 24 px no
+              ponteiro fino, que é o mínimo da WCAG 2.2 (2.5.8, AA). É o mesmo
+              desenho de `LinhaMarcacao`, nos filtros.
+            */}
+            <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-2 md:min-h-6">
               <input
                 type="checkbox"
                 checked={outrasRedes === 'ligada' || outrasRedes === 'carregando'}
