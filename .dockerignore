@@ -76,3 +76,7 @@ README.md
 # `npm run build` refaz inteiro, 277,1s na bancada em 23/09/2026. Com a linha, os
 # dois builds do job veem o MESMO contexto e o mutante custa segundos.
 Dockerfile.mutante-sharp
+
+# Mutante transitorio da regua de psql (ver .gitignore). Fora do contexto por
+# CUSTO: arquivo novo muda o hash do `COPY . .` do estagio builder.
+scripts/db/.regua-mutante-*

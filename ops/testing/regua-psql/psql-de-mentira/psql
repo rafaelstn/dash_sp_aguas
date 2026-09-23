@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+# =============================================================================
+# psql de MENTIRA. Nao conecta em nada: registra uma linha de ambiente e uma de
+# argv por chamada, para a regua medir a classe "senha em argv de psql" sem
+# nenhum PostgreSQL de pe.
+#
+# Ele se chama `psql` de proposito: quem o exercita coloca este diretorio na
+# frente do PATH, e o script sob medicao continua sendo o script de verdade,
+# sem nenhuma alteracao.
+#
+# Por que o registro guarda md5 e nao a senha: ninguem precisa ver a senha para
+# saber se ela chegou certa, e arquivo de log com credencial dentro e exatamente
+# o defeito que esta regua existe para impedir. A regua compara o md5 com o
+# esperado, entao decodificacao errada (a senha `p%40ss` entregue como texto
+# `p%40ss` em vez de `p@ss`) reprova.
+#
+# `${PGPASSWORD+definida}` em vez de `${PGPASSWORD:-}` porque variavel definida
+# e VAZIA e um estado diferente de ausente, e o libpq trata os dois diferente.
+#
+# Sai 0 sempre: o que se mede aqui e o argumento e o ambiente, nao o resultado
+# de uma conexao que nao existe.
+# =============================================================================
+set -eu
+: "${REGISTRO_PSQL:?psql-de-mentira: defina REGISTRO_PSQL com o arquivo de registro}"
+
+if [ -n "${PGPASSWORD+definida}" ]; then
+  impressao=$(printf '%s' "$PGPASSWORD" | md5sum | cut -d' ' -f1)
+  printf 'AMBIENTE: PGPASSWORD=presente md5=%s\n' "$impressao" >> "$REGISTRO_PSQL"
+else
+  printf 'AMBIENTE: PGPASSWORD=ausente\n' >> "$REGISTRO_PSQL"
+fi
+
+printf 'ARGV:' >> "$REGISTRO_PSQL"
+for argumento in "$@"; do
+  printf ' [%s]' "$argumento" >> "$REGISTRO_PSQL"
+done
+printf '\n' >> "$REGISTRO_PSQL"

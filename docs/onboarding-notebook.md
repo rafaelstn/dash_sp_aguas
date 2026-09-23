@@ -65,7 +65,7 @@ Leia **nesta ordem** antes de agir:
 3. **Aplicar as 15 migrations** ao Supabase. Duas opções:
    - `bash scripts/db/db-migrate.sh` (se o bash do Git estiver instalado)
    - Ou via Supabase SQL Editor (copiar e colar cada migration na ordem)
-   - Ou com `psql`: `for f in supabase/migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done`
+   - Ou com `psql`, **sem a senha na linha de comando**: `export PGPASSWORD=<senha>` e depois `for f in supabase/migrations/*.sql; do psql -h <host> -p <porta> -U <usuario> -d <banco> -v ON_ERROR_STOP=1 -f "$f"; done`. Até 23/09/2026 esta linha ensinava a passar a connection string inteira como argumento, e argv é legível por qualquer processo da máquina (`ps`): quem seguisse a receita expunha a senha do banco durante toda a aplicação das migrations. O `scripts/db/db-migrate.sh` faz essa separação sozinho.
    - Validar que as 8 tabelas (`postos`, `arquivos_indexados`, `arquivos_orfaos`, `acesso_ficha`, `import_log`, `indexacao_log`, `tipos_documento`, `tipos_dado`, `revisoes_desconformidade`) + a view `v_postos_desconformes` foram criadas.
 
 4. **Importar o CSV oficial:**

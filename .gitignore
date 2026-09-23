@@ -105,3 +105,9 @@ data/inventario-ana/
 
 # dado de inventario do cliente (carga inicial do Estoque), nao versionar
 ops/estoque/*.xlsx
+
+# Mutante transitorio que ops/testing/regua-psql/medir-argv.sh gera para provar
+# que a regua reprova a forma antiga. O trap da regua o apaga; esta linha existe
+# para que uma execucao interrompida nao deixe rastro commitavel nem no contexto
+# do docker build (arquivo novo no contexto derruba o cache do `COPY . .`).
+scripts/db/.regua-mutante-*

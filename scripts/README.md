@@ -15,7 +15,8 @@ Migração e provisionamento do esquema.
 | Script | Finalidade |
 |--------|-----------|
 | `apply_migrations.py` | Aplica as migrations SQL em ordem na `DATABASE_URL`. Idempotente. Suporta `--only` e `--since`. Usado no fluxo de desenvolvimento local. |
-| `db-migrate.sh` | Aplica as migrations contra uma connection string (genérico, via shell). |
+| `db-migrate.sh` | Aplica as migrations contra uma connection string (genérico, via shell). Aceita a string como argumento, `DATABASE_URL` (do ambiente ou do `.env.local`) ou `PGHOST`/`PGUSER`/`PGDATABASE` mais `POSTGRES_PASSWORD`. A senha nunca vai na linha de comando do `psql`: quem a separa é `db/conexao-psql.sh`, e quando não há como separar com certeza o script recusa em vez de adivinhar. |
+| `db/conexao-psql.sh` | Componente lido com `.` (source) pelos scripts que chamam o `psql`. Separa a senha da string de conexão, entrega em `PGPASSWORD` e devolve em `PSQL_CONEXAO` os argumentos sem segredo. A régua que prova isso, com um `psql` de mentira e sem banco de pé, é `ops/testing/regua-psql/medir-argv.sh`. |
 | `setup_db.py` | Provisiona o banco do zero. |
 
 ## `seed/` — Carga inicial de dados

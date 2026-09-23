@@ -16,3 +16,7 @@ Dockerfile  text eol=lf
 
 # Scripts específicos do Windows permanecem CRLF
 *.ps1       text eol=crlf
+
+# psql de mentira da regua de argv: script sem extensao, executado pelo PATH
+# dentro do Linux. Sem esta linha ele cairia no `* text=auto`.
+ops/testing/regua-psql/psql-de-mentira/psql text eol=lf

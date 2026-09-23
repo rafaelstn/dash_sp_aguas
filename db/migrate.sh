@@ -4,10 +4,16 @@
 #   1) db/auth-compat.sql  — shim de compatibilidade Supabase (schema auth etc.)
 #   2) supabase/migrations/*.sql  — migrations numeradas, em ordem alfabética
 #
-# Usado pelo serviço `migrate` do docker-compose.yml. Idempotente: as migrations
-# são majoritariamente IF NOT EXISTS / CREATE OR REPLACE, então re-rodar é seguro.
+# Usado pelo serviço `migrate` dos DOIS composes, e essa distinção importa: o
+# docker-compose.yml (avaliação) define DATABASE_URL, e o docker-compose.prod.yml
+# (servidor do órgão) lê /etc/spaguas-dmo/db.env, que traz só POSTGRES_DB,
+# POSTGRES_USER e POSTGRES_PASSWORD. Até 23/09/2026 esta linha citava apenas o
+# compose de avaliação, e quem lesse só o cabeçalho concluiria que produção passa
+# por DATABASE_URL. Idempotente: as migrations são majoritariamente
+# IF NOT EXISTS / CREATE OR REPLACE, então re-rodar é seguro.
 #
-# Conexão: usa $DATABASE_URL se definido; senão monta a partir das PG* padrão.
+# Conexão: usa $DATABASE_URL se definido; senão vai pelas PG*, e nesse caminho
+# RECUSA sem POSTGRES_PASSWORD em vez de adivinhar credencial.
 # =============================================================================
 set -eu
 

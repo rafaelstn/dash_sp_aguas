@@ -22,7 +22,18 @@ fi
 
 if command -v psql >/dev/null 2>&1; then
   echo "Checando conexão com PostgreSQL..."
-  if ! psql "$DATABASE_URL" -c "SELECT 1;" >/dev/null 2>&1; then
+  # A senha não entra no argv do psql. Sintoma medido em 23/09/2026: esta
+  # checagem passava a DATABASE_URL inteira como argumento, então a senha ficava
+  # legível em `ps` durante a conexão. Quem separa é scripts/db/conexao-psql.sh,
+  # o mesmo componente de scripts/db/db-migrate.sh.
+  #
+  # A recusa do componente não derruba o `next dev`: aqui ela vale o mesmo aviso
+  # de antes, porque esta checagem sempre foi informativa.
+  # shellcheck source=scripts/db/conexao-psql.sh
+  . "$SCRIPT_DIR/db/conexao-psql.sh"
+  if ! preparar_conexao_psql "$DATABASE_URL"; then
+    echo "aviso: checagem de conexão pulada; o next dev vai subir mesmo assim." >&2
+  elif ! psql "${PSQL_CONEXAO[@]}" -c "SELECT 1;" >/dev/null 2>&1; then
     echo "aviso: falha ao conectar em DATABASE_URL. O next dev vai subir mesmo assim." >&2
   else
     echo "Conexão com PG OK."

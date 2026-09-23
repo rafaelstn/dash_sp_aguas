@@ -102,8 +102,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # TEST_DATABASE_URL continua aqui porque os testes de integracao a leem para
+    # abrir conexao pelo driver. As chamadas de `psql` deste job NAO a usam mais:
+    # elas vao pelas PG* logo abaixo, que e a mesma forma de db/migrate.sh e de
+    # scripts/db/db-migrate.sh depois de 23/09/2026. Passar connection string no
+    # argv deixa a senha legivel em `ps`, e um job que faz isso obrigaria a guarda
+    # de forma (job `scripts`) a se isentar do proprio workflow.
     env:
       TEST_DATABASE_URL: postgresql://spaguas:spaguas@localhost:5432/spaguas_test
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: spaguas
+      PGDATABASE: spaguas_test
       PGPASSWORD: spaguas
     steps:
       - uses: actions/checkout@v5
@@ -119,9 +129,9 @@ jobs:
 
       - name: Aplicar schema (shim de auth + migrations, do zero)
         run: |
-          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
+          psql -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
           for arquivo in $(ls supabase/migrations/*.sql | sort); do
-            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$arquivo"
+            psql -v ON_ERROR_STOP=1 -q -f "$arquivo"
           done
 
       # Sem este passo a reaplicação abaixo roda sobre banco VAZIO, e banco vazio
@@ -129,17 +139,17 @@ jobs:
       # índices transitórios chegaram à produção e derrubaram o serviço
       # (0045 em 10/09/2026, 0057 em 22/09/2026).
       - name: Semear o estado real de produção (a régua sem isto mede o vazio)
-        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/testing/regua-migrations/semear-estado-de-producao.sql
+        run: psql -v ON_ERROR_STOP=1 -f ops/testing/regua-migrations/semear-estado-de-producao.sql
 
       - name: Reaplicar tudo (as migrations têm que ser idempotentes)
         run: |
-          psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
+          psql -v ON_ERROR_STOP=1 -q -f db/auth-compat.sql
           for arquivo in $(ls supabase/migrations/*.sql | sort); do
-            psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$arquivo"
+            psql -v ON_ERROR_STOP=1 -q -f "$arquivo"
           done
 
       - name: Conferir a reaplicação e limpar a semeadura
-        run: psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f ops/testing/regua-migrations/conferir-reaplicacao.sql
+        run: psql -v ON_ERROR_STOP=1 -f ops/testing/regua-migrations/conferir-reaplicacao.sql
 
       - name: Testes de integração
         run: npx vitest run tests/integration
@@ -376,3 +386,87 @@ jobs:
 
           [ "$falhou" -eq 0 ] || exit 1
           echo "::notice title=Nenhuma imagem como root::$achados Dockerfiles conferidos, todos com USER sem privilegio no estagio final."
+
+  scripts:
+    name: 'Scripts: a senha do banco nunca no argv do psql'
+    runs-on: ubuntu-latest
+    # Sintoma medido em 23/09/2026: tres scripts entregues por este repositorio
+    # chamavam `psql` com a connection string inteira como argumento, e argv e
+    # legivel por qualquer processo da maquina (`ps`, e `docker top` no caso do
+    # container). No caminho do container, que e o que roda no servidor do orgao,
+    # era a credencial do banco dele exposta o tempo todo em que o migrate rodasse.
+    #
+    # Sao DUAS redes, e elas medem propriedades diferentes:
+    #   1) a regua de COMPORTAMENTO prova o VALOR que chega ao processo, com um
+    #      psql de mentira que registra argv e ambiente. E ela que cobre o codigo
+    #      consertado: depois do conserto o argv sai de um array e de `set --`, e
+    #      nenhuma varredura de texto sabe dizer o que ha dentro de `"$@"`.
+    #   2) a guarda de FORMA prova a forma INGENUA, a connection string escrita na
+    #      propria chamada, que e como a classe volta em script novo que ninguem
+    #      lembrou de incluir na regua. Ela nao substitui a de cima.
+    #
+    # O QUE ESTE JOB NAO MEDE: nenhuma conexao real, e nenhum arquivo de `docs/`.
+    # Documento que ENSINA a forma antiga continua possivel e se corrige a mao.
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Medir argv e ambiente com um psql de mentira
+        run: bash ops/testing/regua-psql/medir-argv.sh
+
+      - name: Guarda de forma, para o script que ainda nao existe
+        run: |
+          # Fronteira `[^A-Za-z_]` antes de `psql` porque sem ela o nome
+          # `preparar_conexao_psql "$CONN"`, que e a chamada CERTA do componente,
+          # casaria como se fosse a errada.
+          PADRAO='(^|[^A-Za-z_])psql[[:space:]]+("?(postgres(ql)?://|host=)|"?\$\{?[A-Za-z_0-9]*(URL|URI|CONN|DSN))'
+
+          TEMP=$(mktemp -d)
+
+          # Mutante e controle. O texto das duas amostras e MONTADO por printf, e
+          # nao escrito literal, porque este arquivo tambem e varrido logo abaixo:
+          # escrito literal, a amostra do defeito faria a guarda acusar o proprio
+          # workflow, e a saida seria eu isentando este arquivo da varredura.
+          NOME_VAR='DATABASE_URL'
+          printf '#!/bin/sh\npsql "$%s" -f a.sql\n' "$NOME_VAR" > "$TEMP/mutante.sh"
+          printf '#!/bin/sh\npsql "$@" -f a.sql\npsql -h localhost -p 5432 -U u -d d -f a.sql\n' > "$TEMP/legitimo.sh"
+
+          if ! grep -qE "$PADRAO" "$TEMP/mutante.sh"; then
+            echo "::error title=Guarda inerte::o padrao nao casa nem a forma antiga na amostra. Ele parou de medir a classe: corrigir antes de confiar no verde deste passo."
+            exit 1
+          fi
+          if grep -qE "$PADRAO" "$TEMP/legitimo.sh"; then
+            echo "::error title=Guarda com falso positivo::o padrao casa a forma CERTA (argv por array ou -h/-p/-U/-d). Guarda que reprova o correto manda piorar o codigo: corrigir o padrao."
+            exit 1
+          fi
+          echo "padrao conferido: casa a forma antiga na amostra e nao casa a forma nova."
+
+          ARQUIVOS=$(git ls-files '*.sh' '*.yml' '*.yaml')
+          QTD=$(printf '%s\n' "$ARQUIVOS" | grep -c . || true)
+
+          # Piso contra leitura vazia: medido em 23/09/2026, com a regua deste
+          # commit ja versionada, a lista traz 10 arquivos (eram 8 antes dela).
+          # Zero aqui nao quer dizer que a classe acabou, quer dizer que a lista
+          # parou de achar arquivo, e dai este passo vira enfeite verde. O piso
+          # sobe no MESMO commit que acrescenta script, e desce no MESMO commit
+          # que remove.
+          if [ "$QTD" -lt 10 ]; then
+            echo "::error title=Guarda sem alcance::esperava ao menos 10 arquivos de shell ou workflow e encontrei $QTD. Se algum saiu de proposito, baixar este piso no mesmo commit."
+            exit 1
+          fi
+
+          falhou=0
+          for arquivo in $ARQUIVOS; do
+            # Linha de comentario nao chama nada, e este repositorio EXPLICA o
+            # defeito em comentario: sem o filtro, a explicacao seria lida como o
+            # proprio defeito.
+            CASOS=$(grep -nE "$PADRAO" "$arquivo" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+            if [ -n "$CASOS" ]; then
+              falhou=1
+              echo "$CASOS" | while IFS= read -r caso; do
+                echo "::error file=$arquivo,line=${caso%%:*},title=Senha do banco no argv do psql::$arquivo passa a string de conexao na chamada do psql, e argv e legivel por qualquer processo da maquina. Usar -h/-p/-U/-d com a senha em PGPASSWORD, como scripts/db/conexao-psql.sh faz."
+              done
+            fi
+          done
+
+          [ "$falhou" -eq 0 ] || exit 1
+          echo "::notice title=Nenhuma senha no argv::$QTD arquivos de shell e workflow conferidos, nenhum passa connection string na chamada do psql."
