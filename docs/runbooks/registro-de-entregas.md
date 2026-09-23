@@ -17,6 +17,79 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
+## 23/09/2026, `sha-e452f11`
+
+| Campo | Valor |
+|---|---|
+| Versão que entrou | `sha-e452f11` (branch `chore/preparar-container-prodesp-offline`) |
+| Versão anterior | `sha-90655b9` |
+| Autorizado por | Rafael Damasceno, nesta data ("se tiver algo pra subir pro servidor pode subir") |
+| Executado por | Matheus (DamaTech), via SSH com VPN |
+| Transporte | imagem por arquivo, 235.305.435 bytes, `scp` (dashboard e migrate) |
+| Integridade | `sha256` conferido nas duas pontas: `800a7dcc8fc6982d89910adeb09e0859620e540468542d25191abc02213e7e16` |
+
+**Por que esta subida existiu.** Para desfazer o bloqueio deixado em 22/09: o
+`migrate` no servidor abortava na 0057 e qualquer `up -d` derrubava o site. O
+conteúdo da aplicação é o mesmo de `sha-90655b9` mais a guarda da migration, a
+régua nova no CI e a documentação do incidente.
+
+**O que entrou.** A guarda por catálogo na 0057, que só recria
+`uq_estoque_unidades_codigo_spaguas` se a marca da 0060
+(`idx_estoque_unidades_codigo_spaguas`) não estiver no catálogo; dois passos no
+job de integração do CI, que semeiam o estado real de produção entre a aplicação
+do zero e a reaplicação e conferem o resultado; e o registro do incidente nos
+dois runbooks. **Nenhuma migration nova**: seguem 73.
+
+**Só o postgis não viajou, e isso foi medido antes.** O pacote levou apenas as
+duas imagens que o `IMAGEM_TAG` nomeia, porque `postgis/postgis:16-3.4-alpine`
+já estava no servidor com o `db` rodando sobre ela. Conferido antes do
+empacotamento, não presumido.
+
+**O que foi conferido no servidor (todas as saídas vistas).**
+
+| Conferência | Medido |
+|---|---|
+| `sha256` nas duas pontas | idêntico |
+| `docker load` | as duas imagens com a tag do commit, exit 0 |
+| Guarda de catálogo dentro da imagem de `migrate` | presente na 0057 carregada no servidor |
+| Dump antes da migração | 2.529.868 bytes, 44 `TABLE DATA` (16/09: 2.085.051 e 43) |
+| Guarda de parada do dump | passou; o roteiro só trocou a tag depois dela |
+| `migrate` | código de saída **0**, 73 migrations distintas no log, **zero** `ERROR:` |
+| `app` | `Up (healthy)` com `spaguas/dashboard:sha-e452f11`, `RestartCount=0` |
+| `/api/health` | `{"status":"ok","db":"ok"}` |
+| Pela borda | **200** com `--resolve`, e sem `-k`: `ssl_verify_result=0` |
+| Banco | 41 tabelas, PostGIS 3.4.3 |
+| Índice transitório da 0057 | **ausente**, como a 0060 manda |
+| Substituto da 0060 | `idx_estoque_unidades_codigo_spaguas` presente |
+| Dado que a migration errada matava | 521 linhas com `SPA26`, intactas |
+| Portas publicadas | só `127.0.0.1:3000`; o `db` sem porta no host |
+
+**Duas coisas feitas diferente de 22/09, de propósito.**
+
+1. **Nenhum `sudo` no roteiro.** A sessão é `root`, então o vetor que gravou a
+   senha dentro do dump em 22/09 deixou de existir em vez de ser contornado.
+2. **O roteiro reverte sozinho.** A parte que troca o `IMAGEM_TAG` guarda o
+   `.env` anterior e, se o `migrate` sair com código diferente de zero, restaura
+   o arquivo e sobe o `app` com a tag antiga por `up -d --no-deps app`. O dano de
+   22/09 não foi a migration falhar: foi o site esperar em 502.
+
+**Pendências que esta subida não resolveu.**
+
+- **Rotação da senha do sudo do servidor**, aberta desde 22/09. Decisão do
+  Rafael com o órgão.
+- **Retenção de imagem:** são **11** tags de `spaguas/dashboard` no servidor,
+  contra a política de 3. **Não podei**, por dois motivos medidos: o disco tem
+  18 GB livres (33% de uso), e sem internet no servidor uma imagem apagada só
+  volta por transporte novo. Critério para quando o disco pressionar: manter as
+  três mais novas mais `sha-5ff93c7`, que é o piso de rollback, e apagar as sete
+  anteriores a ele.
+- **Backup ainda mora no mesmo disco da VM.** Segue como está descrito na seção
+  10.8 do runbook de entrega, que depende da infraestrutura do órgão.
+- **Nenhum job do CI roda `docker build`**, então o Dockerfile só é exercitado à
+  mão, na bancada.
+
+---
+
 ## 22/09/2026, `sha-90655b9`
 
 | Campo | Valor |

@@ -3,9 +3,11 @@
 **Sistema:** SP Águas - DMO (dashboard Next.js + PostgreSQL próprio)
 **Servidor:** `10.199.43.27`, `dmo.spaguas.sp.gov.br`, Ubuntu 24.04.1 em VM VMware
 **Escrito em:** 27/08/2026
-**Estado:** em uso. Executado no servidor em 10/09/2026 (`sha-5ff93c7`) e em
-16/09/2026 (`sha-7c8c04a`, estoque com código de barras); os números medidos
-nesta última estão no registro de entregas e nas notas "MEDIDO em 16/09/2026".
+**Estado:** em uso. Executado no servidor em 10/09/2026 (`sha-5ff93c7`),
+16/09/2026 (`sha-7c8c04a`, estoque com código de barras), 22/09/2026
+(`sha-90655b9`, com o 502 descrito abaixo) e 23/09/2026 (`sha-e452f11`, a
+correção da 0057). Os números de cada uma estão no registro de entregas; as notas
+"MEDIDO em 16/09/2026" seguem valendo como referência de ordem de grandeza.
 A frase original de 27/08 ("nenhum passo executado", ordem de preparar sem fazer
 o deploy) valia só até a primeira subida.
 
@@ -23,26 +25,23 @@ em todo `exec -T` e `docker run` que não leia entrada.
 Cada afirmação está marcada como **MEDIDO** (existe comando e saída por trás) ou
 **HIPÓTESE** (raciocínio ainda não confirmado no ambiente real).
 
-> ### BLOQUEIO ABERTO desde 22/09/2026: a imagem de `migrate` no servidor está quebrada
+> ### BLOQUEIO RESOLVIDO em 23/09/2026: o `up -d` voltou a funcionar
 >
-> A subida de `sha-90655b9` abortou porque o `migrate` reaplica todas as
-> migrations a cada `up`, e a **0057** recria um índice único que a 0060 derruba
+> Entre 22/09 e 23/09/2026 este runbook trouxe um bloqueio aberto: a imagem de
+> `migrate` no servidor recriava, na **0057**, um índice único que a 0060 derruba
 > de propósito, sobre uma coluna com 521 duplicatas legítimas. Como o `app`
-> depende do `migrate` terminar com sucesso, o site respondeu **502**. Foi
-> restaurado com `up -d --no-deps app`, e a versão nova está no ar.
+> depende do `migrate` terminar com sucesso, o site respondeu **502** em
+> 22/09/2026, e qualquer `up -d` seguinte repetiria a queda.
 >
-> **A correção existe na bancada** (guarda por catálogo na 0057, provada contra
-> Postgres real nos dois sentidos, mais os dois passos novos no CI que semeiam o
-> estado de produção antes da reaplicação), **mas ainda não foi transportada**,
-> porque a VPN caiu antes disso.
->
-> **Enquanto a imagem de `migrate` corrigida não subir, `docker compose up -d` no
-> servidor quebra e nenhum deploy passa pelo caminho normal.** O app segue no ar
-> pelo `restart: unless-stopped`, mas um reboot seguido do `up -d` que este
-> runbook manda rodar deixaria o site fora.
+> **Corrigido e subido em 23/09/2026 com `sha-e452f11`** (guarda por catálogo na
+> 0057, mais os dois passos no CI que semeiam o estado de produção antes da
+> reaplicação). Medido no servidor naquele dia: as 73 migrations reaplicadas sobre
+> o dado real, `migrate` com código de saída **0** e zero `ERROR:`, o índice
+> transitório ausente, o substituto `idx_estoque_unidades_codigo_spaguas`
+> presente, as 521 linhas com `SPA26` intactas e o site em 200 pela borda.
 >
 > É o mesmo padrão do incidente de 10/09/2026 (migration 0045). O detalhe dos
-> dois está no `registro-de-entregas.md`.
+> três está no `registro-de-entregas.md`.
 
 ---
 
@@ -496,6 +495,8 @@ grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env | tee -a ~/tag-anterior-$(date -u +%Y%
 #    Entrega que mexe no esquema não sobe sem ele.
 
 # 5. Apontar a versão. Esta é a única linha que muda entre uma entrega e outra.
+#    A cópia do .env vem ANTES da troca: é para onde o passo 7 volta.
+sudo cp -p /opt/spaguas-dmo/.env "/opt/spaguas-dmo/.env.antes-de-sha-$SHA"
 sudo sed -i "s/^IMAGEM_TAG=.*/IMAGEM_TAG=sha-$SHA/" /opt/spaguas-dmo/.env
 sudo grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env
 
@@ -503,7 +504,26 @@ sudo grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env
 #    banco saudável -> migrations com sucesso -> aplicação.
 cd /opt/spaguas-dmo
 docker compose -f docker-compose.prod.yml up -d
+
+# 7. REVERTER SOZINHO se o migrate reprovar. Não é opcional: é o que impede
+#    o site de esperar em 502, que foi o dano real de 22/09/2026.
+COMPOSE="docker compose -f /opt/spaguas-dmo/docker-compose.prod.yml"
+CODIGO_MIGRATE=$(docker inspect --format '{{.State.ExitCode}}' "$($COMPOSE ps -a -q migrate)")
+echo "EXIT_CODE_DO_MIGRATE=$CODIGO_MIGRATE   (espera 0)"
+if [ "$CODIGO_MIGRATE" != "0" ]; then
+  $COMPOSE logs --no-log-prefix migrate 2>/dev/null | grep -A3 "ERROR:" | head -20
+  cp -p "/opt/spaguas-dmo/.env.antes-de-sha-$SHA" /opt/spaguas-dmo/.env
+  grep -o '^IMAGEM_TAG=.*' /opt/spaguas-dmo/.env
+  $COMPOSE up -d --no-deps app     # o site volta na tag anterior, sem 502
+  echo "REVERTIDO. Nao continuar a subida: ler a secao 7.2 antes de tentar de novo."
+fi
 ```
+
+> **Por que a reversão vive no roteiro e não na cabeça de quem executa.** Em
+> 22/09/2026 o `migrate` reprovou, o `app` ficou preso na dependência e o site
+> respondeu 502 até alguém notar e rodar o `up -d --no-deps app` à mão. O passo 7
+> faz isso no mesmo segundo, sem depender de eu estar olhando o terminal. Foi
+> assim na subida de 23/09/2026, e ali o passo 7 não precisou disparar.
 
 > **O `migrate` reaplica TODAS as migrations a cada `up`**, porque
 > `db/migrate.sh` não tem tabela de controle: percorre `/migrations/*.sql` em
