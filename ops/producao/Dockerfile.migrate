@@ -41,5 +41,29 @@ COPY db/ /db/
 # monta, para que o migrate.sh nao precise saber se esta num caso ou no outro.
 COPY supabase/migrations/ /migrations/
 
+# Usuario sem privilegio. Sintoma medido em 23/09/2026 nesta imagem: sem esta
+# linha o entrypoint roda como uid=0(root), inclusive nos grupos wheel e disk, e
+# ela era a UNICA das cinco imagens do repositorio sem USER (o Dockerfile da
+# aplicacao usa nextjs, ops/importer e ops/indexer criam importer e indexer, e o
+# Dockerfile.carga-estoque usa node). O ADR 0015 ja declara "containers non-root"
+# como consequencia positiva da conteinerizacao, e esta imagem contradizia o
+# registro, num host do orgao.
+#
+# `postgres` (uid 70) ja existe na base do PostGIS: nenhuma camada nova, nenhum
+# gerenciador de pacotes, o que importa num servidor sem internet.
+#
+# O controle que separa permissao de conteudo, medido nesta imagem: o md5 do SQL
+# concatenado em ordem lido como uid 70 e como root e o mesmo (e0cb558a... nas 73
+# migrations, 17b528f9... no shim) e nenhum dos 74 arquivos ficou ilegivel,
+# porque o COPY os deixa root:root com leitura para todos.
+#
+# O QUE NAO FOI MEDIDO: nenhuma migration foi aplicada contra um PostgreSQL de pe
+# nesta verificacao (limite de disco na bancada em 23/09/2026). Sobre HOME, que e
+# a duvida obvia ao trocar de usuario: em modo `-f` nao interativo o psql nao
+# precisa de HOME gravavel (com HOME gravavel, inexistente e sem permissao de
+# escrita a saida foi identica, e nada foi criado sob HOME), e o HOME de postgres,
+# /var/lib/postgresql, e gravavel de todo jeito.
+USER postgres
+
 # Sem CMD proprio: quem manda e o entrypoint, igual ao compose de avaliacao.
 ENTRYPOINT ["sh", "/db/migrate.sh"]

@@ -309,3 +309,70 @@ jobs:
           grep -m1 -F "SHARP NA IMAGEM: $SEMEADO" mutante.log
 
           echo "::notice title=Guarda do sharp provada::o build com sharp aninhado reprovou pela mensagem da propria guarda, e o build da entrega passou."
+
+      - name: Provar que nenhuma imagem entregue roda como root
+        # Guarda de TEXTO, e nao de build: le os Dockerfiles do disco e exige
+        # USER no ESTAGIO FINAL de cada um. Ela existe porque em 23/09/2026 o
+        # ops/producao/Dockerfile.migrate era o unico dos cinco sem USER, e a
+        # imagem construida rodava como uid=0(root) e no grupo wheel, medido com
+        # `docker run --entrypoint sh <imagem> -c id`. O ADR 0015 declarava
+        # "containers non-root" como consequencia positiva desde o inicio da
+        # conteinerizacao, e nada no repositorio media isso: a declaracao valia
+        # mais do que o artefato entregue ao orgao.
+        #
+        # Por que o USER e procurado depois do ULTIMO FROM: em imagem de varios
+        # estagios, USER no `builder` nao muda quem roda a imagem final, e uma
+        # guarda que aceitasse qualquer USER ficaria verde sobre o defeito.
+        #
+        # Por que a lista sai do `git ls-files` e a LEITURA e do disco: a lista
+        # nao pode colher o Dockerfile.mutante-sharp que o passo acima gera, e a
+        # leitura precisa ver conserto que ainda nao foi commitado.
+        #
+        # O QUE ESTA GUARDA NAO MEDE: ela nao levanta container nenhum, entao nao
+        # prova quem e o processo la dentro. Entrypoint que chama `su`, ou um
+        # `user:`/`--user 0` no compose, passariam por ela. Quem prova isso e
+        # `docker run --entrypoint sh <imagem> -c id`, e nao esta neste job.
+        run: |
+          falhou=0
+          achados=0
+          for arquivo in $(git ls-files '*Dockerfile' '*Dockerfile.*' | grep -v '\.dockerignore$'); do
+            achados=$((achados + 1))
+
+            # CRLF existe neste repositorio (o Dockerfile.migrate e CRLF inteiro).
+            # Sem tirar o CR, um `USER root` viraria "root\r" e escaparia da
+            # comparacao abaixo, aprovando exatamente o que a guarda procura.
+            tr -d '\r' < "$arquivo" > /tmp/sem-cr
+
+            # O `|| true` aqui nao mascara defeito, ele PRESERVA a mensagem: o
+            # shell deste `run` e `bash -e -o pipefail`, e num arquivo sem FROM o
+            # pipeline falharia e o `-e` mataria o passo antes do echo logo
+            # abaixo. Medido em 23/09/2026 com um mutante sem FROM: codigo 1 e
+            # nenhuma linha dizendo por que, que e o passo vermelho inutil.
+            ultimo_from=$(grep -nE '^[[:space:]]*FROM[[:space:]]' /tmp/sem-cr | tail -1 | cut -d: -f1 || true)
+            if [ -z "$ultimo_from" ]; then
+              echo "::error file=$arquivo,title=Sem FROM::$arquivo nao tem FROM, e esta guarda nao sabe medi-lo. Ajustar a guarda, senao ela deixa de medir este arquivo."
+              falhou=1
+              continue
+            fi
+
+            usuario=$(awk -v n="$ultimo_from" 'NR > n && /^[[:space:]]*USER[[:space:]]+/ { print $2 }' /tmp/sem-cr | tail -1)
+            dono=${usuario%%:*}
+
+            if [ -z "$usuario" ]; then
+              echo "::error file=$arquivo,title=Imagem roda como root::$arquivo nao declara USER depois do ultimo FROM (linha $ultimo_from), entao o container roda como root no host do orgao."
+              falhou=1
+            elif [ "$dono" = "root" ] || [ "$dono" = "0" ]; then
+              echo "::error file=$arquivo,title=Imagem roda como root::$arquivo declara USER $usuario no estagio final."
+              falhou=1
+            else
+              echo "ok  $arquivo  USER $usuario  (estagio final comeca na linha $ultimo_from)"
+            fi
+          done
+
+          if [ "$achados" -lt 5 ]; then
+            echo "::error title=Guarda sem alcance::esperava ao menos 5 Dockerfiles e encontrei $achados. Se um Dockerfile foi removido de proposito, baixar este piso no mesmo commit; guarda que nao acha arquivo fica verde sem medir nada."
+            exit 1
+          fi
+
+          [ "$falhou" -eq 0 ] || exit 1
+          echo "::notice title=Nenhuma imagem como root::$achados Dockerfiles conferidos, todos com USER sem privilegio no estagio final."
