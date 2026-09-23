@@ -41,6 +41,21 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#1E40AF" />
         <meta name="application-name" content="SP Águas - DMO" />
+        {/*
+          `mobile-web-app-capable` é o nome padronizado, e o `apple-` fica como
+          legado para iOS antigo. Medido em 23/09/2026 no código do Next
+          instalado (`node_modules/next/dist/lib/metadata/generate/basic.js`,
+          15.5.26): `appleWebApp.capable` já emite APENAS a padronizada, e o
+          framework deixou de emitir a `apple-`. Aqui as duas são escritas à
+          mão, pelo mesmo motivo das outras tags deste head (o streaming da
+          Metadata API chega tarde para auditoria).
+          Não medido: a versão mínima de iOS que dispensa a `apple-`, e o head
+          servido em `/app`, onde o `appleWebApp.capable` do layout daquele
+          segmento provavelmente repete a padronizada. Duas tags de mesmo nome
+          e mesmo conteúdo não mudam comportamento, então a checagem fica para
+          quando houver como levantar o servidor.
+        */}
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="SP Águas - DMO" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
