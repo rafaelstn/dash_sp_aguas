@@ -98,6 +98,14 @@ export function CestaComparacao({
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Limpar</span>
+                {/*
+                  Abaixo de `sm` o rótulo acima sai com `display: none` e o
+                  ícone é `aria-hidden`, então sem esta linha o botão fica sem
+                  nome acessível justo na largura do celular do técnico (WCAG
+                  4.1.2, e-MAG). Mesmo par de `TelaPostos.tsx`, que já usa
+                  `hidden sm:inline` com `sr-only sm:hidden`.
+                */}
+                <span className="sr-only sm:hidden">Limpar</span>
               </button>
               <button
                 type="button"
