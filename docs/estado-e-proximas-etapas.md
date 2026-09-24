@@ -622,18 +622,38 @@ regular.
     como artifact com retenção de sete dias, e o transporte ao servidor continua
     sendo `scp` pela VPN, como o runbook manda.
 
-    **Quem dispara é o proprietário**, em Actions, "Entrega offline: pacote de
-    imagens para o servidor do órgão", informando a revisão. O provider de
-    credencial da operação não expõe nenhuma operação que DISPARE execução, e
-    essa fronteira não se amplia por conveniência de sessão.
+    **Dois gatilhos desde o commit `9f7dda4` de 24/09/2026**: o botão em Actions,
+    que só o proprietário alcança, e a tag `entrega-*`. A tag entrou porque o
+    provider de credencial da operação não expõe, de propósito, nenhuma operação
+    que DISPARE execução (`gh run` tem `list`, `view` e `watch`, e `rerun` e
+    `cancel` ficam fora com comentário dizendo que é porque mudam estado), então
+    quem tem só a porta oficial não alcançava o botão. Essa fronteira não se
+    ampliou: `git push` de tag já é operação coberta pela porta oficial. Pela tag
+    a revisão é o commit que a tag aponta (`inputs.revisao || github.sha` no
+    checkout e na guarda), e não existe campo para digitar errado.
 
-    Até o primeiro run passar, a validação é estática: YAML por parser real,
-    `bash -n` nos dez blocos de comando com mutante reprovando, caminhos citados
-    conferidos contra o que está versionado e referências cruzadas com o
-    compose. O `docker build` da aplicação já se prova no CI deste mesmo commit
-    (run `35944613105`, job da imagem em 2m13s); o que nenhum run cobriu ainda é
-    o build do `Dockerfile.migrate` e do `Dockerfile.carga-estoque`, o
-    empacotamento das quatro referências e o tamanho real do pacote.
+    No mesmo commit saiu o `default` do campo `revisao`, que era um SHA de dias
+    antes: pelo botão, quem não trocasse o valor receberia pacote de revisão
+    velha com a guarda APROVANDO, porque o checkout traz exatamente o commit
+    pedido e o HEAD confere com a entrada.
+
+    **O primeiro run passou, e ele cobre o que a validação estática não
+    alcançava.** Run `35950685005`, disparado pela tag
+    `entrega-2026-09-24-9f7dda4`, verde nos treze passos em 3m0s: as três imagens
+    nossas, a imagem do banco, as seis conferências da seção 3 do runbook para a
+    tag `sha-9f7dda4`, o empacotamento das quatro referências com `docker save` e
+    `gzip` em `0 0`, e o artifact publicado. Pacote medido:
+    `dmo-sha-9f7dda4.tar.gz`, 237.486.066 bytes, `sha256`
+    `cde8238e587e51b084ec3e98ceefb3e820ab71641ec5a6fe23eb902a2be0cf73`, com 73
+    migrations dentro da imagem `migrate` e 83 GB livres no runner ao fim.
+
+    **O que continua fora do meu alcance é BAIXAR o artifact**: `gh run download`
+    não está na allowlist do provider, que recusa com código 77. Ou o
+    proprietário baixa pela página do run e salva em
+    `F:\Projetos\Clientes\GOV\_entregas\imagens-docker`, onde estão os três
+    pacotes anteriores, ou ele decide acrescentar essa operação de leitura à
+    allowlist. Enquanto isso o pacote vive só como artifact, com retenção de sete
+    dias contados de 24/09/2026.
 15. **`NEXT_PUBLIC_APP_URL` não tem consumidor nenhum no código, e a
     documentação afirma o contrário.** Medido em 23/09/2026: a variável aparece
     uma única vez em `src/`, na definição do schema em
