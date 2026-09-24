@@ -17,6 +17,70 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
+## 24/09/2026, `sha-9f7dda4`
+
+| Campo | Valor |
+|---|---|
+| Versão que entrou | `sha-9f7dda4` (branch `chore/preparar-container-prodesp-offline`) |
+| Versão anterior | `sha-e452f11` |
+| Autorizado por | Rafael Damasceno, nesta data ("pode subir pra produção", e depois "liguei a VPN pode subir") |
+| Executado por | Matheus (DamaTech), via SSH com VPN |
+| Transporte | pacote único de 237.486.066 bytes com quatro referências (`dashboard`, `migrate`, `carga-estoque` e `postgis/postgis:16-3.4-alpine`), construído no runner self-hosted pelo workflow `entrega-offline.yml` e enviado por `scp` em 91 s |
+| Integridade | `sha256` igual nas três pontas (manifesto do runner, origem e destino): `cde8238e587e51b084ec3e98ceefb3e820ab71641ec5a6fe23eb902a2be0cf73` |
+| Backup antes de trocar | `/var/backups/spaguas-dmo/antes-de-sha-9f7dda4-20260924T045058Z.dump`, 2.574.674 bytes e 44 `TABLE DATA`. A guarda de parada da seção 7.3 aprovou (referência de 16/09: 2.085.051 bytes e 43) |
+
+**O que entrou.** 28 commits. O pacote de entrega passou a ser construído pelo
+runner e publicado como artifact, em vez de montado à mão nesta máquina; a régua
+de alvo de toque passou a varrer o código por AST e os 41 controles que ela
+reprovava subiram para 24 px; o histórico da tela Postos ganhou rótulo em
+português e anúncio explícito da falha do SIBH; os três casos que caíam no mesmo
+estado mudo da comparação de chuva foram separados; `/monitor` passou a responder
+307 enquanto a decisão do SIBH está aberta; entraram a régua de tokens de cor e a
+régua de traço em rótulo; e o `migrate` passou a rodar sem privilégio, com a
+senha fora do `argv` do `psql`.
+
+**Nenhuma migration nova ou alterada:** seguem 73, e zero arquivo mudou em
+`supabase/migrations` no intervalo (medido por `git diff --name-only e452f11
+9f7dda4 -- supabase/migrations`, que devolveu vazio). Nenhuma variável de
+ambiente nova e nenhuma alteração no `docker-compose.prod.yml`.
+
+**O ensaio que faltava nas entregas anteriores.** A mudança de risco desta tag
+não está na aplicação: está no `migrate`, que agora roda como `USER postgres`
+(uid 70) e conecta por `PGHOST`, `PGUSER` e `PGPASSWORD` em vez de uma URI com
+senha embutida. O comentário do próprio código dizia que **nenhuma migration
+havia sido aplicada contra um PostgreSQL de pé**. Antes de tocar no servidor, a
+imagem `migrate` do pacote real foi aplicada duas vezes contra um Postgres de
+ensaio: código 0 nas duas, zero linhas `ERROR:`, 73 migrations, 41 tabelas,
+`estoque_desconformidades` presente, índice transitório da 0057 ausente e o
+substituto da 0060 presente, nenhum `password=` visível em `argv`, e recusa com
+mensagem nomeando `POSTGRES_PASSWORD` quando a senha falta. O que o ensaio **não**
+cobre: banco vazio não revela migration que só quebra com dado existente, e é por
+isso que o CI semeia o estado de produção.
+
+**Conferido depois de subir** (seção 6.3 do runbook, todas as saídas vistas).
+
+| Conferência | Medido |
+|---|---|
+| Código de saída do `migrate` | `0`, encerrado às 04:51:11Z |
+| Migrations aplicadas | 73 linhas `-> `, zero linhas `ERROR:`, última linha `[migrate] concluído.` |
+| Tabelas em `public` | 41 |
+| PostGIS | 3.4.3 |
+| Índice do estoque | somente `idx_estoque_unidades_codigo_spaguas`; o transitório da 0057 continua ausente |
+| Portas | `db` sem porta publicada; `app` só em `127.0.0.1:3000` |
+| Imagens em execução | `app` em `spaguas/dashboard:sha-9f7dda4` com usuário `nextjs`; `migrate` rodou `spaguas/migrate:sha-9f7dda4` com usuário `postgres` |
+| Saúde | `app` `healthy` com zero falhas; `/api/health` local devolveu `{"status":"ok","db":"ok"}`; Next.js pronto em 228 ms |
+| Pela borda | `https://dmo.spaguas.sp.gov.br/` com **200** em 0,108 s, e `/api/health` com `{"status":"ok","db":"ok"}` |
+
+A borda foi medida **da estação com VPN**, e não de dentro do servidor: lá dentro
+o `curl` não resolve `dmo.spaguas.sp.gov.br` (`Could not resolve host`), o que não
+é defeito da entrega e sim o DNS do servidor não conhecer o nome público.
+
+**Rollback disponível e não usado:** `/opt/spaguas-dmo/.env.antes-de-sha-9f7dda4`
+no servidor, a tag `sha-e452f11` ainda no disco, e a reversão automática embutida
+no roteiro de subida, que só dispara se o `migrate` sair diferente de 0.
+
+---
+
 ## 23/09/2026, `sha-e452f11`
 
 | Campo | Valor |

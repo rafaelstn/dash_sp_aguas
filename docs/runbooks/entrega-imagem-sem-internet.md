@@ -5,8 +5,9 @@
 **Escrito em:** 27/08/2026
 **Estado:** em uso. Executado no servidor em 10/09/2026 (`sha-5ff93c7`),
 16/09/2026 (`sha-7c8c04a`, estoque com código de barras), 22/09/2026
-(`sha-90655b9`, com o 502 descrito abaixo) e 23/09/2026 (`sha-e452f11`, a
-correção da 0057). Os números de cada uma estão no registro de entregas; as notas
+(`sha-90655b9`, com o 502 descrito abaixo), 23/09/2026 (`sha-e452f11`, a
+correção da 0057) e 24/09/2026 (`sha-9f7dda4`, primeiro pacote construído pelo
+runner). Os números de cada uma estão no registro de entregas; as notas
 "MEDIDO em 16/09/2026" seguem valendo como referência de ordem de grandeza.
 A frase original de 27/08 ("nenhum passo executado", ordem de preparar sem fazer
 o deploy) valia só até a primeira subida.
@@ -91,8 +92,13 @@ conferência; nenhum passo segue com a conferência anterior fora do esperado.
 6. `sha256` do pacote e da planilha iguais aos da origem, e `docker load`
    (seções 5 e 6.2, passo 1).
 7. **Anotar a tag que está no ar**, que é o destino do rollback:
-   `grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env` (espera `IMAGEM_TAG=sha-5ff93c7`).
-   Diferente disso: parar e perguntar antes de seguir.
+   `grep '^IMAGEM_TAG=' /opt/spaguas-dmo/.env`. O esperado **não é um valor fixo
+   escrito aqui**: é a tag da entrada mais recente de
+   `docs/runbooks/registro-de-entregas.md`, conferida no momento da subida. Esta
+   linha já apontou `sha-5ff93c7` por duas semanas depois de a produção ter
+   avançado três versões, e expectativa envelhecida em runbook ensina a ignorar a
+   conferência. Divergiu do registro: **parar**, porque significa que alguém subiu
+   fora deste caminho, e perguntar antes de seguir.
 8. **Conferir o `app.env` sem imprimir valor**: seção 8 de
    `ops/producao/ambiente-producao.exemplo`. Faltando qualquer `SQLSERVER_*`,
    **parar**: a aplicação nova responde 500 no `/api/health` e em todas as rotas
@@ -477,6 +483,30 @@ O sintoma de divergência é o container da aplicação subir bem por fora e o
 > faz por `ALTER ROLE` dentro do banco, e só depois se acertam os dois arquivos.
 
 ### 6.2 Carregar e subir
+
+**O caminho normal é o roteiro versionado, não o recorte à mão.** Os oito passos
+abaixo estão em `ops/producao/subir-versao.sh`, na mesma ordem, com a reversão
+automática do passo 7 embutida e as conferências da seção 6.3 no fim:
+
+```bash
+# Na bancada, depois do ensaio do migrate (passo 1 do checklist da seção 0):
+scp -i <chave> ops/producao/subir-versao.sh root@10.199.43.27:/root/
+
+# No servidor, como root, com a VPN de pé. O segundo argumento é a tag da entrada
+# mais recente de docs/runbooks/registro-de-entregas.md: o script recusa se o .env
+# no ar divergir dela, porque isso significa que alguém subiu fora deste caminho.
+bash /root/subir-versao.sh sha-<nova> sha-<que-esta-no-ar>
+```
+
+Ele é o mesmo roteiro que subiu `sha-9f7dda4` em 24/09/2026. Executado em
+24/09/2026 na forma com valores fixos; a forma com argumentos foi provada na
+bancada pelas três recusas (sem argumento nenhum, só com a tag nova, e o controle
+com as duas, que passa das guardas). **Antes de rodar no servidor, conferir
+`bash -n` e ausência de CR** (`grep -c $'\r'`), porque arquivo copiado do Windows
+com CRLF quebra no Linux de forma silenciosa.
+
+Os comandos soltos ficam aqui porque, se o script não estiver à mão ou algo sair
+do previsto, é por eles que se faz o passo a passo:
 
 ```bash
 # 1. Carregar as imagens (as quatro de uma vez, do mesmo arquivo)
