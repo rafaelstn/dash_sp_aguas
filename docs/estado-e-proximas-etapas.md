@@ -614,6 +614,49 @@ regular.
 
     **A linha do gatilho sai quando esta branch for fundida na `main`**, e é
     branch nomeada e não curinga porque cada execução gasta minuto de Actions.
+14. **O pacote da entrega passou a se construir no runner.** O workflow é
+    `.github/workflows/entrega-offline.yml`, commit `b8cc2a4` de 23/09/2026.
+    Motivo: a bancada ficou
+    sem condição de construir, com 687 MB livres no `C:` e o Docker parado,
+    contra a ordem de 10 GB que a entrega pede. O gatilho é manual, o pacote sai
+    como artifact com retenção de sete dias, e o transporte ao servidor continua
+    sendo `scp` pela VPN, como o runbook manda.
+
+    **Quem dispara é o proprietário**, em Actions, "Entrega offline: pacote de
+    imagens para o servidor do órgão", informando a revisão. O provider de
+    credencial da operação não expõe nenhuma operação que DISPARE execução, e
+    essa fronteira não se amplia por conveniência de sessão.
+
+    Até o primeiro run passar, a validação é estática: YAML por parser real,
+    `bash -n` nos dez blocos de comando com mutante reprovando, caminhos citados
+    conferidos contra o que está versionado e referências cruzadas com o
+    compose. O `docker build` da aplicação já se prova no CI deste mesmo commit
+    (run `35944613105`, job da imagem em 2m13s); o que nenhum run cobriu ainda é
+    o build do `Dockerfile.migrate` e do `Dockerfile.carga-estoque`, o
+    empacotamento das quatro referências e o tamanho real do pacote.
+15. **`NEXT_PUBLIC_APP_URL` não tem consumidor nenhum no código, e a
+    documentação afirma o contrário.** Medido em 23/09/2026: a variável aparece
+    uma única vez em `src/`, na definição do schema em
+    `src/infrastructure/config/env.ts`, e a busca por `APP_URL` e por `appUrl`
+    em todo o resto de `src/` devolve zero. Não há `metadataBase` nem
+    `canonical` no projeto.
+
+    A consequência é que a frase de `ops/producao/ambiente-producao.exemplo`,
+    "é embutida no pacote do navegador em tempo de BUILD", não vale para esta
+    base: o Next substitui `NEXT_PUBLIC_*` onde o código lê
+    `process.env.NEXT_PUBLIC_X` de forma literal, e aqui a leitura é
+    `schema.safeParse(process.env)`, que não é substituída. O `--build-arg` da
+    seção 4 do runbook é consumido de verdade (o `ARG` existe no `Dockerfile`,
+    linha 51), grava a variável na camada de build e não muda o comportamento de
+    ninguém.
+
+    Nada quebra por causa disso, e é por isso que está aqui e não corrigido na
+    véspera da entrega: mexer nisso toca o runbook que o proprietário segue na
+    mão na frente do técnico do órgão. Duas saídas, e a escolha é do
+    proprietário: retirar a variável do schema, do `Dockerfile`, do workflow, do
+    runbook e do arquivo de exemplo, ou dar a ela o consumidor que se esperaria
+    num Next (URL absoluta em `metadataBase`). O que não pode ficar é a doc
+    afirmando um mecanismo que a base não usa.
 
 ---
 
