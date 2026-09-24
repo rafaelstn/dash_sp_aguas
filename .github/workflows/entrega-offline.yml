@@ -1,0 +1,385 @@
+name: Entrega offline
+
+# Constrói no runner o pacote que viaja para o servidor do órgão, que não tem
+# saída para a internet, e publica esse pacote como artifact para ser baixado e
+# transportado por `scp`.
+#
+# O roteiro vigente é docs/runbooks/entrega-imagem-sem-internet.md, e este
+# workflow ESPELHA as seções 2, 3 e 4 dele: mesma tag, mesmos argumentos de
+# build, mesmas quatro referências de imagem no `docker save`, mesma compressão
+# e o mesmo `sha256` que o runbook confere nas duas pontas. Se este arquivo e o
+# runbook divergirem, o servidor recebe coisa diferente do que o runbook diz que
+# ele recebe: quem mudar um muda o outro no mesmo commit.
+#
+# POR QUE ELE EXISTE: em 23/09/2026 a construção da entrega só rodava na bancada,
+# e a bancada ficou sem condição de construir (687 MB livres no disco local e o
+# Docker parado). A entrega pede ordem de 10 GB entre árvore, dependências,
+# camadas e pacote.
+#
+# O QUE ELE NÃO FAZ, e isso não é esquecimento:
+#   1. não sobe nada em lugar nenhum, e não fala com o servidor do órgão. Quem
+#      carrega e sobe é o runbook, à mão, pela VPN;
+#   2. não levanta a pilha, então não prova que o sistema responde. Isso exige
+#      banco de pé e é prova de outro job (a mesma nota está no job `imagem` do
+#      ci.yml);
+#   3. não reaplica migration nem toca em banco de dados;
+#   4. não usa segredo nenhum do repositório, e o pacote não leva `.env`, `.env.*`
+#      nem planilha. A planilha do estoque viaja por fora, com o `sha256` próprio
+#      (seção 3 de docs/runbooks/carga-inicial-estoque.md).
+
+# workflow_dispatch e mais nada. Em `push` isto gastaria minuto de Actions e
+# armazenamento de artifact a cada commit, sem ninguém ter pedido a entrega, e
+# custo recorrente é decisão do Rafael.
+on:
+  workflow_dispatch:
+    inputs:
+      revisao:
+        description: 'Revisão que vai para produção (SHA completo, tag ou branch). A tag das imagens sai dela, nunca de latest.'
+        required: true
+        default: '1e547114ac880397827e766ea8759dcc04f358ee'
+
+permissions:
+  contents: read
+
+jobs:
+  pacote:
+    name: 'Pacote offline do órgão'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.revisao }}
+
+      - name: Resolver a tag e conferir que o checkout é a revisão pedida
+        # A entrada chega por variável de ambiente, e nunca interpolada dentro do
+        # shell: `${{ }}` no corpo do script é substituição de texto antes da
+        # execução, e transformaria o campo em execução de comando.
+        env:
+          REVISAO: ${{ inputs.revisao }}
+        run: |
+          ATUAL=$(git rev-parse HEAD)
+          CURTO=$(git rev-parse --short=7 HEAD)
+
+          echo "entrada:        $REVISAO"
+          echo "HEAD resolvido: $ATUAL"
+          echo "tag das imagens: sha-$CURTO"
+
+          # Guarda: quando a entrada é um SHA, ela tem que ser o HEAD que veio.
+          # Sem isto, um erro de digitação resolveria para o branch padrão e
+          # produziria um pacote com a cara do commit pedido e o conteúdo de
+          # outro, que é o pior defeito possível numa entrega por arquivo.
+          if printf '%s' "$REVISAO" | grep -qE '^[0-9a-f]{7,40}$'; then
+            case "$ATUAL" in
+              "$REVISAO"*) echo "confere: o HEAD começa pela revisão pedida." ;;
+              *)
+                echo "::error title=Revisão divergente::pedi $REVISAO e o checkout trouxe $ATUAL. Nada é construído sobre revisão que ninguém pediu."
+                exit 1
+                ;;
+            esac
+          else
+            echo "a entrada não é um SHA: a conferência acima é informativa, e a tag vale pelo HEAD impresso."
+          fi
+
+          echo "TAG=sha-$CURTO" >> "$GITHUB_ENV"
+          echo "ARVORE=$RUNNER_TEMP/dmo-build" >> "$GITHUB_ENV"
+          echo "PACOTE_DIR=$RUNNER_TEMP/pacote" >> "$GITHUB_ENV"
+
+      - name: Exportar a árvore versionada e medir o disco de partida
+        # `git archive` em vez de usar o diretório do checkout, espelhando a
+        # seção 2 do runbook: ele entrega só o que está commitado, então nada
+        # gerado por passo anterior nem arquivo de ambiente tem como entrar no
+        # contexto de build, por acidente ou não.
+        #
+        # O disco é medido porque é onde o custo é cobrado: o runner tem por volta
+        # de 20 GB livres, e falta de espaço aqui produz pacote truncado, não
+        # mensagem de erro clara.
+        run: |
+          df -h / | tail -1
+
+          mkdir -p "$ARVORE" "$PACOTE_DIR"
+          git archive HEAD | tar -x -C "$ARVORE"
+
+          # Guarda de alcance: se um destes caminhos sair de lugar, o build abaixo
+          # falha com mensagem do Docker, e não dizendo o que realmente aconteceu.
+          FALTOU=0
+          for caminho in \
+            Dockerfile \
+            .dockerignore \
+            ops/producao/Dockerfile.migrate \
+            ops/producao/Dockerfile.carga-estoque \
+            ops/producao/Dockerfile.carga-estoque.dockerignore \
+            scripts/estoque/importar-inventario.mjs \
+            docker-compose.prod.yml \
+            package-lock.json
+          do
+            if [ -e "$ARVORE/$caminho" ]; then
+              echo "ok      $caminho"
+            else
+              echo "::error title=Caminho ausente na árvore exportada::$caminho não veio no git archive desta revisão. Conferir o nome no repositório e este workflow."
+              FALTOU=1
+            fi
+          done
+          [ "$FALTOU" -eq 0 ] || exit 1
+
+          # Quantas migrations esta revisão entrega. O número é usado depois para
+          # conferir a imagem `migrate`, derivado da árvore e nunca de lista à mão.
+          QTD=$(find "$ARVORE/supabase/migrations" -maxdepth 1 -name '*.sql' | wc -l)
+          echo "migrations .sql nesta revisão: $QTD"
+          if [ "$QTD" -lt 1 ]; then
+            echo "::error title=Sem migration::a árvore exportada não tem nenhum .sql em supabase/migrations, e a imagem migrate encerraria com código 0 sem aplicar nada."
+            exit 1
+          fi
+          echo "QTD_MIGRATIONS=$QTD" >> "$GITHUB_ENV"
+
+      - name: Provar que o contexto de build é a árvore exportada
+        # Os três passos abaixo escolhem o contexto por `working-directory`, que
+        # é resolvido pelo contexto `env` do Actions e não pelo shell. Se aquele
+        # mecanismo falhasse, o `docker build` rodaria no diretório do checkout e
+        # PASSARIA, com contexto diferente do que este workflow diz usar: falso
+        # verde, e não erro. Esta prova é única e vale para os três, porque os
+        # três usam o mesmo mecanismo.
+        #
+        # A ausência de `.git` é o que separa a árvore exportada do checkout: é o
+        # único traço que `git archive` não reproduz.
+        working-directory: ${{ env.ARVORE }}
+        run: |
+          echo "diretório de trabalho: $PWD"
+          echo "esperado:              $ARVORE"
+          if [ -z "$ARVORE" ] || [ "$PWD" != "$ARVORE" ]; then
+            echo "::error title=Contexto de build errado::o passo abriu em '$PWD' e a árvore exportada é '$ARVORE'. Sem isto, o build usaria o diretório do checkout sem avisar."
+            exit 1
+          fi
+          if [ -e .git ]; then
+            echo "::error title=Contexto de build errado::há .git aqui, então este é o checkout e não a árvore exportada por git archive."
+            exit 1
+          fi
+          test -f Dockerfile
+          echo "ok: contexto limpo, sem .git, com o Dockerfile da revisão."
+
+      - name: 'Imagem 1 de 3: a aplicação'
+        # `NEXT_PUBLIC_APP_URL` é substituída em tempo de build e fica GRAVADA no
+        # pacote: não se corrige por variável de ambiente no container, e é por
+        # isso que o valor é fixo aqui e não vem de campo de formulário.
+        #
+        # Nenhum argumento do Supabase, por ordem da seção 2 item 2 do runbook:
+        # com a janela sem identidade (ADR-0024) passar os dois faz o `env.ts`
+        # recusar, e valor de faz de conta gravado no pacote é pior que ausência.
+        working-directory: ${{ env.ARVORE }}
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          docker build --progress=plain \
+            --build-arg NEXT_PUBLIC_APP_URL=https://dmo.spaguas.sp.gov.br \
+            -t "spaguas/dashboard:$TAG" .
+
+      - name: 'Imagem 2 de 3: as migrations'
+        # Construída sobre a mesma base do banco, de propósito: no disco do
+        # servidor ela custa centenas de kB em vez de 627 MB (seção 4 do runbook).
+        working-directory: ${{ env.ARVORE }}
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          docker build --progress=plain \
+            -f ops/producao/Dockerfile.migrate \
+            -t "spaguas/migrate:$TAG" .
+
+      - name: 'Imagem 3 de 3: a carga do estoque'
+        # Tem ignore próprio, por permissão: o BuildKit lê
+        # ops/producao/Dockerfile.carga-estoque.dockerignore quando o build aponta
+        # para aquele Dockerfile, e ali tudo fica de fora menos dois arquivos.
+        # Planilha e ambiente não chegam ao contexto.
+        working-directory: ${{ env.ARVORE }}
+        env:
+          DOCKER_BUILDKIT: '1'
+        run: |
+          docker build --progress=plain \
+            -f ops/producao/Dockerfile.carga-estoque \
+            -t "spaguas/carga-estoque:$TAG" .
+
+      - name: 'Imagem do banco: baixar para viajar no mesmo pacote'
+        # O servidor não alcança registro nenhum, então a imagem do banco viaja
+        # junto. Não adianta deixá-la de fora para economizar: o `docker save`
+        # empacota a cadeia de camadas de cada imagem citada, e a base do PostGIS
+        # já vai dentro da imagem de migrations de qualquer jeito (medido na
+        # seção 4 do runbook: 235.892.386 contra 235.886.243 bytes).
+        #
+        # A referência é a MESMA linha do docker-compose.prod.yml. Divergir aqui
+        # faria o compose no servidor procurar imagem que não foi carregada.
+        run: docker pull postgis/postgis:16-3.4-alpine
+
+      - name: Conferir as imagens antes de empacotar
+        # As seis conferências da seção 3 do runbook, na mesma ordem. Cinco são
+        # invariantes e reprovam; a das migrations compara com a contagem da
+        # árvore, medida no passo de exportação.
+        #
+        # `grep -c` sem casamento sai com código 1, e o shell deste `run` é
+        # `bash -e -o pipefail`: sem o `|| true` a conferência mataria o passo
+        # justamente quando o resultado é o esperado.
+        run: |
+          FALHOU=0
+
+          echo "== 1. nenhuma variável de segredo na imagem final da aplicação (espera vazio)"
+          VAZANDO=$(docker image inspect "spaguas/dashboard:$TAG" \
+            --format '{{range .Config.Env}}{{println .}}{{end}}' \
+            | grep -E 'DATABASE_URL|SERVICE_ROLE|CRON_SECRET' || true)
+          if [ -n "$VAZANDO" ]; then
+            echo "::error title=Segredo gravado na imagem::a imagem da aplicação declara variável que não pode viajar. Nomes das chaves abaixo, sem valor."
+            printf '%s\n' "$VAZANDO" | grep -o '^[A-Za-z_0-9]*='
+            FALHOU=1
+          else
+            echo "ok: nenhuma das três chaves aparece no ambiente da imagem."
+          fi
+
+          echo "== 2. o processo não roda como root (espera nextjs)"
+          USUARIO=$(docker image inspect "spaguas/dashboard:$TAG" --format '{{.Config.User}}')
+          echo "USER da imagem: '$USUARIO'"
+          if [ "$USUARIO" != "nextjs" ]; then
+            echo "::error title=Usuário inesperado::a imagem da aplicação declara '$USUARIO' e o runbook espera nextjs."
+            FALHOU=1
+          fi
+
+          echo "== 3. nenhum arquivo de ambiente dentro da imagem (espera 0)"
+          ENVS=$(docker run --rm --entrypoint sh "spaguas/dashboard:$TAG" \
+            -c 'ls -a /app | grep -c "^\.env" || true' </dev/null)
+          echo "arquivos .env em /app: $ENVS"
+          if [ "$ENVS" != "0" ]; then
+            echo "::error title=Arquivo de ambiente na imagem::a imagem da aplicação carrega $ENVS arquivo de ambiente."
+            FALHOU=1
+          fi
+
+          echo "== 4. nenhuma planilha em nenhuma das três imagens (espera 0, 0 e 0)"
+          for img in dashboard migrate carga-estoque; do
+            PLANILHAS=$(docker run --rm --entrypoint sh "spaguas/$img:$TAG" \
+              -c 'find / -xdev \( -iname "*.xlsx" -o -iname "*.xls" \) 2>/dev/null | wc -l' </dev/null)
+            echo "planilhas em spaguas/$img: $PLANILHAS"
+            if [ "$PLANILHAS" != "0" ]; then
+              echo "::error title=Planilha dentro da imagem::spaguas/$img leva $PLANILHAS planilha, e dado de carga não viaja em imagem."
+              FALHOU=1
+            fi
+          done
+
+          echo "== 5. as migrations da revisão estão dentro da imagem migrate (espera $QTD_MIGRATIONS)"
+          NA_IMAGEM=$(docker run --rm --entrypoint sh "spaguas/migrate:$TAG" \
+            -c 'ls -1 /migrations | grep -c "\.sql$" || true' </dev/null)
+          ULTIMA=$(docker run --rm --entrypoint sh "spaguas/migrate:$TAG" \
+            -c 'ls -1 /migrations | sort | tail -1' </dev/null)
+          echo "migrations na imagem: $NA_IMAGEM   última: $ULTIMA"
+          if [ "$NA_IMAGEM" != "$QTD_MIGRATIONS" ]; then
+            echo "::error title=Migrations não bateram::a árvore desta revisão tem $QTD_MIGRATIONS arquivos .sql e a imagem tem $NA_IMAGEM. Migration fora da imagem é migration que não roda no servidor, e o migrate encerra com código 0 sem ela."
+            FALHOU=1
+          fi
+
+          echo "== 6. nenhuma chave anônima do Supabase gravada no pacote da aplicação (espera 0)"
+          CHAVES=$(docker run --rm --entrypoint sh "spaguas/dashboard:$TAG" \
+            -c 'grep -rlE "eyJhbGciOi[A-Za-z0-9_-]{10,}\.eyJ" /app/.next /app/server.js 2>/dev/null | wc -l' </dev/null)
+          echo "arquivos com formato de token no pacote: $CHAVES"
+          if [ "$CHAVES" != "0" ]; then
+            echo "::error title=Chave gravada no pacote::$CHAVES arquivo do build carrega algo com a forma de um token. Chave embutida em tempo de build não se corrige por variável de ambiente."
+            FALHOU=1
+          fi
+
+          [ "$FALHOU" -eq 0 ] || exit 1
+          echo "::notice title=Imagens conferidas::as seis conferências da seção 3 do runbook passaram para a tag $TAG."
+
+      - name: Empacotar, medir os bytes e tirar o sha256
+        # Seção 4 do runbook, igual: as quatro referências num só arquivo, com
+        # `gzip -6`. As três nossas levam a MESMA tag de commit, e isso não é
+        # estética: é o que impede a aplicação de um commit rodar com as
+        # migrations de outro.
+        run: |
+          PACOTE="$PACOTE_DIR/dmo-$TAG.tar.gz"
+
+          # O `-e` com `pipefail` mataria o script antes de imprimir os códigos,
+          # e o runbook confere os dois. Medição primeiro, decisão depois.
+          set +e
+          docker save \
+            "spaguas/dashboard:$TAG" \
+            "spaguas/migrate:$TAG" \
+            "spaguas/carga-estoque:$TAG" \
+            postgis/postgis:16-3.4-alpine \
+            | gzip -6 -c > "$PACOTE"
+          CODIGOS=("${PIPESTATUS[@]}")
+          set -e
+          echo "códigos do docker save e do gzip: ${CODIGOS[*]}   (espera 0 0)"
+          for c in "${CODIGOS[@]}"; do
+            if [ "$c" != "0" ]; then
+              echo "::error title=Pacote não foi gerado::docker save e gzip saíram com ${CODIGOS[*]}. O arquivo abaixo, se existir, está truncado."
+              ls -l "$PACOTE" || true
+              exit 1
+            fi
+          done
+
+          BYTES=$(stat -c %s "$PACOTE")
+          SOMA=$(sha256sum "$PACOTE" | cut -d' ' -f1)
+
+          # Piso e não teto. Teto envelhece a cada dependência nova; o piso pega o
+          # defeito que realmente acontece, que é pacote truncado por falta de
+          # espaço, e ele sai com nome e extensão certos. Referências medidas:
+          # 235.892.386 bytes em 27/08/2026 e 254.779.338 em 16/09/2026.
+          if [ "$BYTES" -lt 150000000 ]; then
+            echo "::error title=Pacote pequeno demais::$BYTES bytes. As entregas medidas ficaram entre 235 e 255 milhões de bytes; abaixo de 150 milhões o pacote não tem as quatro imagens."
+            df -h / | tail -1
+            exit 1
+          fi
+
+          # Arquivo no formato do `sha256sum`, para o destino conferir com
+          # `sha256sum -c`, que é a conferência da seção 5 do runbook nas duas
+          # pontas. O nome fica relativo de propósito: caminho absoluto do runner
+          # não existe no servidor.
+          ( cd "$PACOTE_DIR" && sha256sum "dmo-$TAG.tar.gz" > "dmo-$TAG.tar.gz.sha256" )
+
+          echo "arquivo: dmo-$TAG.tar.gz"
+          echo "bytes:   $BYTES"
+          echo "sha256:  $SOMA"
+          ls -l "$PACOTE_DIR"
+          df -h / | tail -1
+
+          {
+            echo "### Pacote de entrega offline"
+            echo ""
+            echo "| grandeza | valor |"
+            echo "|---|---|"
+            echo "| revisão | \`$(git rev-parse HEAD)\` |"
+            echo "| tag das três imagens nossas | \`$TAG\` |"
+            echo "| imagem do banco | \`postgis/postgis:16-3.4-alpine\` |"
+            echo "| arquivo | \`dmo-$TAG.tar.gz\` |"
+            echo "| bytes | \`$BYTES\` |"
+            echo "| sha256 | \`$SOMA\` |"
+            echo ""
+            echo "Conferir no servidor antes do \`docker load\`, dentro da pasta do arquivo:"
+            echo ""
+            echo '```'
+            echo "sha256sum -c dmo-$TAG.tar.gz.sha256"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Conferir que só o pacote e o resumo saem daqui
+        # O que sobe como artifact é o que alguém vai baixar e levar para dentro
+        # do órgão. Lista fechada: dois arquivos, e nenhum de ambiente.
+        run: |
+          ls -a "$PACOTE_DIR"
+          INESPERADOS=$(find "$PACOTE_DIR" -mindepth 1 \
+            ! -name "dmo-$TAG.tar.gz" ! -name "dmo-$TAG.tar.gz.sha256" || true)
+          if [ -n "$INESPERADOS" ]; then
+            echo "::error title=Arquivo a mais no pacote::apareceu algo além do .tar.gz e do .sha256 desta tag."
+            printf '%s\n' "$INESPERADOS"
+            exit 1
+          fi
+          echo "ok: apenas dmo-$TAG.tar.gz e o arquivo de soma."
+
+      - name: Publicar o pacote como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacote-entrega-offline-${{ env.TAG }}
+          path: ${{ env.PACOTE_DIR }}/*
+          # Sete dias: o artifact é um meio de transporte, e não o arquivo morto
+          # da entrega. O que fica registrado é a tag, o tamanho e o sha256, em
+          # docs/runbooks/registro-de-entregas.md. Retenção longa de 255 MB por
+          # disparo custa armazenamento sem comprar nada.
+          retention-days: 7
+          # Já está comprimido com gzip: recomprimir gastaria minuto do runner
+          # para ganhar nada.
+          compression-level: 0
+          if-no-files-found: error
