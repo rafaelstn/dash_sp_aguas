@@ -27,16 +27,33 @@ name: Entrega offline
 #      nem planilha. A planilha do estoque viaja por fora, com o `sha256` próprio
 #      (seção 3 de docs/runbooks/carga-inicial-estoque.md).
 
-# workflow_dispatch e mais nada. Em `push` isto gastaria minuto de Actions e
-# armazenamento de artifact a cada commit, sem ninguém ter pedido a entrega, e
-# custo recorrente é decisão do Rafael.
+# Dois gatilhos, e os dois são PEDIDO explícito de entrega: o botão, e a tag
+# `entrega-*`. Em `push` de branch isto gastaria minuto de Actions e
+# armazenamento de artifact a cada commit sem ninguém ter pedido a entrega, e
+# custo recorrente é decisão do Rafael; tag só existe quando alguém quis empacotar.
+#
+# A tag entrou em 23/09/2026 porque o provider de credencial da operação não
+# expõe, de propósito, nenhuma operação que DISPARE execução (`gh run` só tem
+# `list`, `view` e `watch`), então quem só tem a porta oficial não alcançava o
+# botão. `git push` de tag é operação que a porta oficial já cobre, e nenhuma
+# permissão precisou ser afrouxada para isto funcionar.
+#
+# Pela tag não existe campo para digitar errado: a revisão é o commit que a tag
+# aponta, e as imagens saem com a tag `sha-<7>` desse commit.
 on:
   workflow_dispatch:
     inputs:
       revisao:
         description: 'Revisão que vai para produção (SHA completo, tag ou branch). A tag das imagens sai dela, nunca de latest.'
+        # Sem valor padrão de propósito: o SHA que estava aqui envelheceu em dias,
+        # e a guarda abaixo APROVA a revisão velha (o checkout traz exatamente o
+        # commit pedido), então o padrão produziria pacote antigo em silêncio.
+        # Com `required: true` e sem padrão, o campo vem vazio e quem dispara
+        # precisa dizer qual revisão vai para o órgão.
         required: true
-        default: '1e547114ac880397827e766ea8759dcc04f358ee'
+  push:
+    tags:
+      - 'entrega-*'
 
 permissions:
   contents: read
@@ -50,14 +67,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.revisao }}
+          # Pelo botão vale o que foi digitado; pela tag `inputs.revisao` não
+          # existe, e a revisão é o commit que a tag aponta.
+          ref: ${{ inputs.revisao || github.sha }}
 
       - name: Resolver a tag e conferir que o checkout é a revisão pedida
         # A entrada chega por variável de ambiente, e nunca interpolada dentro do
         # shell: `${{ }}` no corpo do script é substituição de texto antes da
         # execução, e transformaria o campo em execução de comando.
         env:
-          REVISAO: ${{ inputs.revisao }}
+          REVISAO: ${{ inputs.revisao || github.sha }}
         run: |
           ATUAL=$(git rev-parse HEAD)
           CURTO=$(git rev-parse --short=7 HEAD)
