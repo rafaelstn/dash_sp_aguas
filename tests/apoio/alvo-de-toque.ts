@@ -667,8 +667,16 @@ function abertura(no: ts.Node): ts.JsxOpeningLikeElement | null {
   return null;
 }
 
-/** Texto visível do controle, recortado para caber na mensagem da falha. */
-function rotuloDe(no: ts.Node, abre: ts.JsxOpeningLikeElement, fonte: ts.SourceFile): string {
+/**
+ * Texto visível do controle, recortado para caber na mensagem da falha.
+ *
+ * Só lê texto solto no PRIMEIRO nível do controle. Texto embrulhado, como o
+ * `<span>` dentro de um botão, não entra aqui, e a mensagem cai no atributo ou
+ * em "sem texto fixo". Isso é limite da MENSAGEM, não da medição: quem reprova
+ * é a altura, e o arquivo com a linha já identifica o controle. Nenhum caso
+ * deixa de ser medido por causa disto.
+ */
+function rotuloDe(no: ts.Node, abre: ts.JsxOpeningLikeElement): string {
   if (ts.isJsxElement(no)) {
     const literal = no.children
       .filter((filho): filho is ts.JsxText => ts.isJsxText(filho))
@@ -1022,7 +1030,7 @@ export function controlesDeToque(
           arquivo,
           linha: fonte.getLineAndCharacterOfPosition(abre.getStart(fonte)).line + 1,
           tag,
-          rotulo: rotuloDe(no, abre, fonte),
+          rotulo: rotuloDe(no, abre),
           classes,
           alturaPx,
           emLinhaDeTexto,
