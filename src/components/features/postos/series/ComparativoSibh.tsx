@@ -361,8 +361,22 @@ function Aviso({
     tom === 'erro'
       ? 'bg-red-50 text-gov-perigo'
       : 'bg-amber-50 text-gov-alerta';
+  /*
+    O papel acompanha o tom, e não é detalhe de estilo (achado 5 do QA da tela
+    Postos, 23/09/2026). Os dois tons chegavam como `role="status"`, que é
+    região polida: o leitor de tela espera uma pausa da pessoa para anunciar. No
+    tom de atenção isso está certo, porque a mensagem apenas informa que não há
+    o que comparar. No tom de erro está errado: "O SIBH não respondeu" é a
+    resposta ao clique em Comparar, vem junto do botão Tentar de novo, e quem
+    navega por teclado com leitor de tela ficava esperando um resultado que
+    nunca era anunciado. `role="alert"` interrompe, que é o comportamento certo
+    para falha de ação pedida pelo usuário (WCAG 2.1 AA, 4.1.3).
+  */
   return (
-    <div role="status" className={`rounded-gov-card p-3 ${classes}`}>
+    <div
+      role={tom === 'erro' ? 'alert' : 'status'}
+      className={`rounded-gov-card p-3 ${classes}`}
+    >
       <p className="text-sm font-semibold">{titulo}</p>
       {/*
         Corpo do aviso MEDIDO em navegador real (Chrome 151, 23/09/2026), nas

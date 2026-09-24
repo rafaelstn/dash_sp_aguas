@@ -13,6 +13,19 @@
  * sempre em comentário ou como marcador de valor vazio, e uma busca textual
  * colheria os dois como se fossem rótulo. Lendo o JSX, só entram os atributos
  * que viram texto de tela, e o template literal não vira porta dos fundos.
+ *
+ * Em 23/09/2026 o extrator ganhou a segunda fonte, e por um motivo concreto: o
+ * formulário de posto deixou de escrever `label="Nome da estação"` e passou a
+ * derivar o rótulo de `ROTULOS_CAMPO_POSTO` (`src/lib/rotulos-posto.ts`), para
+ * o histórico de alterações não ter uma segunda lista dos mesmos nomes. Se a
+ * régua continuasse olhando só o JSX, ela aprovaria aquele arquivo por não ter
+ * mais nada para ler, e os trinta rótulos sairiam do alcance dela caladamente.
+ * Régua que perde o alvo quando o produto muda de lugar não protege nada.
+ *
+ * A segunda fonte é o vocabulário que o projeto já usa, e não uma lista à mão:
+ * constante cujo nome começa por `ROTULO`, medida no dia em 29 arquivos de
+ * `src/`. Entram os valores de texto fixo do objeto, e também o literal solto
+ * (`ROTULO_ORIGEM_DBFCH = 'Dbfch'`).
  */
 import ts from 'typescript';
 
@@ -64,26 +77,75 @@ function textoDe(valor: ts.JsxAttributeValue | undefined): string | null {
   return null;
 }
 
-/** Percorre a árvore entregando cada atributo de rótulo com texto fixo. */
+/** Constante que guarda rótulo de tela, pela convenção de nome do projeto. */
+const NOME_DE_MAPA_DE_ROTULO = /^ROTULO/;
+
+/**
+ * Tira `as const`, `satisfies` e parênteses de cima do valor.
+ *
+ * `ROTULOS_CAMPO_POSTO` é declarado como `{...} as const satisfies
+ * Record<string, string>`, e sem desembrulhar isso o objeto não é alcançado: a
+ * régua aprovaria trinta rótulos que nunca leu.
+ */
+function desembrulhar(no: ts.Expression): ts.Expression {
+  let atual = no;
+  while (
+    ts.isAsExpression(atual) ||
+    ts.isSatisfiesExpression(atual) ||
+    ts.isParenthesizedExpression(atual)
+  ) {
+    atual = atual.expression;
+  }
+  return atual;
+}
+
+/** Percorre a árvore entregando cada rótulo de texto fixo que virá em tela. */
 function paraCadaRotulo(
   codigo: string,
   arquivo: string,
   visitar: (atributo: string, texto: string, linha: number) => void,
 ): void {
+  /*
+    O dialeto sai da EXTENSÃO, e não fixo em TSX. Parsear um `.ts` como TSX faz
+    o TypeScript ler `<T>(x) => x` como abertura de elemento, e aí o arquivo que
+    guarda os rótulos entra na varredura só de nome: a árvore sai errada e o
+    extrator não acha nada, que é o pior resultado possível numa régua.
+  */
   const fonte = ts.createSourceFile(
     arquivo,
     codigo,
     ts.ScriptTarget.Latest,
     true,
-    ts.ScriptKind.TSX,
+    arquivo.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+  const naLinha = (no: ts.Node): number =>
+    fonte.getLineAndCharacterOfPosition(no.getStart(fonte)).line + 1;
+
   const andar = (no: ts.Node): void => {
     if (ts.isJsxAttribute(no)) {
       const nome = no.name.getText(fonte);
       const texto = ATRIBUTOS_DE_ROTULO.test(nome) ? textoDe(no.initializer) : null;
-      if (texto !== null) {
-        const { line } = fonte.getLineAndCharacterOfPosition(no.getStart(fonte));
-        visitar(nome, texto, line + 1);
+      if (texto !== null) visitar(nome, texto, naLinha(no));
+    }
+    if (
+      ts.isVariableDeclaration(no) &&
+      ts.isIdentifier(no.name) &&
+      NOME_DE_MAPA_DE_ROTULO.test(no.name.text) &&
+      no.initializer
+    ) {
+      const constante = no.name.text;
+      const valor = desembrulhar(no.initializer);
+      if (ts.isStringLiteral(valor) || ts.isNoSubstitutionTemplateLiteral(valor)) {
+        visitar(constante, valor.text, naLinha(no));
+      } else if (ts.isObjectLiteralExpression(valor)) {
+        for (const prop of valor.properties) {
+          if (!ts.isPropertyAssignment(prop)) continue;
+          const dentro = desembrulhar(prop.initializer);
+          if (!ts.isStringLiteral(dentro) && !ts.isNoSubstitutionTemplateLiteral(dentro)) {
+            continue;
+          }
+          visitar(`${constante}.${prop.name.getText(fonte)}`, dentro.text, naLinha(prop));
+        }
       }
     }
     ts.forEachChild(no, andar);

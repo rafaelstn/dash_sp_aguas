@@ -1,6 +1,7 @@
 import 'server-only';
 import { USUARIO_SEM_IDENTIDADE } from '@/domain/auth/usuario-sem-identidade';
 import { postosRepository } from '@/infrastructure/repositories';
+import { resumirDiffPosto } from '@/lib/diff-posto';
 
 /**
  * Quem aparece como autor do evento, em três estados e não em dois.
@@ -52,27 +53,6 @@ function corBorda(ev: string): string {
   }
 }
 
-function diffResumo(antes: unknown, depois: unknown): string | null {
-  if (!antes && !depois) return null;
-  const a = (antes ?? {}) as Record<string, unknown>;
-  const d = (depois ?? {}) as Record<string, unknown>;
-  const chaves = new Set([...Object.keys(a), ...Object.keys(d)]);
-  const partes: string[] = [];
-  for (const k of chaves) {
-    const va = a[k];
-    const vd = d[k];
-    if (JSON.stringify(va) === JSON.stringify(vd)) continue;
-    const ant = va === null || va === undefined ? '—' : String(va);
-    const nov = vd === null || vd === undefined ? '—' : String(vd);
-    partes.push(`${k}: ${ant} → ${nov}`);
-  }
-  if (partes.length === 0) return null;
-  if (partes.length > 4) {
-    return partes.slice(0, 4).join(' · ') + ` · (+${partes.length - 4})`;
-  }
-  return partes.join(' · ');
-}
-
 interface Props {
   postoId: string;
 }
@@ -119,7 +99,7 @@ export async function HistoricoPostoEventos({ postoId }: Props) {
       </header>
       <ol className="space-y-2">
         {eventos.map((e) => {
-          const resumo = diffResumo(e.valoresAntes, e.valoresDepois);
+          const resumo = resumirDiffPosto(e.valoresAntes, e.valoresDepois);
           return (
             <li
               key={e.id}

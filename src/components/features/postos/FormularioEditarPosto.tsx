@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Posto } from '@/domain/posto';
+import { ROTULOS_CAMPO_POSTO, type CampoPostoComRotulo } from '@/lib/rotulos-posto';
 
 interface Props {
   posto: Posto;
@@ -174,25 +175,25 @@ export function FormularioEditarPosto({ posto }: Props) {
       ) : null}
 
       <Secao titulo="Identificação">
-        <Campo label="Nome da estação" valor={form.nomeEstacao} onChange={(v) => set('nomeEstacao', v)} />
-        <Campo label="Código ANA (prefixo_ana)" valor={form.prefixoAna} onChange={(v) => set('prefixoAna', v)} />
-        <Campo label="Mantenedor" valor={form.mantenedor} onChange={(v) => set('mantenedor', v)} />
-        <Campo label="Tipo de posto" valor={form.tipoPosto} onChange={(v) => set('tipoPosto', v)} />
-        <Campo label="Proprietário" valor={form.proprietario} onChange={(v) => set('proprietario', v)} />
-        <Campo label="Aquífero" valor={form.aquifero} onChange={(v) => set('aquifero', v)} />
+        <Campo campo="nomeEstacao" form={form} set={set} />
+        <Campo campo="prefixoAna" form={form} set={set} />
+        <Campo campo="mantenedor" form={form} set={set} />
+        <Campo campo="tipoPosto" form={form} set={set} />
+        <Campo campo="proprietario" form={form} set={set} />
+        <Campo campo="aquifero" form={form} set={set} />
       </Secao>
 
       <Secao titulo="Localização">
-        <Campo label="Latitude" valor={form.latitude} onChange={(v) => set('latitude', v)} inputMode="decimal" />
-        <Campo label="Longitude" valor={form.longitude} onChange={(v) => set('longitude', v)} inputMode="decimal" />
-        <Campo label="Altimetria (m)" valor={form.altimetria} onChange={(v) => set('altimetria', v)} inputMode="decimal" />
-        <Campo label="Município" valor={form.municipio} onChange={(v) => set('municipio', v)} />
-        <Campo label="Município (alternativo)" valor={form.municipioAlt} onChange={(v) => set('municipioAlt', v)} />
-        <Campo label="Bacia hidrográfica" valor={form.baciaHidrografica} onChange={(v) => set('baciaHidrografica', v)} />
-        <Campo label="UGRHI nome" valor={form.ugrhiNome} onChange={(v) => set('ugrhiNome', v)} />
-        <Campo label="UGRHI número" valor={form.ugrhiNumero} onChange={(v) => set('ugrhiNumero', v)} />
-        <Campo label="Sub-UGRHI nome" valor={form.subUgrhiNome} onChange={(v) => set('subUgrhiNome', v)} />
-        <Campo label="Área de drenagem (km²)" valor={form.areaKm2} onChange={(v) => set('areaKm2', v)} inputMode="decimal" />
+        <Campo campo="latitude" form={form} set={set} inputMode="decimal" />
+        <Campo campo="longitude" form={form} set={set} inputMode="decimal" />
+        <Campo campo="altimetria" form={form} set={set} inputMode="decimal" />
+        <Campo campo="municipio" form={form} set={set} />
+        <Campo campo="municipioAlt" form={form} set={set} />
+        <Campo campo="baciaHidrografica" form={form} set={set} />
+        <Campo campo="ugrhiNome" form={form} set={set} />
+        <Campo campo="ugrhiNumero" form={form} set={set} />
+        <Campo campo="subUgrhiNome" form={form} set={set} />
+        <Campo campo="areaKm2" form={form} set={set} inputMode="decimal" />
       </Secao>
 
       {/*
@@ -204,23 +205,23 @@ export function FormularioEditarPosto({ posto }: Props) {
         gravação que não acontece é o defeito mais caro da tela.
       */}
       <Secao titulo="Operação">
-        <Campo label="Ano início de operação" valor={form.operacaoInicioAno} onChange={(v) => set('operacaoInicioAno', v)} inputMode="numeric" />
-        <Campo label="Ano fim de operação" valor={form.operacaoFimAno} onChange={(v) => set('operacaoFimAno', v)} inputMode="numeric" />
+        <Campo campo="operacaoInicioAno" form={form} set={set} inputMode="numeric" />
+        <Campo campo="operacaoFimAno" form={form} set={set} inputMode="numeric" />
       </Secao>
 
       <Secao titulo="Datas de medição ANA (Meta I.6)">
-        <Campo label="Escala (início)" valor={form.anaEscalaInicio} onChange={(v) => set('anaEscalaInicio', v)} type="date" />
-        <Campo label="Escala (fim)" valor={form.anaEscalaFim} onChange={(v) => set('anaEscalaFim', v)} type="date" />
-        <Campo label="Descarga líquida (início)" valor={form.anaDescargaLiquidaInicio} onChange={(v) => set('anaDescargaLiquidaInicio', v)} type="date" />
-        <Campo label="Descarga líquida (fim)" valor={form.anaDescargaLiquidaFim} onChange={(v) => set('anaDescargaLiquidaFim', v)} type="date" />
-        <Campo label="Sedimentos (início)" valor={form.anaSedimentosInicio} onChange={(v) => set('anaSedimentosInicio', v)} type="date" />
-        <Campo label="Sedimentos (fim)" valor={form.anaSedimentosFim} onChange={(v) => set('anaSedimentosFim', v)} type="date" />
-        <Campo label="Qualidade da água (início)" valor={form.anaQualidadeInicio} onChange={(v) => set('anaQualidadeInicio', v)} type="date" />
-        <Campo label="Qualidade da água (fim)" valor={form.anaQualidadeFim} onChange={(v) => set('anaQualidadeFim', v)} type="date" />
-        <Campo label="Pluviômetro (início)" valor={form.anaPluviometroInicio} onChange={(v) => set('anaPluviometroInicio', v)} type="date" />
-        <Campo label="Pluviômetro (fim)" valor={form.anaPluviometroFim} onChange={(v) => set('anaPluviometroFim', v)} type="date" />
-        <Campo label="Telemetria (início)" valor={form.anaTelemetriaInicio} onChange={(v) => set('anaTelemetriaInicio', v)} type="date" />
-        <Campo label="Telemetria (fim)" valor={form.anaTelemetriaFim} onChange={(v) => set('anaTelemetriaFim', v)} type="date" />
+        <Campo campo="anaEscalaInicio" form={form} set={set} type="date" />
+        <Campo campo="anaEscalaFim" form={form} set={set} type="date" />
+        <Campo campo="anaDescargaLiquidaInicio" form={form} set={set} type="date" />
+        <Campo campo="anaDescargaLiquidaFim" form={form} set={set} type="date" />
+        <Campo campo="anaSedimentosInicio" form={form} set={set} type="date" />
+        <Campo campo="anaSedimentosFim" form={form} set={set} type="date" />
+        <Campo campo="anaQualidadeInicio" form={form} set={set} type="date" />
+        <Campo campo="anaQualidadeFim" form={form} set={set} type="date" />
+        <Campo campo="anaPluviometroInicio" form={form} set={set} type="date" />
+        <Campo campo="anaPluviometroFim" form={form} set={set} type="date" />
+        <Campo campo="anaTelemetriaInicio" form={form} set={set} type="date" />
+        <Campo campo="anaTelemetriaFim" form={form} set={set} type="date" />
       </Secao>
 
       <div className="flex flex-wrap gap-2">
@@ -254,26 +255,42 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
+/**
+ * Um campo do cadastro, identificado pela CHAVE e não pelo rótulo.
+ *
+ * Antes de 23/09/2026 cada chamada repetia o texto do rótulo (`label="Nome da
+ * estação"`) além da chave, e o mesmo texto estava escrito de novo no histórico
+ * de alterações. Duas listas à mão divergem, e a que ninguém abre é a que
+ * envelhece calada: o histórico chegou a imprimir `nomeEstacao` cru em tela de
+ * governo (achado 2 do QA da tela Postos).
+ *
+ * Agora a chave aparece uma vez por linha e dela saem as três coisas: o rótulo
+ * (de `ROTULOS_CAMPO_POSTO`, a mesma fonte que o histórico lê), o valor exibido
+ * e o destino da escrita. O tipo `keyof FormState & CampoPostoComRotulo` faz o
+ * `tsc` recusar campo do formulário que não tenha rótulo cadastrado.
+ */
 function Campo({
-  label,
-  valor,
-  onChange,
+  campo,
+  form,
+  set,
   type = 'text',
   inputMode,
 }: {
-  label: string;
-  valor: string;
-  onChange: (v: string) => void;
+  campo: keyof FormState & CampoPostoComRotulo;
+  form: FormState;
+  set: (k: keyof FormState, v: string) => void;
   type?: string;
   inputMode?: 'text' | 'decimal' | 'numeric';
 }) {
   return (
     <label className="block text-xs">
-      <span className="mb-0.5 block font-medium text-app-fg-muted">{label}</span>
+      <span className="mb-0.5 block font-medium text-app-fg-muted">
+        {ROTULOS_CAMPO_POSTO[campo]}
+      </span>
       <input
         type={type}
-        value={valor}
-        onChange={(e) => onChange(e.target.value)}
+        value={form[campo]}
+        onChange={(e) => set(campo, e.target.value)}
         inputMode={inputMode}
         className="block w-full rounded border border-app-border-subtle bg-app-surface px-2 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
       />

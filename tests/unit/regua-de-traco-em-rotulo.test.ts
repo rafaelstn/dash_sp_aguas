@@ -84,6 +84,42 @@ export function Secao({ tipo }: { tipo: string }) {
 }
 `;
 
+/**
+ * O defeito depois da mudança de 23/09/2026: o rótulo saiu do JSX e foi para um
+ * mapa `ROTULOS_*`, com `as const satisfies` em cima. Se o extrator não
+ * desembrulhar isso, o travessão passa.
+ */
+const DEFEITO_EM_MAPA = `
+export const ROTULOS_CAMPO_POSTO = {
+  anaEscalaInicio: 'Escala — início',
+  anaEscalaFim: 'Escala (fim)',
+} as const satisfies Record<string, string>;
+`;
+
+/** O mesmo mapa escrito como o padrão da casa pede. */
+const MAPA_CORRIGIDO = `
+export const ROTULOS_CAMPO_POSTO = {
+  anaEscalaInicio: 'Escala (início)',
+  anaEscalaFim: 'Escala (fim)',
+} as const satisfies Record<string, string>;
+`;
+
+/**
+ * Constante que não é de rótulo fica de fora: o traço ali é dado de terceiro
+ * (cabeçalho da planilha da ANA), e reprovar isso quebraria o arquivo que o
+ * órgão entrega. É o recorte que já estava escrito no docblock da régua.
+ */
+const CONSTANTE_QUE_NAO_E_ROTULO = `
+export const COLUNAS_ANA = {
+  anaEscalaInicio: 'Escala - Início',
+};
+`;
+
+/** Rótulo solto, sem objeto: a convenção de nome basta. */
+const ROTULO_SOLTO = `
+export const ROTULO_ORIGEM_DBFCH = 'Dbfch';
+`;
+
 /** Traço em comentário não é rótulo de nada. */
 const TRACO_SO_NO_COMENTARIO = `
 // Datas de medição ANA — a planilha do órgão separa início e fim.
@@ -98,18 +134,29 @@ const SINTETICO = 'amostra-sintetica.tsx';
 const RAIZ = process.cwd();
 
 /**
- * Lista os `.tsx` de `src/` pelo Git, mas lê o conteúdo do DISCO.
+ * Lista os `.ts` e `.tsx` de `src/` pelo Git, mas lê o conteúdo do DISCO.
  *
  * Pelo Git para não varrer `node_modules` nem artefato gerado, e do disco para
  * a régua reprovar o caso que ainda está por commitar.
+ *
+ * O `.ts` entrou em 23/09/2026, junto com a segunda fonte do extrator, e não é
+ * ampliação de escopo por gosto: os mapas `ROTULO*` do projeto moram quase
+ * todos em módulo sem JSX (`src/lib/rotulos-posto.ts`,
+ * `src/components/features/estoque/rotulos.ts`,
+ * `src/components/features/postos/mapa/simbolos.ts`, `src/domain/auth/papel.ts`
+ * e outros). Medido no dia: 196 `.tsx` contra 346 `.ts` versionados em `src/`.
+ * Listar só `.tsx` deixaria a segunda fonte inerte, com a régua verde por não
+ * abrir o arquivo onde o rótulo está escrito.
  */
-function arquivosDeComponente(): string[] {
+function arquivosDeFonte(): string[] {
   const saida = execFileSync('git', ['ls-files', '-z', '--', 'src'], {
     cwd: RAIZ,
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
   });
-  return saida.split('\0').filter((caminho) => caminho.endsWith('.tsx'));
+  return saida
+    .split('\0')
+    .filter((caminho) => caminho.endsWith('.tsx') || caminho.endsWith('.ts'));
 }
 
 describe('o aparelho que acha traço em rótulo', () => {
@@ -155,16 +202,78 @@ describe('o aparelho que acha traço em rótulo', () => {
   });
 });
 
-describe('os componentes de `src/`', () => {
-  const arquivos = arquivosDeComponente();
+/**
+ * A segunda fonte, que nasceu quando o rótulo saiu do JSX.
+ *
+ * O nome do arquivo sintético aqui é `.ts` de propósito: é assim que o extrator
+ * escolhe o dialeto, e um mapa num módulo sem JSX é justamente o caso novo.
+ */
+describe('o aparelho lendo rótulo que mora em mapa', () => {
+  const MODULO = 'amostra-sintetica.ts';
 
-  it('tem a quantidade de arquivos de componente que o projeto promete', () => {
+  it('reprova o travessão dentro do mapa, nomeando a constante e a chave', () => {
+    const achados = tracosEmRotulo(DEFEITO_EM_MAPA, MODULO);
+    expect(achados).toHaveLength(1);
+    expect(achados[0]?.atributo).toBe('ROTULOS_CAMPO_POSTO.anaEscalaInicio');
+    expect(achados[0]?.valor).toBe('Escala — início');
+  });
+
+  it('aprova o mapa corrigido, tendo lido os dois rótulos', () => {
+    expect(tracosEmRotulo(MAPA_CORRIGIDO, MODULO)).toEqual([]);
+    // Presença antes de ausência: sem o desembrulho de `as const satisfies`
+    // este número seria zero, e a aprovação acima seria cegueira do parser.
+    expect(rotulosLidos(MAPA_CORRIGIDO, MODULO)).toBe(2);
+  });
+
+  it('não julga constante que não é de rótulo', () => {
+    expect(rotulosLidos(CONSTANTE_QUE_NAO_E_ROTULO, MODULO)).toBe(0);
+    expect(tracosEmRotulo(CONSTANTE_QUE_NAO_E_ROTULO, MODULO)).toEqual([]);
+  });
+
+  it('lê rótulo declarado solto, sem objeto em volta', () => {
+    expect(rotulosLidos(ROTULO_SOLTO, MODULO)).toBe(1);
+  });
+
+  it('lê o mapa real de campos do posto, e não só o sintético', () => {
+    const caminho = 'src/lib/rotulos-posto.ts';
+    const lidos = rotulosLidos(readFileSync(path.join(RAIZ, caminho), 'utf8'), caminho);
+    // O arquivo tem os campos vivos do cadastro mais os que saíram em
+    // 03/09/2026. Piso, e não igualdade: campo novo no cadastro não deve
+    // reprovar esta régua, que é de estilo de texto.
+    expect(
+      lidos,
+      `o extrator leu ${lidos} rótulos em ${caminho}, e ali há dezenas`,
+    ).toBeGreaterThan(30);
+  });
+});
+
+describe('os módulos de `src/`', () => {
+  const arquivos = arquivosDeFonte();
+
+  it('tem a quantidade de arquivo de fonte que o projeto promete', () => {
     // Piso contra varredura vazia: `git ls-files` que devolve nada faria a
-    // régua abaixo aprovar o repositório inteiro sem ler uma linha.
+    // régua abaixo aprovar o repositório inteiro sem ler uma linha. Medido em
+    // 23/09/2026: 196 `.tsx` mais 346 `.ts`, 542 no total.
     expect(
       arquivos.length,
-      `a listagem de .tsx em src veio curta demais para ser o projeto real (${arquivos.length})`,
-    ).toBeGreaterThan(150);
+      `a listagem de .ts e .tsx em src veio curta demais para ser o projeto real (${arquivos.length})`,
+    ).toBeGreaterThan(400);
+  });
+
+  it('alcança módulo sem JSX, que é onde os mapas de rótulo moram', () => {
+    /*
+      Asserção de alcance, e não de conteúdo: a varredura listava só `.tsx`, e
+      quando os trinta rótulos do formulário de posto passaram a vir de um `.ts`
+      a régua ficou verde por não abrir o arquivo onde eles estavam escritos.
+
+      A âncora é um módulo de rótulo que JÁ está versionado, e não o arquivo
+      novo da mudança: a listagem vem do `git ls-files`, que por desenho não
+      enxerga o que está por commitar, e uma asserção presa ao arquivo novo
+      reprovaria por construção antes do commit e não mediria o filtro.
+    */
+    const tsSemJsx = arquivos.filter((caminho) => caminho.endsWith('.ts'));
+    expect(tsSemJsx.length).toBeGreaterThan(100);
+    expect(tsSemJsx).toContain('src/components/features/estoque/rotulos.ts');
   });
 
   it('tem rótulo de controle em quantidade de projeto real', () => {
