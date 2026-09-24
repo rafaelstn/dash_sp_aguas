@@ -323,7 +323,7 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
           ) : (
             <Link
               href="/inventario-ana"
-              className="rounded-full border border-app-border-subtle bg-app-surface px-2 py-0.5 text-app-fg-muted hover:bg-app-surface-2"
+              className="rounded-full border border-app-border-subtle bg-app-surface px-2 py-1 text-app-fg-muted hover:bg-app-surface-2"
             >
               Todos
             </Link>
@@ -342,7 +342,7 @@ async function ResumoEFila({ filtros }: { filtros: FiltrosResolvidos }) {
                   key={c.chave}
                   href={href}
                   aria-current={ativo ? 'true' : undefined}
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 ${
                     ativo
                       ? 'bg-gov-azul font-medium text-white'
                       : 'border border-app-border-subtle bg-app-surface text-app-fg hover:bg-app-surface-2'

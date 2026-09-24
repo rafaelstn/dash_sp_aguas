@@ -46,7 +46,7 @@ const colunas: readonly ColunaTabela<DesconformidadePrefixo>[] = [
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Link
           href={`/postos/${encodeURIComponent(item.prefixo)}`}
-          className="inline-flex items-center gap-1 rounded text-xs font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+          className="inline-flex min-h-6 items-center gap-1 rounded text-xs font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           aria-label={`Abrir posto ${item.prefixo}`}
         >
           <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />

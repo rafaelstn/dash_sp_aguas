@@ -112,7 +112,7 @@ export function ChipsFiltrosAtivos({ mostrarFavoritos = false }: ChipsFiltrosAti
       <button
         type="button"
         onClick={limparTudo}
-        className="text-xs text-gov-muted hover:text-gov-texto underline-offset-4 hover:underline"
+        className="py-1 text-xs text-gov-muted hover:text-gov-texto underline-offset-4 hover:underline"
       >
         Limpar todos
       </button>

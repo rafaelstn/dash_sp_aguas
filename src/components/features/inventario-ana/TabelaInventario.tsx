@@ -184,7 +184,7 @@ export function TabelaInventario({ itens }: Props) {
                     <div className="flex items-center justify-between gap-2">
                       <Link
                         href={`/inventario-ana/${encodeURIComponent(it.codigoAna)}`}
-                        className="mono truncate text-gov-azul hover:underline"
+                        className="mono truncate py-1 text-gov-azul hover:underline"
                       >
                         {it.codigoAna}
                       </Link>
@@ -220,7 +220,7 @@ export function TabelaInventario({ itens }: Props) {
                       {it.postoPrefixo ? (
                         <Link
                           href={`/postos/${encodeURIComponent(it.postoPrefixo)}/editar`}
-                          className="ml-auto text-2xs text-gov-azul hover:underline"
+                          className="ml-auto py-1 text-2xs text-gov-azul hover:underline"
                           aria-label={`Editar posto ${it.postoPrefixo}`}
                         >
                           Editar posto
@@ -288,7 +288,7 @@ export function TabelaInventario({ itens }: Props) {
                     <th scope="row" className="border-b border-app-border-subtle px-3 py-1.5 text-left font-normal">
                       <Link
                         href={`/inventario-ana/${encodeURIComponent(it.codigoAna)}`}
-                        className="mono text-gov-azul hover:underline"
+                        className="mono py-1 text-gov-azul hover:underline"
                       >
                         {it.codigoAna}
                       </Link>
@@ -336,7 +336,7 @@ export function TabelaInventario({ itens }: Props) {
                       {it.postoPrefixo ? (
                         <Link
                           href={`/postos/${encodeURIComponent(it.postoPrefixo)}/editar`}
-                          className="text-2xs text-gov-azul hover:underline"
+                          className="py-1 text-2xs text-gov-azul hover:underline"
                           aria-label={`Editar posto ${it.postoPrefixo}`}
                         >
                           Editar

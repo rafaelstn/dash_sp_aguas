@@ -111,7 +111,7 @@ const colunasMantenedores: readonly ColunaTabela<LinhaMantenedor>[] = [
     render: (m) => (
       <Link
         href={`/?mantenedor=${encodeURIComponent(m.nome)}`}
-        className="inline-flex items-center gap-2 rounded-sm text-app-fg hover:text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+        className="inline-flex min-h-6 items-center gap-2 rounded-sm text-app-fg hover:text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
         aria-label={`Filtrar postos do mantenedor ${m.nome}`}
       >
         <Building2
@@ -164,7 +164,7 @@ const colunasUgrhi: readonly ColunaTabela<LinhaUgrhi>[] = [
     render: (u) => (
       <Link
         href={`/?ugrhi=${encodeURIComponent(u.numero)}`}
-        className="block rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+        className="block min-h-6 rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
         aria-label={`Filtrar postos da UGRHI ${u.numero} ${u.nome}`}
       >
         <span className="mono text-2xs text-app-fg-subtle">#{u.numero}</span>{' '}

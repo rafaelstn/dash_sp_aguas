@@ -83,7 +83,7 @@ export function DialogAjudaAtalhos({ aberto, aoFechar }: DialogAjudaAtalhosProps
             type="button"
             onClick={aoFechar}
             aria-label="Fechar ajuda"
-            className="rounded text-xl leading-none text-gov-muted hover:text-gov-texto focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+            className="rounded p-1 text-xl leading-none text-gov-muted hover:text-gov-texto focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
           >
             ×
           </button>

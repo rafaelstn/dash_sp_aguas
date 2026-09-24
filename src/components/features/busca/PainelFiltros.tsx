@@ -176,7 +176,7 @@ export function PainelFiltros({
           checkbox é ambíguo (mostrar a coluna? filtrar por ela?).
         */}
         <div className="sm:col-span-2">
-          <label className="inline-flex items-center gap-2 text-sm text-gov-texto">
+          <label className="inline-flex min-h-11 items-center gap-2 text-sm text-gov-texto md:min-h-6">
             <input
               type="checkbox"
               name="tem_telem"
@@ -233,7 +233,7 @@ export function PainelFiltros({
       */}
       {mostrarFavoritos ? (
         <div className="border-t border-gov-borda pt-3">
-          <label className="inline-flex items-center gap-2 text-sm">
+          <label className="inline-flex min-h-11 items-center gap-2 text-sm md:min-h-6">
             <input
               type="checkbox"
               name="favoritos"
@@ -258,7 +258,7 @@ export function PainelFiltros({
         </button>
         <Link
           href="/"
-          className="text-sm text-gov-muted hover:text-gov-texto underline-offset-4 hover:underline"
+          className="py-1 text-sm text-gov-muted hover:text-gov-texto underline-offset-4 hover:underline"
         >
           Limpar
         </Link>

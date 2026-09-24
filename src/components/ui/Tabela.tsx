@@ -97,7 +97,7 @@ export function Tabela<T>({
                     <Link
                       href={urlOrdenacao(col.chave, direcao ?? null)}
                       scroll={false}
-                      className="inline-flex items-center gap-1 rounded-sm hover:text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+                      className="inline-flex min-h-6 items-center gap-1 rounded-sm hover:text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
                     >
                       <span>{col.cabecalho}</span>
                       <IconeOrdenacao direcao={direcao} />

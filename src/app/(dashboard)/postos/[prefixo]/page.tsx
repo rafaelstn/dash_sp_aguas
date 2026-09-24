@@ -255,7 +255,7 @@ function CabecalhoAcervo({
       {/* Aviso sobre requisito de rede pra abrir os arquivos. Colapsável
           (details/summary) — primeiro acesso vê fechado, expande sob demanda. */}
       <details className="rounded border border-gov-azul/30 bg-gov-azul-claro/40 px-3 py-2 text-xs text-gov-azul">
-        <summary className="cursor-pointer font-medium">
+        <summary className="cursor-pointer py-1 font-medium">
           Como abrir os arquivos do HD
         </summary>
         <div className="mt-2 space-y-1.5 text-app-fg">

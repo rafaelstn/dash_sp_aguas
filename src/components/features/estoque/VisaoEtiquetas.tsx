@@ -70,7 +70,7 @@ export function VisaoEtiquetas({ filtros }: Props) {
           <nav aria-label="Trilha de navegação" className="mb-1 text-xs text-app-fg-muted">
             <ol className="flex flex-wrap items-center gap-1">
               <li>
-                <Link href="/estoque" className="text-gov-azul hover:underline">
+                <Link href="/estoque" className="py-1 text-gov-azul hover:underline">
                   Estoque
                 </Link>
               </li>

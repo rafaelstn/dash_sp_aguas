@@ -33,7 +33,7 @@ export function IndicadorSalvamento({ estado, aoTentarNovamente }: Props) {
           <button
             type="button"
             onClick={aoTentarNovamente}
-            className="ml-1 rounded px-1.5 py-0.5 font-semibold text-white underline underline-offset-2 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="ml-1 rounded px-1.5 py-1 font-semibold text-white underline underline-offset-2 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             Tentar novamente
           </button>

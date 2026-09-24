@@ -64,7 +64,7 @@ export function MapaPosto({
           href={linkExterno}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded text-xs font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+          className="inline-flex min-h-6 items-center gap-1 rounded text-xs font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
           aria-label="Abrir no Google Maps"
         >
           Abrir no Maps

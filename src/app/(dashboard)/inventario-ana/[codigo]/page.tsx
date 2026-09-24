@@ -88,7 +88,7 @@ export default async function InventarioAnaDetalhePage({ params }: PageProps) {
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>
-            <Link href="/inventario-ana" className="text-gov-azul hover:underline">
+            <Link href="/inventario-ana" className="py-1 text-gov-azul hover:underline">
               Auditoria ANA
             </Link>
           </li>

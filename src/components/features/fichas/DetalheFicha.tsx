@@ -85,7 +85,7 @@ export function DetalheFicha({ prefixo, ficha, schema }: DetalheFichaProps) {
         <span>Status: {ficha.status}</span>
         <Link
           href={`/postos/${encodeURIComponent(prefixo)}`}
-          className="ml-auto text-gov-azul hover:underline"
+          className="ml-auto py-1 text-gov-azul hover:underline"
         >
           ← Voltar para o posto
         </Link>

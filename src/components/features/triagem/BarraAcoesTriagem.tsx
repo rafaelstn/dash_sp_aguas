@@ -237,7 +237,7 @@ function BannerLockOutroAprovador({
         retomar a revisão.
       </p>
       <details className="mt-2 text-xs">
-        <summary className="cursor-pointer">
+        <summary className="cursor-pointer py-1">
           Liberação manual da reserva
         </summary>
         <p className="mt-1">

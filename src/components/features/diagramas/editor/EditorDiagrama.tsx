@@ -615,7 +615,7 @@ function EditorInterno({ diagrama }: Props) {
               limparErroExport();
               setErroImport(null);
             }}
-            className="shrink-0 rounded px-2 py-0.5 text-xs font-medium underline hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-perigo"
+            className="shrink-0 rounded px-2 py-1 text-xs font-medium underline hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-perigo"
           >
             Dispensar
           </button>

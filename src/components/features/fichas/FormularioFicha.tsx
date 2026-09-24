@@ -267,7 +267,7 @@ export function FormularioFicha({
         <button
           type="button"
           onClick={() => router.back()}
-          className="text-sm text-gov-muted hover:text-gov-texto underline-offset-4 hover:underline"
+          className="py-1 text-sm text-gov-muted hover:text-gov-texto underline-offset-4 hover:underline"
         >
           Cancelar
         </button>
@@ -382,7 +382,7 @@ function CampoDinamico({
       );
     case 'checkbox':
       return (
-        <label className="inline-flex items-center gap-2 text-sm">
+        <label className="inline-flex min-h-11 items-center gap-2 text-sm md:min-h-6">
           <input
             type="checkbox"
             checked={Boolean(valor)}

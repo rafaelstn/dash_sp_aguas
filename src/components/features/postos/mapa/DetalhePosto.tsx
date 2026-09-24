@@ -286,7 +286,7 @@ function BotaoComparar({ comparacao }: { comparacao: ComparacaoChuva }) {
         <button
           type="button"
           onClick={comparacao.tentarDeNovo}
-          className="font-medium text-gov-azul underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
+          className="py-1 font-medium text-gov-azul underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gov-azul"
         >
           Tentar de novo
         </button>

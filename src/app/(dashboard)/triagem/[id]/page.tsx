@@ -106,7 +106,7 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>
-            <Link href="/triagem" className="text-gov-azul hover:underline">
+            <Link href="/triagem" className="py-1 text-gov-azul hover:underline">
               Triagem
             </Link>
           </li>
@@ -180,7 +180,7 @@ export default async function TriagemDetalhePage({ params }: PageProps) {
             className="rounded-gov-card border border-app-border-subtle bg-app-surface p-3 lg:sticky lg:top-[calc(var(--altura-header)+1rem)]"
             open
           >
-            <summary className="cursor-pointer text-sm font-semibold text-app-fg">
+            <summary className="cursor-pointer py-1 text-sm font-semibold text-app-fg">
               Linha do tempo
             </summary>
             <div className="mt-3">
@@ -242,7 +242,7 @@ function SecaoIdentificacao({ ficha }: { ficha: FichaTriagem }) {
               href={linkMapa}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gov-azul hover:underline"
+              className="py-1 text-gov-azul hover:underline"
             >
               Consultar no Google Maps
             </a>
@@ -286,7 +286,7 @@ function MetadadosFicha({ ficha }: { ficha: FichaTriagem }) {
             <dd className="text-app-fg">
               <Link
                 href={`/postos/${encodeURIComponent(ficha.prefixo)}/fichas/${ficha.fichaVisitaId}`}
-                className="text-gov-azul hover:underline"
+                className="py-1 text-gov-azul hover:underline"
               >
                 Consultar ficha na base de produção
               </Link>

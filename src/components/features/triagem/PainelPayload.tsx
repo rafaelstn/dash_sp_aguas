@@ -205,7 +205,7 @@ function renderizarValor(campo: CampoFicha, valor: unknown): React.ReactNode {
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gov-azul hover:underline"
+            className="py-1 text-gov-azul hover:underline"
           >
             {texto}
           </a>
@@ -310,7 +310,7 @@ export function BlocoAnexos({ anexos }: BlocoAnexosProps) {
               href={a.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gov-azul hover:underline"
+              className="py-1 text-gov-azul hover:underline"
             >
               {a.nome ?? 'Ver arquivo'}
             </a>

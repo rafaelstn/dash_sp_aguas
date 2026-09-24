@@ -140,7 +140,7 @@ export function ConferenciaLista({ podeGerenciar }: Props) {
         <div>
           <Link
             href="/estoque"
-            className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            className="mb-1 inline-flex min-h-6 items-center gap-1 text-xs font-medium text-gov-azul hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
             Voltar ao Estoque

@@ -166,7 +166,7 @@ export function CestaComparacao({
                   type="button"
                   onClick={() => aoRemover(e.id)}
                   aria-label={`Remover ${rotuloEstacao(e)} da comparação`}
-                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-app-fg-muted hover:bg-app-surface hover:text-gov-perigo focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gov-azul"
+                  className="ml-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-app-fg-muted hover:bg-app-surface hover:text-gov-perigo focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gov-azul"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>

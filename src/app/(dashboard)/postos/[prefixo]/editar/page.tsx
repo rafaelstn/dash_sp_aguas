@@ -71,13 +71,13 @@ export default async function EditarPostoPage({ params }: PageProps) {
       <nav aria-label="Trilha de navegação" className="text-xs text-app-fg-muted">
         <ol className="flex flex-wrap items-center gap-1">
           <li>
-            <Link href="/" className="text-gov-azul hover:underline">
+            <Link href="/" className="py-1 text-gov-azul hover:underline">
               Postos
             </Link>
           </li>
           <li aria-hidden="true">›</li>
           <li>
-            <Link href={`/postos/${encodeURIComponent(prefixo)}`} className="mono text-gov-azul hover:underline">
+            <Link href={`/postos/${encodeURIComponent(prefixo)}`} className="mono py-1 text-gov-azul hover:underline">
               {prefixo}
             </Link>
           </li>

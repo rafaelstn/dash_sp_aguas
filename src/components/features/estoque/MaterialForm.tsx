@@ -163,7 +163,7 @@ export function MaterialForm({
         />
       ) : null}
       {editando ? (
-        <label className="flex items-center gap-2 text-sm text-app-fg">
+        <label className="flex min-h-11 items-center gap-2 text-sm text-app-fg md:min-h-6">
           <input
             type="checkbox"
             checked={ativo}
