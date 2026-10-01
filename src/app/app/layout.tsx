@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
 import { BottomNav } from '@/components/mobile/BottomNav';
 import { RegistrarServiceWorker } from '@/components/mobile/RegistrarServiceWorker';
@@ -73,6 +74,10 @@ export default async function MobileAppLayout({
   // por algum motivo não houver sessão (ex.: bypass dev), o layout não
   // quebra.
   const usuario = await obterUsuarioAtual();
+  // Nonce desta requisição, posto pelo middleware em `x-nonce`. Ausente só
+  // quando o middleware não cobriu a rota, e aí não há CSP com nonce para
+  // satisfazer: o `undefined` não emite o atributo.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
     <div
@@ -86,9 +91,17 @@ export default async function MobileAppLayout({
         controlando `start_url` no momento do audit. O componente
         `RegistrarServiceWorker` continua respondendo aos eventos de
         update (mantido por compatibilidade futura).
+
+        O `nonce` é obrigatório e vem do mesmo valor que o middleware pôs no
+        cabeçalho `x-nonce` desta requisição: o Next injeta nonce nos scripts
+        que ELE gera, nunca em `<script>` escrito à mão. Sem ele, este script
+        era o único bloqueado em `/app/postos` em 30/09/2026 (27 dos 28 scripts
+        da página traziam nonce), e o registro early do Service Worker nunca
+        rodava em produção. NÃO medido: se o `RegistrarServiceWorker` cobria
+        essa falta nas rotas que hidratavam.
       */}
       <script
-         
+        nonce={nonce}
         dangerouslySetInnerHTML={{
           __html: `
             if ('serviceWorker' in navigator &&

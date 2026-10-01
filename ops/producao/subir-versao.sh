@@ -152,9 +152,15 @@ echo "health do app: $SAUDE   (espera healthy)"
 curl -sS --max-time 20 http://127.0.0.1:3000/api/health; echo
 echo
 echo "A BORDA SE MEDE DA ESTACAO COM VPN, nao daqui: o servidor nao resolve"
-echo "dmo.spaguas.sp.gov.br. Da estacao:"
-echo "  curl -sS -o /dev/null -w 'status=%{http_code}\\n' https://dmo.spaguas.sp.gov.br/"
+echo "dmo.spaguas.sp.gov.br. Da estacao, dentro do clone do projeto:"
+echo "  node scripts/verificar-csp-nonce.mjs https://dmo.spaguas.sp.gov.br"
 echo "  curl -sS https://dmo.spaguas.sp.gov.br/api/health"
+echo
+echo "A regua de nonce vem PRIMEIRO e o status vem depois, nesta ordem, porque"
+echo "em 30/09/2026 a pagina inicial e o aplicativo de campo responderam 200 com"
+echo "health verde servindo 25 e 31 scripts que a CSP bloqueia: a tela abria"
+echo "vazia e nenhum curl de status acusou. Status nao e renderizacao. A regua"
+echo "sai 1 nomeando cada rota quebrada, e 2 quando nao conseguiu medir."
 
 echo
 echo "== 8. Tags no disco (retencao) =="
