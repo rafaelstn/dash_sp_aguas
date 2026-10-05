@@ -59,7 +59,7 @@ on:
 jobs:
   web:
     name: Web — install, lint, typecheck, testes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -83,7 +83,7 @@ jobs:
 
   integracao:
     name: Integração — schema e fluxo transacional em Postgres
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Prova contra Postgres de verdade o que o mock in-memory não alcança:
     # atomicidade, idempotência sob concorrência, coluna GENERATED, índice único
     # parcial. Exigência escrita da ADR 0021. Também garante que as migrations
@@ -208,7 +208,7 @@ jobs:
 
   python:
     name: Python — sintaxe
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -224,7 +224,7 @@ jobs:
 
   imagem:
     name: 'Imagem: docker build da entrega offline'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Até 23/09/2026 nenhum job construía a imagem, e a entrega ao órgão É uma
     # imagem. Lint, typecheck e 1407 testes ficam verdes sobre um Dockerfile que
     # não constrói, porque nenhum deles olha para ele: quem pega COPY de caminho
@@ -389,7 +389,7 @@ jobs:
 
   scripts:
     name: 'Scripts: a senha do banco nunca no argv do psql'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Sintoma medido em 23/09/2026: tres scripts entregues por este repositorio
     # chamavam `psql` com a connection string inteira como argumento, e argv e
     # legivel por qualquer processo da maquina (`ps`, e `docker top` no caso do
@@ -470,3 +470,68 @@ jobs:
 
           [ "$falhou" -eq 0 ] || exit 1
           echo "::notice title=Nenhuma senha no argv::$QTD arquivos de shell e workflow conferidos, nenhum passa connection string na chamada do psql."
+
+  runner:
+    name: 'Guarda: runner com versao fixa'
+    runs-on: ubuntu-24.04
+    # Medido em 05/10/2026: os seis jobs deste repositorio rodavam em rotulo
+    # movel, e todo run trazia o aviso de que ele migra para Ubuntu 26 a partir
+    # de 19/10/2026. Rotulo movel troca a plataforma por baixo sem commit
+    # nenhum, e neste projeto a plataforma ja refutou causa que parecia certa:
+    # a mesma sonda deu zero falha em 600 pedidos no Windows e 510 em
+    # container Linux. Com versao fixa, trocar de plataforma passa a ser uma
+    # linha datada em vez de surpresa numa terca.
+    #
+    # O QUE ESTE JOB NAO MEDE: se a versao fixada continua no catalogo do
+    # GitHub. Imagem retirada falha no agendamento do job, nao aqui, e a
+    # mensagem de la nomeia o rotulo.
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Nenhum job em rotulo movel
+        run: |
+          PADRAO='^[[:space:]]*runs-on:[[:space:]]*.*-latest'
+
+          # Mutante e controle MONTADOS por printf, nunca escritos literal: este
+          # arquivo tambem e varrido abaixo, e a amostra do defeito escrita de
+          # verdade faria a guarda acusar o proprio workflow.
+          TEMP=$(mktemp -d)
+          printf 'jobs:\n  a:\n    runs-on: %s-latest\n' 'ubuntu' > "$TEMP/mutante.yml"
+          printf 'jobs:\n  a:\n    runs-on: ubuntu-24.04\n' > "$TEMP/legitimo.yml"
+
+          if ! grep -qE "$PADRAO" "$TEMP/mutante.yml"; then
+            echo "::error title=Guarda inerte::o padrao nao casa nem o rotulo movel na amostra. Ele parou de medir a classe: corrigir antes de confiar no verde deste passo."
+            exit 1
+          fi
+          if grep -qE "$PADRAO" "$TEMP/legitimo.yml"; then
+            echo "::error title=Guarda com falso positivo::o padrao casa a versao FIXA. Guarda que reprova o correto manda piorar a configuracao: corrigir o padrao."
+            exit 1
+          fi
+          echo "padrao conferido: casa o rotulo movel na amostra e nao casa a versao fixa."
+
+          ARQUIVOS=$(git ls-files '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          QTD=$(printf '%s\n' "$ARQUIVOS" | grep -c . || true)
+
+          # Piso contra leitura vazia, pela mesma razao do job acima: em
+          # 05/10/2026 sao 2 workflows. Zero aqui nao quer dizer que a classe
+          # acabou, quer dizer que a lista parou de achar arquivo e este passo
+          # virou enfeite verde. O piso sobe no MESMO commit que acrescenta
+          # workflow, e desce no MESMO commit que remove.
+          if [ "$QTD" -lt 2 ]; then
+            echo "::error title=Guarda sem alcance::esperava ao menos 2 workflows e encontrei $QTD. Se algum saiu de proposito, baixar este piso no mesmo commit."
+            exit 1
+          fi
+
+          falhou=0
+          for arquivo in $ARQUIVOS; do
+            CASOS=$(grep -nE "$PADRAO" "$arquivo" || true)
+            if [ -n "$CASOS" ]; then
+              falhou=1
+              echo "$CASOS" | while IFS= read -r caso; do
+                echo "::error file=$arquivo,line=${caso%%:*},title=Runner com rotulo movel::$arquivo usa um rotulo que o GitHub move de versao sem commit nenhum. Fixar a versao (ubuntu-24.04) e trocar por decisao datada."
+              done
+            fi
+          done
+
+          [ "$falhou" -eq 0 ] || exit 1
+          echo "::notice title=Runner fixo::$QTD workflows conferidos, nenhum job em rotulo movel."
