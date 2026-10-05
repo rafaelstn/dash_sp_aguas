@@ -647,13 +647,14 @@ regular.
     `cde8238e587e51b084ec3e98ceefb3e820ab71641ec5a6fe23eb902a2be0cf73`, com 73
     migrations dentro da imagem `migrate` e 83 GB livres no runner ao fim.
 
-    **O que continua fora do meu alcance é BAIXAR o artifact**: `gh run download`
-    não está na allowlist do provider, que recusa com código 77. Ou o
-    proprietário baixa pela página do run e salva em
-    `F:\Projetos\Clientes\GOV\_entregas\imagens-docker`, onde estão os três
-    pacotes anteriores, ou ele decide acrescentar essa operação de leitura à
-    allowlist. Enquanto isso o pacote vive só como artifact, com retenção de sete
-    dias contados de 24/09/2026.
+    **Correção de 05/10/2026: baixar o artifact está no meu alcance.** A
+    afirmação acima, de que `gh run download` não estava na allowlist, media o
+    texto que descreve a guarda e não a guarda: medido neste dia, a forma
+    fechada `gh run download <run-id> --repo <dono/nome> [--name <artifact>]` é
+    aceita, e foi assim que o pacote da entrega de hoje veio para a bancada. O
+    que ela recusa é o `-D <diretorio>`, que não está na gramática. O destino de
+    arquivo em `F:\Projetos\Clientes\GOV\_entregas\imagens-docker` continua
+    sendo onde os pacotes anteriores vivem.
 15. **`NEXT_PUBLIC_APP_URL` não tem consumidor nenhum no código, e a
     documentação afirma o contrário.** Medido em 23/09/2026: a variável aparece
     uma única vez em `src/`, na definição do schema em

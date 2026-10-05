@@ -17,6 +17,35 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
+## 05/10/2026, achado: a versão no ar está quebrada, e nenhuma entrega subiu
+
+**Não houve subida nesta data**, e esta seção existe porque a pergunta "o que
+mudou e quando" tem hoje uma resposta que não é uma entrega.
+
+Medido no servidor do órgão em 05/10/2026 pela régua
+`scripts/verificar-csp-nonce.mjs`, que lê o nonce do cabeçalho e conta as tags de
+script com e sem nonce na mesma resposta: cinco rotas servem HTML sem executar
+JavaScript nenhum, porque saem prerenderizadas do build, com HTML fixo e sem
+nonce, enquanto o cabeçalho traz `script-src 'self' 'nonce-<N>' 'strict-dynamic'`,
+e o `'strict-dynamic'` desabilita o `'self'`. Tags de script sem nonce, por rota:
+`/` 25 de 25, `/app` 31 de 31, `/app/perfil` 22 de 22,
+`/app/minhas-fichas` 1 de 37 e `/app/postos` 1 de 28. Quinze rotas aprovaram e
+catorze com parâmetro ficaram como não medidas; o piso de autoteste de seis casos
+passou, e a régua saiu com código 1.
+
+**Por que cinco entregas passaram por cima disto.** A verificação do roteiro era
+HTTP 200 e `/api/health` com `db: ok`, e as duas coisas continuam verdadeiras com
+a tela sem JavaScript. Status não é renderização. A correção está em `2aca429`,
+no GitHub, e **não está no ar**.
+
+O pacote que a leva existe e está íntegro: `dmo-sha-4b93252.tar.gz`,
+237.453.597 bytes, `sha256`
+`62355b7cb1e5dcc999f7d21d726aa965601b89f867c12d8072dcfb91419895ac`, igual ao
+manifesto do workflow. O que falta é a passagem pelo canal (SSH com VPN) e a
+janela com o órgão. O aceite desta subida é a mesma régua sair 0.
+
+---
+
 ## 24/09/2026, `sha-9f7dda4`
 
 | Campo | Valor |
@@ -25,7 +54,7 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 | Versão anterior | `sha-e452f11` |
 | Autorizado por | Rafael Damasceno, nesta data ("pode subir pra produção", e depois "liguei a VPN pode subir") |
 | Executado por | Matheus (DamaTech), via SSH com VPN |
-| Transporte | pacote único de 237.486.066 bytes com quatro referências (`dashboard`, `migrate`, `carga-estoque` e `postgis/postgis:16-3.4-alpine`), construído no runner self-hosted pelo workflow `entrega-offline.yml` e enviado por `scp` em 91 s |
+| Transporte | pacote único de 237.486.066 bytes com quatro referências (`dashboard`, `migrate`, `carga-estoque` e `postgis/postgis:16-3.4-alpine`), construído pelo workflow `entrega-offline.yml` e enviado por `scp` em 91 s |
 | Integridade | `sha256` igual nas três pontas (manifesto do runner, origem e destino): `cde8238e587e51b084ec3e98ceefb3e820ab71641ec5a6fe23eb902a2be0cf73` |
 | Backup antes de trocar | `/var/backups/spaguas-dmo/antes-de-sha-9f7dda4-20260924T045058Z.dump`, 2.574.674 bytes e 44 `TABLE DATA`. A guarda de parada da seção 7.3 aprovou (referência de 16/09: 2.085.051 bytes e 43) |
 
