@@ -617,8 +617,16 @@ regular.
     Corrigido e provado nos dois sentidos contra Postgres com PostGIS local, na
     mesma imagem do CI. Run verde nos três jobs (`34246814039`).
 
-    **A linha do gatilho sai quando esta branch for fundida na `main`**, e é
+    **A linha do gatilho sai quando o trabalho voltar a acontecer na `main`**, e é
     branch nomeada e não curinga porque cada execução gasta minuto de Actions.
+
+    **A `main` foi alinhada em 05/10/2026**, por fast-forward puro
+    (`85230f9..6979bfa`, 108 commits à frente e zero atrás), depois de ficar
+    dezessete dias e cento e oito commits atrás do que já estava em produção.
+    Entre a versão no ar (`4b93252`) e esse ponto só há documentação e os dois
+    workflows, nada de código de produto. O gatilho da branch FICA enquanto o
+    trabalho continuar nela; o preço é que empurrar para as duas gasta dois runs,
+    e quem quiser pagar um só empurra para a `main` e deixa a branch morrer.
 14. **O pacote da entrega passou a se construir no runner.** O workflow é
     `.github/workflows/entrega-offline.yml`, commit `b8cc2a4` de 23/09/2026.
     Motivo: a bancada ficou

@@ -232,23 +232,33 @@ bash ~/.claude/scripts/os-secret.sh exec github \
 
 # 4. Baixar o pacote e o manifesto. O artifact se chama
 #    pacote-entrega-offline-<tag da entrega> e tem retenção de 7 dias.
+#    O <run-id> é obrigatório e sai do passo 3.
 bash ~/.claude/scripts/os-secret.sh exec github \
-  gh run download --repo rafaelstn/dash_sp_aguas --name pacote-entrega-offline-<tag>
+  gh run download <run-id> --repo rafaelstn/dash_sp_aguas \
+  --name pacote-entrega-offline-<tag>
 
 # 5. Conferir o pacote contra o manifesto do runner ANTES de transportar.
+#    No diretório que o passo 4 imprimiu, para o `-c` conferir o arquivo BAIXADO.
+cd ~/.os-secret-artefatos/<run-id>-<n>
 sha256sum -c dmo-sha-<commit>.tar.gz.sha256   # espera: OK
 ```
 
-O destino do download é definido pelo próprio script de credencial, que aceita só
-`--repo` e `--name`: `--dir` é recusado com a gramática na mensagem.
+A gramática aceita é fechada, medida em 05/10/2026:
+`gh run download <run-id> --repo <dono/nome> [--name <artifact>]`. Sem o
+`<run-id>` o script recusa, e `-D`/`--dir` também: **o destino é dele**, e ele o
+imprime na primeira linha (`~/.os-secret-artefatos/<run-id>-<n>`). É de lá que o
+pacote sai para o `scp` do passo da seção 5; os pacotes anteriores vivem em
+`F:\Projetos\Clientes\GOV\_entregas\imagens-docker`.
 
 A conferência do passo 5 não é formalidade: ela é a única que liga o byte que vai
 viajar ao byte que o runner construiu. Em 05/10/2026 ela saiu **OK** para
 237.453.597 bytes, e os dois resumos no destino conferiram com os da bancada
 depois do `scp`.
 
-O pacote e os artefatos de entrega ficam em `C:\Projetos\gov\_entrega-prodesp`,
-que não é repositório de propósito (padrão de `C:\Projetos\CLAUDE.md`).
+O pacote nunca entra em pasta de repositório: ele nasce no destino do script de
+credencial e, se precisar ser guardado, vai para o arquivo em
+`F:\Projetos\Clientes\GOV\_entregas\imagens-docker`, nunca para dentro de
+`C:\Projetos\gov\dmo` (padrão de `C:\Projetos\CLAUDE.md`).
 
 ---
 
