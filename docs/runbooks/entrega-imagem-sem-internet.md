@@ -76,8 +76,9 @@ conferência; nenhum passo segue com a conferência anterior fora do esperado.
      ops/producao/Dockerfile.carga-estoque.dockerignore \
      scripts/estoque/importar-inventario.mjs | wc -l          # espera: 3
    ```
-3. Exportar a árvore para disco local (seção 2) e construir **as três imagens**
-   com a mesma tag, **sem** argumento de build do Supabase (seção 3).
+3. Pedir o pacote ao CI pela tag `entrega-*` (seção 2.0). As três imagens saem
+   com a mesma tag de commit e **sem** argumento de build do Supabase, e quem
+   garante isso é o workflow, cujo contrato é a seção 3.
 4. Conferências antes de transportar: seção 3 (inclusive as quatro migrations
    dentro da imagem `migrate`) e seção 2.1 de `carga-inicial-estoque.md`.
 5. Empacotar as quatro referências e tirar o `sha256` (seção 4). Tirar também o
@@ -196,7 +197,62 @@ trilha de auditoria, favoritos, diagramas e fotos.
 
 ---
 
-## 2. Pré-requisitos antes de construir
+## 2. Quem constrói o pacote: o CI, e não esta máquina
+
+**Mudou em 05/10/2026, e muda o começo de toda entrega.** A máquina do Rafael não
+tem Docker desde 01/10/2026, por decisão dele, e nenhum agente propõe container
+local. Antes disso o caminho da bancada já havia falhado por disco em 23/09/2026,
+e foi por isso que o workflow nasceu. Então o pacote **se constrói no runner**,
+pelo `.github/workflows/entrega-offline.yml`, que espelha as três seções abaixo:
+mesma tag, mesmos argumentos de build, as mesmas quatro referências no
+`docker save`, a mesma compressão e o mesmo `sha256` conferido nas duas pontas.
+
+As seções 2.1, 3 e 4 ficam como o CONTRATO do que o workflow faz, e é por elas
+que se confere se ele continua fazendo o certo. Quem mudar uma muda o workflow no
+mesmo commit, e vice-versa: divergindo, o servidor recebe coisa diferente do que
+este runbook diz que ele recebe. **Nenhum dos comandos `docker` delas roda nesta
+máquina**, e tentar rodá-los é o erro que este bloco existe para evitar.
+
+### 2.0 O caminho vigente, medido na entrega de 05/10/2026
+
+```bash
+# 1. Estar na revisão que vai para produção, com a árvore limpa e empurrada.
+git status --porcelain      # tem que sair vazio
+git rev-parse --short HEAD  # esta é a TAG das três imagens
+
+# 2. Pedir a entrega. A tag é o gatilho, e `git push` de tag é operação que a
+#    porta oficial de credencial já cobre (o provider não expõe `gh run` que
+#    DISPARE execução, só `list`, `view`, `watch` e `download`).
+git tag "entrega-$(date +%Y-%m-%d)-$(git rev-parse --short HEAD)"
+bash ~/.claude/scripts/os-secret.sh exec github git push origin --tags
+
+# 3. Acompanhar. O job leva cerca de 3 min (2m59s em 05/10/2026).
+bash ~/.claude/scripts/os-secret.sh exec github \
+  gh run list --repo rafaelstn/dash_sp_aguas --limit 5
+
+# 4. Baixar o pacote e o manifesto. O artifact se chama
+#    pacote-entrega-offline-<tag da entrega> e tem retenção de 7 dias.
+bash ~/.claude/scripts/os-secret.sh exec github \
+  gh run download --repo rafaelstn/dash_sp_aguas --name pacote-entrega-offline-<tag>
+
+# 5. Conferir o pacote contra o manifesto do runner ANTES de transportar.
+sha256sum -c dmo-sha-<commit>.tar.gz.sha256   # espera: OK
+```
+
+O destino do download é definido pelo próprio script de credencial, que aceita só
+`--repo` e `--name`: `--dir` é recusado com a gramática na mensagem.
+
+A conferência do passo 5 não é formalidade: ela é a única que liga o byte que vai
+viajar ao byte que o runner construiu. Em 05/10/2026 ela saiu **OK** para
+237.453.597 bytes, e os dois resumos no destino conferiram com os da bancada
+depois do `scp`.
+
+O pacote e os artefatos de entrega ficam em `C:\Projetos\gov\_entrega-prodesp`,
+que não é repositório de propósito (padrão de `C:\Projetos\CLAUDE.md`).
+
+---
+
+### 2.1 Pré-requisitos da construção (contrato do workflow)
 
 1. Estar na revisão exata que vai para produção, com a árvore limpa:
 
@@ -230,7 +286,12 @@ trilha de auditoria, favoritos, diagramas e fotos.
 
 ---
 
-## 3. Construir as três imagens
+## 3. Construir as três imagens (contrato do workflow, não roda nesta máquina)
+
+> Quem executa isto é o job `pacote` do `entrega-offline.yml`. Esta seção é o
+> espelho dele, e serve para conferir se ele continua fazendo o certo: mesma tag,
+> mesmos `--build-arg`, mesmas conferências. Nesta bancada não há Docker desde
+> 01/10/2026; o caminho de verdade está na seção 2.0.
 
 As três levam **a mesma tag de commit**, e isso não é estética: é o que impede a
 aplicação de um commit rodar com as migrations de outro, e a carga do estoque de
@@ -240,7 +301,7 @@ procurar colunas que o esquema no ar não tem.
 cd /c/tmp/dmo-build
 SHA=$(git -C "<repositorio>" rev-parse --short HEAD)
 
-# 1. Aplicação (sem argumento do Supabase: ver seção 2, item 2)
+# 1. Aplicação (sem argumento do Supabase: ver seção 2.1, item 2)
 DOCKER_BUILDKIT=1 docker build \
   --build-arg NEXT_PUBLIC_APP_URL=https://dmo.spaguas.sp.gov.br \
   -t spaguas/dashboard:sha-$SHA .
@@ -310,7 +371,13 @@ foi exercitada.
 
 ---
 
-## 4. Empacotar e medir o que trafega
+## 4. Empacotar e medir o que trafega (contrato do workflow)
+
+> Também executado pelo job `pacote`. O que esta seção manda medir, o workflow
+> mede e publica junto com o pacote: o `.sha256` do artifact é o que o passo 5 da
+> seção 2.0 confere na bancada antes de transportar. Os números abaixo descrevem
+> a ordem de grandeza, não a entrega de hoje; os da entrega de 05/10/2026 estão
+> no `registro-de-entregas.md`.
 
 ```bash
 docker save \
@@ -403,8 +470,14 @@ nos 22 GB.
 
 ## 5. Transportar
 
-**PENDENTE DE DEFINIÇÃO PELO ÓRGÃO.** Está no pedido formal (seção 10.5). As
-opções, em ordem de preferência:
+**RESOLVIDO NA PRÁTICA em 05/10/2026, pela VPN.** O pacote de 237.453.597 bytes
+foi de `scp` da bancada do Rafael direto para `/opt/spaguas-dmo/`, em 17 s a
+13,1 MB/s, com a VPN do órgão conectada. Não foi preciso nenhuma das opções
+abaixo, e o pedido formal da seção 10.5 deixa de ser bloqueio: fica como registro
+de que o canal nunca foi formalizado pelo órgão, só funcionou.
+
+Enquanto a VPN atender, o canal é este. As opções do pedido formal continuam
+valendo como alternativa se ela cair ou se o órgão fechar a rota:
 
 1. Compartilhamento de arquivos interno alcançável pelo servidor (`scp` a partir
    de uma máquina da rede do órgão que tenha o arquivo).
@@ -1268,6 +1341,12 @@ containers publicam em `127.0.0.1`, e o banco não publica nada, justamente para
 não repetir isso.
 
 ### 10.5 Canal de transporte da imagem
+
+**Deixou de ser bloqueio em 05/10/2026**: a entrega da `sha-4b93252` passou por
+`scp` pela VPN em 17 s (seção 5). Continua valendo como pedido de FORMALIZAÇÃO,
+não de viabilidade: o canal que usamos é o acesso do Rafael pela VPN, e não há
+registro institucional de quem pode transportar nem de como a passagem se
+registra.
 
 Sem internet, cada nova versão do sistema é um arquivo de cerca de 225 MiB que
 precisa chegar ao servidor. Definir o canal oficial, quem tem acesso e como se

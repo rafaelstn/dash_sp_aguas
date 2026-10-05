@@ -5,7 +5,7 @@ name: Entrega offline
 # transportado por `scp`.
 #
 # O roteiro vigente é docs/runbooks/entrega-imagem-sem-internet.md, e este
-# workflow ESPELHA as seções 2, 3 e 4 dele: mesma tag, mesmos argumentos de
+# workflow ESPELHA as seções 2.1, 3 e 4 dele: mesma tag, mesmos argumentos de
 # build, mesmas quatro referências de imagem no `docker save`, mesma compressão
 # e o mesmo `sha256` que o runbook confere nas duas pontas. Se este arquivo e o
 # runbook divergirem, o servidor recebe coisa diferente do que o runbook diz que
@@ -33,8 +33,9 @@ name: Entrega offline
 # custo recorrente é decisão do Rafael; tag só existe quando alguém quis empacotar.
 #
 # A tag entrou em 23/09/2026 porque o provider de credencial da operação não
-# expõe, de propósito, nenhuma operação que DISPARE execução (`gh run` só tem
-# `list`, `view` e `watch`), então quem só tem a porta oficial não alcançava o
+# expõe, de propósito, nenhuma operação que DISPARE execução (de `gh run` passam
+# `list`, `view`, `watch` e `download`, medido em 05/10/2026, e o `download` aceita
+# só `--repo` e `--name`), então quem só tem a porta oficial não alcançava o
 # botão. `git push` de tag é operação que a porta oficial já cobre, e nenhuma
 # permissão precisou ser afrouxada para isto funcionar.
 #
