@@ -1,6 +1,9 @@
 import type { TipoPostoMapa } from '@/domain/mapa-postos';
 import { estiloDoTipo, type Forma } from './simbolos';
 
+/** O vazado do posto extinto é a superfície por baixo dele, que é token. */
+const PREENCHIMENTO_VAZADO = 'hsl(var(--bg-surface))';
+
 /**
  * O mesmo símbolo do mapa, em SVG, para lista, legenda, filtros e detalhe.
  * Decorativo: quem usa escreve o tipo e a situação em texto ao lado.
@@ -26,7 +29,7 @@ export function GlifoPosto({
     >
       <Forma
         forma={estilo.forma}
-        fill={extinto ? '#FFFFFF' : estilo.cor}
+        fill={extinto ? PREENCHIMENTO_VAZADO : estilo.cor}
         stroke={extinto ? estilo.cor : 'none'}
         strokeWidth={extinto ? 1.6 : 0}
       />

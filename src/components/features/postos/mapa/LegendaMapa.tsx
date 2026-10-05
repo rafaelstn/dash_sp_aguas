@@ -18,6 +18,17 @@ import type { EstadoTela } from './estado-url';
  * chips de filtro contam o total. As duas contagens respondem perguntas
  * diferentes ("o que estou vendo aqui" e "quantos existem com este filtro"), e
  * foi por isso que não se unificaram.
+ *
+ * É a BARRA do pé do mapa desde 05/10/2026, e não mais uma caixa flutuante no
+ * canto inferior esquerdo. A caixa tinha três problemas medidos: cobria o canto
+ * do estado (e o enquadramento tinha de desviar dela, sobrando margem vazia dos
+ * dois lados), era cortada em janela de 900 px de altura, e era a quarta caixa
+ * branca de mesmo peso em cima do mapa. Como barra, ela é o rodapé do mapa: não
+ * cobre recorte nenhum, nunca é cortada, e o enquadramento só desconta a altura
+ * dela.
+ *
+ * O comportamento de recolher no celular continua igual, inclusive ao girar o
+ * aparelho, e continua com a trava de quem decidiu no botão.
  */
 
 export type EstadoOutrasRedes = 'desligada' | 'carregando' | 'ligada' | 'erro';
@@ -73,7 +84,7 @@ export function LegendaMapa({
   return (
     <section
       aria-label="Legenda do mapa"
-      className="absolute bottom-3 left-3 z-[800] max-w-[calc(100%-4.5rem)] rounded-md bg-white/95 text-xs shadow-gov-card"
+      className="absolute inset-x-0 bottom-0 z-[800] flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-app-border-subtle bg-app-surface/90 px-2 py-1.5 text-xs backdrop-blur-sm"
     >
       <button
         type="button"
@@ -83,7 +94,7 @@ export function LegendaMapa({
           decidiuNaMao.current = true;
           setAberta((a) => !a);
         }}
-        className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-left font-medium text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
+        className="flex min-h-6 shrink-0 items-center gap-1 rounded px-1 py-0.5 text-left font-medium text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul"
       >
         {aberta ? (
           <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -93,27 +104,27 @@ export function LegendaMapa({
         Legenda
       </button>
       {aberta && (
-        <div id={idCorpo} className="w-56 space-y-2 px-3 pb-3">
-          <p className="text-2xs uppercase tracking-wide text-app-fg-subtle">Nesta área do mapa</p>
-          <ul className="space-y-1">
+        <div id={idCorpo} className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="text-2xs uppercase tracking-wide text-app-fg-subtle">Nesta área</p>
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {TIPOS_POSTO_MAPA.map((t) => {
               const ligado = estado.tipos.includes(t);
               return (
-                <li key={t} className="flex items-center gap-2">
+                <li key={t} className="flex items-center gap-1.5">
                   <GlifoPosto tipo={t} tamanho={11} />
-                  <span className={`flex-1 ${ligado ? 'text-app-fg' : 'text-app-fg-subtle'}`}>
+                  <span className={ligado ? 'text-app-fg' : 'text-app-fg-subtle'}>
                     {ESTILO_TIPO[t].nome}
                   </span>
-                  <span className="tabular-nums text-app-fg-muted">
+                  <span className="tabular-nums font-medium text-app-fg-muted">
                     {ligado ? fmt(porTipo.get(t) ?? 0) : 'fora do filtro'}
                   </span>
                 </li>
               );
             })}
           </ul>
-          <ul className="space-y-1 border-t border-app-border-subtle pt-2">
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 border-app-border-subtle pl-0 md:border-l md:pl-3">
             {SITUACOES_POSTO.map((s) => (
-              <li key={s} className="flex items-center gap-2 text-app-fg">
+              <li key={s} className="flex items-center gap-1.5 text-app-fg">
                 <GlifoSituacao extinto={s === 'extinto'} />
                 {s === 'extinto' ? 'Extinto (vazado)' : `${ROTULO_SITUACAO[s]} (cheio)`}
               </li>
@@ -128,7 +139,7 @@ export function LegendaMapa({
             Separado, o checkbox tem nome estável e a contagem é anunciada como
             status, que é o que ela é.
           */}
-          <div className="flex items-center gap-2 border-t border-app-border-subtle pt-2 text-app-fg">
+          <div className="flex items-center gap-2 border-app-border-subtle text-app-fg md:border-l md:pl-3">
             {/*
               A altura mínima é do ALVO DE TOQUE, e não do desenho: sem ela a
               linha tinha a altura da própria letra, uns 16 px, e este é o único
@@ -137,7 +148,7 @@ export function LegendaMapa({
               ponteiro fino, que é o mínimo da WCAG 2.2 (2.5.8, AA). É o mesmo
               desenho de `LinhaMarcacao`, nos filtros.
             */}
-            <label className="flex min-h-11 flex-1 cursor-pointer items-center gap-2 md:min-h-6">
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 md:min-h-6">
               <input
                 type="checkbox"
                 checked={outrasRedes === 'ligada' || outrasRedes === 'carregando'}

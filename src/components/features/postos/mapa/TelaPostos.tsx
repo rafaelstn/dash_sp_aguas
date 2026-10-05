@@ -59,6 +59,24 @@ type CargaEstacoes =
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 
+/**
+ * Larguras das linhas do esqueleto da lista, par por item (nome e local).
+ *
+ * São fixas e desiguais de propósito: largura aleatória muda a cada render e
+ * faz o esqueleto tremer, e largura igual em todos devolve o paredão de barras
+ * iguais que havia antes.
+ */
+const LARGURAS_DO_ESQUELETO: readonly (readonly [string, string])[] = [
+  ['w-[68%]', 'w-[42%]'],
+  ['w-[82%]', 'w-[55%]'],
+  ['w-[54%]', 'w-[36%]'],
+  ['w-[74%]', 'w-[48%]'],
+  ['w-[62%]', 'w-[30%]'],
+  ['w-[88%]', 'w-[52%]'],
+  ['w-[58%]', 'w-[40%]'],
+  ['w-[78%]', 'w-[34%]'],
+];
+
 function dentro(p: PontoMapaPosto, l: LimitesMapa): boolean {
   return (
     p.lat !== null &&
@@ -464,8 +482,27 @@ export function TelaPostos() {
         </div>
       )}
 
-      <div className="isolate grid gap-3 md:h-[max(34rem,calc(100dvh-15rem))] md:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_28rem]">
-        <div ref={regiaoMapa} className="relative h-[56dvh] min-h-[20rem] overflow-hidden rounded-gov-card shadow-gov-card md:h-full">
+      {/*
+        A reserva de 19rem é a soma MEDIDA do que divide a janela com este
+        grid, em 1440 por 900 no dia 05/10/2026: header 3rem, padding do main
+        1,5rem em cima e embaixo, a barra de busca com os chips e os filtros
+        10rem, e o rodapé 2,5rem, o que dá 18,5rem, mais 0,5rem de folga. Com
+        as 15rem que havia aqui a página transbordava 56 px e a barra de
+        legenda, que nasceu no pé do mapa em 05/10/2026, ficava cortada na
+        primeira tela. NÃO medido: larguras em que os chips de tipo quebram
+        para uma segunda linha, que acrescentam cerca de 2,5rem; nelas o piso
+        de 34rem assume e a página volta a rolar, de propósito.
+      */}
+      <div className="isolate grid gap-3 md:h-[max(34rem,calc(100dvh-19rem))] md:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_28rem]">
+        {/*
+          44dvh no celular, e não 56dvh. São Paulo é mais largo do que alto
+          (perto de 3 por 2), e numa caixa em pé o encaixe é limitado pela
+          largura: medido a 390 px, o estado usava 95% da largura e 47% da
+          altura, com 124 px de cinza vazio em cima e 129 embaixo. A caixa mais
+          baixa tem quase a proporção do estado (59% da altura, 68 px e 83 px de
+          sobra), e o resto vai para a lista, que é o que a pessoa rola em campo.
+        */}
+        <div ref={regiaoMapa} className="relative h-[44dvh] min-h-[18rem] overflow-hidden rounded-gov-card shadow-gov-card md:h-full">
           <MapaPostos
             pontos={derivado?.comCoordenada ?? []}
             outrasRedes={outrasRedes}
@@ -499,7 +536,7 @@ export function TelaPostos() {
           )}
           {carga.situacao === 'carregando' && (
             <div className="pointer-events-none absolute inset-0 z-[900] flex items-center justify-center">
-              <p role="status" className="rounded-md bg-white/95 px-3 py-2 text-sm text-app-fg shadow-gov-card">
+              <p role="status" className="rounded-full border border-app-border-subtle bg-app-surface/95 px-3 py-1.5 text-sm text-app-fg shadow-gov-card">
                 Carregando postos
               </p>
             </div>
@@ -528,36 +565,60 @@ export function TelaPostos() {
           className="min-h-0 overflow-hidden rounded-gov-card bg-app-surface shadow-gov-card md:h-full"
         >
           {carga.situacao === 'carregando' ? (
-            <SkeletonGrupo rotulo="Carregando lista de postos" className="space-y-3 p-4">
-              {Array.from({ length: 8 }, (_, i) => (
-                <div key={i} className="space-y-1.5">
-                  <Skeleton variante="texto" className="w-3/4" />
-                  <Skeleton variante="texto" className="h-3 w-1/3" />
-                </div>
-              ))}
+            /*
+              O esqueleto tem a FORMA do item real: cabeçalho, glifo, linha do
+              prefixo com o nome e a linha de local, com larguras diferentes a
+              cada item. O que havia aqui até 05/10/2026 eram dezesseis barras
+              iguais, que não antecipam nada e deixam a coluna com cara de
+              carregamento genérico; com a forma certa, a lista não salta de
+              desenho quando os dados chegam.
+            */
+            <SkeletonGrupo rotulo="Carregando lista de postos" className="flex h-full flex-col">
+              <div className="flex items-center gap-2 border-b border-app-border-subtle px-4 py-3">
+                <Skeleton variante="texto" className="h-3.5 w-28" />
+                <Skeleton variante="texto" className="h-3.5 w-16" />
+              </div>
+              <div className="divide-y divide-app-border-subtle">
+                {LARGURAS_DO_ESQUELETO.map(([nome, local], i) => (
+                  <div key={i} className="flex items-start gap-3 px-4 py-3">
+                    <Skeleton className="mt-0.5 h-3 w-3 shrink-0 rounded-full" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Skeleton variante="texto" className={`h-3.5 ${nome}`} />
+                      <Skeleton variante="texto" className={`h-3 ${local}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </SkeletonGrupo>
           ) : carga.situacao === 'erro' ? (
             /*
-              Mesma explicação e mesma ação do alerta do mapa. Antes daqui saía
-              só "A lista aparece quando os postos carregarem", que não diz que
-              houve falha nem oferece saída: em tela estreita o painel fica
-              ABAIXO do mapa, então quem rolou até a lista lia uma frase de
-              espera para uma carga que já tinha falhado. Sem `role="alert"` de
-              propósito, porque o do mapa já anuncia a mesma falha e dois
-              alertas simultâneos leem a mesma coisa duas vezes.
+              Duas formas da MESMA falha, porque a posição deste painel muda
+              com a largura. Em tela estreita ele fica ABAIXO do mapa, fora da
+              vista de quem rolou, e antes daqui saía só "A lista aparece
+              quando os postos carregarem", uma frase de espera para uma carga
+              que já tinha falhado: ali vai a explicação inteira com a saída.
+              A partir de md o painel fica AO LADO do mapa, e medido em 1440
+              por 900 no dia 05/10/2026 a mesma frase e o mesmo botão
+              apareciam duas vezes na mesma tela, a 40 px um do outro. Nessa
+              largura fica só a linha curta, e quem age é o botão do mapa. Sem
+              `role="alert"` nos dois casos de propósito, porque o do mapa já
+              anuncia a falha e dois alertas leem a mesma coisa duas vezes.
             */
             <div className="space-y-3 p-4">
-              <p className="text-sm font-medium text-app-fg">Não foi possível carregar os postos</p>
-              <p className="text-sm text-app-fg-muted">{carga.mensagem}</p>
-              {carga.status !== 401 ? (
-                <button type="button" onClick={recarregar} className={classeAcaoSecundaria}>
-                  Tentar de novo
-                </button>
-              ) : (
-                <a href="/login" className={classeAcaoSecundaria}>
-                  Entrar
-                </a>
-              )}
+              <p className="hidden text-sm text-app-fg-muted md:block">A lista não carregou.</p>
+              <div className="space-y-3 md:hidden">
+                <p className="text-sm font-medium text-app-fg">Não foi possível carregar os postos</p>
+                <p className="text-sm text-app-fg-muted">{carga.mensagem}</p>
+                {carga.status !== 401 ? (
+                  <button type="button" onClick={recarregar} className={classeAcaoSecundaria}>
+                    Tentar de novo
+                  </button>
+                ) : (
+                  <a href="/login" className={classeAcaoSecundaria}>
+                    Entrar
+                  </a>
+                )}
+              </div>
             </div>
           ) : estado.posto && aberto ? (
             <DetalhePosto ponto={aberto} comparacao={comparacaoChuva} aoVoltar={fechar} />

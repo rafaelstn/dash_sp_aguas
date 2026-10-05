@@ -39,6 +39,22 @@ const config: Config = {
           'border-strong': 'hsl(var(--border-strong))',
           'border-input': 'hsl(var(--border-input))',
         },
+        /* Fundo desenhado do mapa de postos. O canvas dos símbolos não lê
+           utilitário do Tailwind, e por isso consome os mesmos tokens por
+           `paleta-mapa.ts`, com régua provando que os dois lados concordam. */
+        mapa: {
+          fora: 'hsl(var(--mapa-fora))',
+          divisa: 'hsl(var(--mapa-divisa))',
+          rotulo: 'hsl(var(--mapa-rotulo))',
+          'outras-redes': 'hsl(var(--mapa-outras-redes))',
+        },
+        posto: {
+          plu: 'hsl(var(--posto-plu))',
+          flu: 'hsl(var(--posto-flu))',
+          piezo: 'hsl(var(--posto-piezo))',
+          meteo: 'hsl(var(--posto-meteo))',
+          indefinido: 'hsl(var(--posto-indefinido))',
+        },
       },
       spacing: {
         18: '4.5rem',

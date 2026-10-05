@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './mapa-postos.css';
-import { Crosshair, Minus, Plus } from 'lucide-react';
+import { Crosshair, Layers, Minus, Plus } from 'lucide-react';
 import type { PontoMapaPosto } from '@/domain/mapa-postos';
 import { CamadaCanvasPostos, type PontoDesenho } from './camada-canvas-postos';
 import { GlifoPosto } from './GlifoPosto';
+import { COR } from './paleta-mapa';
 import { ROTULO_SITUACAO, estiloDoTipo } from './simbolos';
 import { AVISO_COORDENADA_SUSPEITA, linhasDeLocal } from './local-posto';
 import type { UgrhiSelecionada } from './estado-url';
@@ -21,10 +22,22 @@ import type { UgrhiSelecionada } from './estado-url';
  * ciclo de render do React a cada movimento do mapa.
  *
  * A geometria do estado e das UGRHIs é estática (`public/geo`, gerada por
- * `scripts/geo/gerar-geometria-postos.mjs`). Nada aqui consulta WFS nem WMS em
- * tempo de execução, e o mapa funciona sem o fundo do OpenStreetMap: se os
- * blocos não chegam (rede do órgão bloqueando), postos e UGRHIs continuam na
- * tela e um aviso diz o que faltou.
+ * `scripts/geo/gerar-geometria-postos.mjs`, das malhas do IBGE e do geoserver
+ * do DAEE). Nada aqui consulta WFS nem WMS em tempo de execução.
+ *
+ * O FUNDO É DESENHADO, e isto mudou em 05/10/2026. Antes, o fundo era o mapa de
+ * ruas do OpenStreetMap lavado em cinza, e ele trazia nome de cidade do Paraná,
+ * de Minas e do Mato Grosso do Sul, rodovia e mancha urbana, tudo na mesma
+ * importância dos postos, que são o assunto da tela; São Paulo ficava no mesmo
+ * cinza do entorno, sem separação de figura e fundo. Agora o estado é uma folha
+ * clara sobre um fundo frio, desenhado da geometria local, e o mapa de ruas é
+ * camada opcional, DESLIGADA por padrão, no botão "Ruas".
+ *
+ * Duas consequências que valem dizer: a tela não depende mais de bloco de tile
+ * para fazer sentido (a rede do órgão bloqueia domínio externo, e o aviso de
+ * fundo indisponível só aparece para quem LIGOU as ruas), e o único texto sobre
+ * o mapa passou a ser o rótulo de UGRHI, que não disputa mais espaço com nome
+ * de cidade de outro estado.
  */
 
 export interface LimitesMapa {
@@ -85,7 +98,6 @@ const AJUSTE_ROTULO: Record<number, [number, number]> = {
   6: [-23.55, -46.55],
 };
 const ZOOM_NOMES = 8.5;
-const COR_FUNDO = '#F4F6F8';
 
 function centroide(anel: number[][]): [number, number] {
   let a = 0;
@@ -111,12 +123,17 @@ function ehCelular(): boolean {
 }
 
 /**
- * Folga base do encaixe do estado inteiro. No celular tem de ser zero: com 6 px
- * o encaixe (zoomSnap 0,25) caía um degrau e São Paulo ocupava 83% da largura,
- * contra 98% sem folga (medido a 390 px).
+ * Folga base do encaixe do estado inteiro.
+ *
+ * A regra de "zero no celular" era remendo do `zoomSnap: 0,25`: com 6 px de
+ * folga o encaixe caía um degrau e São Paulo ocupava 83% da largura, contra
+ * 98% sem folga nenhuma (medido a 390 px). Em 05/10/2026 o degrau saiu
+ * (`zoomSnap: 0`), e com ele o remendo: medido a 1440 px, o estado ia de 82%
+ * para 96% da largura do mapa, com 62 px de sobra vazia de cada lado virando
+ * 13. Agora a folga é só a respiração que se quer, igual nas duas larguras.
  */
 function baseDoEstado(): number {
-  return ehCelular() ? 0 : 20;
+  return ehCelular() ? 8 : 10;
 }
 
 async function lerGeo(nome: string): Promise<Colecao | null> {
@@ -152,6 +169,8 @@ export function MapaPostos({
   const mapaRef = useRef<L.Map | null>(null);
   const camadaRef = useRef<CamadaCanvasPostos | null>(null);
   const ugrhisRef = useRef<L.GeoJSON | null>(null);
+  const ruasRef = useRef(false);
+  const aplicarFundoRef = useRef<() => void>(() => undefined);
   const rotulosRef = useRef<Array<{ codigo: number; nome: string; marcador: L.Marker }>>([]);
   const ugrhiRef = useRef<UgrhiSelecionada>(ugrhi);
   const pontosRef = useRef(new Map<string, PontoMapaPosto>());
@@ -161,6 +180,7 @@ export function MapaPostos({
   retornos.current = { aoSelecionar, aoRealcar, aoMudarLimites, aoPronto };
 
   const [dica, setDica] = useState<Dica | null>(null);
+  const [ruas, setRuas] = useState(false);
   const [fundoIndisponivel, setFundoIndisponivel] = useState(false);
   const [geoIndisponivel, setGeoIndisponivel] = useState(false);
 
@@ -172,7 +192,20 @@ export function MapaPostos({
     const mapa = L.map(el, {
       preferCanvas: true,
       zoomControl: false,
-      zoomSnap: 0.25,
+      /*
+        Encaixe contínuo desde 05/10/2026. Com `zoomSnap: 0,25` o `fitBounds`
+        tinha de arredondar para baixo, e o degrau perdido aparecia como margem
+        vazia: medido a 1440 px, São Paulo ocupava 82% da largura do mapa, com
+        62 px de sobra de cada lado, num mapa em que ele é o assunto. Com 0 o
+        encaixe é exato (96%), e some também o remendo de folga zero no celular.
+
+        O que se paga: ligando a camada de ruas, os blocos do OpenStreetMap
+        passam a ser escalados em zoom fracionário e ficam levemente moles. É
+        aceitável porque as ruas são camada opcional de contexto, e o que tem de
+        estar nítido (contorno, divisas e postos) é desenhado por nós, em
+        coordenada, e não depende de bloco de imagem.
+      */
+      zoomSnap: 0,
       zoomDelta: 0.5,
       minZoom: ZOOM_MINIMO_SP,
       maxZoom: 16,
@@ -185,9 +218,13 @@ export function MapaPostos({
     mapaRef.current = mapa;
     mapa.attributionControl.setPrefix(false);
 
-    mapa.fitBounds(LIMITE_SP, { ...folgaDaLegenda(LIMITE_SP, baseDoEstado()), animate: false });
+    mapa.fitBounds(LIMITE_SP, { ...folgaDaLegenda(baseDoEstado()), animate: false });
 
+    // A folha do estado fica ABAIXO da máscara: a máscara é o mundo menos São
+    // Paulo, então as duas não se sobrepõem, e a ordem só importa para o
+    // momento em que as ruas estão ligadas e a folha fica transparente.
     for (const [nome, z] of [
+      ['terra', 240],
       ['mascara', 250],
       ['ugrhis', 380],
       ['rotulos', 420],
@@ -198,9 +235,20 @@ export function MapaPostos({
       if (nome !== 'ugrhis') pane.style.pointerEvents = 'none';
     }
 
+    mapa.attributionControl.addAttribution('Limites: IBGE e DAEE');
+
     let blocosOk = 0;
     let blocosErro = 0;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    /*
+      Ligar as ruas deixa a folha do estado transparente para a rua aparecer
+      dentro dele. Se os blocos NÃO chegam, que é o caso da rede do órgão, a
+      folha transparente sobre o entorno esmaecido apaga a silhueta de São Paulo
+      e a tela inteira vira um cinza só: ligar uma camada que não carrega
+      pioraria o mapa que já estava bom. Por isso `semBlocos` desfaz a
+      transparência, e o fundo desenhado volta inteiro enquanto a rua não vem.
+    */
+    let semBlocos = false;
+    const ruasDoOsm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       className: 'mapa-postos-fundo',
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -208,12 +256,19 @@ export function MapaPostos({
       .on('tileload', () => {
         blocosOk++;
         setFundoIndisponivel(false);
+        if (semBlocos) {
+          semBlocos = false;
+          aplicarFundo();
+        }
       })
       .on('tileerror', () => {
         blocosErro++;
-        if (blocosErro >= 4 && blocosOk === 0) setFundoIndisponivel(true);
-      })
-      .addTo(mapa);
+        if (blocosErro >= 4 && blocosOk === 0 && !semBlocos) {
+          semBlocos = true;
+          setFundoIndisponivel(true);
+          aplicarFundo();
+        }
+      });
 
     const camada = new CamadaCanvasPostos('postos');
     camada.addTo(mapa);
@@ -274,6 +329,33 @@ export function MapaPostos({
       else if (p) setDica({ x: e.containerPoint.x, y: e.containerPoint.y, ponto: p });
     });
 
+    let terra: L.Polygon | null = null;
+    let mascara: L.Polygon | null = null;
+
+    /**
+     * Liga e desliga o mapa de ruas, e com ele o papel do fundo desenhado.
+     *
+     * Com as ruas DESLIGADAS (o padrão) o estado é uma folha opaca e o entorno é
+     * a cor fria cheia: a silhueta de São Paulo é o único recorte da tela.
+     * LIGADAS, a folha fica transparente para a rua aparecer dentro do estado, e
+     * o entorno continua esmaecido para o olho não sair de São Paulo.
+     */
+    function aplicarFundo() {
+      const pedidas = ruasRef.current;
+      if (pedidas) ruasDoOsm.addTo(mapa);
+      else {
+        ruasDoOsm.remove();
+        semBlocos = false;
+        blocosErro = 0;
+        setFundoIndisponivel(false);
+      }
+      // Só abre a folha quando a rua REALMENTE está desenhada embaixo dela.
+      const comRua = pedidas && !semBlocos;
+      terra?.setStyle({ fillOpacity: comRua ? 0 : 1 });
+      mascara?.setStyle({ fillOpacity: comRua ? 0.82 : 1 });
+    }
+    aplicarFundoRef.current = aplicarFundo;
+
     let desmontado = false;
     void Promise.all([lerGeo('limite-sp.json'), lerGeo('ugrhis-sp.json')]).then(([sp, ugrhis]) => {
       if (desmontado) return;
@@ -284,8 +366,16 @@ export function MapaPostos({
           const externo = poligono[0];
           if (externo) aneis.push(externo.map(([x, y]) => [y as number, x as number]));
         }
-        // Máscara: o mundo menos São Paulo, na cor do fundo. Põe o estado em primeiro plano.
-        L.polygon(
+        // A folha: São Paulo em claro, que é o que faz os símbolos aparecerem.
+        terra = L.polygon(aneis, {
+          pane: 'terra',
+          stroke: false,
+          fillColor: COR.terra,
+          fillOpacity: 1,
+          interactive: false,
+        }).addTo(mapa);
+        // A máscara: o mundo menos São Paulo, na cor fria. Põe o estado em primeiro plano.
+        mascara = L.polygon(
           [
             [
               [-90, -180],
@@ -295,13 +385,14 @@ export function MapaPostos({
             ],
             ...aneis,
           ],
-          { pane: 'mascara', stroke: false, fillColor: COR_FUNDO, fillOpacity: 0.78, interactive: false },
+          { pane: 'mascara', stroke: false, fillColor: COR.fora, fillOpacity: 1, interactive: false },
         ).addTo(mapa);
         L.geoJSON(sp as unknown as GeoJSON.FeatureCollection, {
           pane: 'ugrhis',
           interactive: false,
-          style: { color: '#1E3A8A', weight: 1.5, opacity: 0.8, fill: false },
+          style: { color: COR.contorno, weight: 1.25, opacity: 0.9, fill: false },
         }).addTo(mapa);
+        aplicarFundo();
       }
       if (ugrhis) {
         const camadaUg = L.geoJSON(ugrhis as unknown as GeoJSON.FeatureCollection, {
@@ -331,46 +422,42 @@ export function MapaPostos({
       if (!alvo) return;
       const limite = alvo.getBounds();
       mapa.fitBounds(limite, {
-        ...folgaDaLegenda(limite, ehCelular() ? 10 : 24),
+        ...folgaDaLegenda(ehCelular() ? 10 : 14),
         animate: animar,
       });
     }
 
     /**
-     * Folga do enquadramento. A legenda aberta ocupa o canto inferior esquerdo
-     * e, medido no filtro PR a 1280 px, escondia a ponta oeste do estado. A
-     * folga desvia dela pela lateral OU por baixo, o que deixar o zoom maior;
-     * no celular a legenda nasce recolhida, então lá vale só a base.
+     * Folga do enquadramento, descontando a barra da legenda.
      *
-     * A `base` vem de quem chama porque cada enquadramento tem a sua, medida:
-     * o estado no celular pede 0, porque com 6 px o encaixe (zoomSnap 0,25)
-     * caía um degrau e ele passava de 98% para 83% da largura (a 390 px). Os
-     * três enquadramentos passam por aqui de propósito: quando só o dos pontos
-     * desviava da legenda, escolher uma UGRHI do oeste ou voltar para o estado
-     * inteiro punha a ponta do recorte atrás dela.
+     * Até 05/10/2026 a legenda era caixa flutuante no canto inferior esquerdo, e
+     * esta função tinha de escolher entre desviar dela pela lateral ou por
+     * baixo, comparando dois `getBoundsZoom`. A caixa escondia a ponta oeste do
+     * estado (medido no filtro PR a 1280 px) e, de quebra, obrigava a sobrar
+     * margem dos dois lados do mapa.
+     *
+     * Virando barra de largura inteira no pé do mapa, sobrou só a conta de
+     * baixo, e o estado passou a poder usar a largura toda. A altura é LIDA do
+     * elemento, e não fixada aqui, porque a legenda recolhe no celular e por
+     * escolha de quem usa: número copiado envelheceria na primeira mudança.
+     *
+     * A `base` vem de quem chama porque cada enquadramento tem a sua: o estado
+     * inteiro pede a menor, que é a de `baseDoEstado`, e um punhado de postos
+     * pede mais ar em volta.
      */
-    function folgaDaLegenda(
-      alvo: L.LatLngBounds,
-      base = ehCelular() ? 16 : 32,
-    ): L.FitBoundsOptions {
+    function folgaDaLegenda(base = ehCelular() ? 12 : 16): L.FitBoundsOptions {
       const legenda = mapa
         .getContainer()
         .parentElement?.parentElement?.querySelector<HTMLElement>('section[aria-label="Legenda do mapa"]');
-      if (ehCelular() || !legenda) return { padding: [base, base] };
-      const largura = legenda.offsetWidth + 12;
-      const altura = legenda.offsetHeight + 12;
-      const pelaLateral = mapa.getBoundsZoom(alvo, false, L.point(base * 2 + largura, base * 2));
-      const porBaixo = mapa.getBoundsZoom(alvo, false, L.point(base * 2, base * 2 + altura));
-      return pelaLateral > porBaixo
-        ? { paddingTopLeft: [base + largura, base], paddingBottomRight: [base, base] }
-        : { paddingTopLeft: [base, base], paddingBottomRight: [base, base + altura] };
+      const altura = legenda?.offsetHeight ?? 0;
+      return { paddingTopLeft: [base, base], paddingBottomRight: [base, base + altura] };
     }
 
     function enquadrarEstado() {
       mapa.setMinZoom(ZOOM_MINIMO_SP);
       mapa.setMaxBounds(ARRASTO_SP);
       mapa.fitBounds(LIMITE_SP, {
-        ...folgaDaLegenda(LIMITE_SP, baseDoEstado()),
+        ...folgaDaLegenda(baseDoEstado()),
         animate: !preferenciaSemMovimento(),
       });
     }
@@ -396,7 +483,7 @@ export function MapaPostos({
           mapa.setMaxBounds(mapa.getBounds().pad(0.25).extend(alvo.pad(0.5)).extend(ARRASTO_SP));
         });
         mapa.fitBounds(alvo, {
-          ...folgaDaLegenda(alvo),
+          ...folgaDaLegenda(),
           maxZoom: 11,
           animate: !preferenciaSemMovimento(),
         });
@@ -473,6 +560,11 @@ export function MapaPostos({
   }, [realce]);
 
   useEffect(() => {
+    ruasRef.current = ruas;
+    aplicarFundoRef.current();
+  }, [ruas]);
+
+  useEffect(() => {
     ugrhiRef.current = ugrhi;
     const camadaUg = ugrhisRef.current;
     camadaUg?.setStyle((f) => estiloUgrhi((f?.properties as { codigo: number }).codigo, ugrhi));
@@ -482,7 +574,7 @@ export function MapaPostos({
   const detalhe = dica ? pontosRef.current.get(dica.ponto.prefixo) : undefined;
 
   return (
-    <div className="relative isolate h-full w-full overflow-hidden bg-[#F4F6F8]">
+    <div className="relative isolate h-full w-full overflow-hidden bg-mapa-fora">
       <div
         ref={elemento}
         className="mapa-postos h-full w-full"
@@ -490,33 +582,42 @@ export function MapaPostos({
         aria-label="Mapa dos postos. A lista ao lado tem os mesmos postos, navegável por teclado."
       />
 
-      <div className="absolute right-3 top-3 z-[800] grid gap-2">
-        <div className="grid overflow-hidden rounded-md bg-white/95 shadow-gov-card">
-          <BotaoMapa rotulo="Aproximar" aoClicar={() => mapaRef.current?.zoomIn()}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </BotaoMapa>
-          <BotaoMapa rotulo="Afastar" aoClicar={() => mapaRef.current?.zoomOut()} separado>
-            <Minus className="h-4 w-4" aria-hidden="true" />
-          </BotaoMapa>
-        </div>
-        <div className="grid overflow-hidden rounded-md bg-white/95 shadow-gov-card">
-          <BotaoMapa
-            rotulo={rotuloEnquadrar}
-            aoClicar={aoEnquadrar}
-          >
-            <Crosshair className="h-4 w-4" aria-hidden="true" />
-          </BotaoMapa>
-        </div>
+      {/*
+        UM cartão, e não quatro caixas flutuantes de mesmo peso sobre o mapa.
+        Eram quatro (zoom, enquadrar, legenda, aviso), todas brancas, todas com
+        a mesma sombra: nenhuma era mais importante que a outra e o mapa ficava
+        coberto de retângulo. Aqui as ferramentas do mapa ficam juntas, na mesma
+        coluna, separadas por fio; a legenda virou a barra de baixo e o aviso é
+        status, com desenho de aviso.
+      */}
+      <div className="absolute right-3 top-3 z-[800] grid overflow-hidden rounded-md border border-app-border-subtle bg-app-surface/95 shadow-gov-card backdrop-blur-sm">
+        <BotaoMapa rotulo="Aproximar" aoClicar={() => mapaRef.current?.zoomIn()}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        </BotaoMapa>
+        <BotaoMapa rotulo="Afastar" aoClicar={() => mapaRef.current?.zoomOut()} separado>
+          <Minus className="h-4 w-4" aria-hidden="true" />
+        </BotaoMapa>
+        <BotaoMapa rotulo={rotuloEnquadrar} aoClicar={aoEnquadrar} separado>
+          <Crosshair className="h-4 w-4" aria-hidden="true" />
+        </BotaoMapa>
+        <BotaoMapa
+          rotulo={ruas ? 'Ocultar ruas e cidades' : 'Mostrar ruas e cidades'}
+          aoClicar={() => setRuas((r) => !r)}
+          pressionado={ruas}
+          separado
+        >
+          <Layers className="h-4 w-4" aria-hidden="true" />
+        </BotaoMapa>
       </div>
 
       {(fundoIndisponivel || geoIndisponivel) && (
         <p
           role="status"
-          className="absolute left-1/2 top-3 z-[800] max-w-[calc(100%-7rem)] -translate-x-1/2 rounded-md bg-white/95 px-3 py-1.5 text-center text-xs text-app-fg-muted shadow-gov-card"
+          className="absolute left-1/2 top-3 z-[800] max-w-[calc(100%-7rem)] -translate-x-1/2 rounded-full border border-app-border-subtle bg-app-surface/95 px-3 py-1 text-center text-xs text-app-fg-muted shadow-gov-card backdrop-blur-sm"
         >
-          {fundoIndisponivel && !geoIndisponivel && 'Fundo do mapa indisponível. Postos e UGRHIs seguem visíveis.'}
+          {fundoIndisponivel && !geoIndisponivel && 'Ruas indisponíveis nesta rede.'}
           {geoIndisponivel && !fundoIndisponivel && 'Contorno das UGRHIs indisponível. Os postos seguem visíveis.'}
-          {fundoIndisponivel && geoIndisponivel && 'Fundo e contornos do mapa indisponíveis. Os postos seguem visíveis.'}
+          {fundoIndisponivel && geoIndisponivel && 'Ruas e contornos indisponíveis nesta rede.'}
         </p>
       )}
 
@@ -529,16 +630,34 @@ function codigoDaFeicao(camada: L.Layer): number | undefined {
   return ((camada as L.Polygon).feature?.properties as { codigo?: number } | undefined)?.codigo;
 }
 
+/**
+ * Divisa de UGRHI: fio fino sobre a folha clara.
+ *
+ * O token `--mapa-divisa` já tem 3:1 sobre a folha (WCAG 1.4.11), então a linha
+ * não precisa de opacidade alta para ser lida, e é por isso que ela pode ser
+ * fina: divisa grossa some com o posto, que é o assunto. Com uma UGRHI
+ * escolhida, ela ganha o azul da marca e um preenchimento claro (responde "qual
+ * recorte eu estou vendo"), e as outras recuam.
+ */
 function estiloUgrhi(codigo: number, selecionada: UgrhiSelecionada): L.PathOptions {
-  if (selecionada === codigo) return { color: '#1E40AF', weight: 2.25, opacity: 0.95, fill: false };
+  if (selecionada === codigo) {
+    return {
+      color: COR.selecao,
+      weight: 2,
+      opacity: 1,
+      fill: true,
+      fillColor: COR.selecaoFundo,
+      fillOpacity: 0.55,
+    };
+  }
   const haSelecao = typeof selecionada === 'number';
   return {
-    color: '#1E3A8A',
-    weight: 0.9,
-    opacity: haSelecao ? 0.28 : 0.4,
+    color: COR.divisa,
+    weight: 0.8,
+    opacity: haSelecao ? 0.5 : 1,
     fill: haSelecao,
-    fillColor: COR_FUNDO,
-    fillOpacity: 0.55,
+    fillColor: COR.fora,
+    fillOpacity: 0.45,
   };
 }
 
@@ -546,22 +665,27 @@ function BotaoMapa({
   rotulo,
   aoClicar,
   separado = false,
+  pressionado,
   children,
 }: {
   rotulo: string;
   aoClicar: () => void;
   separado?: boolean;
+  /** Só para o botão que liga e desliga camada: vira `aria-pressed`. */
+  pressionado?: boolean;
   children: React.ReactNode;
 }) {
+  const ligado = pressionado === true;
   return (
     <button
       type="button"
       onClick={aoClicar}
       aria-label={rotulo}
+      aria-pressed={pressionado}
       title={rotulo}
-      className={`grid h-9 w-9 place-items-center text-app-fg-muted transition-colors duration-150 ease-gov-ease hover:bg-app-surface-2 hover:text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul ${
-        separado ? 'border-t border-app-border-subtle' : ''
-      }`}
+      className={`grid h-9 w-9 place-items-center transition-colors duration-150 ease-gov-ease hover:bg-app-surface-2 hover:text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul ${
+        ligado ? 'bg-gov-azul-claro text-gov-azul' : 'text-app-fg-muted'
+      } ${separado ? 'border-t border-app-border-subtle' : ''}`}
     >
       {children}
     </button>
@@ -585,7 +709,7 @@ function DicaPosto({
   return (
     <div
       aria-hidden="true"
-      className={`pointer-events-none absolute z-[850] w-max max-w-[260px] rounded-md bg-white px-3 py-2 text-xs shadow-gov-card-hover ${transformar}`}
+      className={`pointer-events-none absolute z-[850] w-max max-w-[260px] rounded-md bg-app-surface px-3 py-2 text-xs shadow-gov-card-hover ${transformar}`}
       style={{ left: Math.max(8, esquerda), top: topo }}
     >
       {d.externo ? (

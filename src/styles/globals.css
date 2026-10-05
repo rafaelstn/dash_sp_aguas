@@ -90,6 +90,35 @@
     --sibh-legenda-alerta: 38.8 100% 50%;      /* laranja #ffa500 */
     --sibh-legenda-extravasamento: 0 100% 50%; /* vermelho #ff0000 */
 
+    /* ── Mapa de postos ────────────────────────────────────────────────
+       O fundo do mapa é DESENHADO a partir da geometria local (estado e
+       UGRHIs em public/geo), e não herdado de um mapa de ruas lavado em
+       cinza, que era o que havia até 05/10/2026: nomes de cidade de três
+       outros estados, rodovia e manchas urbanas competindo com os postos,
+       que são o assunto da tela. O estado é a folha clara (--bg-surface,
+       branco) e o resto do mundo é a cor fria abaixo, então a silhueta de
+       São Paulo se separa do entorno sem depender de bloco de tile.
+
+       Os ratios citados são sobre branco, que é a cor da folha: é o pior
+       caso para o traço escuro e o número que sustenta a conformidade.
+       O consumidor no canvas é paleta-mapa.ts, e a régua
+       tests/unit/componentes/paleta-do-mapa.test.ts prova que os dois lados
+       dizem a mesma cor. */
+    --mapa-fora: 213.8 29.6% 89.4%;  /* #DCE3EC, fora do estado, fundo frio */
+    --mapa-divisa: 213.9 22.5% 60%;  /* #8296B0, divisa de UGRHI, 3:1 (WCAG 1.4.11) */
+    --mapa-rotulo: 217.2 31.5% 36.1%; /* #3F5579, rótulo de UGRHI no mapa, 7.5:1 */
+
+    /* Cor por tipo de posto. Mesmos valores de antes da reforma visual: eles
+       já tinham contraste bom e cada tipo tem também uma FORMA própria
+       (círculo, quadrado, triângulo, losango), porque cor nunca é a única
+       pista (WCAG 1.4.1). O que mudou é que agora saem de token. */
+    --posto-plu: 211.6 63.9% 40.2%;  /* #2563A8, pluviométrico, 6.1:1 */
+    --posto-flu: 164.5 81.6% 29.8%;  /* #0E8A6A, fluviométrico, 4.3:1 */
+    --posto-piezo: 17.5 88.3% 40.4%; /* #C2410C, piezométrico, 5.2:1 */
+    --posto-meteo: 215 14% 34%;      /* #4B5563, meteorológico, 7.6:1 */
+    --posto-indefinido: 220 8.9% 46.1%; /* #6B7280, tipo não reconhecido, 4.8:1 */
+    --mapa-outras-redes: 220 8.9% 46.1%; /* #6B7280, camada SIBH, 4.8:1 */
+
     /* Focus ring */
     --ring: var(--gov-azul);
 

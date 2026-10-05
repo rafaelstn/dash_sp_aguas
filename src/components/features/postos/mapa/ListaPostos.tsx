@@ -85,11 +85,19 @@ export function ListaPostos({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-baseline gap-2 border-b border-app-border-subtle px-4 py-3">
-        <h2 className="text-sm font-semibold text-app-fg">
+      {/*
+        A contagem é o dado, e o título é o rótulo dela: invertidos os pesos
+        (rótulo pequeno em caixa alta, número em destaque), a coluna passa a ter
+        um ponto de entrada para o olho. Antes os dois tinham o mesmo tamanho e
+        o cabeçalho competia com o primeiro item da lista.
+        Ele já não rola com a lista: o cabeçalho está FORA do contêiner de
+        rolagem, e é o flex que o mantém no topo.
+      */}
+      <div className="flex items-baseline gap-2 border-b border-app-border-subtle px-4 py-2.5">
+        <h2 className="text-2xs font-semibold uppercase tracking-wide text-app-fg-subtle">
           {verSemCoordenada ? 'Sem coordenada válida' : 'Na área do mapa'}
         </h2>
-        <p className="text-sm tabular-nums text-app-fg-muted" aria-live="polite">
+        <p className="text-sm font-medium tabular-nums text-app-fg" aria-live="polite">
           {fmt(exibidos.length)} {exibidos.length === 1 ? 'posto' : 'postos'}
         </p>
       </div>
@@ -181,8 +189,10 @@ function ItemPosto({
       onMouseEnter={() => aoRealcar(ponto.prefixo)}
       onFocus={() => aoRealcar(ponto.prefixo)}
       onBlur={() => aoRealcar(null)}
-      className={`flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors duration-150 ease-gov-ease hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul ${
-        atual ? 'bg-gov-azul-claro/60' : ''
+      className={`relative flex w-full items-start gap-3 py-2.5 pl-4 pr-3 text-left transition-colors duration-150 ease-gov-ease hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gov-azul ${
+        atual
+          ? 'bg-gov-azul-claro/50 before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-gov-azul before:content-[""]'
+          : ''
       }`}
     >
       <span className="mt-1">
@@ -193,11 +203,22 @@ function ItemPosto({
           <span className="font-semibold tabular-nums">{ponto.prefixo}</span>{' '}
           {ponto.nome ?? <span className="text-app-fg-subtle">Sem nome</span>}
         </span>
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-app-fg-muted">
+        {/*
+          O ponto medial entre as linhas de local é separador, e por isso é
+          `aria-hidden`: lido em voz alta, ele viraria "ponto" no meio do
+          endereço. Para quem vê, é o que impede municipio e bacia de se
+          emendarem num texto só quando os dois cabem na mesma linha.
+        */}
+        <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-app-fg-muted">
           <span className="sr-only">{estiloDoTipo(ponto.tipo).nome}, </span>
-          {linhasDeLocal(ponto).map((linha) => (
-            <span key={linha} className="min-w-0 truncate">
-              {linha}
+          {linhasDeLocal(ponto).map((linha, i) => (
+            <span key={linha} className="flex min-w-0 items-center gap-1.5">
+              {i > 0 && (
+                <span aria-hidden="true" className="text-app-fg-subtle">
+                  &middot;
+                </span>
+              )}
+              <span className="min-w-0 truncate">{linha}</span>
             </span>
           ))}
           {extinto && <Etiqueta>Extinto</Etiqueta>}

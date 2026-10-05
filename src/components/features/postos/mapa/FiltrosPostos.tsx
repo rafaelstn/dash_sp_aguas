@@ -74,7 +74,39 @@ const classeChip = (ativo: boolean) =>
   }`;
 
 const classeSelect =
-  'h-8 rounded-md border border-app-border-input bg-app-surface pl-2.5 pr-8 text-sm text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gov-azul';
+  'h-8 appearance-none rounded-md border border-app-border-input bg-app-surface pl-2.5 pr-8 text-sm text-app-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gov-azul';
+
+/**
+ * Lista suspensa nativa com a seta do conjunto de ícones do projeto.
+ *
+ * O controle CONTINUA sendo `<select>` nativo, e isso é decisão, não sobra: num
+ * painel de órgão público ele é o que já funciona com leitor de tela, com
+ * teclado, com a roda do mouse e com o seletor do sistema no celular, e uma
+ * caixa de listagem própria (`role="listbox"`) seria código novo de teclado e
+ * de foco para ganhar só aparência. O que tinha cara de protótipo era a seta
+ * DO SISTEMA OPERACIONAL, cinza e de outra família, ao lado dos chips e do
+ * botão de Transmissão, que já usam o chevron do lucide. Com `appearance-none`
+ * a seta passa a ser a mesma dos outros controles da barra, e nada do
+ * comportamento nativo se perde.
+ *
+ * A seta não recebe evento (`pointer-events-none`): o clique nela precisa
+ * chegar ao `select` por baixo, senão o canto direito do campo fica morto.
+ */
+function CampoSelect({
+  envoltorio = '',
+  className = '',
+  ...resto
+}: React.ComponentPropsWithoutRef<'select'> & { readonly envoltorio?: string }) {
+  return (
+    <div className={`relative inline-flex items-center ${envoltorio}`}>
+      <select {...resto} className={`${classeSelect} ${className}`} />
+      <ChevronDown
+        className="pointer-events-none absolute right-2 h-4 w-4 text-app-fg-muted"
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
 
 /**
  * Opções de UGRHI com a contagem cruzada.
@@ -223,8 +255,8 @@ export function GlifoSituacao({ extinto }: { extinto: boolean }) {
         cx="6"
         cy="6"
         r="4.3"
-        fill={extinto ? '#FFFFFF' : '#4B5563'}
-        stroke="#4B5563"
+        fill={extinto ? 'hsl(var(--bg-surface))' : 'hsl(var(--fg-muted))'}
+        stroke="hsl(var(--fg-muted))"
         strokeWidth={extinto ? 1.8 : 0}
       />
     </svg>
@@ -374,37 +406,37 @@ export function FiltrosDesktop({ estado, facetas, aoMudar, aoLimpar }: FiltrosPo
         <label htmlFor={idVazao} className="text-sm text-app-fg-muted">
           Vazão
         </label>
-        <select
+        <CampoSelect
           id={idVazao}
           value={estado.vazao ?? ''}
           onChange={(e) => aoMudar({ vazao: (e.target.value || null) as OpcaoVazao | null })}
-          className={`${classeSelect} ${estado.vazao ? 'border-gov-azul text-gov-azul-escuro' : ''}`}
+          className={estado.vazao ? 'border-gov-azul text-gov-azul-escuro' : ''}
         >
           <OpcoesVazao facetas={facetas} vazio="Sem filtro" />
-        </select>
+        </CampoSelect>
         <MenuTransmissao estado={estado} facetas={facetas} aoMudar={aoMudar} />
         <label htmlFor={idUf} className="sr-only">
           UF
         </label>
-        <select
+        <CampoSelect
           id={idUf}
           value={valorUf(estado.uf)}
           onChange={(e) => aoMudar({ uf: lerUfOpcao(e.target.value) })}
-          className={`${classeSelect} ${estado.uf !== UF_DO_ESTADO ? 'border-gov-azul text-gov-azul-escuro' : ''}`}
+          className={estado.uf !== UF_DO_ESTADO ? 'border-gov-azul text-gov-azul-escuro' : ''}
         >
           <OpcoesUf facetas={facetas} estado={estado} />
-        </select>
+        </CampoSelect>
         <label htmlFor={idUgrhi} className="sr-only">
           UGRHI
         </label>
-        <select
+        <CampoSelect
           id={idUgrhi}
           value={valorUgrhi(estado.ugrhi)}
           onChange={(e) => aoMudar({ ugrhi: lerUgrhi(e.target.value) })}
-          className={`${classeSelect} max-w-[20rem] ${estado.ugrhi !== null ? 'border-gov-azul text-gov-azul-escuro' : ''}`}
+          className={`max-w-[20rem] ${estado.ugrhi !== null ? 'border-gov-azul text-gov-azul-escuro' : ''}`}
         >
           <OpcoesUgrhi facetas={facetas} estado={estado} />
-        </select>
+        </CampoSelect>
         {ativos > 0 && (
           <button
             type="button"
@@ -556,27 +588,29 @@ export function FiltrosCelular({ estado, facetas, totalFiltrado, aoMudar, aoLimp
               <label htmlFor={idUf} className="block text-sm font-semibold text-app-fg">
                 UF
               </label>
-              <select
+              <CampoSelect
                 id={idUf}
                 value={valorUf(estado.uf)}
                 onChange={(e) => aoMudar({ uf: lerUfOpcao(e.target.value) })}
-                className={`${classeSelect} h-11 w-full`}
+                envoltorio="w-full"
+                className="h-11 w-full"
               >
                 <OpcoesUf facetas={facetas} estado={estado} />
-              </select>
+              </CampoSelect>
             </div>
             <div className="space-y-2">
               <label htmlFor={idUgrhi} className="block text-sm font-semibold text-app-fg">
                 UGRHI
               </label>
-              <select
+              <CampoSelect
                 id={idUgrhi}
                 value={valorUgrhi(estado.ugrhi)}
                 onChange={(e) => aoMudar({ ugrhi: lerUgrhi(e.target.value) })}
-                className={`${classeSelect} h-11 w-full`}
+                envoltorio="w-full"
+                className="h-11 w-full"
               >
                 <OpcoesUgrhi facetas={facetas} estado={estado} />
-              </select>
+              </CampoSelect>
             </div>
           </div>
 

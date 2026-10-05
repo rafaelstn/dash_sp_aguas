@@ -1,5 +1,6 @@
 import L from 'leaflet';
 import type { TipoPostoMapa } from '@/domain/mapa-postos';
+import { COR, comAlfa } from './paleta-mapa';
 import {
   COR_OUTRAS_REDES,
   desenharSimbolo,
@@ -189,16 +190,25 @@ export class CamadaCanvasPostos extends L.Layer {
       const selecionado = prefixo === this.selecionado;
       const estilo = estiloDoTipo(t.ponto.tipo);
       if (selecionado) {
+        // Disco suave mais anel nítido: sobre o fundo claro desenhado, só o
+        // disco translúcido virava uma mancha sem borda, e era a única pista de
+        // "este é o posto aberto no painel ao lado".
+        const alcance = r * 1.85 + 9;
         ctx.beginPath();
-        ctx.arc(t.x, t.y, r * 1.85 + 9, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(30,64,175,0.16)';
+        ctx.arc(t.x, t.y, alcance, 0, Math.PI * 2);
+        ctx.fillStyle = comAlfa(COR.selecao, 0.12);
         ctx.fill();
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, alcance, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = comAlfa(COR.selecao, 0.5);
+        ctx.stroke();
       }
       tracarForma(ctx, estilo.forma, t.x, t.y, r + 3.2);
-      ctx.fillStyle = '#FFFFFF';
+      ctx.fillStyle = COR.terra;
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = selecionado ? '#1E3A8A' : '#111827';
+      ctx.strokeStyle = selecionado ? COR.contorno : COR.realce;
       ctx.stroke();
       if (t.ponto.externo) {
         ctx.beginPath();

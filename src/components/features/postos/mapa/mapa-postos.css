@@ -1,38 +1,83 @@
 /* Tela Postos: o que o Leaflet cria fora do React e o Tailwind não alcança. */
 
-/* Fundo em cinza e atenuado: o mapa de rua é contexto, os postos são o assunto. */
+/*
+  O mapa de ruas é CAMADA OPCIONAL, desligada por padrão (botão "Ruas"): o fundo
+  de verdade é desenhado da geometria local. Quando alguém liga as ruas, elas
+  entram esmaecidas, porque continuam sendo contexto e não o assunto.
+
+  O que havia aqui até 05/10/2026 era `grayscale(1) contrast(0.82)` com opacity
+  0.62 sobre o mapa SEMPRE ligado: cinza sobre cinza, nome de cidade de três
+  outros estados e rodovia competindo com os postos, e São Paulo no mesmo tom do
+  entorno. A dessaturação parcial de hoje é mais honesta: quem liga as ruas quer
+  ver rua, e o que separa São Paulo do resto é a máscara desenhada, não um filtro.
+*/
 .mapa-postos .mapa-postos-fundo {
-  filter: grayscale(1) contrast(0.82) brightness(1.06);
-  opacity: 0.62;
+  filter: saturate(0.45) contrast(0.95) brightness(1.03);
+  opacity: 0.85;
 }
 
 .mapa-postos.leaflet-container {
-  background: #f4f6f8;
+  background: hsl(var(--mapa-fora));
   font: inherit;
 }
 
+/*
+  O crédito sai do canto inferior direito, que é onde o Leaflet o põe: desde
+  05/10/2026 o pé do mapa é a barra da legenda, que o cobriria. Vai para o canto
+  superior esquerdo, onde não há controle nenhum (o cartão de controles fica à
+  direita e a lista de postos é fora do mapa), como pílula discreta.
+*/
+.mapa-postos .leaflet-bottom.leaflet-right {
+  bottom: auto;
+  right: auto;
+  top: 0;
+  left: 0;
+}
+
 .mapa-postos .leaflet-control-attribution {
+  margin: 8px 0 0 8px;
+  padding: 1px 6px;
+  border-radius: 9999px;
   font-size: 10.5px;
-  background: rgba(255, 255, 255, 0.75);
+  color: hsl(var(--fg-subtle));
+  background: hsl(var(--bg-surface) / 0.78);
+}
+
+.mapa-postos .leaflet-control-attribution a {
+  color: hsl(var(--fg-muted));
 }
 
 .mapa-postos-rotulo {
   pointer-events: none;
 }
 
+/*
+  Rótulo de UGRHI. Virou o ÚNICO texto sobre o mapa quando as ruas saíram do
+  padrão, e por isso pode ser legível de verdade: cor própria (--mapa-rotulo,
+  7.5:1 sobre a folha clara) em vez de azul da marca a 62% de opacidade, que era
+  texto desbotado em cima de nome de cidade do OpenStreetMap.
+
+  O halo branco fica: ele é o que mantém o número legível quando cai sobre uma
+  UGRHI preenchida, sobre um aglomerado de postos ou sobre a rua ligada.
+*/
 .mapa-postos-rotulo span {
   display: inline-block;
   transform: translate(-50%, -50%);
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: rgba(30, 58, 138, 0.62);
-  text-shadow: 0 0 2px #fff, 0 0 3px #fff, 0 0 4px #fff;
+  letter-spacing: 0.01em;
+  color: hsl(var(--mapa-rotulo));
+  text-shadow:
+    0 0 2px hsl(var(--bg-surface)),
+    0 0 3px hsl(var(--bg-surface)),
+    0 0 5px hsl(var(--bg-surface));
   font-variant-numeric: tabular-nums;
 }
 
 .mapa-postos-rotulo span[data-nome='sim'] {
-  font-size: 11.5px;
-  font-weight: 550;
-  color: rgba(30, 58, 138, 0.7);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
