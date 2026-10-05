@@ -641,6 +641,17 @@ docker inspect spaguas-dmo-db spaguas-dmo-app --format '{{.Name}} {{.HostConfig.
 
 # h. Pela borda, já com o Nginx configurado.
 curl -sSI https://dmo.spaguas.sp.gov.br/ | head -20
+#    200 aqui NÃO é aceite. Corrigido em 05/10/2026: a versão `sha-9f7dda4`
+#    respondeu 200 em todas as rotas por onze dias servindo HTML que o navegador
+#    não executa, porque a página sai prerenderizada do build sem o nonce e o
+#    'strict-dynamic' da CSP desabilita o 'self'. O cabeçalho mede o transporte;
+#    quem mede o produto é a régua abaixo, e o aceite é ela sair 0.
+
+# h2. ACEITE DA SUBIDA. Roda na bancada, contra a borda, e cobre as 22 rotas que
+#     ela mesma descobre no código (nunca uma lista fixa, que envelhece):
+node scripts/verificar-csp-nonce.mjs https://dmo.spaguas.sp.gov.br
+echo "codigo: $?"   # espera: 0. Qualquer tag de script sem nonce reprova e a
+                    #          saída nomeia a rota e a contagem.
 
 # i. A 0073 é idempotente em produção: reaplicada sozinha, não mexe no índice.
 #    A comparação dela é por pg_get_indexdef contra um literal; se o texto do
@@ -665,7 +676,10 @@ Q "select oid from pg_class where relname='uq_estoque_unidades_codigo'"
 - **e.** `{"status":"ok","db":"ok"}`.
 - **f.** Valores idênticos aos comentários acima.
 - **g.** `json-file` com 10m x 5 nos dois.
-- **h.** 200.
+- **h.** 200. **E 200 não queria dizer que estava no ar:** medido em 05/10/2026,
+  essa mesma versão servia `/`, `/app`, `/app/perfil`, `/app/minhas-fichas` e
+  `/app/postos` sem executar JavaScript. O item h2 nasceu desta medição, e
+  nenhuma subida anterior a ela foi aprovada por renderização.
 - **i.** Código 0, "nada a fazer", OID 25323 antes e depois.
 
 ---
