@@ -33,6 +33,11 @@ código.
 
 ## 1. O que está no ar
 
+A versão no ar não está escrita aqui de propósito: ela envelhece em um dia. Quem
+responde é `docs/runbooks/registro-de-entregas.md`, que tem a entrada de cada
+subida com data, tag, conferências e aceite, e no servidor a linha
+`IMAGEM_TAG=` do `/opt/spaguas-dmo/.env`.
+
 O sistema roda no servidor da PRODESP em `https://dmo.spaguas.sp.gov.br`, em
 container, sem exigência de login (ADR-0024, janela sem identidade), com a
 estrutura de autenticação preservada e desligada por chave, esperando as APIs de
@@ -725,7 +730,17 @@ de medição, não de suposição.
 
 ## 5. Aviso de processo
 
-O projeto **não tem cartão no quadro de acompanhamento** (conferidos os 49 em
-04/09/2026: 30 com etapas, 19 resquícios do formato antigo, nenhum do SP Águas).
-Enquanto ele não existir, o cliente não tem o que ler em `/acompanhar`, e o
-progresso registrado é apenas este documento.
+**Resolvido por decisão do Rafael em 05/10/2026, e deixa de ser pendência.** Este
+projeto é **exceção às duas superfícies de acompanhamento**: não leva página
+`acompanhar.<domínio>` nem cartão no quadro de projetos ("esse não precisa de
+nada no Lynx"). O canal com o órgão é o relatório formal e o item **IN-05** do
+relatório de pendências, não página web.
+
+A prova de entrega destes projetos é `docs/runbooks/registro-de-entregas.md`, que
+existe exatamente por causa do IN-05, mais este documento de estado. Não criar
+cartão nem página, e não contar a ausência dos dois como pendência.
+
+Até esta data o aviso dizia o contrário: "enquanto o cartão não existir, o
+cliente não tem o que ler em `/acompanhar`". Isso vinha da conferência dos 49
+cartões em 04/09/2026 (30 com etapas, 19 resquícios, nenhum do SP Águas), e
+mandava a próxima sessão cobrar algo que o dono já havia decidido não querer.
