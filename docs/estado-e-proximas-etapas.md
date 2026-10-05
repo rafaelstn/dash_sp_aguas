@@ -668,6 +668,18 @@ regular.
     que ela recusa é o `-D <diretorio>`, que não está na gramática. O destino de
     arquivo em `F:\Projetos\Clientes\GOV\_entregas\imagens-docker` continua
     sendo onde os pacotes anteriores vivem.
+    **`actions/upload-artifact@v4` avisa Node 20 obsoleto, e eu NÃO subi a
+    versão** (medido em 05/10/2026). É a única action atrasada dos dois
+    workflows. Duas razões para não mexer agora: a leitura das releases veio
+    inconsistente (uma mesma página afirma `v7.0.1` em 10 de abril, Node 24
+    desde a `v6.0.0` e lista uma `v5.0.0` em 24 de outubro sem ano), e fixar
+    versão sem poder listar é sorteio; e provar a troca exige disparar uma
+    entrega de verdade, que publica 226 MiB de artifact e gasta 3 min de runner,
+    porque este workflow não roda em push. Quando for mexer: subir a action e
+    disparar uma tag `entrega-*` de prova no mesmo trabalho, conferindo que o
+    artifact publicado continua se chamando `pacote-entrega-offline-<tag>` e que
+    o `sha256` do pacote bate. O aviso não quebra nada hoje; quebra quando o
+    GitHub remover o runtime Node 20.
 15. **`NEXT_PUBLIC_APP_URL` não tem consumidor nenhum no código, e a
     documentação afirma o contrário.** Medido em 23/09/2026: a variável aparece
     uma única vez em `src/`, na definição do schema em
