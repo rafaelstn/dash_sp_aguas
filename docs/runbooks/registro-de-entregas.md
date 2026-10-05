@@ -17,12 +17,68 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
-## 05/10/2026, achado: a versão no ar está quebrada, e nenhuma entrega subiu
+## 05/10/2026, `sha-4b93252`
 
-**Não houve subida nesta data**, e esta seção existe porque a pergunta "o que
-mudou e quando" tem hoje uma resposta que não é uma entrega.
+| Campo | Valor |
+|---|---|
+| Versão que entrou | `sha-4b93252` (branch `chore/preparar-container-prodesp-offline`) |
+| Versão anterior | `sha-9f7dda4`, no ar desde 24/09 |
+| Autorizado por | Rafael Damasceno, nesta data ("pode fazer o deploy do que tem" e "eu permito pode fazer") |
+| Executado por | Rafael, no terminal dele, com o roteiro preparado por Matheus. O classificador desta sessão recusou `ssh` e `scp`, então o transporte e a execução no servidor saíram da mão dele; a conferência e o aceite foram meus |
+| Transporte | pacote único `dmo-sha-4b93252.tar.gz`, 237.453.597 bytes, com quatro referências (`dashboard`, `migrate`, `carga-estoque` e `postgis/postgis:16-3.4-alpine`), construído pelo workflow `entrega-offline.yml` (run 37353340440) e enviado por `scp` em 17 s a 13,1 MB/s |
+| Integridade | `sha256` igual nas três pontas (manifesto do runner, origem e destino): `62355b7cb1e5dcc999f7d21d726aa965601b89f867c12d8072dcfb91419895ac`. O `subir-versao.sh` viajou junto e conferiu por `md5` `49eb71a8051701587a61141e7ba2bd9f`, idêntico ao `git show HEAD:` |
+| Backup antes de trocar | `/var/backups/spaguas-dmo/antes-de-sha-4b93252-20261005T195025Z.dump`, 3.538.791 bytes e 44 `TABLE DATA`. A guarda de parada aprovou (piso de 100.000 bytes e 30 tabelas; referência de 24/09: 2.574.674 bytes e 44) |
 
-Medido no servidor do órgão em 05/10/2026 pela régua
+**O que entrou.** Cinco commits. O que motivou a subida é o `2aca429`: render por
+requisição em toda rota e nonce no script do service worker, que é a correção do
+achado abaixo. Vieram com ele o refazimento do fundo do mapa da tela Postos a
+partir da geometria local (`afd4aa5`), os medidores do pico de `resumoPorPosto`
+no banco do órgão (`4b93252`) e dois commits de documentação.
+
+**Nenhuma migration nova ou alterada:** seguem 73 nos dois commits, e zero
+arquivo mudou em `supabase/migrations` no intervalo. Nenhuma variável de ambiente
+nova e nenhuma alteração no `docker-compose.prod.yml`. O pathspec foi conferido
+antes de o vazio valer como prova: na primeira medição eu usei `db/migrations/`,
+que não existe neste repositório, e o `git diff` devolveu vazio calado.
+
+**Conferido depois de subir**, pelo próprio `ops/producao/subir-versao.sh`, com
+toda a saída lida.
+
+| Conferência | Medido |
+|---|---|
+| Tag anterior no `.env` | `sha-9f7dda4`, igual ao que este registro afirmava; o script não recusou |
+| Código de saída do `migrate` | `0`, encerrado às 19:50:31Z |
+| Migrations aplicadas | 73 linhas `-> `, zero linhas `ERROR:`, última linha `[migrate] concluído.` |
+| Tabelas em `public` | 41 |
+| PostGIS | 3.4.3 |
+| Índice do estoque | somente `idx_estoque_unidades_codigo_spaguas` |
+| Portas | `db` sem porta publicada (`map[5432/tcp:[]]`); `app` só em `127.0.0.1:3000` |
+| Imagens em execução | `app` em `spaguas/dashboard:sha-4b93252` com usuário `nextjs`; `migrate` rodou `spaguas/migrate:sha-4b93252` com usuário `postgres` |
+| Saúde | `app` `healthy`; `/api/health` local devolveu `{"status":"ok","db":"ok"}` |
+| **Aceite pela borda** | `node scripts/verificar-csp-nonce.mjs https://dmo.spaguas.sp.gov.br` saiu **0**, da estação com VPN. 22 rotas descobertas no código, autoteste de seis casos passou, 20 medidas e catorze com parâmetro não medidas. As cinco rotas quebradas voltaram: `/` 25 de 25 com nonce, `/app` 32 de 32, `/app/perfil` 24 de 24, `/app/minhas-fichas` 37 de 37, `/app/postos` 28 de 28 |
+
+**Este é o primeiro aceite por renderização.** Nenhuma das cinco subidas
+anteriores foi aprovada assim: o critério era HTTP 200 mais `/api/health`, e foi
+exatamente por isso que o defeito abaixo durou onze dias. O item h2 da seção 6.3
+do `entrega-imagem-sem-internet.md` e a seção 6b do `checklist-release.md`
+nasceram desta entrega e tornam a régua bloqueante.
+
+O que o aceite **não** cobre: `style-src` e as demais diretivas da CSP, e se o
+navegador de fato executou o script. A régua mede presença de nonce nas tags, não
+execução.
+
+**Rollback disponível e não usado:** `/opt/spaguas-dmo/.env.antes-de-sha-4b93252`
+no servidor, a tag `sha-9f7dda4` ainda no disco, e a reversão automática embutida
+no roteiro, que só dispara se o `migrate` sair diferente de 0. Sem migration nova
+nesta entrega, o rollback de código seria suficiente.
+
+Ruído entendido e descartado na leitura da saída: o PowerShell renderiza o
+`stderr` do `docker compose` como `NativeCommandError`. Não é falha; o código do
+`up` foi 0.
+
+### O achado que motivou a subida
+
+Medido no servidor do órgão em 05/10/2026, antes dela, pela régua
 `scripts/verificar-csp-nonce.mjs`, que lê o nonce do cabeçalho e conta as tags de
 script com e sem nonce na mesma resposta: cinco rotas servem HTML sem executar
 JavaScript nenhum, porque saem prerenderizadas do build, com HTML fixo e sem
@@ -35,14 +91,9 @@ passou, e a régua saiu com código 1.
 
 **Por que cinco entregas passaram por cima disto.** A verificação do roteiro era
 HTTP 200 e `/api/health` com `db: ok`, e as duas coisas continuam verdadeiras com
-a tela sem JavaScript. Status não é renderização. A correção está em `2aca429`,
-no GitHub, e **não está no ar**.
-
-O pacote que a leva existe e está íntegro: `dmo-sha-4b93252.tar.gz`,
-237.453.597 bytes, `sha256`
-`62355b7cb1e5dcc999f7d21d726aa965601b89f867c12d8072dcfb91419895ac`, igual ao
-manifesto do workflow. O que falta é a passagem pelo canal (SSH com VPN) e a
-janela com o órgão. O aceite desta subida é a mesma régua sair 0.
+a tela sem JavaScript. Status não é renderização. A correção está em `2aca429` e
+subiu nesta mesma data, na `sha-4b93252` registrada acima; o aceite dela foi a
+régua sair 0, e saiu.
 
 ---
 

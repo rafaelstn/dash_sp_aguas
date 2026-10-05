@@ -11,7 +11,12 @@ remediação 2026-06-25.
 - [ ] `npm run lint` verde (`--max-warnings 0`).
 - [ ] `npm run test` verde (toda a suíte).
 - [ ] `npm run build` conclui sem erro.
-- [ ] **CI verde no commit que vai subir** (`gh run list --workflow=CI --branch main`).
+- [ ] **CI verde no commit que vai subir**, no branch de onde a entrega sai de
+      fato (`gh run list --workflow=CI --branch <o branch da entrega>`). Corrigido
+      em 05/10/2026: o `--branch main` escrito aqui media o branch errado, porque
+      a entrega offline sai de `chore/preparar-container-prodesp-offline` desde
+      que esse caminho existe, e um run verde em `main` nada diz sobre o commit
+      empacotado.
       Verde local não substitui: o CI roda em Linux/Node 24, o mesmo par do container
       de produção (`node:24-alpine` nos três estágios do `Dockerfile`). Node 24 traz
       npm 11 dos dois lados, então `npm run lock:ci`, que fixa o npm 10 para gerar o
@@ -51,6 +56,16 @@ remediação 2026-06-25.
 
 - [ ] Logs estruturados em operação crítica; alertas SIEM ativos.
 - [ ] Plano de rollback claro para a mudança (migration reversível ou compensável).
+
+## 6b. Aceite depois da subida: a página renderiza
+
+- [ ] `node scripts/verificar-csp-nonce.mjs https://dmo.spaguas.sp.gov.br` sai **0**.
+      Acrescentado em 05/10/2026, e é bloqueante como os demais. Até então o
+      checklist inteiro podia passar sobre um site que o navegador não executa:
+      a versão `sha-9f7dda4` ficou onze dias no ar respondendo 200 em todas as
+      rotas, com as tags de script sem nonce, e nenhum item daqui era capaz de
+      reprovar isso. Código de status mede o transporte; esta régua mede o
+      produto, e descobre as rotas no próprio código em vez de lista fixa.
 
 ## 7. Documentação
 
