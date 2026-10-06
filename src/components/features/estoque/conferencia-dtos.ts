@@ -94,6 +94,15 @@ export interface ListaItensConferenciaDTO {
   total: number;
   pagina: number;
   porPagina: number;
+  /**
+   * Se a autoria da contagem veio PREENCHIDA nesta resposta. `false` quando a
+   * rota tirou os quatro campos de autoria por falta de gestao do estoque
+   * (06/10/2026): a tela precisa dizer "voce nao ve" em vez de "nao ha", que
+   * sao estados DIFERENTES (item 10 do padrao-ui). Obrigatorio, nao opcional:
+   * quem decide e a RESPOSTA do servidor, e um default aqui deixaria a tela
+   * escolher a frase calada.
+   */
+  autoriaVisivel: boolean;
 }
 
 /** Resposta de reconciliar 1 item. */

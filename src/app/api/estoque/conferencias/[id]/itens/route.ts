@@ -49,10 +49,13 @@ const idSchema = z.string().uuid('Identificador de conferência inválido.');
  * ainda imprime UUID na tela (`conferencia-ui.ts`, `autoriaDoItem`).
  *
  * `autoriaVisivel: false` existe para a tela dizer "você não vê" em vez de
- * "não há" (item 10 do padrao-ui). PENDÊNCIA DE UI, da Fernanda: hoje
- * `autoriaDoItem` cai em "Contado (autoria não registrada)" quando a autoria
- * vem nula, o que é a frase errada para recusa por escopo. Não afeta a janela
- * atual (ver abaixo), mas tem de sair antes de a autenticação individual ligar.
+ * "não há" (item 10 do padrao-ui), e quem o consome é
+ * `autoriaDoItem(item, autoriaVisivel)` em `conferencia-ui.ts`: com a autoria
+ * recusada a frase diz "Autoria restrita à gestão do estoque" e preserva o
+ * carimbo de tempo, e "autoria não registrada" voltou a significar só o que
+ * sempre significou, item contado antes da migration 0065. Os três estados
+ * ficam distintos em
+ * `tests/unit/components/estoque/conferencia-autoria-restrita.test.tsx`.
  *
  * ALCANCE REAL desta guarda: `podeGerenciarEstoque` devolve true para o usuário
  * institucional enquanto a janela sem identidade do ADR-0024 estiver ativa, e o

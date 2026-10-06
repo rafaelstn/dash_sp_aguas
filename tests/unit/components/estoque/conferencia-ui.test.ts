@@ -283,9 +283,14 @@ describe('descreverBaseAlterada (aviso antes de confirmar)', () => {
   });
 });
 
+/**
+ * Autoria ENTREGUE pelo servidor (`autoriaVisivel: true`). O caso em que o
+ * servidor RECUSA a autoria por escopo mora em
+ * `conferencia-autoria-restrita.test.tsx`, junto da cadeia que carrega o campo.
+ */
 describe('autoriaDoItem (trilha da contagem)', () => {
   it('item nao contado nao inventa autoria', () => {
-    expect(autoriaDoItem(quant({ quantidadeContada: null }))).toBe('Ainda não contado');
+    expect(autoriaDoItem(quant({ quantidadeContada: null }), true)).toBe('Ainda não contado');
   });
 
   it('usa o rotulo resolvido pela API, nunca o UUID cru', () => {
@@ -296,13 +301,14 @@ describe('autoriaDoItem (trilha da contagem)', () => {
         contadoPorRotulo: 'Maria Souza',
         contadoEm: '2026-07-15T14:30:00Z',
       }),
+      true,
     );
     expect(texto).toContain('Contado por Maria Souza');
     expect(texto).not.toContain('33333333');
   });
 
   it('item contado antes da migration 0065 admite a lacuna em vez de forjar autor', () => {
-    expect(autoriaDoItem(quant({ quantidadeContada: 8, contadoPor: null }))).toBe(
+    expect(autoriaDoItem(quant({ quantidadeContada: 8, contadoPor: null }), true)).toBe(
       'Contado (autoria não registrada)',
     );
   });
@@ -318,6 +324,7 @@ describe('autoriaDoItem (trilha da contagem)', () => {
         reconciliadoPorRotulo: 'João',
         reconciliadoEm: '2026-07-16T09:00:00Z',
       }),
+      true,
     );
     expect(texto).toContain('Contado por Maria');
     expect(texto).toContain('Reconciliado por João');

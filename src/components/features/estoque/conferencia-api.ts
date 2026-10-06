@@ -139,6 +139,18 @@ export interface CargaItens {
   total: number;
   /** true quando o teto de paginas cortou o resultado: a tela NAO tem tudo. */
   parcial: boolean;
+  /**
+   * `autoriaVisivel` agregado das paginas lidas: a tela mostra UMA frase de
+   * trilha por item e precisa saber se a autoria nula e ausencia ou recusa.
+   * Falso vence (E logico): paginas discordando so acontece se a autorizacao
+   * mudar no meio da carga, e nesse caso a parte da lista veio sem autoria,
+   * entao dizer "autoria restrita" e verdade para ela e nao inventa autor
+   * nenhum para as outras. O oposto imprimiria "autoria nao registrada" sobre
+   * item que TEM autor, que e justamente o defeito que o campo existe para
+   * fechar. Nenhuma pagina lida (impossivel com teto >= 1, mas o tipo permite)
+   * tambem e `false`: o lado seguro e nunca afirmar ausencia.
+   */
+  autoriaVisivel: boolean;
 }
 
 /**
@@ -154,6 +166,7 @@ export async function carregarItensCompleto(
 ): Promise<CargaItens> {
   const acc: ConferenciaItemDTO[] = [];
   let total = 0;
+  let autoriaVisivel: boolean | null = null;
   for (let pagina = 1; pagina <= TETO_PAGINAS; pagina += 1) {
     const r = await listarItensConferencia(
       id,
@@ -161,10 +174,11 @@ export async function carregarItensCompleto(
       signal,
     );
     total = r.total;
+    autoriaVisivel = autoriaVisivel === null ? r.autoriaVisivel : autoriaVisivel && r.autoriaVisivel;
     acc.push(...r.itens);
     if (acc.length >= r.total || r.itens.length === 0) break;
   }
-  return { itens: acc, total, parcial: acc.length < total };
+  return { itens: acc, total, parcial: acc.length < total, autoriaVisivel: autoriaVisivel ?? false };
 }
 
 export function registrarContagem(

@@ -105,10 +105,37 @@ export function descreverBaseAlterada(
  * ser testavel. Usa o rotulo resolvido pela API; nunca mostra UUID cru, e diz
  * "autoria nao registrada" para item contado antes da migration 0065 (em vez de
  * inventar um responsavel).
+ *
+ * `autoriaVisivel` e o `autoriaVisivel` da RESPOSTA do servidor, nao o papel no
+ * navegador, e e OBRIGATORIO de proposito: "nao ha autoria registrada" e "voce
+ * nao pode ver quem foi" sao estados DIFERENTES (item 10 do padrao-ui), e os
+ * dois chegam aqui com os mesmos campos nulos. Sem a exigencia, o `tsc` nao
+ * nomearia cada chamador e um default decidiria a frase calado. Mesmo motivo do
+ * `podeVerTrilha` em `TrilhaMovimentacoes`.
+ *
+ * Com a autoria recusada, o CARIMBO de tempo continua (ele vem no corpo: e
+ * estado do item, nao identificacao de pessoa) e o que falta e dito como
+ * restricao, nunca como ausencia.
  */
-export function autoriaDoItem(item: ConferenciaItemDTO): string {
+export function autoriaDoItem(item: ConferenciaItemDTO, autoriaVisivel: boolean): string {
+  const contado = itemContado(item);
+  const reconciliado = item.reconciliadoEm !== null;
+  if (!contado && !reconciliado) return 'Ainda não contado';
+
+  if (!autoriaVisivel) {
+    const partes: string[] = [];
+    if (contado) {
+      partes.push(item.contadoEm ? `Contado em ${formatarDataHora(item.contadoEm)}` : 'Contado');
+    }
+    if (item.reconciliadoEm !== null) {
+      partes.push(`Reconciliado em ${formatarDataHora(item.reconciliadoEm)}`);
+    }
+    partes.push('Autoria restrita à gestão do estoque');
+    return partes.join(' · ');
+  }
+
   const partes: string[] = [];
-  if (itemContado(item)) {
+  if (contado) {
     const quem = item.contadoPorRotulo ?? item.contadoPor;
     const quando = item.contadoEm ? formatarDataHora(item.contadoEm) : null;
     partes.push(
@@ -123,7 +150,7 @@ export function autoriaDoItem(item: ConferenciaItemDTO): string {
       `Reconciliado por ${quem ?? 'autoria não registrada'} em ${formatarDataHora(item.reconciliadoEm)}`,
     );
   }
-  return partes.length > 0 ? partes.join(' · ') : 'Ainda não contado';
+  return partes.join(' · ');
 }
 
 // ── Divergencia (DTO) ─────────────────────────────────────────────────────────

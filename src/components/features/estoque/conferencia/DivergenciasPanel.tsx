@@ -44,7 +44,18 @@ interface Props {
 type Carga =
   | { fase: 'carregando' }
   | { fase: 'erro'; mensagem: string }
-  | { fase: 'ok'; itens: ConferenciaItemDTO[]; total: number; parcial: boolean };
+  | {
+      fase: 'ok';
+      itens: ConferenciaItemDTO[];
+      total: number;
+      parcial: boolean;
+      /**
+       * Vem da RESPOSTA do servidor (`carregarItensCompleto`), nunca do
+       * `podeGerenciar` que chega por prop: quem sabe se a autoria foi
+       * entregue e quem a entregou.
+       */
+      autoriaVisivel: boolean;
+    };
 
 /**
  * Painel de DIVERGÊNCIAS + reconciliação (sessão concluída). Lista as divergências
@@ -237,6 +248,7 @@ export function DivergenciasPanel({
             <LinhaDivergencia
               item={item}
               podeGerenciar={podeGerenciar}
+              autoriaVisivel={carga.autoriaVisivel}
               resolvedores={resolvedores}
               aoReconciliar={() => setItemDialog(item)}
             />
@@ -305,11 +317,14 @@ export function DivergenciasPanel({
 function LinhaDivergencia({
   item,
   podeGerenciar,
+  autoriaVisivel,
   resolvedores,
   aoReconciliar,
 }: {
   item: ConferenciaItemDTO;
   podeGerenciar: boolean;
+  /** `autoriaVisivel` da resposta do servidor, repassado a `autoriaDoItem`. */
+  autoriaVisivel: boolean;
   resolvedores: Resolvedores;
   aoReconciliar: () => void;
 }) {
@@ -360,8 +375,9 @@ function LinhaDivergencia({
       </div>
 
       {/* Trilha: o ajuste patrimonial deriva da contagem, entao quem contou faz
-          parte da evidencia, nao e detalhe de interface. */}
-      <p className="mt-2 text-2xs text-app-fg-muted">{autoriaDoItem(item)}</p>
+          parte da evidencia, nao e detalhe de interface. Quando a resposta vem
+          sem autoria, a frase diz RESTRICAO e nunca ausencia. */}
+      <p className="mt-2 text-2xs text-app-fg-muted">{autoriaDoItem(item, autoriaVisivel)}</p>
 
       {podeGerenciar && !reconciliado ? (
         <div className="mt-3 flex justify-end">
