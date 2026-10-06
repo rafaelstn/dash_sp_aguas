@@ -405,7 +405,9 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
     if (comando === null) {
       // So carimba (sem tocar o estoque). nao_encontrado ganha nota de apuracao.
       if (item.situacao === 'nao_encontrado' && atualizado.observacao === null) {
-        atualizado.observacao = 'nao localizado: requer apuracao';
+        // Literal IGUAL ao do repositorio pg (acentuado): se divergirem, o
+        // teste de aplicacao aprova no mock o que reprovaria no Postgres.
+        atualizado.observacao = 'não localizado: requer apuração';
       }
     } else {
       let cmd = comando;

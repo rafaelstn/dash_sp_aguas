@@ -232,9 +232,20 @@ export function calcularDivergencia(item: ConferenciaItem): DivergenciaResultado
  */
 export type ComandoReconciliacao = Omit<ComandoMovimentacao, 'usuarioId'>;
 
-/** Motivo padrao da movimentacao gerada por reconciliacao. */
+/**
+ * Motivo padrao da movimentacao gerada por reconciliacao.
+ *
+ * ACENTUADO de proposito: este texto e RENDERIZADO ao usuario, na coluna
+ * "Motivo" da trilha (`TrilhaMovimentacoes.tsx`) e na planilha de export
+ * (`src/domain/estoque/export.ts`), e texto de tela acentuado e inegociavel.
+ *
+ * O que isto NAO conserta: a trilha e append-only e imutavel, entao a linha ja
+ * gravada antes de 06/10/2026 continua sem acento, e as duas grafias convivem
+ * na mesma coluna por data do evento. Quantas linhas existem assim no banco da
+ * PRODESP: NAO MEDIDO (sem acesso ao banco do orgao nesta bancada).
+ */
 export function motivoReconciliacao(conferenciaId: string): string {
-  return `Conferencia fisica #${conferenciaId.slice(0, 8)} (ajuste de inventario)`;
+  return `Conferência física #${conferenciaId.slice(0, 8)} (ajuste de inventário)`;
 }
 
 /**

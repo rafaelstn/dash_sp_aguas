@@ -733,7 +733,11 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
 
         if (comando === null) {
           if (item.situacao === 'nao_encontrado' && observacaoFinal === null) {
-            observacaoFinal = 'nao localizado: requer apuracao';
+            // Acentuado: e texto de produto que a auditoria do orgao le, e o
+            // mock grava o MESMO literal. Hoje nao chega a tela (nenhum .tsx
+            // renderiza `observacao` de item de conferencia, medido em
+            // 06/10/2026); acentuado para nao virar defeito no dia que chegar.
+            observacaoFinal = 'não localizado: requer apuração';
           }
         } else {
           let cmd = comando;

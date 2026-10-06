@@ -166,4 +166,17 @@ describe('conferencia, resolverReconciliacao (mapeamento divergencia -> moviment
     expect(cmd?.motivo).toBe(motivoReconciliacao('cafe1234-0000-0000-0000-000000000000'));
     expect(cmd?.motivo).toContain('cafe1234');
   });
+
+  /**
+   * O texto LITERAL, e nao `motivoReconciliacao(...)`, que seria tautologico: a
+   * assercao acima aprova qualquer texto que o gerador produzir, inclusive sem
+   * acento. Este motivo e RENDERIZADO (coluna "Motivo" da trilha e da planilha
+   * de export), e acentuacao de texto de tela e inegociavel, entao quem tirar o
+   * acento tem de reprovar aqui, no job `unit`, e nao so no job `integracao`.
+   */
+  it('motivo e o texto acentuado que o almoxarife le', () => {
+    expect(motivoReconciliacao('cafe1234-0000-0000-0000-000000000000')).toBe(
+      'Conferência física #cafe1234 (ajuste de inventário)',
+    );
+  });
 });

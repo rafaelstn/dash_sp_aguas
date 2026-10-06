@@ -203,7 +203,7 @@ describe('conferencia, contagem + reconciliacao (serializado)', () => {
 
     const r = await reconciliarItem(conf, sessao.id, itens[0]!.id, USER);
     expect(r.movimentacaoId).toBeNull();
-    expect(r.item.observacao).toBe('nao localizado: requer apuracao');
+    expect(r.item.observacao).toBe('não localizado: requer apuração');
     // nao mexeu na unidade (nao virou baixa automatica).
     expect((await unidades.obterPorId(unidade.id))?.status).toBe('ativo');
   });

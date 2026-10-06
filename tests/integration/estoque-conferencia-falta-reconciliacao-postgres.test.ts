@@ -202,12 +202,12 @@ rodar('reconciliação de FALTA contra Postgres real', () => {
    * Motivo gravado na trilha, escrito LITERAL aqui em vez de importado de
    * `motivoReconciliacao`: reusar o gerador tornaria a asserção tautológica, e
    * este texto é o que o almoxarife lê na tela da trilha
-   * (`TrilhaMovimentacoes.tsx`, coluna `motivo`). Se o texto mudar (por exemplo
-   * para receber acento, que é o padrão da casa), ESTE é o lugar de atualizar,
-   * no mesmo commit da mudança.
+   * (`TrilhaMovimentacoes.tsx`, coluna `motivo`). Se o texto mudar, ESTE é o
+   * lugar de atualizar, no mesmo commit da mudança: foi o que aconteceu em
+   * 06/10/2026, quando o texto recebeu o acento que o padrão da casa exige.
    */
   const motivoEsperado = (conferenciaId: string) =>
-    `Conferencia fisica #${conferenciaId.slice(0, 8)} (ajuste de inventario)`;
+    `Conferência física #${conferenciaId.slice(0, 8)} (ajuste de inventário)`;
 
   /**
    * Cenário de falta: entrada de `sistema`, sessão aberta, contagem de `contada`
@@ -518,7 +518,7 @@ rodar('reconciliação de FALTA contra Postgres real', () => {
 
     // Nenhuma palavra sobre causa sobra nos itens: a observação da contagem é
     // opcional e continua nula, e a falta quantificável (ao contrário do
-    // serializado `nao_encontrado`, que recebe 'nao localizado: requer apuracao')
+    // serializado `nao_encontrado`, que recebe 'não localizado: requer apuração')
     // não ganha marca de apuração nenhuma.
     const observacaoDe = async (itemId: string) => {
       const [linha] = await sql<{ observacao: string | null }[]>`
