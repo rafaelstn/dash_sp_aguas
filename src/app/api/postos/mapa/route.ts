@@ -113,7 +113,8 @@ const querySchema = z.object({
  *   tipo         plu, flu, piezo, meteo
  *   situacao     em_operacao, extinto
  *   transmissao  telemetrico, gravacao_local, convencional
- *   vazao        aparelho_ativo, medicao, curva, qualquer
+ *   vazao        aparelho_ativo, medicao, curva, qualquer, e as ausências
+ *                nenhuma, sem_medicao, sem_curva (negação pedida em 29/09/2026)
  *   ugrhi        1 a 22, ou `sem` para os postos sem UGRHI
  *   uf           sigla de duas letras (SP, PR, MG...), ou `sem` para os postos
  *                sem UF declarada. O `Dbfch` tem postos de outros estados: a

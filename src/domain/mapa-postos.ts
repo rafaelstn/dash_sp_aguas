@@ -39,7 +39,12 @@
  *   `aparelho_ativo`  aparelho ativo CURVA-CHAVE* ou MEDICAO DE VAZAO* (326)
  *   `medicao`         medição de campo em `ResumoMedicaoVazoes` (519)
  *   `curva`           curva-chave em `CurvaChaveFluviometricas` (375)
- * O filtro aceita ainda `qualquer`, que é a união das três (595).
+ * O filtro aceita ainda `qualquer`, que é a união das três (595), e as três
+ * AUSÊNCIAS pedidas pelo órgão em 29/09/2026 ("COM/SEM curva-chave, COM/SEM
+ * medições de vazão"): `sem_curva`, `sem_medicao` e `nenhuma`, o par de
+ * `qualquer`. Ausência é afirmação sobre o cadastro, e não sobre o rio: o posto
+ * que nunca recebeu curva-chave e o que a perdeu na depuração do cadastro caem
+ * os dois em `sem_curva`, porque a tabela do órgão não distingue os dois casos.
  *
  * ═════════════════════════════════════════════════════════════════════════
  * POSTOS FORA DE SÃO PAULO (medido no `Dbfch` em 17/09/2026)
@@ -95,9 +100,45 @@ export type Transmissao = (typeof TRANSMISSOES)[number];
 export const FONTES_VAZAO = ['aparelho_ativo', 'medicao', 'curva'] as const;
 export type FonteVazao = (typeof FONTES_VAZAO)[number];
 
-/** Opções do filtro de vazão: as três fontes e a união delas. */
-export const OPCOES_VAZAO = [...FONTES_VAZAO, 'qualquer'] as const;
+/**
+ * Ausências de vazão, na ordem em que a tela as mostra.
+ *
+ * `nenhuma` é o par de `qualquer`, e `sem_medicao` e `sem_curva` são a negação
+ * da fonte de mesmo nome. Não existe `sem_aparelho_ativo`: o órgão não pediu, e
+ * opção que ninguém usa em filtro de painel é ruído na lista.
+ */
+export const AUSENCIAS_VAZAO = ['nenhuma', 'sem_medicao', 'sem_curva'] as const;
+export type AusenciaVazao = (typeof AUSENCIAS_VAZAO)[number];
+
+/** Opções do filtro de vazão: as três fontes, a união delas e as ausências. */
+export const OPCOES_VAZAO = [...FONTES_VAZAO, 'qualquer', ...AUSENCIAS_VAZAO] as const;
 export type OpcaoVazao = (typeof OPCOES_VAZAO)[number];
+
+/**
+ * `true` quando o posto atende a opção de vazão pedida.
+ *
+ * Único lugar que decide isso: o filtro e a contagem de facetas chamam esta
+ * função, e foi assim que a opção `qualquer` deixou de ser caso especial
+ * espalhado nos dois. Uma segunda régua faria a lista dizer um número e o mapa
+ * desenhar outro.
+ */
+export function atendeOpcaoVazao(
+  vazao: readonly FonteVazao[],
+  opcao: OpcaoVazao,
+): boolean {
+  switch (opcao) {
+    case 'qualquer':
+      return vazao.length > 0;
+    case 'nenhuma':
+      return vazao.length === 0;
+    case 'sem_medicao':
+      return !vazao.includes('medicao');
+    case 'sem_curva':
+      return !vazao.includes('curva');
+    default:
+      return vazao.includes(opcao);
+  }
+}
 
 /** Valor de `ugrhi` e `uf` na query que seleciona os postos sem valor. */
 export const SEM_VALOR = 'sem';
@@ -196,11 +237,7 @@ export function atendeFiltros(
     if (!ponto.transmissao.some((t) => filtros.transmissao!.includes(t))) return false;
   }
   if (ignorar !== 'vazao' && !vazio(filtros.vazao)) {
-    const pedidas = filtros.vazao!;
-    const passa = pedidas.includes('qualquer')
-      ? ponto.vazao.length > 0
-      : ponto.vazao.some((v) => pedidas.includes(v));
-    if (!passa) return false;
+    if (!filtros.vazao!.some((o) => atendeOpcaoVazao(ponto.vazao, o))) return false;
   }
   if (ignorar !== 'ugrhi' && !vazio(filtros.ugrhi)) {
     if (!filtros.ugrhi!.includes(ponto.ugrhi)) return false;
@@ -224,7 +261,9 @@ function zerado<K extends string>(chaves: readonly K[]): Record<K, number> {
  * marcadas, e a lista de filtros viraria um espelho da seleção.
  *
  * Nas dimensões de valor múltiplo (transmissão e vazão) as contagens NÃO somam
- * o total: um posto telemétrico e com gravação local conta nas duas.
+ * o total: um posto telemétrico e com gravação local conta nas duas, e em vazão
+ * cada ausência conta o COMPLEMENTO da fonte de mesmo nome (`curva` mais
+ * `sem_curva` dá o total da dimensão, e `qualquer` mais `nenhuma` também).
  */
 export function contarFacetas(
   pontos: readonly PontoMapaPosto[],
@@ -248,8 +287,7 @@ export function contarFacetas(
       for (const t of p.transmissao) transmissao[t] += 1;
     }
     if (atendeFiltros(p, filtros, 'vazao')) {
-      for (const v of p.vazao) vazao[v] += 1;
-      if (p.vazao.length > 0) vazao.qualquer += 1;
+      for (const o of OPCOES_VAZAO) if (atendeOpcaoVazao(p.vazao, o)) vazao[o] += 1;
     }
     if (atendeFiltros(p, filtros, 'ugrhi')) {
       ugrhi.set(p.ugrhi, (ugrhi.get(p.ugrhi) ?? 0) + 1);

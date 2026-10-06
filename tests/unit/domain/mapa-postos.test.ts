@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  AUSENCIAS_VAZAO,
   atendeFiltros,
   contarFacetas,
   coordenadaSuspeita,
@@ -80,6 +81,33 @@ describe('atendeFiltros', () => {
     expect(atendeFiltros(telemetricoComMedicao, { vazao: ['curva', 'medicao'] })).toBe(true);
   });
 
+  it('cada ausência é o complemento da fonte de mesmo nome, no MESMO ponto', () => {
+    // O ponto tem medição e não tem curva: um par de asserções opostas sobre
+    // ele, porque uma negação que recusasse (ou aceitasse) tudo ficaria verde
+    // com só metade do par.
+    expect(atendeFiltros(telemetricoComMedicao, { vazao: ['sem_curva'] })).toBe(true);
+    expect(atendeFiltros(telemetricoComMedicao, { vazao: ['sem_medicao'] })).toBe(false);
+    expect(atendeFiltros(telemetricoComMedicao, { vazao: ['nenhuma'] })).toBe(false);
+
+    const semVazao = ponto({ prefixo: 'F' });
+    expect(atendeFiltros(semVazao, { vazao: ['nenhuma'] })).toBe(true);
+    expect(atendeFiltros(semVazao, { vazao: ['sem_curva'] })).toBe(true);
+    expect(atendeFiltros(semVazao, { vazao: ['sem_medicao'] })).toBe(true);
+    expect(atendeFiltros(semVazao, { vazao: ['qualquer'] })).toBe(false);
+
+    // O posto com as três fontes não cai em nenhuma ausência.
+    const comTudo = ponto({ prefixo: 'G', vazao: ['aparelho_ativo', 'medicao', 'curva'] });
+    for (const ausencia of AUSENCIAS_VAZAO) {
+      expect(atendeFiltros(comTudo, { vazao: [ausencia] })).toBe(false);
+    }
+  });
+
+  it('OU dentro da dimensão vale entre fonte e ausência: "sem curva" ou "com medição"', () => {
+    const soCurva = ponto({ prefixo: 'H', vazao: ['curva'] });
+    expect(atendeFiltros(soCurva, { vazao: ['sem_curva', 'medicao'] })).toBe(false);
+    expect(atendeFiltros(soCurva, { vazao: ['sem_medicao', 'curva'] })).toBe(true);
+  });
+
   it('tipo ou UGRHI nulos não passam quando o filtro existe, e passam sem ele', () => {
     const semNada = ponto({ prefixo: 'C', tipo: null, ugrhi: null });
     expect(atendeFiltros(semNada, { tipo: ['plu'] })).toBe(false);
@@ -132,7 +160,21 @@ describe('contarFacetas', () => {
     expect(f.situacao).toEqual({ em_operacao: 3, extinto: 1 });
     expect(f.transmissao).toEqual({ telemetrico: 2, gravacao_local: 1, convencional: 1 });
     // `qualquer` conta POSTOS (2), e não a soma das fontes (4).
-    expect(f.vazao).toEqual({ aparelho_ativo: 1, medicao: 2, curva: 1, qualquer: 2 });
+    expect(f.vazao).toEqual({
+      aparelho_ativo: 1,
+      medicao: 2,
+      curva: 1,
+      qualquer: 2,
+      nenhuma: 2,
+      sem_medicao: 2,
+      sem_curva: 3,
+    });
+    // A aritmética que denuncia faceta de ausência contada errado: cada par
+    // soma o total da base, e nenhum dos quatro valores é zero (um complemento
+    // sempre verdadeiro ou sempre falso fecharia a conta e passaria batido).
+    expect(f.vazao.curva + f.vazao.sem_curva).toBe(base.length);
+    expect(f.vazao.medicao + f.vazao.sem_medicao).toBe(base.length);
+    expect(f.vazao.qualquer + f.vazao.nenhuma).toBe(base.length);
     expect(f.ugrhi).toEqual([
       { numero: 2, total: 2 },
       { numero: 6, total: 1 },
@@ -148,6 +190,17 @@ describe('contarFacetas', () => {
     expect(f.situacao).toEqual({ em_operacao: 1, extinto: 1 });
     expect(f.transmissao).toEqual({ telemetrico: 1, gravacao_local: 1, convencional: 0 });
     expect(f.ugrhi).toEqual([{ numero: 2, total: 2 }]);
+  });
+
+  it('ausência marcada: a vazão ignora o próprio filtro e as outras dimensões o respeitam', () => {
+    const f = contarFacetas(base, { vazao: ['sem_curva'] });
+    // Os três sem curva-chave são os postos 1, 3 e 4.
+    expect(f.tipo).toEqual({ plu: 1, flu: 1, piezo: 0, meteo: 0 });
+    expect(f.situacao).toEqual({ em_operacao: 2, extinto: 1 });
+    // A própria dimensão continua contando a base inteira, inclusive o posto
+    // com curva, que o filtro recusa.
+    expect(f.vazao.curva).toBe(1);
+    expect(f.vazao.sem_curva).toBe(3);
   });
 
   it('faceta de UF: SP primeiro, siglas em ordem, sem UF por último, cruzada', () => {

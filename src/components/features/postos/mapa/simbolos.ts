@@ -60,6 +60,9 @@ export const ROTULO_VAZAO: Readonly<Record<OpcaoVazao, string>> = {
   medicao: 'Com medição de campo',
   curva: 'Com curva-chave',
   qualquer: 'Qualquer fonte de vazão',
+  nenhuma: 'Nenhuma fonte de vazão',
+  sem_medicao: 'Sem medição de campo',
+  sem_curva: 'Sem curva-chave',
 };
 
 /**

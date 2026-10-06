@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import {
-  OPCOES_VAZAO,
+  AUSENCIAS_VAZAO,
+  FONTES_VAZAO,
   SITUACOES_POSTO,
   TIPOS_POSTO_MAPA,
   TRANSMISSOES,
@@ -176,16 +177,35 @@ function OpcoesUf({ facetas, estado }: { facetas: FacetasMapa | null; estado: Es
   );
 }
 
+/**
+ * Opções de vazão, separadas em "tem" e "não tem".
+ *
+ * As ausências entraram junto das fontes em 06/10/2026, e numa lista corrida
+ * "Com curva-chave" e "Sem curva-chave" ficam a duas linhas de distância, com
+ * rótulos que só diferem na primeira palavra. O `<optgroup>` é o que o próprio
+ * `<select>` nativo tem para isso: o leitor de tela anuncia o grupo, e quem
+ * olha vê os dois blocos sem precisar ler cada linha.
+ */
 function OpcoesVazao({ facetas, vazio }: { facetas: FacetasMapa | null; vazio: string }) {
+  const rotulo = (v: OpcaoVazao) =>
+    `${ROTULO_VAZAO[v]}${facetas ? ` (${fmt(facetas.vazao[v])})` : ''}`;
   return (
     <>
       <option value="">{vazio}</option>
-      {OPCOES_VAZAO.map((v) => (
-        <option key={v} value={v}>
-          {ROTULO_VAZAO[v]}
-          {facetas ? ` (${fmt(facetas.vazao[v])})` : ''}
-        </option>
-      ))}
+      <optgroup label="O posto tem">
+        {[...FONTES_VAZAO, 'qualquer' as const].map((v) => (
+          <option key={v} value={v}>
+            {rotulo(v)}
+          </option>
+        ))}
+      </optgroup>
+      <optgroup label="O posto não tem">
+        {AUSENCIAS_VAZAO.map((v) => (
+          <option key={v} value={v}>
+            {rotulo(v)}
+          </option>
+        ))}
+      </optgroup>
     </>
   );
 }
@@ -382,6 +402,15 @@ function LinhaMarcacao({
       />
       {glifo}
       <span className="flex-1">{rotulo}</span>
+      {/*
+        O `{' '}` não é enfeite: sem ele o JSX descarta a quebra de linha entre
+        os dois spans, o nome acessível do controle sai emendado ("Sem
+        curva-chave2") e quem usa leitor de tela ouve um número colado no
+        rótulo. Medido em 05/10/2026 nos filtros do celular, e valia para os
+        quatro grupos. O que NÃO foi medido é se algum leitor de tela real
+        insere a pausa por conta própria; o espaço é a forma de não depender
+        disso.
+      */}{' '}
       {contagem !== undefined && (
         <span className="tabular-nums text-app-fg-muted">{fmt(contagem)}</span>
       )}
@@ -572,7 +601,31 @@ export function FiltrosCelular({ estado, facetas, totalFiltrado, aoMudar, aoLimp
                 aoMudar={() => aoMudar({ vazao: null })}
                 rotulo="Sem filtro"
               />
-              {OPCOES_VAZAO.map((v) => (
+              {[...FONTES_VAZAO, 'qualquer' as const].map((v) => (
+                <LinhaMarcacao
+                  key={v}
+                  tipo="radio"
+                  nome="vazao"
+                  marcado={estado.vazao === v}
+                  aoMudar={() => aoMudar({ vazao: v })}
+                  rotulo={ROTULO_VAZAO[v]}
+                  contagem={facetas?.vazao[v]}
+                />
+              ))}
+            </Grupo>
+            {/*
+              Fieldset separado, e não mais oito radios corridos: numa lista
+              única "Com curva-chave" e "Sem curva-chave" ficam a três linhas de
+              distância e o dedo erra. O `nome` segue o MESMO dos de cima, que é
+              o que faz as setas do teclado percorrerem as sete opções como um
+              grupo só; a exclusividade em si NÃO vem dele, e sim de
+              `estado.vazao` ser um valor único. Medido em 05/10/2026: trocar
+              este nome não muda nada no que a tela marca, porque os radios são
+              controlados, e o percurso por seta é comportamento de navegador
+              que o jsdom não reproduz.
+            */}
+            <Grupo titulo="Vazão que o posto não tem">
+              {AUSENCIAS_VAZAO.map((v) => (
                 <LinhaMarcacao
                   key={v}
                   tipo="radio"
