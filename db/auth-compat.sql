@@ -41,10 +41,41 @@ $$;
 CREATE SCHEMA IF NOT EXISTS auth;
 
 CREATE TABLE IF NOT EXISTS auth.users (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       text UNIQUE,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email               text UNIQUE,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  raw_user_meta_data  jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- raw_user_meta_data: a coluna existe para a consulta de identidade NÃO
+-- ESTOURAR. Medido em 05/10/2026: `usuarios-identidade-repository.pg.ts` lê
+-- `u.raw_user_meta_data->>'nome'` (é de lá que sai o nome do operador na trilha
+-- e na planilha do Estoque), o GoTrue do Supabase tem essa coluna e este shim
+-- não tinha, então no Postgres puro a consulta levantava 42703
+-- undefined_column, o `resolverOperadores` caía no ramo degradado e as duas
+-- telas mostravam o id cru ou o e-mail. O ramo degradado está correto; o que
+-- estava errado era o schema embaixo dele.
+--
+-- O CONTEÚDO real vem da camada de identidade definitiva (GoTrue self-hosted ou
+-- auth própria, ADR-0015 e ADR-0006). Até ela existir o objeto fica em `{}`, o
+-- nome resolve VAZIO e o código cai para o e-mail por desenho, e não por falha.
+--
+-- O ALTER abaixo alcança o banco que já subiu com a versão anterior deste
+-- arquivo, onde a tabela existe sem a coluna e o CREATE TABLE IF NOT EXISTS não
+-- faz nada. Este arquivo nunca roda contra o Supabase gerenciado (lá o GoTrue é
+-- dono de auth.users e já tem a coluna); é o shim do self-hosted, e o GRANT no
+-- fim do arquivo já assume essa propriedade.
+--
+-- NÃO MEDIDO contra banco de pé: a bancada de 06/10/2026 não tem Docker nem
+-- psql (decisão do Rafael de 01/10/2026). Quem mede é o job `integracao` do CI,
+-- em tests/integration/auth-compat-identidade-postgres.test.ts, que pergunta a
+-- coluna ao information_schema e faz a MESMA consulta do repositório de
+-- identidade contra a tabela real.
+ALTER TABLE auth.users
+  ADD COLUMN IF NOT EXISTS raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN auth.users.raw_user_meta_data IS
+  'Metadados do usuário no formato do GoTrue (Supabase). Existe neste shim para a consulta de identidade não estourar com 42703; o conteúdo real vem da camada de identidade definitiva. Enquanto for {}, o nome resolve vazio e o código cai para o e-mail por desenho.';
 
 -- ----------------------------------------------------------------------------
 -- auth.uid(): no Supabase lê o claim `sub` do JWT injetado pelo PostgREST.
