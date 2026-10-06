@@ -24,6 +24,7 @@ import {
 import { listarFichasDoPosto } from '@/application/use-cases/fichas-visita';
 import { IndexacaoPendente, PostoNaoEncontrado } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { extrairIpDeHeadersOuNulo } from '@/infrastructure/security/rate-limit';
 import { favoritosRepository, papeisRepository } from '@/infrastructure/repositories';
 import { BotaoFavoritar } from '@/components/features/favoritos/BotaoFavoritar';
 import { BotaoExportarRelatorio } from '@/components/features/posto/BotaoExportarRelatorio';
@@ -147,10 +148,7 @@ async function BlocoArquivos({
   posto: Awaited<ReturnType<typeof obterFicha>>;
 }) {
   const h = await headers();
-  const ip =
-    h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    h.get('x-real-ip') ??
-    null;
+  const ip = extrairIpDeHeadersOuNulo(h);
   const userAgent = h.get('user-agent');
   const usuario = await obterUsuarioAtual();
 
@@ -299,10 +297,7 @@ export default async function PaginaPosto({ params }: PageProps) {
   }
 
   const h = await headers();
-  const ip =
-    h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    h.get('x-real-ip') ??
-    null;
+  const ip = extrairIpDeHeadersOuNulo(h);
   const userAgent = h.get('user-agent');
   const usuario = await obterUsuarioAtual();
 

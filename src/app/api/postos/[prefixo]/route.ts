@@ -12,6 +12,7 @@ import {
   PostoRemovido,
 } from '@/domain/errors';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { exigirUsuario } from '@/app/api/_helpers/auth';
 import { logger } from '@/infrastructure/logging/logger';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import type { RespostaErro, RespostaFicha } from '@/types/dto';
@@ -27,26 +28,39 @@ import {
   POLITICAS,
   aplicarHeadersRateLimit,
   consumirRateLimit,
-  extrairIp,
+  extrairIpOuNulo,
 } from '@/infrastructure/security/rate-limit';
 
 // Lazy indexing é read-heavy em HD de rede; o runtime Node é obrigatório
 // pra permitir `spawn` do worker Python.
 export const runtime = 'nodejs';
 
+/**
+ * GET /api/postos/{prefixo} — ficha completa do posto. GRAVA a linha LGPD de
+ * `acesso_ficha` (acao `visualizou_ficha`) antes de servir.
+ *
+ * Recusa no HANDLER desde 06/10/2026 (achado do Andre, PO de Seguranca): a rota
+ * lia `obterUsuarioAtual()` sem checar e gravava `usuarioId: null`, ou seja,
+ * acesso a dado do orgao registrado sem ator. Quem barrava era so o middleware,
+ * que REDIRECIONA para `/login` (307), e redirecionar nao e recusar. Na janela
+ * sem identificacao (ADR-0024) `exigirUsuario` passa com o id institucional, que
+ * e o comportamento desejado: a trilha aponta a janela, nao o vazio.
+ *
+ * O IP tambem vinha do PRIMEIRO elemento de `x-forwarded-for`, que o cliente
+ * controla; agora sai de `extrairIpOuNulo`.
+ */
 export async function GET(
   request: NextRequest,
   ctx: { params: Promise<{ prefixo: string }> },
 ) {
+  const auth = await exigirUsuario();
+  if (auth instanceof NextResponse) return auth;
+
   const { prefixo: prefixoRaw } = await ctx.params;
   const prefixo = decodeURIComponent(prefixoRaw);
 
-  const ip =
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    request.headers.get('x-real-ip') ??
-    null;
+  const ip = extrairIpOuNulo(request);
   const userAgent = request.headers.get('user-agent');
-  const usuario = await obterUsuarioAtual();
 
   // --- Lazy indexing (ADR-0006) -------------------------------------------
   // 1) Cache fresh: serve direto.
@@ -124,7 +138,7 @@ export async function GET(
       prefixo,
       ip,
       userAgent,
-      usuarioId: usuario?.id ?? null,
+      usuarioId: auth.id,
     });
     const body: RespostaFicha = posto;
     return NextResponse.json(body);
@@ -323,12 +337,12 @@ export async function PATCH(
 
   const { prefixo: prefixoRaw } = await ctx.params;
   const prefixo = decodeURIComponent(prefixoRaw);
-  const ip = extrairIp(request);
+  const ip = extrairIpOuNulo(request);
 
   try {
     const posto = await postosRepository.atualizar(prefixo, parsed.data, {
       usuarioId: usuario.id,
-      ip: ip === 'unknown' ? null : ip,
+      ip,
       userAgent: request.headers.get('user-agent'),
       origemEvento: 'ui_edicao',
       observacao: 'Edição manual via tela /postos/[prefixo]/editar',

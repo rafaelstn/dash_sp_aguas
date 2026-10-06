@@ -163,6 +163,35 @@ export function extrairIpDeHeaders(h: { get(name: string): string | null }): str
 }
 
 /**
+ * Mesmo resolvedor, para quem grava o IP em TRILHA em vez de usar como chave de
+ * rate limit: devolve `null` onde `extrairIp` devolve a string `'unknown'`.
+ *
+ * Existe porque a coluna `ip` de `acesso_ficha` e das trilhas de evento é
+ * `text null`, e "não consegui determinar" é ausência, não o endereço literal
+ * `unknown`. Sem este par, cada chamador repetia `ip === 'unknown' ? null : ip`
+ * (estava no PATCH de `/api/postos/[prefixo]`) ou, pior, montava o IP à mão a
+ * partir do `x-forwarded-for` cru.
+ *
+ * Em 06/10/2026 o inventário desse "à mão" era de SEIS arquivos e SETE pontos de
+ * leitura (três rotas de API e três Server Components, um deles com dois
+ * pontos), todos pegando o PRIMEIRO elemento da cadeia, que é justamente o que o
+ * cliente controla: quem chamasse escolhia o IP que a trilha do órgão ia
+ * registrar, sem deixar rastro. A régua que impede a próxima cópia de voltar é
+ * `tests/unit/infrastructure/security/ip-da-trilha-sai-do-resolvedor.test.ts`.
+ */
+export function extrairIpOuNulo(req: Request): string | null {
+  return extrairIpDeHeadersOuNulo(req.headers);
+}
+
+/** Par de `extrairIpOuNulo` para o `headers()` de `next/headers`. */
+export function extrairIpDeHeadersOuNulo(
+  h: { get(name: string): string | null },
+): string | null {
+  const ip = extrairIpDeHeaders(h);
+  return ip === 'unknown' ? null : ip;
+}
+
+/**
  * Políticas pré-definidas para o módulo de triagem (ver
  * `docs/seguranca/checklist-modulo-mobile.md §6.3`).
  */

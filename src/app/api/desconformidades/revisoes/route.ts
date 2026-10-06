@@ -7,6 +7,7 @@ import type { CategoriaDesconformidade } from '@/domain/desconformidade';
 import type { TipoEntidadeRevisada } from '@/domain/revisao-desconformidade';
 import { exigirIdentidadeVerificada } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
+import { extrairIpDeHeadersOuNulo } from '@/infrastructure/security/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,11 +63,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ erro: 'payload_invalido' }, { status: 400 });
   }
 
-  const h = await headers();
-  const ip =
-    h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    h.get('x-real-ip') ??
-    null;
+  // O IP vinha do PRIMEIRO elemento do `x-forwarded-for`, que o cliente
+  // controla, e esta trilha e quem diz QUEM marcou a desconformidade como
+  // revisada (06/10/2026).
+  const ip = extrairIpDeHeadersOuNulo(await headers());
 
   try {
     const revisao = await marcarRevisaoDesconformidade(revisoesRepository, {

@@ -8,6 +8,7 @@ import {
   auditoriaRepository,
 } from '@/infrastructure/repositories';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { extrairIpDeHeadersOuNulo } from '@/infrastructure/security/rate-limit';
 import { SCHEMAS_FICHA } from '@/domain/fichas/schemas';
 import { CODIGOS_TIPO_DOCUMENTO } from '@/domain/tipo-documento';
 import type { CodigoTipoDocumento } from '@/domain/tipo-documento';
@@ -22,10 +23,7 @@ import { logger } from '@/infrastructure/logging/logger';
 async function registrarAcessoRecente(prefixo: string): Promise<void> {
   try {
     const h = await headers();
-    const ip =
-      h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-      h.get('x-real-ip') ??
-      null;
+    const ip = extrairIpDeHeadersOuNulo(h);
     const userAgent = h.get('user-agent');
     const usuario = await obterUsuarioAtual();
     await auditoriaRepository.registrarAcesso({

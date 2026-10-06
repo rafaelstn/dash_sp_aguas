@@ -9,6 +9,7 @@ import { obterFicha } from '@/application/use-cases/obter-ficha';
 import { obterFichaVisita } from '@/application/use-cases/fichas-visita';
 import { obterSchema } from '@/domain/fichas/schemas';
 import { obterUsuarioAtual } from '@/infrastructure/auth/current-user';
+import { extrairIpDeHeadersOuNulo } from '@/infrastructure/security/rate-limit';
 import { TemplateImpressao } from '@/components/features/fichas/TemplateImpressao';
 import { logger } from '@/infrastructure/logging/logger';
 
@@ -54,10 +55,7 @@ export default async function ImprimirFichaPage({
   const schema = obterSchema(ficha.codTipoDocumento);
 
   const h = await headers();
-  const ip =
-    h.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    h.get('x-real-ip') ??
-    null;
+  const ip = extrairIpDeHeadersOuNulo(h);
   const userAgent = h.get('user-agent');
   const usuario = await obterUsuarioAtual();
 
