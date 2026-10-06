@@ -42,10 +42,15 @@ interface LinhaDeAcesso {
   usuarioId: string | null;
 }
 
-const registrarAcesso = vi.fn(async (_linha: LinhaDeAcesso) => {});
-const buscarPorPrefixo = vi.fn(async (_prefixo: string): Promise<unknown> => null);
-const listarPorPrefixo = vi.fn(async (_prefixo: string) => [] as unknown[]);
-const foiIndexadoAlgumaVez = vi.fn(async (_prefixo: string) => true);
+// A assinatura vai no GENÉRICO, não em parâmetro nomeado e ignorado: o
+// `no-unused-vars` que vem de `next/typescript` não tem `argsIgnorePattern`, e
+// `_linha` reprova o lint do CI com `--max-warnings 0`. Sem a assinatura,
+// `vi.fn(async () => {})` infere zero argumentos e `mock.calls[0]![0]` nem
+// compila.
+const registrarAcesso = vi.fn<(linha: LinhaDeAcesso) => Promise<void>>(async () => {});
+const buscarPorPrefixo = vi.fn<(prefixo: string) => Promise<unknown>>(async () => null);
+const listarPorPrefixo = vi.fn<(prefixo: string) => Promise<unknown[]>>(async () => []);
+const foiIndexadoAlgumaVez = vi.fn<(prefixo: string) => Promise<boolean>>(async () => true);
 const listarFacetasRepo = vi.fn(async () => ({
   ugrhis: [{ numero: '06', nome: 'Alto Tietê', total: 3 }],
   municipios: [],
