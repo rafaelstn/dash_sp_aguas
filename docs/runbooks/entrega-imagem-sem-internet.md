@@ -359,10 +359,18 @@ for img in dashboard migrate carga-estoque; do
     'find / -xdev \( -iname "*.xlsx" -o -iname "*.xls" \) 2>/dev/null | wc -l'
 done
 
-# 5. As migrations novas estão DENTRO da imagem migrate, e a última é a 0073.
+# 5. Toda migration da revisão está DENTRO da imagem migrate.
+#    O número NÃO se escreve aqui: ele sai da árvore da revisão, e a conferência
+#    é a igualdade entre os dois lados. Fixado à mão, ele envelhece a cada
+#    migration nova e ensina a pular a conferência (este item dizia "a última é
+#    a 0073" com a revisão já na 0076, em 06/10/2026).
+NA_ARVORE=$(ls -1 supabase/migrations/*.sql | wc -l)
 docker run --rm --entrypoint sh spaguas/migrate:sha-$SHA -c \
-  'ls /migrations | grep -cE "^007[0123]_"; ls /migrations | sort | tail -1'
-#    espera: 4, e depois 0073_estoque_unidades_codigo_sem_caixa.sql
+  'ls -1 /migrations | grep -c "\.sql$"; ls -1 /migrations | sort | tail -1'
+#    espera: o mesmo $NA_ARVORE, e depois o nome da última migration da revisão.
+#    Quem manda nesta conferência é o passo "Conferir as imagens antes de
+#    empacotar" do .github/workflows/entrega-offline.yml, que faz a mesma
+#    igualdade e REPROVA o pacote: aqui é repetição para quem está no servidor.
 #    (MEDIDO em 16/09/2026: 73 arquivos na imagem, e o hash do SQL concatenado
 #    igual ao da árvore exportada)
 
