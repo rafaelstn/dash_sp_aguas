@@ -760,6 +760,13 @@ texto para não envelhecer a cada item que entra ou sai.
    que não foi entregue, e o item 7 é o único entregue pela metade; os outros seis
    subiram em `da5d868` (22/09) e estão no ar.
 
+Os dois e-mails que o órgão mandou depois daquela reunião trouxeram demandas
+novas, e elas têm lista própria em `docs/demandas-do-orgao-2026-10.md`, com o
+estado medido de cada uma e as decisões que faltam. **As perguntas de lá não se
+repetem aqui**: duas listas da mesma coisa divergem sozinhas, e a daquele
+documento é a mais rica. A única sobreposição é o mapa de UGRHI para gerência,
+que é o item 8 acima e nasceu antes.
+
 ---
 
 ## 5. Aviso de processo
