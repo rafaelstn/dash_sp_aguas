@@ -81,6 +81,7 @@ rodar('conferencia fisica contra Postgres real', () => {
       tamanho: null,
       motivo: 'seed de teste',
       usuarioId: USUARIO,
+      solicitanteMatricula: null,
     });
   }
 
@@ -200,6 +201,10 @@ rodar('conferencia fisica contra Postgres real', () => {
       tamanho: null,
       motivo: 'saida legitima durante a contagem',
       usuarioId: USUARIO,
+      // Saida de balcao, entao TEM solicitante: e o que a 0075 passou a exigir,
+      // e passar null aqui faria o CHECK ck_estoque_mov_saida_solicitante
+      // recusar o insert antes de o cenario chegar ao que ele mede.
+      solicitanteMatricula: '482913',
     });
     expect(await saldoDe(materialId, localId)).toBe(2);
 
@@ -339,6 +344,7 @@ rodar('conferencia fisica contra Postgres real', () => {
       tamanho: null,
       motivo: 'transferencia paralela',
       usuarioId: USUARIO,
+      solicitanteMatricula: null,
     });
 
     const r = await repo.reconciliarItem(sessao.id, item.id, USUARIO);
@@ -433,6 +439,7 @@ rodar('conferencia fisica contra Postgres real', () => {
       tamanho: null,
       motivo: 'descarte por dano irreparavel',
       usuarioId: USUARIO,
+      solicitanteMatricula: null,
     });
 
     // Transferir ressuscitaria a unidade num local e falsificaria o inventario.

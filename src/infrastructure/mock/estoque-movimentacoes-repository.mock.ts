@@ -149,6 +149,7 @@ export function aplicarMovimentacaoNaMemoria(
         motivo: cmd.motivo,
         usuarioId: cmd.usuarioId,
         conferenciaId,
+        solicitanteMatricula: cmd.solicitanteMatricula,
         criadoEm: new Date(),
       };
       estoqueStore.movimentacoes.push(mov);
@@ -204,6 +205,7 @@ export function aplicarMovimentacaoNaMemoria(
       motivo: cmd.motivo,
       usuarioId: cmd.usuarioId,
       conferenciaId,
+      solicitanteMatricula: cmd.solicitanteMatricula,
       criadoEm: new Date(),
     };
     estoqueStore.movimentacoes.push(mov);

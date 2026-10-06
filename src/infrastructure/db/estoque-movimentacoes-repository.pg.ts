@@ -39,6 +39,7 @@ type LinhaMov = {
   motivo: string | null;
   usuario_id: string;
   conferencia_id: string | null;
+  solicitante_matricula: string | null;
   criado_em: Date;
 };
 
@@ -67,6 +68,7 @@ function mapearMov(l: LinhaMov): Movimentacao {
     motivo: l.motivo,
     usuarioId: l.usuario_id,
     conferenciaId: l.conferencia_id,
+    solicitanteMatricula: l.solicitante_matricula,
     criadoEm: l.criado_em,
   };
 }
@@ -88,7 +90,7 @@ function mapearSaldo(l: LinhaSaldo): Saldo {
 const COLUNAS_MOV = () => sql`
   id, tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
   estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id,
-  conferencia_id, criado_em
+  conferencia_id, solicitante_matricula, criado_em
 `;
 const COLUNAS_SALDO = () => sql`id, material_id, local_id, quantidade, tamanho, atualizado_em`;
 
@@ -256,7 +258,7 @@ export const estoqueMovimentacoesRepository: EstoqueMovimentacoesRepository = {
         SELECT em.id, em.tipo, em.unidade_id, em.material_id, em.quantidade,
                em.local_origem, em.local_destino, em.estado_anterior, em.estado_novo,
                em.status_anterior, em.status_novo, em.motivo, em.usuario_id,
-               em.conferencia_id, em.criado_em,
+               em.conferencia_id, em.solicitante_matricula, em.criado_em,
                u.descricao AS unidade_descricao,
                COALESCE(u.pat_daee, u.numero_serie, u.codigo, u.codigo_spaguas) AS unidade_identificacao,
                mat.descricao AS material_descricao,
@@ -354,11 +356,12 @@ async function registrarSerializado(
     INSERT INTO estoque_movimentacoes (
       tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
       estado_anterior, estado_novo, status_anterior, status_novo, motivo, usuario_id,
-      conferencia_id
+      conferencia_id, solicitante_matricula
     ) VALUES (
       ${cmd.tipo}, ${unidadeId}::uuid, NULL, 1, ${localOrigem}, ${localDestino},
       ${estadoAnterior}, ${estadoNovo}, ${statusAnterior}, ${statusNovo},
-      ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId}
+      ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId},
+      ${cmd.solicitanteMatricula}
     )
     RETURNING ${COLUNAS_MOV()}
   `;
@@ -415,10 +418,11 @@ async function registrarQuantificavel(
   const movs = await tx<LinhaMov[]>`
     INSERT INTO estoque_movimentacoes (
       tipo, unidade_id, material_id, quantidade, local_origem, local_destino,
-      motivo, usuario_id, conferencia_id
+      motivo, usuario_id, conferencia_id, solicitante_matricula
     ) VALUES (
       ${cmd.tipo}, NULL, ${materialId}::uuid, ${q}, ${localOrigem}, ${localDestino},
-      ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId}
+      ${cmd.motivo}, ${cmd.usuarioId}::uuid, ${conferenciaId},
+      ${cmd.solicitanteMatricula}
     )
     RETURNING ${COLUNAS_MOV()}
   `;

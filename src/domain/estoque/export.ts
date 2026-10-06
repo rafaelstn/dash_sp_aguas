@@ -226,6 +226,13 @@ export const CABECALHO_MOVIMENTACAO: readonly string[] = [
   'Situação',
   'Motivo',
   'Operador',
+  // Coluna 12, acrescentada em 06/10/2026 com a migration 0075. Fica no FIM de
+  // proposito: coluna nova no meio desloca todas as seguintes, e a planilha e
+  // lida por pessoa que ja conhece a ordem. "Operador" e quem digitou;
+  // "Solicitante" e quem pediu o material, e sao papeis diferentes.
+  // Identificador, nunca nome: finalidade e auditoria de retirada, e a leitura do
+  // export passou a exigir gestor de estoque no mesmo trabalho.
+  'Solicitante (matrícula)',
 ];
 
 // ── Transformacao registro -> linha do xlsx (texto nulo vira celula vazia) ────
@@ -276,5 +283,9 @@ export function linhaMovimentacao(m: MovimentacaoExport, operadorRotulo: string)
     rotuloTransicaoStatus(m.statusAnterior, m.statusNovo),
     m.motivo ?? '',
     operadorRotulo,
+    // Celula vazia quando nao ha solicitante (entrada, transferencia, baixa,
+    // ajuste, e a saida gerada por reconciliacao de conferencia). Mesma regra das
+    // outras colunas nulaveis: texto nulo vira celula vazia, nunca "null".
+    m.solicitanteMatricula ?? '',
   ];
 }

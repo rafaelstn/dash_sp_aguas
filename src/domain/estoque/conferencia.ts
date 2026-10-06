@@ -265,6 +265,7 @@ export function resolverReconciliacao(item: ConferenciaItem): ComandoReconciliac
         localDestinoId: item.localEsperadoId,
         tamanho: item.tamanho,
         motivo,
+        solicitanteMatricula: null,
       };
     }
     return {
@@ -275,6 +276,11 @@ export function resolverReconciliacao(item: ConferenciaItem): ComandoReconciliac
       localDestinoId: null,
       tamanho: item.tamanho,
       motivo,
+      // null de proposito, e e o par exato da isencao `conferencia_id IS NOT
+      // NULL` da constraint ck_estoque_mov_saida_solicitante (0075): esta saida
+      // nao tem solicitante humano, porque ninguem retirou material, foi ajuste
+      // de inventario. Preencher matricula aqui seria inventar quem pediu.
+      solicitanteMatricula: null,
     };
   }
 
@@ -288,6 +294,7 @@ export function resolverReconciliacao(item: ConferenciaItem): ComandoReconciliac
       localDestinoId: item.localEncontradoId,
       tamanho: null,
       motivo,
+      solicitanteMatricula: null,
     };
   }
 

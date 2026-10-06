@@ -3,7 +3,7 @@ import {
   estoqueMovimentacoesRepository,
   usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
-import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
+import { exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { registrarMovimentacao } from '@/application/use-cases/estoque/registrar-movimentacao';
@@ -16,11 +16,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/estoque/movimentacoes — trilha de auditoria paginada. Leitura: usuario.
+ * GET /api/estoque/movimentacoes — trilha de auditoria paginada.
+ *
+ * Leitura: exigirGestorEstoque, e nao qualquer logado (decisao do Rafael em
+ * 06/10/2026, no mesmo trabalho da migration 0075). Motivo: a trilha passou a
+ * devolver `solicitanteMatricula`, que identifica a pessoa que retirou material,
+ * e ela ja devolvia o rotulo do operador. Trilha de auditoria de estoque nao e
+ * leitura geral do painel.
+ *
  * Filtros: tipo, unidadeId, materialId, local, usuarioId, de, ate, pagina, porPagina.
  */
 export async function GET(request: NextRequest) {
-  const auth = await exigirUsuario();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
   const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;
@@ -114,10 +121,22 @@ export async function POST(request: NextRequest) {
         motivo: 'motivo' in d ? d.motivo : undefined,
         estado: 'estado' in d ? d.estado : undefined,
         status: 'status' in d ? d.status : undefined,
+        // So o ramo `saida` do zod declara este campo; nos outros tipos o parse
+        // descarta a chave e aqui ela nem existe no objeto.
+        solicitanteMatricula:
+          'solicitanteMatricula' in d ? d.solicitanteMatricula : undefined,
       },
       auth.id,
     );
 
+    // Contexto do log por LISTA DE PERMISSAO: campo a campo, nunca
+    // `...resultado.movimentacao` nem lista de negacao, que e fail-open (campo
+    // novo no ledger entraria no log sozinho). `solicitanteMatricula` fica FORA
+    // de proposito: identifica a pessoa que retirou material, o log nao e a
+    // trilha (quem guarda o dado e a tabela, com finalidade e acesso definidos) e
+    // log nao tem a retencao nem o controle de acesso da tabela.
+    // Quem reprova se alguem acrescentar o campo aqui:
+    // tests/unit/api/estoque-movimentacao-solicitante-rota.test.ts.
     logger.info(
       'estoque.movimentacoes.registrada',
       {

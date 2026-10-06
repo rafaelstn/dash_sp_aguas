@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  MATRICULA_SOLICITANTE_MENSAGEM,
+  MATRICULA_SOLICITANTE_REGEX,
+} from '@/domain/estoque/movimentacao';
 
 /**
  * Schemas zod compartilhados pelas rotas do modulo Estoque. Zod valida a FORMA
@@ -87,7 +91,22 @@ const alvoBase = {
 
 export const movimentacaoSchema = z.discriminatedUnion('tipo', [
   z.object({ tipo: z.literal('entrada'), ...alvoBase, localDestino: z.string().uuid() }),
-  z.object({ tipo: z.literal('saida'), ...alvoBase, localOrigem: z.string().uuid() }),
+  z.object({
+    tipo: z.literal('saida'),
+    ...alvoBase,
+    localOrigem: z.string().uuid(),
+    // Quem SOLICITOU a saida, por matricula (0075). A regra vem do dominio e nao
+    // e reescrita aqui: duas copias da mesma guarda divergem na primeira vez que
+    // o orgao informar a mascara real. So declarado no ramo `saida`: nos outros
+    // tipos o zod descarta a chave, e identificador sem finalidade nao se grava.
+    //
+    // Sem `.trim()` de proposito: trim faria ' 482913' virar valido e gravaria
+    // valor diferente do digitado, e o espaco e justamente o que a guarda recusa
+    // para o campo nao voltar a ser nome livre.
+    solicitanteMatricula: z
+      .string()
+      .regex(MATRICULA_SOLICITANTE_REGEX, MATRICULA_SOLICITANTE_MENSAGEM),
+  }),
   z.object({
     tipo: z.literal('transferencia'),
     ...alvoBase,

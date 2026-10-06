@@ -259,10 +259,49 @@ CREATE INDEX IF NOT EXISTS idx_estoque_mov_material ON estoque_movimentacoes (ma
 CREATE INDEX IF NOT EXISTS idx_estoque_mov_tipo ON estoque_movimentacoes (tipo, criado_em DESC);
 CREATE INDEX IF NOT EXISTS idx_estoque_mov_usuario ON estoque_movimentacoes (usuario_id, criado_em DESC);
 ALTER TABLE IF EXISTS estoque_movimentacoes ENABLE ROW LEVEL SECURITY;
+
+-- 0074_estoque_movimentacoes_append_only.sql  (imutabilidade, 06/10/2026)
+REVOKE UPDATE, DELETE ON estoque_movimentacoes FROM PUBLIC;
+-- Gatilho BEFORE UPDATE OR DELETE que recusa INCLUSIVE para o dono: e ele, e nao o
+-- REVOKE, que sustenta a imutabilidade, porque privilegio de tabela nao vale contra o
+-- dono, que e o papel com que a aplicacao conecta.
+CREATE TRIGGER estoque_mov_append_only BEFORE UPDATE OR DELETE ON estoque_movimentacoes
+  FOR EACH ROW EXECUTE FUNCTION trg_estoque_mov_append_only();
+
+-- 0075_estoque_movimentacoes_solicitante_matricula.sql  (06/10/2026)
+ALTER TABLE estoque_movimentacoes
+  ADD COLUMN IF NOT EXISTS solicitante_matricula TEXT;  -- quem PEDIU a retirada
+-- As duas constraints sao NOT VALID de proposito: valem para linha NOVA e nao varrem o
+-- passado. Ver o COMMENT ON CONSTRAINT na propria migration antes de pensar em VALIDATE.
+ALTER TABLE estoque_movimentacoes
+  ADD CONSTRAINT ck_estoque_mov_matricula_formato CHECK (
+    solicitante_matricula IS NULL OR solicitante_matricula ~ '^[^[:space:]]{2,30}$'
+  ) NOT VALID;
+-- Isencao semantica: saida de reconciliacao de conferencia nao tem solicitante humano.
+ALTER TABLE estoque_movimentacoes
+  ADD CONSTRAINT ck_estoque_mov_saida_solicitante CHECK (
+    tipo <> 'saida' OR solicitante_matricula IS NOT NULL OR conferencia_id IS NOT NULL
+  ) NOT VALID;
 ```
 
-Nota de auditoria (governo): o ledger e append-only na pratica. Correcao nunca sobrescreve linha:
-gera nova movimentacao `ajuste` com motivo. Nao ha UPDATE/DELETE em `estoque_movimentacoes` pelo app.
+Nota de auditoria (governo): o ledger e append-only, e desde 06/10/2026 isso e GARANTIDO pelo
+banco, nao apenas pela aplicacao. Correcao nunca sobrescreve linha: gera nova movimentacao
+`ajuste` com motivo. Ate aquela data esta nota dizia "append-only na pratica" e "nao ha
+UPDATE/DELETE pelo app", que descrevia a disciplina do codigo e nao uma garantia: a 0059 nao
+tinha nem o `REVOKE` das sete trilhas anteriores, e o `REVOKE` sozinho nao bastaria, porque
+privilegio de tabela nao vale contra o dono. Quem recusa hoje e o gatilho da 0074, que tambem
+fecha um caminho de escrita IMPLICITO que a nota antiga nao cobria: `local_origem`,
+`local_destino` e `conferencia_id` sao FK `ON DELETE SET NULL`, e apagar o alvo reescrevia
+linha ja gravada em silencio.
+
+A coluna `solicitante_matricula` guarda IDENTIFICADOR e nunca nome: nome escrito a mao numa
+trilha imutavel fica sem caminho de retificacao, e o direito de correcao do titular passaria a
+exigir excecao a imutabilidade. O nome legivel e resolvido na LEITURA, a partir do cadastro.
+A consequencia de LGPD esta na secao 1 e na secao 5 de `docs/seguranca/direitos-do-titular-lgpd.md`.
+
+O segundo campo pedido pelo orgao, a autorizacao do responsavel, NAO existe: depende de login
+individual, que a janela sem identificacao do ADR-0024 nao tem, e da resposta do orgao sobre
+quem autoriza. O que foi entregue e o que falta estao em `docs/demandas-do-orgao-2026-10.md`.
 
 ### 2.5 Fluxo transacional da movimentacao (padrao do repo)
 
@@ -457,8 +496,16 @@ Novas politicas de rate limit em `src/infrastructure/security/rate-limit.ts`:
 | GET `/api/estoque/categorias` | usuario | listar | — |
 | POST/PATCH/DELETE `/api/estoque/categorias[/[id]]` | admin | CRUD categoria | corpo `categoriaSchema` |
 | GET `/api/estoque/saldos` | usuario | consultar saldo quantificavel | `materialId`, `local`, `unidade` |
-| POST `/api/estoque/movimentacoes` | admin | registrar movimentacao (nucleo) | corpo `movimentacaoSchema` |
-| GET `/api/estoque/movimentacoes` | usuario | trilha/auditoria paginada | `tipo`, `unidadeId`, `materialId`, `local`, `usuarioId`, `de`, `ate`, `pagina` |
+| POST `/api/estoque/movimentacoes` | gestor | registrar movimentacao (nucleo) | corpo `movimentacaoSchema`, com `solicitanteMatricula` exigido na saida |
+| GET `/api/estoque/movimentacoes` | gestor | trilha/auditoria paginada | `tipo`, `unidadeId`, `materialId`, `local`, `usuarioId`, `de`, `ate`, `pagina` |
+| GET `/api/estoque/export` | gestor | planilha da trilha e dos saldos | filtros da trilha |
+
+Sobre a coluna "auth" desta tabela, medido em 06/10/2026: o rotulo `admin` nas
+linhas acima significa o guard `exigirGestorEstoque`, e nao `exigirAdmin`, que
+guarda `/api/estoque/`... nenhuma rota, e sim a administracao de usuarios. O
+rotulo `usuario` significa `exigirUsuario`. Duas linhas sairam de `usuario` para
+`gestor` na mesma data, a trilha e o export: elas aceitavam qualquer usuario
+logado embora a planilha traga nome ou e-mail do operador.
 
 Schema zod principal (esboco, `movimentacaoSchema` — discriminated union por `tipo` com refinamentos):
 
@@ -563,11 +610,18 @@ erro/sucesso/borda; responsivo real (mobile/tablet); acessibilidade WCAG 2.1 AA 
 
 Mecanismo existente (`src/app/api/_helpers/auth.ts` + `src/domain/auth/papel.ts`):
 
-- Leitura (todos os GET): `const auth = await exigirUsuario(); if (auth instanceof NextResponse) return auth;`
+- Leitura de catalogo e saldo (GET materiais, unidades, locais, categorias, saldos):
+  `const auth = await exigirUsuario(); if (auth instanceof NextResponse) return auth;`
   Papeis `user`, `admin`, `super_admin` leem (user = consulta read-only).
-- Escrita (POST/PATCH/DELETE e `movimentacoes`): `const auth = await exigirAdmin();` (admin ou
-  super_admin). `user` recebe 403 `sem_papel_admin`. Nao criar papel novo: o RBAC atual ja cobre
-  ("admin/super_admin gerenciam; user consulta").
+- Leitura da TRILHA e o export (GET `movimentacoes`, GET `export`): `exigirGestorEstoque()`
+  desde 06/10/2026. Nao e leitura de catalogo: a planilha traz nome ou e-mail do operador, e
+  `user` passa a receber 403 `sem_papel_admin`. Este item dizia que TODO GET usava
+  `exigirUsuario`, o que era verdade e era o defeito.
+- Escrita (POST/PATCH/DELETE e `movimentacoes`): `const auth = await exigirGestorEstoque();`
+  (admin ou super_admin). `user` recebe 403 `sem_papel_admin`. Nao criar papel novo: o RBAC
+  atual ja cobre ("admin/super_admin gerenciam; user consulta"). Ate 06/10/2026 este item
+  escrevia `exigirAdmin`, que existe e guarda a administracao de USUARIOS, sem nenhuma
+  ocorrencia em rota de estoque; o guard destas rotas sempre foi `exigirGestorEstoque`.
 - Frontend esconde acao de escrita para `user`: o papel ja chega no cliente (mesmo mecanismo das
   telas admin/triagem). Botoes Adicionar/Editar/Excluir/Movimentar so renderizam para `ehAdmin(papel)`.
   Esconder no front e UX; a autorizacao real e sempre no backend (defesa em profundidade, nunca

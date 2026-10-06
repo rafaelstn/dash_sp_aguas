@@ -162,11 +162,41 @@ Faltam dois campos, os dois do trecho "no caso de retirada":
 1. **quem solicitou** a retirada;
 2. **autorização do responsável SP-Águas**.
 
-Hoje a saída grava quem registrou (pela trilha), o local, a quantidade e uma
-observação livre. O pedido é que solicitante e autorização sejam campos próprios,
-e isso muda o formulário e a trilha. Vale perguntar junto: a **autorização** é um
-nome digitado, uma lista de responsáveis cadastrados, ou um aceite que a pessoa
-autorizada dá no sistema? São três produtos diferentes, e o terceiro é bem maior.
+Hoje a saída grava quem registrou (pela trilha do usuário autenticado), o local
+de origem e a quantidade, e nada mais. Medido em 05/10/2026, e esta parte do
+documento estava errada antes: a saída não tem nem campo de observação livre. O
+único campo de texto da movimentação é o "motivo", exigido só na baixa e no
+ajuste, e a saída não o aceita. Então o pedido não é mover dado nenhum de lugar:
+os dois campos não existem, e abri-los muda o banco, o formulário, a trilha e a
+exportação.
+
+Vale perguntar junto: a **autorização** é um nome digitado, uma lista de
+responsáveis cadastrados, ou um aceite que a pessoa autorizada dá no sistema? São
+três produtos diferentes, e o terceiro é bem maior.
+
+Dos dois campos, **entregamos agora um só, "quem solicitou"**. A razão veio de
+medição feita em 06/10/2026, depois de este trecho já estar escrito: a autorização
+por identificador depende de três coisas que hoje não existem no servidor do órgão.
+A primeira é a resposta sobre quem são os responsáveis que podem autorizar. A
+segunda é login individual, porque o painel roda em acesso sem identificação e não
+há a quem atribuir a autorização. A terceira é um cadastro que devolva o nome dessas
+pessoas. Abrir a coluna antes disso gravaria "autorizado por" sem ninguém
+verificável atrás, que é justamente o defeito que o campo existe para evitar.
+
+"Quem solicitou" não depende de nada disso: é a matrícula funcional de quem pediu a
+retirada, digitada pelo operador, e passa a ser exigida em toda saída que não venha
+de uma reconciliação de inventário. Guardamos a matrícula, e não o nome, porque a
+trilha do estoque é imutável por exigência de auditoria: o que entra nela fica, e
+nome escrito à mão numa trilha imutável não tem como ser corrigido depois.
+
+Quando a autorização vier, ela também será identificador, e não nome digitado: nome
+digitado registra autorização que ninguém pode verificar, bastando alguém escrever o
+nome de quem não autorizou. O identificador recusa pessoa inexistente. Mesmo assim,
+o que isto **não** é: assinatura. Aceite dado pela própria pessoa autorizada é o
+terceiro produto, e segue em aberto.
+
+Precisamos do formato da matrícula funcional, porque hoje a única coisa que separa
+matrícula de nome digitado na validação é o espaço em branco.
 
 Continua valendo a pergunta já aberta: no modo de acesso sem identificação,
 abrir conferência exige papel de administrador, e no ensaio de 16/09 a operação
@@ -206,8 +236,14 @@ uma lista fechada de etapas.
    escrita liberada, ou segue no legado.
 2. Tabela de correspondência UGRHI para gerência (item 1).
 3. Os exemplos do poço e do perfil geológico (item 4).
-4. O que é a "autorização do responsável" na retirada: texto, lista ou aceite no
-   sistema (item 6).
+4. O que é a "autorização do responsável" na retirada (item 6). Esta **bloqueia a
+   metade da autorização**, e não bloqueia "quem solicitou", que entregamos agora.
+   Precisamos de duas informações para abrir o campo de autorização: quais
+   responsáveis da SP Águas terão conta no painel para autorizar, e se a
+   autorização é um nome escolhido entre esses responsáveis ou um aceite que a
+   própria pessoa dá no sistema. Uma terceira informação é independente dessa
+   resposta e já serve para o campo que entregamos: qual é o formato da matrícula
+   funcional de quem solicita.
 5. Confirmação do vocabulário de transmissão: "automática" é o nosso
    `gravacao_local` (item 1).
 

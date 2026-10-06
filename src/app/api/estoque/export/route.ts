@@ -6,7 +6,7 @@ import {
   estoqueUnidadesRepository,
   usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
-import { exigirUsuario } from '@/app/api/_helpers/auth';
+import { exigirGestorEstoque } from '@/app/api/_helpers/auth';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { logger } from '@/infrastructure/logging/logger';
 import { checarRateLimit } from '../_rl';
@@ -29,8 +29,14 @@ const CONTENT_TYPE_XLSX =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /**
- * GET /api/estoque/export — gera o XLSX do inventario para download. Leitura:
- * exigirUsuario (qualquer logado exporta o que consegue ver). Rate-limit:
+ * GET /api/estoque/export — gera o XLSX do inventario para download.
+ *
+ * Leitura: exigirGestorEstoque, e nao qualquer logado (decisao do Rafael em
+ * 06/10/2026). A frase anterior deste docblock dizia "qualquer logado exporta o
+ * que consegue ver" e, se tivesse ficado, viraria mentira no mesmo commit: a aba
+ * de movimentacoes passou a levar a coluna Solicitante (matricula), que
+ * identifica quem retirou material, e planilha baixada sai do controle de acesso
+ * do painel. Rate-limit:
  * leituraEstoque. Param `tipo` (serializado|quantificavel|movimentacoes) define
  * a aba e reaproveita os MESMOS filtros das rotas de listagem correspondentes;
  * o export respeita o filtro atual e traz TUDO (sem paginacao, teto TETO_EXPORT).
@@ -39,7 +45,7 @@ const CONTENT_TYPE_XLSX =
  * o filtro de tipo de movimento (entrada|saida|...) vem no param `tipoMov`.
  */
 export async function GET(request: NextRequest) {
-  const auth = await exigirUsuario();
+  const auth = await exigirGestorEstoque();
   if (auth instanceof NextResponse) return auth;
   const { headers, resposta } = checarRateLimit('leituraEstoque', auth.id, request);
   if (resposta) return resposta;

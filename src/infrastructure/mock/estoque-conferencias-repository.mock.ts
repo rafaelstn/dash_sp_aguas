@@ -444,7 +444,9 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
       }
       // Mesma validacao estrutural da movimentacao direta (paridade com o .pg).
       const cmdCompleto = { ...cmd, usuarioId };
-      validarComandoEstrutural(cmdCompleto);
+      // Contexto com a conferencia (paridade com o .pg): e o conferencia_id que
+      // isenta a saida de reconciliacao da exigencia de solicitante (0075).
+      validarComandoEstrutural(cmdCompleto, { conferenciaId });
       const resultado = aplicarMovimentacaoNaMemoria(cmdCompleto, conferenciaId);
       movimentacaoId = resultado.movimentacao.id;
     }

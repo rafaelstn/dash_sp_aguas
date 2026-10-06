@@ -50,6 +50,7 @@ describe('estoque, listarParaExport (mock) enriquece contexto', () => {
       tamanho: 'RG-58',
       motivo: null,
       usuarioId: 'user-1',
+      solicitanteMatricula: null,
     });
 
     const linhas = await saldos.listarParaExport({});
@@ -85,6 +86,7 @@ describe('estoque, listarParaExport (mock) enriquece contexto', () => {
       tamanho: null,
       motivo: null,
       usuarioId: 'user-1',
+      solicitanteMatricula: null,
     });
     await movimentacoes.registrar({
       tipo: 'entrada',
@@ -95,6 +97,7 @@ describe('estoque, listarParaExport (mock) enriquece contexto', () => {
       tamanho: null,
       motivo: null,
       usuarioId: 'user-1',
+      solicitanteMatricula: null,
     });
 
     const linhas = await movimentacoes.listarParaExport({});

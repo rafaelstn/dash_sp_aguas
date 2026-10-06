@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   CABECALHO_MOVIMENTACAO,
   CABECALHO_QUANTIFICAVEL,
@@ -198,6 +200,7 @@ describe('estoque/export, linhas do xlsx', () => {
     motivo: null,
     usuarioId: 'user-1',
     conferenciaId: null,
+    solicitanteMatricula: null,
     criadoEm: new Date('2026-07-15T18:05:00Z'),
     itemDescricao: 'Datalogger',
     itemIdentificacao: 'PAT-9',
@@ -227,7 +230,31 @@ describe('estoque/export, linhas do xlsx', () => {
       '', // situacao sem mudanca
       '', // motivo nulo
       'Maria Silva',
+      '', // solicitante: transferencia nao tem solicitante
     ]);
+  });
+
+  it('movimentacao de saida leva a matricula do solicitante na ultima coluna', () => {
+    // A coluna entrou em 06/10/2026 com a migration 0075. O indice sai do
+    // CABECALHO e nao do numero 11 escrito a mao: coluna nova no meio desloca
+    // tudo, e regua com indice fixo passaria a medir a celula errada calada.
+    const iSolicitante = CABECALHO_MOVIMENTACAO.indexOf('Solicitante (matrícula)');
+    expect(iSolicitante).toBeGreaterThanOrEqual(0);
+    const linha = linhaMovimentacao(
+      {
+        ...baseMov,
+        tipo: 'saida',
+        localDestinoId: null,
+        localDestinoRotulo: null,
+        solicitanteMatricula: 'SP-482913',
+      },
+      'Maria Silva',
+    );
+    expect(linha).toHaveLength(CABECALHO_MOVIMENTACAO.length);
+    expect(linha[iSolicitante]).toBe('SP-482913');
+    // Operador e solicitante sao papeis diferentes e ocupam celulas diferentes:
+    // sem esta assercao, trocar uma pela outra ficaria verde.
+    expect(linha[CABECALHO_MOVIMENTACAO.indexOf('Operador')]).toBe('Maria Silva');
   });
 
   it('movimentacao com mudanca de status mostra a transicao', () => {
@@ -239,5 +266,42 @@ describe('estoque/export, linhas do xlsx', () => {
     expect(linha[8]).toBe('Ativo -> Descarte');
     expect(linha[9]).toBe('sucata');
     expect(linha[10]).toBe('Importação');
+  });
+});
+
+/**
+ * Catraca das larguras da planilha de movimentacoes.
+ *
+ * Por que ela existe: a coluna nova de 06/10/2026 (Solicitante) entrou em TRES
+ * lugares que ninguem comparava (cabecalho, linha e larguras), e largura a menos
+ * nao quebra nada: a ultima coluna sai com a largura padrao do Excel e o defeito
+ * atravessa a entrega. O cabecalho e a linha ja se conferem pelo caso acima.
+ *
+ * O que ela mede: a QUANTIDADE de larguras no texto de
+ * src/application/use-cases/estoque/exportar-estoque.ts, contra
+ * CABECALHO_MOVIMENTACAO.length (lado mais rico, importado e nao copiado).
+ *
+ * O que ela NAO mede: que o Excel aplicou a largura. `LARGURAS_MOVIMENTACAO` nao
+ * e exportado, e o modulo importa `server-only` e o exceljs, que fora do
+ * `next build` nao sobem nesta suite. Isto e assercao de FORMA, de proposito, e
+ * esta dito aqui para ninguem a ler como prova de renderizacao.
+ */
+describe('export de movimentacoes, larguras x cabecalho', () => {
+  it('ha uma largura para cada coluna do cabecalho', () => {
+    const fonte = readFileSync(
+      resolve(process.cwd(), 'src/application/use-cases/estoque/exportar-estoque.ts'),
+      'utf-8',
+    );
+    const m = fonte.match(/const LARGURAS_MOVIMENTACAO = \[([^\]]*)\]/);
+    // Ancora de PRESENCA: sem ela, renomear a constante deixaria a contagem
+    // comparando zero com zero e a regua aprovaria o arquivo inteiro.
+    expect(m).not.toBeNull();
+    const larguras = m![1]!
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .map(Number);
+    expect(larguras.every((n) => Number.isFinite(n) && n > 0)).toBe(true);
+    expect(larguras).toHaveLength(CABECALHO_MOVIMENTACAO.length);
   });
 });

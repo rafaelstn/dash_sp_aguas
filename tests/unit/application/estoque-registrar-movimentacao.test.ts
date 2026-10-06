@@ -14,6 +14,18 @@ import {
 
 const USER = '99999999-9999-9999-9999-999999999999';
 
+/**
+ * Matricula de quem SOLICITOU a saida (migration 0075, 06/10/2026). Toda saida
+ * passou a exigir solicitante: sem o campo, os casos abaixo nao medem mais saldo
+ * nem nao-negatividade, e falham no 400 de validacao estrutural, que e OUTRA
+ * recusa. Um unico valor em const porque valor repetido a mao no mesmo arquivo
+ * envelhece de formas diferentes.
+ *
+ * A isencao da reconciliacao de conferencia nao vale aqui: este use case e a
+ * saida de balcao, que sempre tem solicitante.
+ */
+const SOLICITANTE = 'SP-482913';
+
 async function seedQuantificavel() {
   const material = await materiais.criar({ descricao: 'Cabo coaxial', natureza: 'quantificavel' });
   const l1 = await locais.criar({ unidade: 'PENHA', sala: '2' });
@@ -42,7 +54,13 @@ describe('use-case registrarMovimentacao (quantificavel)', () => {
 
     const s = await registrarMovimentacao(
       repo,
-      { tipo: 'saida', materialId: material.id, quantidade: 4, localOrigem: l1.id },
+      {
+        tipo: 'saida',
+        materialId: material.id,
+        quantidade: 4,
+        localOrigem: l1.id,
+        solicitanteMatricula: SOLICITANTE,
+      },
       USER,
     );
     expect(s.saldo?.quantidade).toBe(6);
@@ -60,7 +78,13 @@ describe('use-case registrarMovimentacao (quantificavel)', () => {
     await expect(
       registrarMovimentacao(
         repo,
-        { tipo: 'saida', materialId: material.id, quantidade: 6, localOrigem: l1.id },
+        {
+          tipo: 'saida',
+          materialId: material.id,
+          quantidade: 6,
+          localOrigem: l1.id,
+          solicitanteMatricula: SOLICITANTE,
+        },
         USER,
       ),
     ).rejects.toBeInstanceOf(SaldoInsuficiente);
@@ -71,11 +95,31 @@ describe('use-case registrarMovimentacao (quantificavel)', () => {
   it('esvaziar ate zero e entao retirar 1 lanca insuficiente (nao-negativo)', async () => {
     const { material, l1 } = await seedQuantificavel();
     await registrarMovimentacao(repo, { tipo: 'entrada', materialId: material.id, quantidade: 5, localDestino: l1.id }, USER);
-    await registrarMovimentacao(repo, { tipo: 'saida', materialId: material.id, quantidade: 5, localOrigem: l1.id }, USER);
+    await registrarMovimentacao(
+      repo,
+      {
+        tipo: 'saida',
+        materialId: material.id,
+        quantidade: 5,
+        localOrigem: l1.id,
+        solicitanteMatricula: SOLICITANTE,
+      },
+      USER,
+    );
     const zero = await saldos.obterPorMaterialLocal(material.id, l1.id, null);
     expect(zero?.quantidade).toBe(0);
     await expect(
-      registrarMovimentacao(repo, { tipo: 'saida', materialId: material.id, quantidade: 1, localOrigem: l1.id }, USER),
+      registrarMovimentacao(
+        repo,
+        {
+          tipo: 'saida',
+          materialId: material.id,
+          quantidade: 1,
+          localOrigem: l1.id,
+          solicitanteMatricula: SOLICITANTE,
+        },
+        USER,
+      ),
     ).rejects.toBeInstanceOf(SaldoInsuficiente);
   });
 

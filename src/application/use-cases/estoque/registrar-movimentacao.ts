@@ -30,6 +30,12 @@ export interface EntradaRegistrarMovimentacao {
   estado?: Estado | null;
   /** Ajuste serializado: novo status (undefined = nao mexer). */
   status?: Status;
+  /**
+   * Matricula de quem SOLICITOU a saida (0075). Diferente de `usuarioId`, que e
+   * quem operou o sistema e vem do auth: este campo vem do corpo, porque quem
+   * pede o material pode nao ter conta no painel. E identificador, nunca nome.
+   */
+  solicitanteMatricula?: string | null;
 }
 
 /**
@@ -60,6 +66,10 @@ export async function registrarMovimentacao(
   const localDestinoId = entrada.localDestino ?? null;
   const motivo = entrada.motivo ?? null;
   const quantidade = entrada.quantidade ?? 1;
+  // Sem trim de proposito: espaco e exatamente o que a guarda da 0075 recusa, e
+  // normalizar aqui gravaria silenciosamente valor diferente do que o balcao
+  // digitou. Quem erra ve a mensagem do campo.
+  const solicitanteMatricula = entrada.solicitanteMatricula ?? null;
 
   validarComandoEstrutural({
     tipo: entrada.tipo,
@@ -71,6 +81,7 @@ export async function registrarMovimentacao(
     motivo,
     novoEstado: entrada.estado,
     novoStatus: entrada.status,
+    solicitanteMatricula,
   });
 
   const comando: ComandoMovimentacao = {
@@ -84,6 +95,7 @@ export async function registrarMovimentacao(
     novoEstado: entrada.estado,
     novoStatus: entrada.status,
     usuarioId,
+    solicitanteMatricula,
   };
 
   return repo.registrar(comando);

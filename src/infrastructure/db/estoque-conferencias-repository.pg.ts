@@ -787,7 +787,12 @@ export const estoqueConferenciasRepository: EstoqueConferenciasRepository = {
           // comando so encontraria o CHECK do banco (transferencia com origem
           // nula ou igual ao destino), que sai como 500 opaco e trava o item.
           const cmdCompleto = { ...cmd, usuarioId };
-          validarComandoEstrutural(cmdCompleto);
+          // O contexto leva o id da conferencia porque e ele que isenta a saida
+          // de reconciliacao da exigencia de solicitante (CHECK
+          // ck_estoque_mov_saida_solicitante, 0075). Sem passar o contexto a
+          // reconciliacao de divergencia negativa pararia de funcionar com 400,
+          // e o mesmo id ja vai no carimbo logo abaixo.
+          validarComandoEstrutural(cmdCompleto, { conferenciaId });
 
           // 5. Aplica a movimentacao na MESMA transacao (reusa o nucleo do ledger,
           // sem abrir outra sql.begin/conexao). Carimba conferencia_id.

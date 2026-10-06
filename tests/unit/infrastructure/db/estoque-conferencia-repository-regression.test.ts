@@ -54,10 +54,25 @@ describe('estoque-conferencias-repository.pg, snapshot + reconciliacao', () => {
     expect(src).toMatch(/aplicarMovimentacaoNaTx\(\s*tx,\s*cmdCompleto,\s*conferenciaId,?\s*\)/);
   });
 
-  it('valida o comando estruturalmente antes de tocar o ledger', () => {
+  it('valida o comando estruturalmente antes de tocar o ledger, com o contexto da conferencia', () => {
     // Sem isso, transferencia sem origem (ou origem igual ao destino) so seria
     // barrada pelo CHECK do banco, virando 500 opaco com o item travado.
-    expect(src).toMatch(/validarComandoEstrutural\(cmdCompleto\)/);
+    //
+    // A assercao mudou em 06/10/2026 (0075) e NAO foi apagada: antes exigia
+    // `validarComandoEstrutural(cmdCompleto)` com o parentese colado, forma que
+    // passou a reprovar a chamada correta. O segundo argumento e o que leva o
+    // conferencia_id ao dominio; sem ele a saida de reconciliacao cai na
+    // exigencia de solicitante e a reconciliacao de divergencia negativa morre
+    // com 400 (medido: era a falha de tests/unit/application/estoque-conferencia.test.ts).
+    expect(src).toMatch(
+      /validarComandoEstrutural\(cmdCompleto, \{ conferenciaId \}\)/,
+    );
+    // Paridade: o mock chama a MESMA funcao com o MESMO contexto. Duas
+    // implementacoes do mesmo contrato divergem sozinhas quando so uma e medida.
+    const srcMock = ler('src/infrastructure/mock/estoque-conferencias-repository.mock.ts');
+    expect(srcMock).toMatch(
+      /validarComandoEstrutural\(cmdCompleto, \{ conferenciaId \}\)/,
+    );
   });
 
   it('recusa reconciliar item sem divergencia', () => {
@@ -97,8 +112,13 @@ describe('estoque-movimentacoes-repository.pg, refactor do nucleo transacional',
     expect(src).toMatch(/sql\.begin\(async \(tx\) =>\s*\n?\s*aplicarMovimentacaoNaTx\(/);
   });
 
-  it('COLUNAS_MOV passa a ler conferencia_id (coluna 0064)', () => {
-    expect(src).toMatch(/conferencia_id, criado_em/);
+  it('COLUNAS_MOV passa a ler conferencia_id (0064) e solicitante_matricula (0075)', () => {
+    // Assercao INVERTIDA em 06/10/2026, nunca apagada: a 0075 entrou entre
+    // conferencia_id e criado_em, e a forma antiga (`conferencia_id, criado_em`)
+    // passaria a reprovar a lista correta. Quem mede a lista inteira nos dois
+    // sentidos (COLUNAS_MOV contra o SELECT do export) e
+    // tests/unit/infrastructure/db/estoque-solicitante-matricula-regression.test.ts.
+    expect(src).toMatch(/conferencia_id, solicitante_matricula, criado_em/);
   });
 });
 

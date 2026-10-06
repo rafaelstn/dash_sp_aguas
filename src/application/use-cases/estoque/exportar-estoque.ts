@@ -60,7 +60,10 @@ interface PlanilhaMontada {
 
 const LARGURAS_SERIALIZADO = [34, 16, 16, 14, 18, 16, 14, 20, 12, 12, 28, 12, 12, 16, 40];
 const LARGURAS_QUANTIFICAVEL = [34, 16, 16, 18, 12, 28, 14, 12];
-const LARGURAS_MOVIMENTACAO = [18, 15, 14, 40, 12, 24, 24, 22, 22, 30, 26];
+// A ultima largura (22) e a coluna Solicitante (matricula), de 06/10/2026: a
+// quantidade de larguras tem de bater com CABECALHO_MOVIMENTACAO, e quem denuncia
+// divergencia e tests/unit/domain/estoque-export.test.ts.
+const LARGURAS_MOVIMENTACAO = [18, 15, 14, 40, 12, 24, 24, 22, 22, 30, 26, 22];
 
 /** Data AAAA-MM-DD (hora de Sao Paulo) para o nome do arquivo. */
 function dataArquivo(agora: Date): string {
