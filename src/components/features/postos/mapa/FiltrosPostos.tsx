@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import {
   AUSENCIAS_VAZAO,
+  chaveMantenedor,
   FONTES_VAZAO,
   SITUACOES_POSTO,
   TIPOS_POSTO_MAPA,
@@ -22,6 +23,7 @@ import {
   contarFiltrosAtivos,
   UF_TODAS,
   type EstadoTela,
+  type MantenedorSelecionado,
   type UfSelecionada,
   type UgrhiSelecionada,
 } from './estado-url';
@@ -39,7 +41,7 @@ import {
  */
 
 export type MudancaFiltros = Partial<
-  Pick<EstadoTela, 'tipos' | 'situacoes' | 'transmissoes' | 'vazao' | 'ugrhi' | 'uf'>
+  Pick<EstadoTela, 'tipos' | 'situacoes' | 'transmissoes' | 'vazao' | 'ugrhi' | 'uf' | 'mantenedor'>
 >;
 
 interface FiltrosPostosProps {
@@ -173,6 +175,84 @@ function OpcoesUf({ facetas, estado }: { facetas: FacetasMapa | null; estado: Es
       ))}
       {selecionadaAusente && <option value={estado.uf as string}>{estado.uf} (0)</option>}
       <option value="sem">Sem UF ({fmt(sem?.total ?? 0)})</option>
+    </>
+  );
+}
+
+/**
+ * Valor do `<select>` para o mantenedor escolhido.
+ *
+ * Não é o texto cru do estado: a opção da lista tem o nome como o CADASTRO
+ * grava, e o link pode trazer outra caixa ou sem acento. Medido em 05/10/2026,
+ * com o caso em `tests/unit/componentes/postos-filtro-mantenedor.test.tsx`:
+ * `/?mantenedor=sabesp` com a faceta trazendo "SABESP" deixava o campo em
+ * "Todos os mantenedores" com o filtro aplicado, porque `value="sabesp"` não
+ * casa com `<option value="SABESP">` (o HTML compara os valores byte a byte) e
+ * a opção de resgate, que compara por chave, via o mantenedor como presente.
+ *
+ * Com a faceta na mão, o valor passa a ser o rótulo do cadastro; sem ela (carga
+ * e erro) continua o do link, e aí quem desenha a opção é o resgate.
+ */
+function valorMantenedor(m: MantenedorSelecionado, facetas: FacetasMapa | null): string {
+  if (m === null) return '';
+  if (m === 'sem') return 'sem';
+  const chave = chaveMantenedor(m);
+  const doCadastro = facetas?.mantenedor.find(
+    (f) => f.mantenedor !== null && chaveMantenedor(f.mantenedor) === chave,
+  );
+  return doCadastro?.mantenedor ?? m;
+}
+
+function lerMantenedorOpcao(valor: string): MantenedorSelecionado {
+  return valor === '' ? null : valor;
+}
+
+/**
+ * Opções de mantenedor com a contagem cruzada, pedidas pelo órgão em
+ * 30/09/2026 ("a lista dos mantenedores e quantos postos cada um tem").
+ *
+ * Lista suspensa, como UF e UGRHI da mesma barra, e não o `<input list>` com
+ * `<datalist>` que a tela de Busca usa para o mesmo campo: ali o filtro é texto
+ * digitado e não tem contagem, e aqui a contagem é justamente a demanda. O
+ * `<select>` nativo também aceita digitar para pular até o nome, que é o que
+ * resolve uma lista longa sem código de teclado novo.
+ *
+ * A cardinalidade real do `Dbfch` NÃO foi medida (depende da VPN do órgão); o
+ * `<datalist>` da Busca corta em 500 nomes, então o campo nasce com largura
+ * limitada. Passando de algumas centenas de operadoras, o controle certo volta
+ * a ser o campo com `<datalist>`, e isso é troca de componente, não de regra.
+ *
+ * O valor da opção é o nome como o CADASTRO grava, e a comparação da opção de
+ * resgate é por `chaveMantenedor`: abrir `/?mantenedor=sabesp` casa com a
+ * "SABESP" da faceta, e sem a chave a tela desenharia uma segunda opção com
+ * total zero para o mesmo mantenedor. O resto do motivo está em `OpcoesUgrhi`.
+ */
+function OpcoesMantenedor({
+  facetas,
+  estado,
+}: {
+  facetas: FacetasMapa | null;
+  estado: EstadoTela;
+}) {
+  const lista = facetas?.mantenedor ?? [];
+  const nomes = lista.filter((m): m is { mantenedor: string; total: number } => m.mantenedor !== null);
+  const sem = lista.find((m) => m.mantenedor === null);
+  const escolhido = estado.mantenedor;
+  const selecionadaAusente =
+    typeof escolhido === 'string' &&
+    escolhido !== 'sem' &&
+    !nomes.some((m) => chaveMantenedor(m.mantenedor) === chaveMantenedor(escolhido));
+  const total = lista.reduce((s, m) => s + m.total, 0);
+  return (
+    <>
+      <option value="">Todos os mantenedores{facetas ? ` (${fmt(total)})` : ''}</option>
+      {nomes.map((m) => (
+        <option key={m.mantenedor} value={m.mantenedor}>
+          {m.mantenedor} ({fmt(m.total)})
+        </option>
+      ))}
+      {selecionadaAusente && <option value={escolhido}>{escolhido} (0)</option>}
+      <option value="sem">Sem mantenedor ({fmt(sem?.total ?? 0)})</option>
     </>
   );
 }
@@ -423,6 +503,7 @@ export function FiltrosDesktop({ estado, facetas, aoMudar, aoLimpar }: FiltrosPo
   const idVazao = useId();
   const idUgrhi = useId();
   const idUf = useId();
+  const idMantenedor = useId();
   const ativos = contarFiltrosAtivos(estado);
   return (
     <div className="hidden space-y-2 md:block">
@@ -466,6 +547,17 @@ export function FiltrosDesktop({ estado, facetas, aoMudar, aoLimpar }: FiltrosPo
         >
           <OpcoesUgrhi facetas={facetas} estado={estado} />
         </CampoSelect>
+        <label htmlFor={idMantenedor} className="sr-only">
+          Mantenedor
+        </label>
+        <CampoSelect
+          id={idMantenedor}
+          value={valorMantenedor(estado.mantenedor, facetas)}
+          onChange={(e) => aoMudar({ mantenedor: lerMantenedorOpcao(e.target.value) })}
+          className={`max-w-[18rem] ${estado.mantenedor !== null ? 'border-gov-azul text-gov-azul-escuro' : ''}`}
+        >
+          <OpcoesMantenedor facetas={facetas} estado={estado} />
+        </CampoSelect>
         {ativos > 0 && (
           <button
             type="button"
@@ -488,6 +580,7 @@ export function FiltrosCelular({ estado, facetas, totalFiltrado, aoMudar, aoLimp
   const idTitulo = useId();
   const idUgrhi = useId();
   const idUf = useId();
+  const idMantenedor = useId();
   const ativos = contarFiltrosAtivos(estado);
 
   useEffect(() => {
@@ -663,6 +756,20 @@ export function FiltrosCelular({ estado, facetas, totalFiltrado, aoMudar, aoLimp
                 className="h-11 w-full"
               >
                 <OpcoesUgrhi facetas={facetas} estado={estado} />
+              </CampoSelect>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor={idMantenedor} className="block text-sm font-semibold text-app-fg">
+                Mantenedor
+              </label>
+              <CampoSelect
+                id={idMantenedor}
+                value={valorMantenedor(estado.mantenedor, facetas)}
+                onChange={(e) => aoMudar({ mantenedor: lerMantenedorOpcao(e.target.value) })}
+                envoltorio="w-full"
+                className="h-11 w-full"
+              >
+                <OpcoesMantenedor facetas={facetas} estado={estado} />
               </CampoSelect>
             </div>
           </div>

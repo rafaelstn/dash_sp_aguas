@@ -56,6 +56,7 @@ const PONTO: PontoMapaPosto = {
   ugrhi: 7,
   municipio: 'SANTOS',
   uf: 'SP',
+  mantenedor: null,
   coordenadaSuspeita: false,
 };
 

@@ -37,11 +37,24 @@ export type UfSelecionada = string | 'sem' | null;
 /** Valor de `uf` na URL que pede todos os estados (sem ele, abre em SP). */
 export const UF_TODAS = 'todas';
 
+/**
+ * Mantenedor escolhido: o nome como o cadastro grava, `'sem'` para os postos
+ * sem operadora, ou `null` para todos.
+ *
+ * Era parte do `EscopoServidor` até 05/10/2026, quando virou dimensão
+ * classificada: faceta é contagem CRUZADA, e recortado no servidor a lista
+ * mostraria só a opção já marcada. O parâmetro da URL continua se chamando
+ * `mantenedor`, porque o painel linka `/?mantenedor=<nome>` e há link salvo.
+ *
+ * Escolha única, e não lista como tipo e situação: o nome é texto livre do
+ * cadastro e pode conter vírgula, que é o separador das listas na URL e na API.
+ */
+export type MantenedorSelecionado = string | 'sem' | null;
+
 /** Recorte que a API aplica no servidor. O resto dos filtros roda no navegador. */
 export interface EscopoServidor {
   readonly municipio: string | null;
   readonly bacia: string | null;
-  readonly mantenedor: string | null;
   readonly favoritos: boolean;
 }
 
@@ -53,6 +66,7 @@ export interface EstadoTela {
   readonly vazao: OpcaoVazao | null;
   readonly ugrhi: UgrhiSelecionada;
   readonly uf: UfSelecionada;
+  readonly mantenedor: MantenedorSelecionado;
   readonly posto: string | null;
   readonly escopo: EscopoServidor;
 }
@@ -69,8 +83,9 @@ export const ESTADO_PADRAO: EstadoTela = {
   vazao: null,
   ugrhi: null,
   uf: UF_DO_ESTADO,
+  mantenedor: null,
   posto: null,
-  escopo: { municipio: null, bacia: null, mantenedor: null, favoritos: false },
+  escopo: { municipio: null, bacia: null, favoritos: false },
 };
 
 interface LeitorParametros {
@@ -151,11 +166,11 @@ export function lerEstado(p: LeitorParametros): EstadoTela {
     vazao: lerVazao(p),
     ugrhi: lerUgrhi(p),
     uf: lerUf(p),
+    mantenedor: texto(p.get('mantenedor')),
     posto: texto(p.get('posto')),
     escopo: {
       municipio: texto(p.get('municipio')),
       bacia: texto(p.get('bacia')),
-      mantenedor: texto(p.get('mantenedor')),
       favoritos: favoritos === '1' || favoritos === 'true',
     },
   };
@@ -177,10 +192,10 @@ export function serializarEstado(estado: EstadoTela): string {
   if (estado.vazao) u.set('vazao', estado.vazao);
   if (estado.ugrhi !== null) u.set('ugrhi', String(estado.ugrhi));
   if (estado.uf !== UF_DO_ESTADO) u.set('uf', estado.uf ?? UF_TODAS);
-  const { municipio, bacia, mantenedor, favoritos } = estado.escopo;
+  if (estado.mantenedor) u.set('mantenedor', estado.mantenedor);
+  const { municipio, bacia, favoritos } = estado.escopo;
   if (municipio) u.set('municipio', municipio);
   if (bacia) u.set('bacia', bacia);
-  if (mantenedor) u.set('mantenedor', mantenedor);
   if (favoritos) u.set('favoritos', '1');
   if (estado.posto) u.set('posto', estado.posto);
   return u.toString();
@@ -191,13 +206,12 @@ export function parametrosDaApi(escopo: EscopoServidor): string {
   const u = new URLSearchParams();
   if (escopo.municipio) u.set('municipio', escopo.municipio);
   if (escopo.bacia) u.set('bacia', escopo.bacia);
-  if (escopo.mantenedor) u.set('mantenedor', escopo.mantenedor);
   if (escopo.favoritos) u.set('favoritos', '1');
   return u.toString();
 }
 
 export function temEscopo(escopo: EscopoServidor): boolean {
-  return Boolean(escopo.municipio || escopo.bacia || escopo.mantenedor || escopo.favoritos);
+  return Boolean(escopo.municipio || escopo.bacia || escopo.favoritos);
 }
 
 /**
@@ -232,6 +246,10 @@ export function filtrosDoEstado(estado: EstadoTela): FiltrosClassificacao {
     vazao: estado.vazao ? [estado.vazao] : undefined,
     ugrhi: estado.ugrhi === null ? undefined : [estado.ugrhi === 'sem' ? null : estado.ugrhi],
     uf: estado.uf === null ? undefined : [estado.uf === 'sem' ? null : estado.uf],
+    mantenedor:
+      estado.mantenedor === null
+        ? undefined
+        : [estado.mantenedor === 'sem' ? null : estado.mantenedor],
   };
 }
 
@@ -244,6 +262,7 @@ export function contarFiltrosAtivos(estado: EstadoTela): number {
   if (estado.vazao) n++;
   if (estado.ugrhi !== null) n++;
   if (estado.uf !== UF_DO_ESTADO) n++;
+  if (estado.mantenedor !== null) n++;
   return n;
 }
 

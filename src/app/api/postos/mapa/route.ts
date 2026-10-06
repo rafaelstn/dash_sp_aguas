@@ -77,7 +77,16 @@ const querySchema = z.object({
   q: z.string().trim().max(60).optional(),
   municipio: textoOpcional,
   bacia: textoOpcional,
-  mantenedor: textoOpcional,
+  /**
+   * Escolha ÚNICA, e não lista como as outras dimensões: o nome da entidade é
+   * texto livre do cadastro e pode conter vírgula, que é justamente o separador
+   * que `multiplos` usa. Partir "PREFEITURA DE X, SP" em dois valores devolveria
+   * zero posto com 200. O domínio aceita lista, e a rota manda um item.
+   */
+  mantenedor: ouSemValor(
+    z.string().trim().min(1).max(200),
+    'nome do mantenedor, ou "sem" para os postos sem operadora',
+  ).optional(),
   favoritos: z.boolean().optional(),
   tipo: z.array(z.enum(TIPOS_POSTO_MAPA)).optional(),
   situacao: z.array(z.enum(SITUACOES_POSTO)).optional(),
@@ -108,7 +117,9 @@ const querySchema = z.object({
  *
  * Query (todos opcionais):
  *   q            termo livre ou código de posto (mesma regra da busca)
- *   municipio, bacia, mantenedor   igualdade, como na busca
+ *   municipio, bacia  igualdade, como na busca
+ *   mantenedor   nome da entidade operadora, comparado sem caixa e sem acento,
+ *                ou `sem` para os postos sem operadora. Escolha única
  *   favoritos    `1` ou `true`
  *   tipo         plu, flu, piezo, meteo
  *   situacao     em_operacao, extinto
@@ -179,7 +190,7 @@ export async function GET(request: NextRequest) {
       termo: q.q,
       municipio: q.municipio,
       baciaHidrografica: q.bacia,
-      mantenedor: q.mantenedor,
+      mantenedor: q.mantenedor === undefined ? undefined : [q.mantenedor],
       apenasFavoritos: q.favoritos,
       usuarioId: usuario.id,
       tipo: q.tipo,
@@ -204,6 +215,9 @@ export async function GET(request: NextRequest) {
           vazao: q.vazao,
           ugrhi: q.ugrhi,
           uf: q.uf,
+          // Só se havia filtro, como `termo`: nome de entidade do cadastro é
+          // texto livre, e este log não guarda texto livre.
+          mantenedor: q.mantenedor !== undefined,
           favoritos: q.favoritos === true,
         },
         duracaoMs: Date.now() - inicio,

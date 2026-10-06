@@ -66,6 +66,7 @@ function ponto(p: Posto, anoAtual: number): PontoMapaPosto {
     vazao,
     ugrhi: ugrhi !== null && Number.isFinite(ugrhi) ? ugrhi : null,
     municipio: p.municipio,
+    mantenedor: p.mantenedor,
     // As fixtures saem da planilha da rede paulista, que só tem postos de SP.
     uf: UF_DO_ESTADO,
     coordenadaSuspeita: coordenadaSuspeita(lat, lon),
@@ -94,7 +95,6 @@ export const mapaPostosRepositoryMock: MapaPostosRepository = {
       if (filtro.baciaHidrografica && !igual(p.baciaHidrografica, filtro.baciaHidrografica)) {
         return false;
       }
-      if (filtro.mantenedor && !igual(p.mantenedor, filtro.mantenedor)) return false;
       return true;
     })
       .sort((a, b) => a.prefixo.localeCompare(b.prefixo))

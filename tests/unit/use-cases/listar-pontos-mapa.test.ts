@@ -22,6 +22,7 @@ const PONTOS: PontoMapaPosto[] = [
     ugrhi: 2,
     municipio: 'CRUZEIRO',
     uf: 'SP',
+    mantenedor: null,
     coordenadaSuspeita: false,
   },
   {
@@ -36,6 +37,7 @@ const PONTOS: PontoMapaPosto[] = [
     ugrhi: 15,
     municipio: null,
     uf: 'PR',
+    mantenedor: null,
     coordenadaSuspeita: false,
   },
 ];

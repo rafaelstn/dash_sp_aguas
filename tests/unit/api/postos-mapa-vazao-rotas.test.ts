@@ -72,6 +72,12 @@ describe('GET /api/postos/mapa', () => {
         'coordenadaSuspeita',
         'lat',
         'lon',
+        // Entrou em 05/10/2026 com o filtro de mantenedor. O payload cresce um
+        // nome por ponto: medido em 5.790 pontos sintéticos, +10,9% no JSON e
+        // +5,7% depois do gzip com cinquenta mantenedores distintos (+15,5% no
+        // cenário pessimista de quinhentos). A cardinalidade real do `Dbfch`
+        // NÃO foi medida, porque depende da VPN do órgão.
+        'mantenedor',
         'municipio',
         'nome',
         'prefixo',

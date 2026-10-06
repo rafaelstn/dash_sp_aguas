@@ -31,11 +31,27 @@ vi.mock('@/infrastructure/db/mssql-client', async (original) => {
   };
 });
 
-import { mapaPostosRepositoryMssql } from '@/infrastructure/db/mapa-postos-repository.mssql';
+import {
+  mapaPostosRepositoryMssql,
+  type LinhaPontoMssql,
+} from '@/infrastructure/db/mapa-postos-repository.mssql';
 import { vazaoPostoRepositoryMssql } from '@/infrastructure/db/vazao-posto-repository.mssql';
 import { FalhaRepositorio } from '@/domain/errors';
 
 const ID = 'AAAAAAAA-0000-0000-0000-000000000001';
+
+/**
+ * Dá tipo ao literal do recordset do mapa.
+ *
+ * Não tem `Partial` de propósito: o que esta função faz é obrigar toda coluna
+ * da consulta a aparecer no dublê. Sem ela o dublê era `unknown[]`, e a coluna
+ * `Mantenedor` entrou em 05/10/2026 com o typecheck verde e as duas asserções
+ * quebrando em execução por `undefined.trim()`. Coluna nova agora reprova aqui,
+ * dizendo o nome dela.
+ */
+function linhaMapa(l: LinhaPontoMssql): LinhaPontoMssql {
+  return l;
+}
 
 beforeEach(() => {
   respostas.fila = [];
@@ -45,7 +61,7 @@ beforeEach(() => {
 describe('mapaPostosRepositoryMssql', () => {
   it('SQL passa pela guarda e as colunas de bit viram listas', async () => {
     respostas.fila.push(() => [
-      {
+      linhaMapa({
         Prefixo: '2D-013 ',
         Nome: ' Rio X ',
         Latitude: -22.123456789,
@@ -55,14 +71,15 @@ describe('mapaPostosRepositoryMssql', () => {
         UgrhiNumero: 5,
         Municipio: ' CRUZEIRO ',
         Uf: 'sp',
+        Mantenedor: ' SABESP ',
         Telemetrico: 1,
         GravacaoLocal: 1,
         Convencional: 0,
         VazaoAparelho: 1,
         Medicao: 0,
         Curva: 1,
-      },
-      {
+      }),
+      linhaMapa({
         Prefixo: 'B0-001',
         Nome: null,
         Latitude: -23.1,
@@ -72,13 +89,17 @@ describe('mapaPostosRepositoryMssql', () => {
         UgrhiNumero: null,
         Municipio: '  ',
         Uf: null,
+        // Posto sem operadora no cadastro: o `LEFT JOIN` devolve nulo, e o
+        // ponto tem de sair com `mantenedor: null`, que é o que a tela conta
+        // como "Sem mantenedor".
+        Mantenedor: null,
         Telemetrico: null,
         GravacaoLocal: null,
         Convencional: null,
         VazaoAparelho: null,
         Medicao: 0,
         Curva: 0,
-      },
+      }),
     ]);
     const pontos = await mapaPostosRepositoryMssql.listarPontos({});
     expect(pontos[0]).toEqual({
@@ -92,6 +113,9 @@ describe('mapaPostosRepositoryMssql', () => {
       vazao: ['aparelho_ativo', 'curva'],
       ugrhi: 5,
       municipio: 'CRUZEIRO',
+      // O espaço do mainframe cai aqui, e não na comparação da tela: duas
+      // linhas com ' SABESP ' e 'SABESP' tinham de somar na mesma faceta.
+      mantenedor: 'SABESP',
       uf: 'SP',
       coordenadaSuspeita: false,
     });
@@ -105,6 +129,7 @@ describe('mapaPostosRepositoryMssql', () => {
       vazao: [],
       ugrhi: null,
       municipio: null,
+      mantenedor: null,
       uf: null,
       coordenadaSuspeita: false,
     });
@@ -118,7 +143,8 @@ describe('mapaPostosRepositoryMssql', () => {
   });
 
   it('UF só vira sigla com duas letras, e grau inteiro nos dois eixos marca suspeita', async () => {
-    const linha = (prefixo: string, uf: string | null, lat: number, lon: number) => ({
+    const linha = (prefixo: string, uf: string | null, lat: number, lon: number) =>
+      linhaMapa({
       Prefixo: prefixo,
       Nome: null,
       Latitude: lat,
@@ -128,13 +154,14 @@ describe('mapaPostosRepositoryMssql', () => {
       UgrhiNumero: null,
       Municipio: null,
       Uf: uf,
+      Mantenedor: null,
       Telemetrico: null,
       GravacaoLocal: null,
       Convencional: null,
       VazaoAparelho: null,
       Medicao: 0,
       Curva: 0,
-    });
+      });
     respostas.fila.push(() => [
       // Os casos medidos no Dbfch em 17/09/2026.
       linha('4G-002', 'SP', -25, -47),

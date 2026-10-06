@@ -44,7 +44,17 @@ import {
 
 const PIEZOMETRO_CONVENCIONAL = 'PIEZOMETRO';
 
-interface LinhaPontoMssql {
+/**
+ * Uma linha da consulta de pontos, como o `Dbfch` a devolve.
+ *
+ * Exportado para a régua do adaptador tipar o recordset do dublê. Era interno
+ * até 05/10/2026, quando a coluna `Mantenedor` entrou: o dublê devolvia
+ * `unknown[]`, o typecheck ficou verde, e as duas asserções do mapa quebraram em
+ * execução com `Cannot read properties of undefined (reading 'trim')`, um erro
+ * que não nomeia a coluna que faltou. Com o tipo, coluna nova reprova no
+ * typecheck, onde o nome dela aparece.
+ */
+export interface LinhaPontoMssql {
   Prefixo: string;
   Nome: string | null;
   Latitude: number | null;
@@ -54,6 +64,7 @@ interface LinhaPontoMssql {
   UgrhiNumero: number | null;
   Municipio: string | null;
   Uf: string | null;
+  Mantenedor: string | null;
   Telemetrico: number | null;
   GravacaoLocal: number | null;
   Convencional: number | null;
@@ -107,6 +118,7 @@ function sqlPontos(f: ConstrutorFiltro): string {
                          THEN 1 ELSE 0 END,
           UgrhiNumero = ${UGRHI_NUMERO},
           Municipio = md.Nome,
+          Mantenedor = oper.Nome,
           Uf = COALESCE(NULLIF(LTRIM(RTRIM(p.CodigoEstadoMainframe)), ''),
                         NULLIF(LTRIM(RTRIM(md.CodigoUnidadeFederacaoMainframe)), '')),
           inst.Telemetrico, inst.GravacaoLocal, inst.Convencional, inst.VazaoAparelho,
@@ -159,6 +171,7 @@ function mapear(l: LinhaPontoMssql): PontoMapaPosto {
     vazao,
     ugrhi: l.UgrhiNumero === null ? null : Number(l.UgrhiNumero),
     municipio: texto(l.Municipio),
+    mantenedor: texto(l.Mantenedor),
     uf: siglaUf(l.Uf),
     coordenadaSuspeita: coordenadaSuspeita(temAsDuas ? lat : null, temAsDuas ? lon : null),
   };
@@ -176,7 +189,6 @@ export const mapaPostosRepositoryMssql: MapaPostosRepository = {
           prefixoComecaCom: filtro.prefixoComecaCom,
           municipio: filtro.municipio,
           baciaHidrografica: filtro.baciaHidrografica,
-          mantenedor: filtro.mantenedor,
           apenasFavoritos: filtro.apenasFavoritos,
           usuarioId: filtro.usuarioId,
         },

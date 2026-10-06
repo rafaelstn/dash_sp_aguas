@@ -117,6 +117,32 @@ Object.defineProperty(globalThis, 'IntersectionObserver', {
   value: ObservadorSilencioso,
 });
 
+/**
+ * `<dialog>`: o jsdom das versões usadas aqui não implementa `showModal`, e
+ * chamá-lo joga "Not implemented". O painel de filtros do celular é um
+ * `<dialog>` fechado, cujo conteúdo existe no DOM e é INACESSÍVEL por papel
+ * enquanto não abre, então sem este dublê o teste do caminho estreito quebra na
+ * abertura, antes de medir o que foi escrever.
+ *
+ * O dublê faz o MÍNIMO: marca o atributo `open`, que é o que torna o conteúdo
+ * acessível, e emite `close`. O que ele NÃO reproduz, e cuja prova é de
+ * navegador: inércia do resto da página, trava de foco e backdrop.
+ *
+ * Nasceu em `tests/unit/componentes/postos-filtro-vazao-ausencia.test.tsx` e
+ * subiu para cá em 05/10/2026, quando o segundo arquivo precisou do mesmo
+ * dublê, como aquele arquivo já previa. Instala só se faltar: onde o jsdom
+ * passar a implementar de verdade, vale o de verdade.
+ */
+if (typeof HTMLDialogElement.prototype.showModal !== 'function') {
+  HTMLDialogElement.prototype.showModal = function abrir(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function fechar(this: HTMLDialogElement) {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  };
+}
+
 // O jsdom declara `scrollTo` mas joga "Not implemented" ao ser chamado, e o
 // ruído esconde a saída do teste.
 Object.defineProperty(window, 'scrollTo', { writable: true, value: () => {} });

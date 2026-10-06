@@ -19,7 +19,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   FiltrosCelular,
@@ -41,6 +41,7 @@ function posto(prefixo: string, vazao: PontoMapaPosto['vazao']): PontoMapaPosto 
     ugrhi: 7,
     municipio: 'SANTOS',
     uf: 'SP',
+    mantenedor: null,
     coordenadaSuspeita: false,
   };
 }
@@ -101,38 +102,9 @@ describe('desktop: as ausências no select de vazão', () => {
   });
 });
 
-/**
- * O jsdom desta versão não implementa `showModal`, e o painel do celular é um
- * `<dialog>`: sem o dublê o teste morre em "dlg.showModal is not a function",
- * antes de medir qualquer coisa. O dublê faz o MÍNIMO, que é marcar o atributo
- * `open` (é ele que torna o conteúdo acessível por papel) e emitir `close`.
- *
- * O que ele NÃO reproduz: o diálogo modal real torna inerte o resto da página,
- * trava o foco dentro dele e desenha o backdrop. Nada disso é medido aqui, e a
- * prova dessas três coisas é de navegador. Se outro arquivo precisar do mesmo
- * dublê, ele sobe para o `tests/setup-dom.ts` em vez de ser copiado.
- */
-const semDialogoNativo = typeof HTMLDialogElement.prototype.showModal !== 'function';
-
-beforeAll(() => {
-  if (!semDialogoNativo) return;
-  HTMLDialogElement.prototype.showModal = function abrir(this: HTMLDialogElement) {
-    this.open = true;
-  };
-  HTMLDialogElement.prototype.close = function fechar(this: HTMLDialogElement) {
-    this.open = false;
-    this.dispatchEvent(new Event('close'));
-  };
-});
-
-afterAll(() => {
-  if (!semDialogoNativo) return;
-  // @ts-expect-error devolvendo o protótipo ao estado em que estava: o dublê é
-  // deste arquivo e não pode vazar para quem roda depois na mesma thread.
-  delete HTMLDialogElement.prototype.showModal;
-  // @ts-expect-error mesmo motivo.
-  delete HTMLDialogElement.prototype.close;
-});
+// O dublê de `showModal` nasceu aqui e subiu para `tests/setup-dom.ts` em
+// 05/10/2026, quando o teste do filtro de mantenedor precisou do mesmo: era o
+// que esta nota já previa, e o motivo e os limites dele estão lá.
 
 describe('celular: as ausências são radios do MESMO grupo', () => {
   // O painel do celular é um `<dialog>` fechado: o conteúdo existe no DOM e é

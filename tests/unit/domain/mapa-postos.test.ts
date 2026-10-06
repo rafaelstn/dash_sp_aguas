@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUSENCIAS_VAZAO,
   atendeFiltros,
+  chaveMantenedor,
   contarFacetas,
   coordenadaSuspeita,
   tipoDaDescricao,
@@ -27,6 +28,7 @@ function ponto(parcial: Partial<PontoMapaPosto> & { prefixo: string }): PontoMap
     ugrhi: 6,
     municipio: null,
     uf: 'SP',
+    mantenedor: null,
     coordenadaSuspeita: false,
     ...parcial,
   };
@@ -228,6 +230,78 @@ describe('contarFacetas', () => {
     const f = contarFacetas(base, { ugrhi: [15], tipo: ['piezo'] });
     expect(f.ugrhi).toContainEqual({ numero: 15, total: 0 });
     expect(f.tipo.piezo).toBe(0);
+  });
+});
+
+/**
+ * Mantenedor, pedido pelo órgão em 30/09/2026. Saiu do `WHERE` do adaptador e
+ * virou dimensão classificada, então a comparação sem caixa e sem acento que o
+ * `CI_AI` do SQL dava de graça passou a ser responsabilidade daqui.
+ */
+describe('mantenedor', () => {
+  it('a chave ignora caixa, acento e espaço de sobra, e o vazio é ausência', () => {
+    expect(chaveMantenedor('Sabesp')).toBe(chaveMantenedor('SABESP'));
+    expect(chaveMantenedor('  sabesp  ')).toBe('SABESP');
+    expect(chaveMantenedor('Águas de São Paulo')).toBe('AGUAS DE SAO PAULO');
+    // Nome diferente continua diferente: a chave não achata tudo.
+    expect(chaveMantenedor('SABESP')).not.toBe(chaveMantenedor('SABESP SUL'));
+    expect(chaveMantenedor(null)).toBeNull();
+    expect(chaveMantenedor('   ')).toBeNull();
+  });
+
+  it('filtra pelo nome do cadastro sem exigir a caixa e o acento do link', () => {
+    const p = ponto({ prefixo: '1', mantenedor: 'Águas de São Paulo' });
+    expect(atendeFiltros(p, { mantenedor: ['AGUAS DE SAO PAULO'] })).toBe(true);
+    expect(atendeFiltros(p, { mantenedor: ['DAEE'] })).toBe(false);
+    // Vários mantenedores: OU dentro da dimensão, como as outras.
+    expect(atendeFiltros(p, { mantenedor: ['DAEE', 'aguas de sao paulo'] })).toBe(true);
+  });
+
+  it('"sem mantenedor" seleciona o posto sem operadora, e só ele', () => {
+    expect(atendeFiltros(ponto({ prefixo: '1', mantenedor: null }), { mantenedor: [null] })).toBe(
+      true,
+    );
+    expect(atendeFiltros(ponto({ prefixo: '2', mantenedor: 'DAEE' }), { mantenedor: [null] })).toBe(
+      false,
+    );
+    // Nome que é só espaço no cadastro conta como ausência, não como nome.
+    expect(atendeFiltros(ponto({ prefixo: '3', mantenedor: '  ' }), { mantenedor: [null] })).toBe(
+      true,
+    );
+  });
+
+  it('a faceta conta ignorando o próprio filtro, em ordem alfabética e com o "sem" por último', () => {
+    const base = [
+      ponto({ prefixo: '1', mantenedor: 'SABESP' }),
+      ponto({ prefixo: '2', mantenedor: 'sabesp' }),
+      ponto({ prefixo: '3', mantenedor: 'DAEE' }),
+      ponto({ prefixo: '4', mantenedor: null }),
+    ];
+    // Com SABESP marcado, a lista continua mostrando o DAEE: é esta contagem
+    // cruzada que impediu o filtro de ficar no `WHERE` do adaptador.
+    const f = contarFacetas(base, { mantenedor: ['SABESP'] });
+    expect(f.mantenedor).toEqual([
+      { mantenedor: 'DAEE', total: 1 },
+      { mantenedor: 'SABESP', total: 2 },
+      { mantenedor: null, total: 1 },
+    ]);
+    // E as OUTRAS dimensões respeitam o filtro de mantenedor: dois postos.
+    expect(f.situacao).toEqual({ em_operacao: 2, extinto: 0 });
+  });
+
+  it('o mantenedor marcado que os outros filtros zeram continua na lista com zero', () => {
+    const f = contarFacetas([ponto({ prefixo: '1', mantenedor: 'DAEE', tipo: 'plu' })], {
+      mantenedor: ['SABESP'],
+      tipo: ['flu'],
+    });
+    expect(f.mantenedor).toContainEqual({ mantenedor: 'SABESP', total: 0 });
+  });
+
+  it('a faceta mostra o nome do CADASTRO, mesmo quando o link veio com outra caixa', () => {
+    const f = contarFacetas([ponto({ prefixo: '1', mantenedor: 'Águas de São Paulo' })], {
+      mantenedor: ['AGUAS DE SAO PAULO'],
+    });
+    expect(f.mantenedor).toEqual([{ mantenedor: 'Águas de São Paulo', total: 1 }]);
   });
 });
 

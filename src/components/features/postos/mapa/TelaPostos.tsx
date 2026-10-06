@@ -127,17 +127,17 @@ export function TelaPostos() {
   }, [estado]);
 
   const mudar = useCallback((m: MudancaFiltros) => setEstado((e) => ({ ...e, ...m })), []);
+  /**
+   * Limpar filtros volta ao PADRÃO e preserva o que não é filtro de dimensão: o
+   * texto da busca, o posto aberto e o recorte que veio no link.
+   *
+   * Derivado de `ESTADO_PADRAO` em vez de listar as dimensões uma a uma: a lista
+   * à mão não zerava o mantenedor quando ele entrou em 05/10/2026, e o botão
+   * ficava aceso sem limpar nada. Dimensão nova passa a zerar sozinha.
+   */
   const limparFiltros = useCallback(
     () =>
-      setEstado((e) => ({
-        ...e,
-        tipos: ESTADO_PADRAO.tipos,
-        situacoes: ESTADO_PADRAO.situacoes,
-        transmissoes: [],
-        vazao: null,
-        ugrhi: null,
-        uf: ESTADO_PADRAO.uf,
-      })),
+      setEstado((e) => ({ ...ESTADO_PADRAO, q: e.q, posto: e.posto, escopo: e.escopo })),
     [],
   );
 
@@ -466,7 +466,6 @@ export function TelaPostos() {
             {[
               estado.escopo.municipio && `município ${estado.escopo.municipio}`,
               estado.escopo.bacia && `bacia ${estado.escopo.bacia}`,
-              estado.escopo.mantenedor && `mantenedor ${estado.escopo.mantenedor}`,
               estado.escopo.favoritos && 'só favoritos',
             ]
               .filter(Boolean)

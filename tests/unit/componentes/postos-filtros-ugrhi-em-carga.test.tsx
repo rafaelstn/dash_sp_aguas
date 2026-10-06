@@ -41,6 +41,7 @@ function posto(prefixo: string, ugrhi: number): PontoMapaPosto {
     ugrhi,
     municipio: 'SANTOS',
     uf: 'SP',
+    mantenedor: null,
     coordenadaSuspeita: false,
   };
 }

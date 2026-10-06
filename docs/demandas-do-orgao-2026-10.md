@@ -45,15 +45,23 @@ Dos filtros pedidos, já funcionam:
 | PLU / FLU / PIEZO | os três tipos no topo dos filtros |
 | COM medições de vazão | três fontes independentes: aparelho ativo (326), medição de campo (519), curva-chave (375), e a união (595) |
 
-Faltam três, e eles não são do mesmo tamanho:
+Faltavam três. Dois estão entregues e o terceiro depende do órgão:
 
-1. **Mantenedor**: o campo existe e a API já aceita filtrar por ele
-   (`src/app/api/postos/mapa/route.ts:80`), mas a tela não tem o grupo com a
-   lista e a contagem. É o menor item deste documento.
-2. **COM / SEM curva-chave e COM / SEM medição**: hoje só existe o "COM". Dizer
-   "sem" é a negação do filtro, que não está implementada em nenhuma dimensão.
-   Vale decidir se a negação entra só nessas duas ou em todas, porque o custo é
-   quase o mesmo e o comportamento precisa ser um só.
+1. **Mantenedor**: **pronto em 05/10/2026**, e entra no ar na próxima entrega
+   à Prodesp, como todo o resto (o push não publica nada aqui). A tela tem o
+   campo com a lista dos mantenedores e quantos postos cada um tem, nas duas
+   larguras, mais a
+   opção "Sem mantenedor" para os postos que o cadastro deixou sem operadora.
+   A contagem é cruzada, como a das outras dimensões: cada opção mostra quantos
+   postos ela traria mantidos os demais filtros. Nomes que o cadastro gravou com
+   caixa ou acentuação diferentes somam na mesma linha, e o rótulo exibido é o
+   do cadastro. O link `/?mantenedor=<nome>` que o painel já produzia continua
+   abrindo a tela filtrada.
+2. **COM / SEM curva-chave e COM / SEM medição**: **pronto em 05/10/2026**, e
+   a negação entrou nas duas dimensões de vazão com o mesmo comportamento, mais
+   a opção "Nenhuma fonte de vazão". No desktop as ausências ficam num grupo
+   separado do select ("O posto não tem"), e no celular são radios do mesmo
+   grupo das fontes, para a escolha continuar sendo uma só.
 3. **Gerência SP-Águas**: **não existe no banco do órgão**. Zero ocorrência no
    `Dbfch`. A hipótese registrada é derivar da UGRHI, e para isso o órgão precisa
    mandar a tabela de correspondência UGRHI para gerência. Enquanto ela não vier,

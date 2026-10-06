@@ -9,6 +9,7 @@ import {
   normalizarBusca,
   parametrosDaApi,
   serializarEstado,
+  temEscopo,
 } from '@/components/features/postos/mapa/estado-url';
 
 /**
@@ -32,6 +33,7 @@ function ponto(parcial: Partial<PontoMapaPosto>): PontoMapaPosto {
     ugrhi: 6,
     municipio: null,
     uf: 'SP',
+    mantenedor: null,
     coordenadaSuspeita: false,
     ...parcial,
   };
@@ -181,6 +183,79 @@ describe('UF', () => {
       { uf: 'SP', total: 1 },
       { uf: 'MG', total: 1 },
       { uf: null, total: 1 },
+    ]);
+  });
+});
+
+/**
+ * O parâmetro `mantenedor` existe na URL desde a busca antiga, e o painel linka
+ * `/?mantenedor=<nome>`: em 05/10/2026 ele deixou de ser recorte do servidor e
+ * virou dimensão filtrada no navegador, e estes casos existem para o link
+ * continuar abrindo a MESMA tela depois da mudança.
+ */
+describe('mantenedor', () => {
+  it('o link do painel abre a tela filtrada, conta como filtro e volta igual', () => {
+    const e = ler('mantenedor=SABESP');
+    expect(e.mantenedor).toBe('SABESP');
+    expect(filtrosDoEstado(e).mantenedor).toEqual(['SABESP']);
+    expect(contarFiltrosAtivos(e)).toBe(1);
+    expect(serializarEstado(e)).toBe('mantenedor=SABESP');
+    expect(lerEstado(new URLSearchParams(serializarEstado(e)))).toEqual(e);
+  });
+
+  it('não é mais recorte do servidor: não vai na chamada da API nem acende o aviso de recorte', () => {
+    const e = ler('mantenedor=SABESP&municipio=Santos');
+    const api = new URLSearchParams(parametrosDaApi(e.escopo));
+    expect(api.get('mantenedor')).toBeNull();
+    expect(api.get('municipio')).toBe('Santos');
+    // Só o município é recorte; mantenedor sozinho não acende a faixa.
+    expect(temEscopo(ler('mantenedor=SABESP').escopo)).toBe(false);
+    expect(temEscopo(e.escopo)).toBe(true);
+  });
+
+  it('nome com acento e espaço sobrevive à ida e volta pela URL', () => {
+    const e = ler('mantenedor=' + encodeURIComponent('Águas de São Paulo'));
+    expect(e.mantenedor).toBe('Águas de São Paulo');
+    expect(lerEstado(new URLSearchParams(serializarEstado(e)))).toEqual(e);
+    expect(atendeFiltros(ponto({ mantenedor: 'AGUAS DE SAO PAULO' }), filtrosDoEstado(e))).toBe(
+      true,
+    );
+  });
+
+  it('nome com vírgula não vira dois mantenedores, que devolveria zero posto', () => {
+    const nome = 'PREFEITURA DE ITU, SP';
+    const e = ler('mantenedor=' + encodeURIComponent(nome));
+    expect(e.mantenedor).toBe(nome);
+    expect(filtrosDoEstado(e).mantenedor).toEqual([nome]);
+    expect(atendeFiltros(ponto({ mantenedor: nome }), filtrosDoEstado(e))).toBe(true);
+  });
+
+  it('"sem" seleciona o posto sem operadora, e sem o parâmetro não há filtro', () => {
+    const e = ler('mantenedor=sem');
+    expect(filtrosDoEstado(e).mantenedor).toEqual([null]);
+    expect(atendeFiltros(ponto({ mantenedor: null }), filtrosDoEstado(e))).toBe(true);
+    expect(atendeFiltros(ponto({ mantenedor: 'DAEE' }), filtrosDoEstado(e))).toBe(false);
+
+    const vazio = ler('');
+    expect(vazio.mantenedor).toBeNull();
+    expect(filtrosDoEstado(vazio).mantenedor).toBeUndefined();
+    expect(contarFiltrosAtivos(vazio)).toBe(0);
+    expect(atendeFiltros(ponto({ mantenedor: 'DAEE' }), filtrosDoEstado(vazio))).toBe(true);
+  });
+
+  it('a faceta lista os mantenedores com a contagem que o órgão pediu', () => {
+    const facetas = contarFacetas(
+      [
+        ponto({ prefixo: '1', mantenedor: 'SABESP' }),
+        ponto({ prefixo: '2', mantenedor: 'DAEE' }),
+        ponto({ prefixo: '3', mantenedor: null }),
+      ],
+      filtrosDoEstado(ler('mantenedor=SABESP')),
+    );
+    expect(facetas.mantenedor).toEqual([
+      { mantenedor: 'DAEE', total: 1 },
+      { mantenedor: 'SABESP', total: 1 },
+      { mantenedor: null, total: 1 },
     ]);
   });
 });

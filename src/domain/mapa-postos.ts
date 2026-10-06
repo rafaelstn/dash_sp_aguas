@@ -159,6 +159,12 @@ export interface PontoMapaPosto {
   /** Nome do município ou distrito do cadastro, como o órgão grava (caixa alta). */
   readonly municipio: string | null;
   /**
+   * Nome da entidade operadora (o "mantenedor" do órgão), como o cadastro
+   * grava, ou `null` quando o posto não tem uma. Comparado por
+   * `chaveMantenedor`, nunca por igualdade crua.
+   */
+  readonly mantenedor: string | null;
+  /**
    * Sigla da unidade da federação DECLARADA no cadastro, ou `null` sem
    * declaração. Ver "POSTOS FORA DE SÃO PAULO" no topo deste arquivo.
    */
@@ -181,6 +187,11 @@ export interface FiltrosClassificacao {
   readonly ugrhi?: readonly (number | null)[];
   /** `null` na lista seleciona os postos sem UF declarada. */
   readonly uf?: readonly (string | null)[];
+  /**
+   * Nome do mantenedor, comparado sem caixa e sem acento (`chaveMantenedor`).
+   * `null` na lista seleciona os postos sem operadora no cadastro.
+   */
+  readonly mantenedor?: readonly (string | null)[];
 }
 
 export type DimensaoMapa = keyof FiltrosClassificacao;
@@ -194,6 +205,22 @@ export interface FacetasMapa {
   readonly ugrhi: ReadonlyArray<{ readonly numero: number | null; readonly total: number }>;
   /** Ordenada por sigla, com `SP` primeiro; `uf: null` (sem UF declarada) por último. */
   readonly uf: ReadonlyArray<{ readonly uf: string | null; readonly total: number }>;
+  /**
+   * Ordenada pelo nome em pt-BR; `mantenedor: null` (sem operadora) por último.
+   *
+   * Alfabética de propósito, e não por total como o ranking do painel: a lista
+   * tem cardinalidade aberta (o cadastro é texto livre e a busca já oferece até
+   * 500 nomes em `datalist`), e quem abre este filtro procura UM mantenedor
+   * pelo nome. A contagem ao lado é informação, não a ordem.
+   *
+   * O rótulo é o nome como o CADASTRO grava, mesmo quando o filtro veio da URL
+   * com outra caixa: a chave é insensível a caixa e acento, mas `mantenedor=sabesp`
+   * num link não deve reescrever o que a lista mostra.
+   */
+  readonly mantenedor: ReadonlyArray<{
+    readonly mantenedor: string | null;
+    readonly total: number;
+  }>;
 }
 
 /**
@@ -215,6 +242,28 @@ export function tipoDaDescricao(descricao: string | null | undefined): TipoPosto
   if (t.startsWith('PIEZ')) return 'piezo';
   if (t.startsWith('METEO')) return 'meteo';
   return null;
+}
+
+/**
+ * Chave de comparação de mantenedor: sem caixa, sem acento e sem espaço nas
+ * pontas. `null` (posto sem operadora) é chave própria.
+ *
+ * O `Dbfch` grava o nome da entidade operadora em texto livre, e enquanto o
+ * filtro rodava no SQL a comparação era `CI_AI` (insensível a caixa e a
+ * acento). Em 05/10/2026 o mantenedor virou dimensão classificada, para ter a
+ * contagem cruzada que as outras dimensões já tinham, e o filtro passou a
+ * rodar em memória: comparar por igualdade crua faria "Sabesp" e "SABESP"
+ * virarem dois mantenedores na lista, com a contagem dividida entre eles, e
+ * um link do painel com a caixa trocada deixaria de achar o posto que achava.
+ */
+export function chaveMantenedor(nome: string | null): string | null {
+  if (nome === null) return null;
+  const t = nome
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .trim()
+    .toUpperCase();
+  return t.length > 0 ? t : null;
 }
 
 function vazio<T>(lista: readonly T[] | undefined): boolean {
@@ -244,6 +293,10 @@ export function atendeFiltros(
   }
   if (ignorar !== 'uf' && !vazio(filtros.uf)) {
     if (!filtros.uf!.includes(ponto.uf)) return false;
+  }
+  if (ignorar !== 'mantenedor' && !vazio(filtros.mantenedor)) {
+    const chave = chaveMantenedor(ponto.mantenedor);
+    if (!filtros.mantenedor!.some((m) => chaveMantenedor(m) === chave)) return false;
   }
   return true;
 }
@@ -275,10 +328,14 @@ export function contarFacetas(
   const vazao = zerado(OPCOES_VAZAO);
   const ugrhi = new Map<number | null, number>();
   const uf = new Map<string | null, number>();
+  const mantenedor = new Map<string | null, { rotulo: string | null; total: number }>();
   // A opção marcada continua na lista mesmo quando os outros filtros a zeram,
   // para o que a pessoa marcou não sumir da tela.
   for (const n of filtros.ugrhi ?? []) ugrhi.set(n, 0);
   for (const u of filtros.uf ?? []) uf.set(u, 0);
+  for (const m of filtros.mantenedor ?? []) {
+    mantenedor.set(chaveMantenedor(m), { rotulo: m, total: 0 });
+  }
 
   for (const p of pontos) {
     if (p.tipo !== null && atendeFiltros(p, filtros, 'tipo')) tipo[p.tipo] += 1;
@@ -294,6 +351,18 @@ export function contarFacetas(
     }
     if (atendeFiltros(p, filtros, 'uf')) {
       uf.set(p.uf, (uf.get(p.uf) ?? 0) + 1);
+    }
+    if (atendeFiltros(p, filtros, 'mantenedor')) {
+      const chave = chaveMantenedor(p.mantenedor);
+      const atual = mantenedor.get(chave);
+      if (atual === undefined) {
+        mantenedor.set(chave, { rotulo: p.mantenedor, total: 1 });
+      } else {
+        // Primeiro ponto de uma chave SEMEADA pelo filtro: o rótulo passa a ser
+        // o do cadastro, que é o nome que o órgão lê.
+        if (atual.total === 0) atual.rotulo = p.mantenedor;
+        atual.total += 1;
+      }
     }
   }
 
@@ -316,5 +385,22 @@ export function contarFacetas(
       return a.uf.localeCompare(b.uf);
     });
 
-  return { tipo, situacao, transmissao, vazao, ugrhi: listaUgrhi, uf: listaUf };
+  const listaMantenedor = [...mantenedor.values()]
+    .map(({ rotulo, total }) => ({ mantenedor: rotulo, total }))
+    .sort((a, b) => {
+      if (a.mantenedor === b.mantenedor) return 0;
+      if (a.mantenedor === null) return 1;
+      if (b.mantenedor === null) return -1;
+      return a.mantenedor.localeCompare(b.mantenedor, 'pt-BR');
+    });
+
+  return {
+    tipo,
+    situacao,
+    transmissao,
+    vazao,
+    ugrhi: listaUgrhi,
+    uf: listaUf,
+    mantenedor: listaMantenedor,
+  };
 }

@@ -16,7 +16,6 @@ export interface EntradaListarPontosMapa extends FiltrosClassificacao {
   readonly termo?: string;
   readonly municipio?: string;
   readonly baciaHidrografica?: string;
-  readonly mantenedor?: string;
   readonly apenasFavoritos?: boolean;
   readonly usuarioId?: string | null;
 }
@@ -53,7 +52,6 @@ export async function listarPontosMapa(
     prefixoComecaCom: codigo ? termo.toUpperCase() : undefined,
     municipio: entrada.municipio,
     baciaHidrografica: entrada.baciaHidrografica,
-    mantenedor: entrada.mantenedor,
     apenasFavoritos: entrada.apenasFavoritos,
     usuarioId: entrada.usuarioId,
   };
@@ -65,6 +63,7 @@ export async function listarPontosMapa(
     vazao: entrada.vazao,
     ugrhi: entrada.ugrhi,
     uf: entrada.uf,
+    mantenedor: entrada.mantenedor,
   };
 
   const candidatos =

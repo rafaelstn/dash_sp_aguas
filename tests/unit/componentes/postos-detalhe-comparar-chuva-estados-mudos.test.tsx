@@ -42,6 +42,7 @@ function ponto(tipo: PontoMapaPosto['tipo']): PontoMapaPosto {
     ugrhi: 6,
     municipio: 'SÃO PAULO',
     uf: 'SP',
+    mantenedor: null,
     coordenadaSuspeita: false,
   };
 }

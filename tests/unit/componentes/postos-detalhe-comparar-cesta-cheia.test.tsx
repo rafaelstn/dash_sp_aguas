@@ -55,6 +55,7 @@ const PONTO: PontoMapaPosto = {
   ugrhi: 6,
   municipio: 'SÃO PAULO',
   uf: 'SP',
+  mantenedor: null,
   coordenadaSuspeita: false,
 };
 
