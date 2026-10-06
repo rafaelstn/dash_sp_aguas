@@ -696,6 +696,14 @@ CREATE TABLE import_log (
 
 ### 5.6 *Row Level Security* no Supabase
 
+> Medido em 06/10/2026, e vale para toda esta seção: **a RLS não barra a conexão da
+> aplicação**, nem aqui nem no container da entrega offline. Ela conecta com o papel dono
+> das tabelas, e dono não é submetido a política sem `FORCE ROW LEVEL SECURITY`, que
+> nenhuma das 28 tabelas com RLS declara. O diagrama da seção 2 que escreve "leitura via
+> RLS" descreve o caminho PostgREST do Supabase, que este produto não usa: quem autoriza é
+> o gate das API Routes. A consequência de segurança está na seção 4 do ADR-0024, e é de lá
+> que vem esta nota.
+
 - **RLS baseada em usuário aplicada apenas em `usuarios_favoritos`** (ADR-0005), onde o titular é o próprio usuário autenticado. Demais tabelas (`postos`, `arquivos_indexados`, `arquivos_orfaos`, `revisoes_desconformidade`, `acesso_ficha`) **não usam RLS por usuário**: o domínio é compartilhado entre todos os técnicos do setor SPÁguas e a leitura é uniforme.
 - A proteção do banco no MVP é feita por defesa em profundidade:
   - Nenhuma chave de banco (`service_role`, `DATABASE_URL`) exposta ao navegador.

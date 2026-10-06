@@ -34,10 +34,24 @@ Principios herdados do projeto:
 - Dominio puro em `src/domain/estoque/*` (tipos, enums, maquina de estados, sem I/O).
 - Ports em `src/application/ports/*`; adapters `.pg` (postgres-js) e `.mock` (demo) atras deles.
 - Toggle demo/pg centralizado em `src/infrastructure/repositories.ts`.
-- Rotas em `src/app/api/estoque/*`: `exigirUsuario` para leitura, `exigirAdmin` para escrita;
-  rate limit por politica; validacao zod; erro via `respostaDeErro`; log estruturado.
+- Rotas em `src/app/api/estoque/*`: `exigirUsuario` para leitura, `exigirGestorEstoque` para
+  escrita; rate limit por politica; validacao zod; erro via `respostaDeErro`; log estruturado.
+  Até 06/10/2026 este item dizia `exigirAdmin`, que existe no projeto mas guarda outra
+  coisa: na medição daquele dia, `src/app/api/estoque/` tinha 48 ocorrências de
+  `exigirGestorEstoque` e **nenhuma** de `exigirAdmin`, cujos únicos usos estão em
+  `src/app/api/admin/usuarios/`. Gestor de estoque e administrador de usuários são papéis
+  distintos, e o item antigo trocava um pelo outro.
 - Migrations idempotentes (`IF NOT EXISTS`), reversiveis, CHECK para enum, RLS habilitada
-  deny-by-default (backend conecta com BYPASSRLS e aplica autorizacao na aplicacao).
+  deny-by-default. **A RLS não barra a conexão desta aplicação**, e o mecanismo não é o que
+  este item afirmava até 06/10/2026 ("backend conecta com BYPASSRLS"): a aplicação conecta
+  com o papel DONO das tabelas (`POSTGRES_USER` cria o banco, aplica as migrations e é o
+  mesmo usuário da `DATABASE_URL`), e dono não é submetido a política sem
+  `FORCE ROW LEVEL SECURITY`, que nenhuma das 28 tabelas com RLS declara. O único papel com
+  `BYPASSRLS` é o `service_role` do `db/auth-compat.sql`, que é `NOLOGIN` e não atende
+  conexão nenhuma. Quem autoriza é o gate da aplicação; a RLS fica como defesa em
+  profundidade para o dia em que um papel não-dono conectar. A consequência de segurança
+  está na seção 4 do `docs/adr/0024-janela-sem-identidade-para-a-entrega-prodesp.md`, que
+  apontou esta imprecisão antes desta correção.
 
 ---
 

@@ -24,9 +24,13 @@ outra, com a diferenca de vir carimbada com a conferencia que a originou.
 Principios herdados (nao renegociaveis):
 - Dominio puro em `src/domain/estoque/*`; ports em `src/application/ports/*`; adapters `.pg`
   (postgres-js) e `.mock` (MODO DEMO) atras deles; toggle em `src/infrastructure/repositories.ts`.
-- Rotas em `src/app/api/estoque/*`: `exigirUsuario` para leitura, `exigirAdmin` para escrita; rate
+- Rotas em `src/app/api/estoque/*`: `exigirUsuario` para leitura, `exigirGestorEstoque` para
+  escrita (corrigido em 06/10/2026: dizia `exigirAdmin`, que guarda as rotas de
+  administração de usuários e não aparece em nenhuma rota de estoque); rate
   limit por politica; validacao zod com `safeParse`; erro via `respostaDeErro`; log estruturado.
-- Migrations idempotentes (`IF NOT EXISTS`), reversiveis, CHECK para enum, RLS deny-by-default.
+- Migrations idempotentes (`IF NOT EXISTS`), reversiveis, CHECK para enum, RLS deny-by-default,
+  que **não barra a conexão desta aplicação** porque ela conecta com o papel dono: ver o item
+  correspondente em `modulo-estoque.md` e a seção 4 do ADR-0024.
 - Toda mutacao que toca o estoque real roda numa `sql.begin` (atomica), e a reconciliacao e
   **idempotente** (nunca aplica o mesmo ajuste duas vezes).
 
