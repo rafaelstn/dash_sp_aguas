@@ -51,4 +51,11 @@ export interface PayloadMovimentacao {
   estado?: import('@/domain/estoque/estado').Estado;
   /** Ajuste de serializado. */
   status?: import('@/domain/estoque/status-unidade').Status;
+  /**
+   * Matricula funcional de quem SOLICITOU a retirada. OBRIGATORIO na `saida` e
+   * recusado nos outros tipos: o zod da rota so declara a chave no ramo
+   * `tipo: 'saida'`. Identificador, nunca nome. Vai como a pessoa digitou, sem
+   * trim, porque a ausencia de espaco e o que o dominio verifica.
+   */
+  solicitanteMatricula?: string;
 }

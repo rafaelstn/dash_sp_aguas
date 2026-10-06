@@ -62,10 +62,18 @@ export function MaterialDetalhe({
     let ativo = true;
     const controlador = new AbortController();
     setEstado({ fase: 'carregando' });
+    // A trilha e gestor-only no backend (gate de gestor em
+    // `GET /api/estoque/movimentacoes`). Sem este desvio, o 403 dela caia no
+    // MESMO `.catch` do catalogo e do saldo, e o drawer INTEIRO virava erro
+    // para quem so tem leitura: a pessoa perdia o material e o saldo, que ela
+    // pode ver, por causa de uma parte que ela nao pode.
+    const trilha = podeGerenciar
+      ? listarMovimentacoes({ materialId, porPagina: 100 }, controlador.signal)
+      : Promise.resolve({ itens: [] as MovimentacaoTrilhaDTO[] });
     Promise.all([
       obterMaterial(materialId, controlador.signal),
       listarSaldos({ materialId }, controlador.signal),
-      listarMovimentacoes({ materialId, porPagina: 100 }, controlador.signal),
+      trilha,
     ])
       .then(([material, saldos, movs]) => {
         if (ativo) {
@@ -87,7 +95,7 @@ export function MaterialDetalhe({
       ativo = false;
       controlador.abort();
     };
-  }, [materialId, versao]);
+  }, [materialId, versao, podeGerenciar]);
 
   const material = estado.fase === 'ok' ? estado.dados.material : null;
   const tamanhos =
@@ -238,7 +246,10 @@ export function MaterialDetalhe({
           <section className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-app-fg">Trilha de movimentação</h3>
-              {estado.dados.historico.length > 0 ? (
+              {/* O export tambem e gestor-only (o gate roda antes do parse
+                  do tipo em `GET /api/estoque/export`).
+                  Oferecer para recusar depois e pior que nao oferecer. */}
+              {podeGerenciar && estado.dados.historico.length > 0 ? (
                 <BotaoExportarExcel
                   compacto
                   url={urlExportarMovimentacoes({ materialId: estado.dados.material.id })}
@@ -248,7 +259,11 @@ export function MaterialDetalhe({
                 />
               ) : null}
             </div>
-            <TrilhaMovimentacoes movimentacoes={estado.dados.historico} nomeLocal={nomeLocal} />
+            <TrilhaMovimentacoes
+              movimentacoes={estado.dados.historico}
+              nomeLocal={nomeLocal}
+              podeVerTrilha={podeGerenciar}
+            />
           </section>
         </div>
       )}

@@ -113,6 +113,12 @@ export interface MovimentacaoDTO {
   usuarioId: string;
   /** Conferencia que originou o ajuste (null nas movimentacoes normais). */
   conferenciaId: string | null;
+  /**
+   * Matricula funcional de quem SOLICITOU a retirada. Preenchida so em `saida`
+   * (migration 0075); null em entrada, transferencia, baixa e ajuste. E um
+   * IDENTIFICADOR, nunca o nome da pessoa: nao resolver para nome na tela.
+   */
+  solicitanteMatricula: string | null;
   criadoEm: string;
 }
 
@@ -199,8 +205,20 @@ export interface AtualizarDesconformidadeUI {
   statusEsperado?: StatusDesconformidade;
 }
 
-/** Detalhe de unidade serializada: registro + trilha de movimentacao. */
+/**
+ * Detalhe de unidade serializada: registro + trilha de movimentacao.
+ *
+ * Contrato de `GET /api/estoque/unidades/[id]` desde 06/10/2026: o registro da
+ * unidade continua aberto a papel `user`, mas a TRILHA nao. Para quem nao e
+ * gestor a rota devolve `historico: null` com `historicoVisivel: false`, e o
+ * `null` e deliberado: `[]` faria a tela dizer "sem movimentacao" a quem na
+ * verdade nao tem permissao de ver (item 10 do padrao-ui).
+ *
+ * `historicoVisivel` e quem manda na tela, e nao o `podeGerenciar` do cliente:
+ * o papel no navegador e palpite de UI, o campo e a resposta de QUEM decidiu.
+ */
 export interface DetalheUnidadeDTO {
   unidade: UnidadeDTO;
-  historico: MovimentacaoTrilhaDTO[];
+  historico: MovimentacaoTrilhaDTO[] | null;
+  historicoVisivel: boolean;
 }

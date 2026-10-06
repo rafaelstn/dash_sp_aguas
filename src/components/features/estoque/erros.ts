@@ -29,6 +29,12 @@ export interface CorpoErroEstoque {
 
 /** Mensagens amigaveis por codigo de negocio conhecido do modulo. */
 const MENSAGEM_POR_CODIGO: Record<string, string> = {
+  // Recusa por PAPEL, nao falta de dado. O backend responde "Operação requer
+  // papel de Admin.", que e a linguagem do sistema: quem le a tela precisa
+  // saber o que fazer, e nao qual helper recusou. Vem ANTES de `corpo.mensagem`
+  // na prioridade do `mensagemDeErro`, de proposito.
+  sem_papel_admin:
+    'Seu perfil não tem acesso a esta ação do estoque. Peça o perfil de gestão do estoque a um administrador.',
   saldo_insuficiente:
     'Saldo insuficiente no local de origem para a quantidade informada.',
   transicao_invalida:

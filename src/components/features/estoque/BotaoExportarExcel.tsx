@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
+import { mensagemDeErro } from './erros';
 
 export interface BotaoExportarExcelProps {
   /** URL do export (com a querystring dos filtros ja montada). */
@@ -17,14 +18,18 @@ export interface BotaoExportarExcelProps {
 }
 
 const CLASSES_PADRAO =
-  'inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-app-surface disabled:hover:text-gov-azul';
+  'inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-app-surface aria-disabled:hover:text-gov-azul';
 
 const CLASSES_COMPACTO =
-  'inline-flex items-center gap-1.5 rounded border border-app-border-input px-2.5 py-1.5 text-xs font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent';
+  'inline-flex items-center gap-1.5 rounded border border-app-border-input px-2.5 py-1.5 text-xs font-medium text-app-fg hover:bg-app-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-transparent';
 
 /**
- * Botao de exportacao para Excel (XLSX) do modulo de Estoque. E uma acao de
- * LEITURA (qualquer usuario logado pode exportar o que consegue ver).
+ * Botao de exportacao para Excel (XLSX) do modulo de Estoque.
+ *
+ * NAO e mais acao de leitura livre: desde 06/10/2026 o `GET /api/estoque/export`
+ * exige papel de gestor do estoque ANTES de olhar o `tipo`, porque a planilha traz
+ * nome ou e-mail do operador. Papel `user` colhe 403 nas tres abas. Quem monta
+ * este botao decide pelo papel; o backend continua sendo a autorizacao real.
  *
  * Baixa via fetch + blob (em vez de navegar a janela) para conseguir mostrar
  * estados de "gerando" e de erro sem trocar de pagina; a auth por cookie de
@@ -67,12 +72,12 @@ export function BotaoExportarExcel({
         const corpo = (await resp.json().catch(() => ({}))) as {
           erro?: string;
           mensagem?: string;
+          motivos?: string[];
         };
-        throw new Error(
-          corpo.mensagem ??
-            corpo.erro ??
-            `Falha ao gerar a planilha (HTTP ${resp.status}).`,
-        );
+        // `mensagemDeErro` e a MESMA traducao que o resto do modulo usa. A
+        // cadeia anterior caia em `corpo.erro`, que e o slug do backend
+        // ('sem_papel_admin'): enum nunca vira texto de tela.
+        throw new Error(mensagemDeErro(corpo, resp.status));
       }
       // Dispara o download a partir do blob, sem sair da pagina.
       const blob = await resp.blob();
@@ -97,10 +102,12 @@ export function BotaoExportarExcel({
 
   return (
     <div className="flex flex-col gap-1">
+      {/* aria-disabled, nao disabled: desabilitar joga o foco no BODY no meio
+          da geracao. O bloqueio real esta no `if (gerando) return`. */}
       <button
         type="button"
         onClick={exportar}
-        disabled={gerando}
+        aria-disabled={gerando || undefined}
         aria-busy={gerando}
         title={descricao}
         className={compacto ? CLASSES_COMPACTO : CLASSES_PADRAO}

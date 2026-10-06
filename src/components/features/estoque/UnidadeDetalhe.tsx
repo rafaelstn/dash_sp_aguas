@@ -150,7 +150,11 @@ export function UnidadeDetalhe({
           <section className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-app-fg">Trilha de movimentação</h3>
-              {estado.dados.historico.length > 0 ? (
+              {/* O export da trilha e gestor-only no backend desde 06/10/2026:
+                  oferecer o botao a quem levaria 403 e oferecer para recusar.
+                  A condicao e `historicoVisivel`, que vem do servidor, e nao o
+                  papel do cliente. */}
+              {estado.dados.historicoVisivel && (estado.dados.historico?.length ?? 0) > 0 ? (
                 <BotaoExportarExcel
                   compacto
                   url={urlExportarMovimentacoes({ unidadeId: estado.dados.unidade.id })}
@@ -160,7 +164,14 @@ export function UnidadeDetalhe({
                 />
               ) : null}
             </div>
-            <TrilhaMovimentacoes movimentacoes={estado.dados.historico} nomeLocal={nomeLocal} />
+            {/* `historicoVisivel` e a resposta de quem decidiu, e o `?? []` nao
+                mente: quando ele e false a trilha nem renderiza a lista, entao
+                o array vazio nunca chega a virar "sem movimentacao" na tela. */}
+            <TrilhaMovimentacoes
+              movimentacoes={estado.dados.historico ?? []}
+              nomeLocal={nomeLocal}
+              podeVerTrilha={estado.dados.historicoVisivel}
+            />
           </section>
         </div>
       )}

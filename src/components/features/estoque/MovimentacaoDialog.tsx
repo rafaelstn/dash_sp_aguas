@@ -5,6 +5,7 @@ import { ESTADOS } from '@/domain/estoque/estado';
 import { STATUS } from '@/domain/estoque/status-unidade';
 import { registrarMovimentacao } from './api';
 import { ErroEstoque } from './erros';
+import { enviarUmaVez } from './form-dialog-envio';
 import {
   AJUDA_TIPO_MOV,
   ROTULO_ESTADO,
@@ -55,6 +56,10 @@ export function MovimentacaoDialog({
   aoConcluir,
 }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Trava do envio em ref, nao no estado: dois submits no mesmo tick leem o
+  // mesmo `enviando` antigo e passariam os dois. O `aria-disabled` do botao
+  // avisa, nao bloqueia, entao o bloqueio real precisa morar no handler.
+  const travaEnvio = useRef(false);
   const baseId = useId();
   const natureza: Natureza = alvo?.natureza ?? 'serializado';
   const tipos = useMemo(() => tiposPorNatureza(natureza), [natureza]);
@@ -80,6 +85,7 @@ export function MovimentacaoDialog({
     setErros({});
     setErroApi(null);
     setEnviando(false);
+    travaEnvio.current = false;
   }, [aberto, alvo]);
 
   useEffect(() => {
@@ -115,12 +121,14 @@ export function MovimentacaoDialog({
       setErros(errosValidacao);
       return;
     }
-    setEnviando(true);
-    setErroApi(null);
-    try {
+    const r = await enviarUmaVez(travaEnvio, async () => {
+      setEnviando(true);
+      setErroApi(null);
       await registrarMovimentacao(payload);
       aoConcluir(`Movimentação registrada: ${ROTULO_TIPO_MOV[form.tipo]} de ${alvo.descricao}.`);
-    } catch (e) {
+    });
+    if (r.executou && r.erro) {
+      const e = r.erro;
       setErroApi(
         e instanceof ErroEstoque
           ? e.message
@@ -241,6 +249,20 @@ export function MovimentacaoDialog({
             />
           ) : null}
 
+          {/* Solicitante (so saida). Campo de MATRICULA, nunca de nome: a
+              trilha e imutavel e guarda identificador. Sem seletor de pessoas
+              e sem resolucao de nome na escrita. */}
+          {vis.solicitanteMatricula ? (
+            <CampoTexto
+              rotulo="Matrícula de quem solicitou"
+              descricao="Matrícula ou identificação funcional, sem espaço. Não é o nome da pessoa."
+              placeholder="Ex.: 482913"
+              valor={form.solicitanteMatricula}
+              erro={erros.solicitanteMatricula}
+              aoMudar={(v) => atualizar('solicitanteMatricula', v)}
+            />
+          ) : null}
+
           {/* Ajuste serializado: estado / situacao */}
           {vis.estado ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -304,18 +326,23 @@ export function MovimentacaoDialog({
         </div>
 
         <footer className="flex flex-col-reverse gap-2 border-t border-app-border-subtle bg-app-surface-2 px-5 py-3 sm:flex-row sm:justify-end">
+          {/* aria-disabled em vez de disabled: botao desabilitado perde o foco
+              para o BODY no meio do envio, e ele nao volta. O bloqueio real
+              esta no handler (trava em ref). */}
           <button
             type="button"
-            onClick={aoFechar}
-            disabled={enviando}
-            className="rounded border border-app-border-subtle bg-app-surface px-3 py-1.5 text-sm font-medium text-app-fg hover:bg-app-surface-2 disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            onClick={() => {
+              if (!enviando) aoFechar();
+            }}
+            aria-disabled={enviando || undefined}
+            className="rounded border border-app-border-subtle bg-app-surface px-3 py-1.5 text-sm font-medium text-app-fg hover:bg-app-surface-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
             Cancelar
           </button>
           <button
             type="submit"
-            disabled={enviando}
-            className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            aria-disabled={enviando || undefined}
+            className="rounded bg-gov-azul px-3 py-1.5 text-sm font-medium text-white hover:bg-gov-azul-escuro aria-disabled:cursor-not-allowed aria-disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
           >
             {enviando ? 'Registrando…' : 'Registrar movimentação'}
           </button>
@@ -370,16 +397,27 @@ function CampoTexto({
   descricao,
   valor,
   lista,
+  erro,
+  placeholder,
   aoMudar,
 }: {
   rotulo: string;
   descricao?: string;
   valor: string;
   lista?: readonly string[];
+  erro?: string;
+  placeholder?: string;
   aoMudar: (v: string) => void;
 }) {
   const id = useId();
   const listId = `${id}-lista`;
+  const idDescricao = `${id}-descricao`;
+  const idErro = `${id}-erro`;
+  // O erro entra na descricao acessivel para quem chega ao campo pelo teclado
+  // DEPOIS de ele aparecer; o role=alert abaixo cobre quem ja estava na tela.
+  const descrito = [descricao ? idDescricao : null, erro ? idErro : null]
+    .filter(Boolean)
+    .join(' ');
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium text-app-fg">
@@ -390,8 +428,16 @@ function CampoTexto({
         type="text"
         value={valor}
         list={lista && lista.length > 0 ? listId : undefined}
+        placeholder={placeholder}
         onChange={(e) => aoMudar(e.target.value)}
-        className="rounded border border-app-border-input bg-app-surface px-3 py-2 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov-azul focus-visible:ring-offset-1 focus-visible:ring-offset-app-surface"
+        aria-invalid={erro ? true : undefined}
+        aria-describedby={descrito || undefined}
+        className={[
+          'rounded border bg-app-surface px-3 py-2 text-sm text-app-fg placeholder:text-app-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-offset-app-surface',
+          erro
+            ? 'border-gov-perigo focus-visible:ring-gov-perigo'
+            : 'border-app-border-input focus-visible:ring-gov-azul',
+        ].join(' ')}
       />
       {lista && lista.length > 0 ? (
         <datalist id={listId}>
@@ -400,7 +446,16 @@ function CampoTexto({
           ))}
         </datalist>
       ) : null}
-      {descricao ? <span className="text-2xs text-app-fg-muted">{descricao}</span> : null}
+      {descricao ? (
+        <span id={idDescricao} className="text-2xs text-app-fg-muted">
+          {descricao}
+        </span>
+      ) : null}
+      {erro ? (
+        <span id={idErro} role="alert" className="text-sm text-gov-perigo">
+          {erro}
+        </span>
+      ) : null}
     </div>
   );
 }

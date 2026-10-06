@@ -283,7 +283,14 @@ export function PatrimonioDetalhe({ id, podeGerenciar }: Props) {
             <h2 id="sec-trilha" className="text-sm font-semibold text-app-fg">
               Trilha de movimentação
             </h2>
-            <TrilhaMovimentacoes movimentacoes={carga.dados.historico} nomeLocal={nomeLocal} />
+            {/* Mesma fonte de UnidadeDetalhe: desde 06/10/2026 a rota devolve
+                `historico: null` e `historicoVisivel: false` a quem nao e
+                gestor, e e esse campo que decide, nao o papel do cliente. */}
+            <TrilhaMovimentacoes
+              movimentacoes={carga.dados.historico ?? []}
+              nomeLocal={nomeLocal}
+              podeVerTrilha={carga.dados.historicoVisivel}
+            />
           </section>
         </div>
       )}

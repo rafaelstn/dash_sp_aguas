@@ -563,38 +563,24 @@ export function PainelEstoque({ podeGerenciar }: Props) {
             <ClipboardList className="h-4 w-4" aria-hidden="true" />
             Conferências
           </Link>
-          {/* Exportacao Excel (LEITURA: aparece para qualquer usuario logado). */}
-          {aba === 'serializado' ? (
-            <>
-              <BotaoExportarExcel
-                url={urlExportarSerializado({
-                  unidade: filtros.unidade || undefined,
-                  local: filtros.local || undefined,
-                  estado: filtros.estado || undefined,
-                  status: filtros.status || undefined,
-                  busca: buscaDebounced.trim() || undefined,
-                })}
-                arquivoFallback="estoque-serializados"
-                descricao="Exporta os itens serializados com os filtros aplicados nesta aba."
-              />
-              {/* Etiquetas de patrimonio com codigo de barras (LEITURA: qualquer usuario logado
-                  imprime). Abre a visao de impressao do conjunto filtrado. */}
-              <Link
-                href={hrefEtiquetas({
-                  unidade: filtros.unidade || undefined,
-                  local: filtros.local || undefined,
-                  estado: filtros.estado || undefined,
-                  status: filtros.status || undefined,
-                  busca: buscaDebounced.trim() || undefined,
-                })}
-                title="Gera as etiquetas com código de barras dos itens serializados do filtro atual, prontas para imprimir e colar no equipamento."
-                className="inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
-              >
-                <Barcode className="h-4 w-4" aria-hidden="true" />
-                Gerar etiquetas
-              </Link>
-            </>
-          ) : aba === 'quantificavel' ? (
+          {/* Exportacao Excel: GESTOR desde 06/10/2026. O
+              `GET /api/estoque/export` exige papel de gestor antes de
+              olhar o `tipo`, entao as TRES abas recusam papel `user` com 403.
+              Oferecer o botao e recusar o clique e pior que nao oferecer. */}
+          {podeGerenciar && aba === 'serializado' ? (
+            <BotaoExportarExcel
+              url={urlExportarSerializado({
+                unidade: filtros.unidade || undefined,
+                local: filtros.local || undefined,
+                estado: filtros.estado || undefined,
+                status: filtros.status || undefined,
+                busca: buscaDebounced.trim() || undefined,
+              })}
+              arquivoFallback="estoque-serializados"
+              descricao="Exporta os itens serializados com os filtros aplicados nesta aba."
+            />
+          ) : null}
+          {podeGerenciar && aba === 'quantificavel' ? (
             <BotaoExportarExcel
               url={urlExportarQuantificavel({
                 unidade: filtros.unidade || undefined,
@@ -604,12 +590,33 @@ export function PainelEstoque({ podeGerenciar }: Props) {
               descricao="Exporta os materiais quantificáveis por unidade e local."
             />
           ) : null}
-          <BotaoExportarExcel
-            url={urlExportarMovimentacoes()}
-            rotulo="Exportar movimentações"
-            arquivoFallback="estoque-movimentacoes"
-            descricao="Exporta a trilha completa de movimentações (auditoria do almoxarifado)."
-          />
+          {podeGerenciar ? (
+            <BotaoExportarExcel
+              url={urlExportarMovimentacoes()}
+              rotulo="Exportar movimentações"
+              arquivoFallback="estoque-movimentacoes"
+              descricao="Exporta a trilha completa de movimentações (auditoria do almoxarifado)."
+            />
+          ) : null}
+          {/* Etiquetas de patrimonio com codigo de barras. LEITURA mesmo:
+              `GET /api/estoque/etiquetas` segue em `exigirUsuario` (medido em
+              06/10/2026), entao continua aparecendo para quem so consulta. */}
+          {aba === 'serializado' ? (
+            <Link
+              href={hrefEtiquetas({
+                unidade: filtros.unidade || undefined,
+                local: filtros.local || undefined,
+                estado: filtros.estado || undefined,
+                status: filtros.status || undefined,
+                busca: buscaDebounced.trim() || undefined,
+              })}
+              title="Gera as etiquetas com código de barras dos itens serializados do filtro atual, prontas para imprimir e colar no equipamento."
+              className="inline-flex items-center gap-2 rounded border border-gov-azul bg-app-surface px-3 py-1.5 text-sm font-medium text-gov-azul hover:bg-gov-azul hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gov-azul"
+            >
+              <Barcode className="h-4 w-4" aria-hidden="true" />
+              Gerar etiquetas
+            </Link>
+          ) : null}
           {podeGerenciar ? (
             <>
               <Button

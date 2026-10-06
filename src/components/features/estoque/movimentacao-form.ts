@@ -5,6 +5,11 @@
  * isto e so UX. Testavel isoladamente.
  */
 
+import {
+  MATRICULA_SOLICITANTE_MAX,
+  MATRICULA_SOLICITANTE_MIN,
+  MATRICULA_SOLICITANTE_REGEX,
+} from '@/domain/estoque/movimentacao';
 import type { PayloadMovimentacao } from './tipos';
 import type { Estado, Natureza, Status, TipoMovimentacao } from './dtos';
 
@@ -32,6 +37,12 @@ export interface EstadoFormMov {
   estado: '' | Estado;
   /** Ajuste serializado: nova situacao. '' = nao mexer. */
   status: '' | Status;
+  /**
+   * Matricula funcional de quem SOLICITOU a retirada. So a `saida` usa. Guarda
+   * o valor BRUTO que a pessoa digitou: sem trim, porque o espaco e justamente
+   * o que separa matricula de nome, e aparar faria ' 482913' virar outro valor.
+   */
+  solicitanteMatricula: string;
 }
 
 export function estadoInicialForm(tipoInicial: TipoMovimentacao): EstadoFormMov {
@@ -44,7 +55,34 @@ export function estadoInicialForm(tipoInicial: TipoMovimentacao): EstadoFormMov 
     motivo: '',
     estado: '',
     status: '',
+    solicitanteMatricula: '',
   };
+}
+
+/**
+ * Motivo da recusa da matricula, em texto para QUEM DIGITA.
+ *
+ * Nao reaproveita o `MATRICULA_SOLICITANTE_MENSAGEM` do dominio de proposito:
+ * aquela frase comeca pelo nome do campo (`solicitanteMatricula`) e serve ao
+ * corpo de erro da rota, nao a tela (identificador de programa nao e texto de
+ * interface). Os LIMITES, que sao a regra, vem importados, e a regex do dominio
+ * continua sendo a palavra final logo abaixo.
+ *
+ * Tres motivos separados porque a pessoa precisa saber qual e o dela: no balcao
+ * o erro comum e digitar o NOME, e "valor invalido" faria ela digitar o nome de
+ * novo. Devolve null quando o valor passa.
+ */
+export function motivoRecusaMatricula(valor: string): string | null {
+  if (valor === '') {
+    return 'Informe a matrícula funcional de quem solicitou a retirada.';
+  }
+  if (/\s/.test(valor)) {
+    return 'A matrícula não pode conter espaço. Este campo é a matrícula funcional de quem solicitou, não é o nome da pessoa.';
+  }
+  if (!MATRICULA_SOLICITANTE_REGEX.test(valor)) {
+    return `A matrícula deve ter de ${MATRICULA_SOLICITANTE_MIN} a ${MATRICULA_SOLICITANTE_MAX} caracteres.`;
+  }
+  return null;
 }
 
 /**
@@ -68,6 +106,8 @@ export interface CamposVisiveis {
   motivo: boolean;
   estado: boolean;
   status: boolean;
+  /** So a `saida` tem solicitante. Nos outros tipos mandar o campo e erro. */
+  solicitanteMatricula: boolean;
 }
 
 export function camposVisiveis(
@@ -83,12 +123,19 @@ export function camposVisiveis(
     motivo: false,
     estado: false,
     status: false,
+    solicitanteMatricula: false,
   };
   switch (tipo) {
     case 'entrada':
       return { ...base, quantidade: quant, tamanho: quant, localDestino: true };
     case 'saida':
-      return { ...base, quantidade: quant, tamanho: quant, localOrigem: true };
+      return {
+        ...base,
+        quantidade: quant,
+        tamanho: quant,
+        localOrigem: true,
+        solicitanteMatricula: true,
+      };
     case 'transferencia':
       return {
         ...base,
@@ -162,6 +209,12 @@ export function montarPayload(
       erros.geral = 'Escolha ao menos uma mudança: estado, situação ou local.';
     }
   }
+  if (vis.solicitanteMatricula) {
+    // Sobre o valor BRUTO. A regex do dominio e a palavra final dentro de
+    // `motivoRecusaMatricula`, para a tela nunca aceitar o que a rota recusaria.
+    const recusa = motivoRecusaMatricula(form.solicitanteMatricula);
+    if (recusa) erros.solicitanteMatricula = recusa;
+  }
 
   if (Object.keys(erros).length > 0) {
     return { payload: null, erros };
@@ -182,6 +235,11 @@ export function montarPayload(
   if (form.tipo === 'ajuste') {
     if (form.estado !== '') payload.estado = form.estado;
     if (form.status !== '') payload.status = form.status;
+  }
+  // So a saida declara a chave no zod da rota. Mandar identificador funcional
+  // onde ele nao tem finalidade e dado pessoal gravado sem necessidade.
+  if (vis.solicitanteMatricula) {
+    payload.solicitanteMatricula = form.solicitanteMatricula;
   }
 
   return { payload, erros: {} };
