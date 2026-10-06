@@ -2,6 +2,12 @@
 
 Pré compartilhamento com gestores do Governo SP. Suporte: auditoria André + Bruno.
 
+> **Foto de 18/05/2026, reavaliada em 06/10/2026.** A entrada de `postcss`
+> abaixo descreve um `next@15.5.18` que não é mais o do projeto, e a medição
+> atual (23 vulnerabilidades, uma delas crítica no `@capacitor/android`) está em
+> `dependencias-reavaliacao-2026-10-06.md`. Este arquivo continua valendo como
+> registro de quem decidiu o quê em maio, não como estado.
+
 ## Vulnerabilidades aceitas
 
 ### postcss < 8.5.10, severidade moderate, GHSA-qx2v-qp2m-jg93
