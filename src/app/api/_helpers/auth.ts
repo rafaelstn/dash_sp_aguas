@@ -69,9 +69,14 @@ export async function exigirAdmin(): Promise<UsuarioAutenticado | NextResponse> 
 }
 
 /**
- * Exige permissão de escrita no módulo de estoque. Critério em
+ * Exige permissão de gestão no módulo de estoque. Critério em
  * `podeGerenciarEstoque`: Admin, ou o usuário institucional da janela sem
  * identidade. Use SÓ em rotas de `/api/estoque`.
+ *
+ * Guarda a escrita e, desde 06/10/2026, também a LEITURA da trilha
+ * (`GET /api/estoque/movimentacoes`) e o export: a planilha traz nome ou e-mail
+ * do operador, então não é leitura de catálogo. Leitura de catálogo e de saldo
+ * continua em `exigirUsuario`.
  */
 export async function exigirGestorEstoque(): Promise<UsuarioAutenticado | NextResponse> {
   const auth = await exigirUsuario();
