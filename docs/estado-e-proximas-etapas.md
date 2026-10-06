@@ -708,8 +708,9 @@ regular.
 
 ## 4. O que depende do órgão
 
-Estas seis perguntas destravam trabalho que hoje está parado, e todas nasceram
-de medição, não de suposição.
+As perguntas abaixo destravam trabalho que hoje está parado, e todas nasceram de
+medição, não de suposição. O número delas é o da lista, e não se repete aqui em
+texto para não envelhecer a cada item que entra ou sai.
 
 1. **A série manual ainda é alimentada?** As cinco séries param em agosto de 2025,
    e a chuva manual vinha caindo antes: 369 postos em fevereiro, 59 em agosto. Se
@@ -745,6 +746,19 @@ de medição, não de suposição.
    `user`: `POST /api/estoque/conferencias` respondeu 403 no ensaio de 16/09/2026.
    Dar o papel é decisão de dono (ADR-0024, 3.2), e vem com um risco medido: o limite
    de requisições é por usuário, e nesse modo todos os operadores dividem o mesmo.
+7. **Qual a regra de "paralisado"?** Na reunião de 16/09/2026 o órgão pediu filtrar
+   ativo, inativo e paralisado. O Dbfch só tem `DataExtincao`, então a tela entrega
+   ativo e extinto; **paralisado não tem campo nenhum**. O lugar de receber a regra
+   já está escrito e vazio, em `src/domain/mapa-postos.ts:87`. Sem a definição
+   (quanto tempo sem leitura? marcação manual? situação no cadastro?), o filtro não
+   pode existir sem inventar critério, e critério inventado em painel de governo
+   vira número que alguém cita.
+8. **Existe mapa de UGRHI para gerência?** O mesmo pedido incluía filtrar por
+   gerência, e **gerência não existe no Dbfch**: zero ocorrência na API e na UI de
+   postos. A hipótese registrada em 17/09/2026 é derivar da UGRHI, o que exige a
+   tabela de correspondência do órgão. É o único dos oito pedidos daquela reunião
+   que não foi entregue, e o item 7 é o único entregue pela metade; os outros seis
+   subiram em `da5d868` (22/09) e estão no ar.
 
 ---
 
