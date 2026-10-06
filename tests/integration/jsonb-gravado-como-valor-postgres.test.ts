@@ -24,6 +24,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import postgres, { type Sql } from 'postgres';
 import type { ElementoDiagrama } from '@/domain/diagramas/tipos';
+import { comGatilhoDesligado } from '../apoio/trilha-append-only';
 
 const URL_TESTE = process.env.TEST_DATABASE_URL ?? '';
 const rodar = URL_TESTE.length > 0 ? describe : describe.skip;
@@ -77,18 +78,40 @@ rodar('jsonb gravado pelos repositórios chega como objeto, não como string', (
   });
 
   async function limpar() {
+    // Desde a migration 0076, `triagem_eventos`, `postos_evento` e
+    // `ana_revisao_evento` têm gatilho de append-only que recusa DELETE
+    // inclusive para o DONO da tabela, que é como esta conexão entra: a limpeza
+    // delas passa pelo apoio, que desliga o gatilho dentro de transação e liga
+    // de volta (ver tests/apoio/trilha-append-only.ts).
+    //
     // Ordem: eventos antes das fichas (FK ON DELETE RESTRICT).
-    await sql`DELETE FROM triagem_eventos WHERE triagem_id IN (
-      SELECT id FROM fichas_triagem WHERE prefixo = ${MARCA})`;
+    await comGatilhoDesligado(sql, 'triagem_eventos', async (tx) => {
+      await tx`DELETE FROM triagem_eventos WHERE triagem_id IN (
+        SELECT id FROM fichas_triagem WHERE prefixo = ${MARCA})`;
+    });
     await sql`DELETE FROM triagem_locks WHERE triagem_id IN (
       SELECT id FROM fichas_triagem WHERE prefixo = ${MARCA})`;
     await sql`UPDATE fichas_triagem SET ficha_origem_id = NULL WHERE prefixo = ${MARCA}`;
     await sql`DELETE FROM fichas_triagem WHERE prefixo = ${MARCA}`;
     await sql`DELETE FROM fichas_visita WHERE prefixo = ${MARCA}`;
     await sql`DELETE FROM diagramas WHERE nome LIKE ${MARCA + '%'}`;
-    await sql`DELETE FROM postos_evento WHERE posto_id IN (SELECT id FROM postos WHERE prefixo = ${MARCA})`;
+    await comGatilhoDesligado(sql, 'postos_evento', async (tx) => {
+      await tx`DELETE FROM postos_evento WHERE posto_id IN (
+        SELECT id FROM postos WHERE prefixo = ${MARCA})`;
+    });
     await sql`DELETE FROM postos WHERE prefixo = ${MARCA}`;
-    // Cascata apaga estação e ana_revisao_evento (FK ON DELETE CASCADE).
+    // A cascata de `ana_revisao_estacao` para `ana_revisao_evento` SAIU na 0076
+    // (ação referencial escreve em linha já gravada da trilha, e era por ela que
+    // reimportar a planilha da ANA apagava a revisão da rodada anterior): a
+    // trilha agora é apagada aqui, explicitamente e com escopo da marca, antes
+    // do lote.
+    await comGatilhoDesligado(sql, 'ana_revisao_evento', async (tx) => {
+      await tx`DELETE FROM ana_revisao_evento WHERE estacao_id IN (
+        SELECT e.id FROM ana_revisao_estacao e
+          JOIN ana_revisao_lote l ON l.id = e.lote_id
+         WHERE l.nome = ${MARCA})`;
+    });
+    // Cascata apaga a estação (FK ON DELETE CASCADE de estação para lote).
     await sql`DELETE FROM ana_revisao_lote WHERE nome = ${MARCA}`;
     // `#>> '{}'` lê o texto nos dois formatos, objeto e string, para a limpeza
     // alcançar também a linha gravada pelo código defeituoso.

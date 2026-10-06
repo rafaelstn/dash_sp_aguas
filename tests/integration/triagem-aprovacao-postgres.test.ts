@@ -32,6 +32,7 @@ import type { PostosRepository } from '@/application/ports/postos-repository';
 import type { PapeisRepository } from '@/application/ports/papeis-repository';
 import type { Posto } from '@/domain/posto';
 import { EstadoTriagemInvalido } from '@/domain/errors';
+import { comGatilhoDesligado } from '../apoio/trilha-append-only';
 
 const URL_TESTE = process.env.TEST_DATABASE_URL ?? '';
 const rodar = URL_TESTE.length > 0 ? describe : describe.skip;
@@ -103,8 +104,15 @@ rodar('aprovação de triagem com o cadastro fora do nosso banco', () => {
   async function limpar() {
     // Ordem obrigatória: `triagem_eventos` referencia `fichas_triagem` com
     // ON DELETE RESTRICT, então apagar a ficha primeiro seria recusado.
-    await sql`DELETE FROM triagem_eventos WHERE triagem_id IN (
-      SELECT id FROM fichas_triagem WHERE prefixo = ${PREFIXO})`;
+    //
+    // E desde a migration 0076 `triagem_eventos` tem gatilho de append-only que
+    // recusa DELETE inclusive para o DONO da tabela, que é como esta conexão
+    // entra: a limpeza passa pelo apoio, que desliga o gatilho dentro de
+    // transação e liga de volta (ver tests/apoio/trilha-append-only.ts).
+    await comGatilhoDesligado(sql, 'triagem_eventos', async (tx) => {
+      await tx`DELETE FROM triagem_eventos WHERE triagem_id IN (
+        SELECT id FROM fichas_triagem WHERE prefixo = ${PREFIXO})`;
+    });
     await sql`DELETE FROM triagem_locks WHERE triagem_id IN (
       SELECT id FROM fichas_triagem WHERE prefixo = ${PREFIXO})`;
     await sql`DELETE FROM fichas_triagem WHERE prefixo = ${PREFIXO}`;

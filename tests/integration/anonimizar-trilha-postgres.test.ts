@@ -14,6 +14,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import postgres, { type Sql } from 'postgres';
 import { anonimizarTrilhaAuditoria } from '@/application/use-cases/manutencao/anonimizar-trilha-auditoria';
+import { comGatilhoDesligado } from '../apoio/trilha-append-only';
 
 const URL_TESTE = process.env.TEST_DATABASE_URL ?? '';
 const rodar = URL_TESTE.length > 0 ? describe : describe.skip;
@@ -38,7 +39,14 @@ rodar('anonimizacao da trilha de auditoria contra Postgres real', () => {
   });
 
   beforeEach(async () => {
-    await sql`DELETE FROM acesso_ficha`;
+    // Desde a migration 0076 `acesso_ficha` tem gatilho de append-only que
+    // recusa DELETE inclusive para o DONO da tabela, que e como esta conexao
+    // entra: sem desligar o gatilho, esta limpeza passa a falhar e a suite
+    // inteira morre antes de medir a anonimizacao. O apoio desliga dentro de
+    // transacao e liga de volta (ver tests/apoio/trilha-append-only.ts).
+    await comGatilhoDesligado(sql, 'acesso_ficha', async (tx) => {
+      await tx`DELETE FROM acesso_ficha`;
+    });
   });
 
   /** Evento de trilha com data controlada (a funcao corta por `ocorreu_em`). */
