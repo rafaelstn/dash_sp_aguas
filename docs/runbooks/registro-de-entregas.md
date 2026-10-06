@@ -17,6 +17,64 @@ passagens feitas pelo caminho disponível hoje (SSH com VPN, imagem por arquivo)
 
 ---
 
+## 06/10/2026, `sha-e5ac0c9`
+
+| Campo | Valor |
+|---|---|
+| Versão que entrou | `sha-e5ac0c9` (branch `chore/preparar-container-prodesp-offline`) |
+| Versão anterior | `sha-4b93252`, no ar desde 05/10 |
+| Autorizado por | Rafael Damasceno, nesta data ("pode subir a versão") |
+| Executado por | Rafael, no terminal dele. O classificador desta sessão recusou `ssh` com o motivo `[Production Reads]`, então o transporte e a execução no servidor saíram da mão dele; a construção, a conferência e o aceite foram meus |
+| Transporte | pacote único `dmo-sha-e5ac0c9.tar.gz`, 237.470.474 bytes, construído pelo `entrega-offline.yml` (tag `entrega-2026-10-06-e5ac0c9`, run 37481854447) e enviado por `scp` a 13,9 MB/s |
+| Integridade | `sha256` igual nas três pontas: `5c9a17dc5b6915f843f0b847b3cf72db0e121a7bf2a68daa55f397e535346156`. Na bancada o `sha256sum -c` saiu `OK` antes do envio, e no servidor ele roda encadeado por `&&` com o `subir-versao.sh`, de modo que hash divergente para antes de tocar em produção |
+
+**O que entrou.** Vinte e oito commits. Para o órgão, o que importa são os três
+itens que a Nicole pediu no e-mail posterior à reunião de 16/09: o filtro por
+mantenedor e o filtro por fonte de vazão na tela de Postos, e o campo de quem
+solicitou a saída no Estoque, gravado por **matrícula** e não por nome, porque a
+trilha é imutável.
+
+**Três migrations novas**, de 73 para 76: `0074_estoque_movimentacoes_append_only`,
+`0075_estoque_movimentacoes_solicitante_matricula` e `0076_trilhas_append_only`.
+Antes de autorizar a subida eu medi o risco sobre banco com dado: nenhuma das três
+varre ou reescreve linha existente. A 0075 adiciona coluna anulável e deixa as duas
+`CHECK` como `NOT VALID` de propósito, justamente porque a máscara real da
+matrícula no órgão ainda **não foi medida**; validar essas restrições é passo
+futuro, e sem tratar linha antiga ele falha. Nenhuma variável de ambiente nova e
+nenhuma alteração no `docker-compose.prod.yml`.
+
+**Conferido depois de subir.**
+
+| Conferência | Medido |
+|---|---|
+| **Qual versão está no ar** | Prova por conteúdo, e não por tag: baixei da borda os 20 scripts que a produção serve em `/` e `/estoque`, extraí a mesma camada do pacote e comparei. **20 de 20 com `md5` idêntico, zero diferente**, com controle negativo em 0. `BUILD_ID` da imagem: `RJozCrcP0xGjtl2CLCF5K` |
+| **Aceite pela borda** | `node scripts/verificar-csp-nonce.mjs https://dmo.spaguas.sp.gov.br` saiu **0**, da estação com VPN. 22 rotas descobertas, autoteste de seis casos passou, 20 medidas e todas com todo script trazendo o nonce da própria resposta |
+| Saúde | `/api/health` pela borda devolveu `{"status":"ok","db":"ok"}` em 79 ms |
+| Código de saída do `migrate` | **Não li a saída**, que correu no terminal do Rafael. Vale como `0` por efeito, não por leitura: o `subir-versao.sh` reverte sozinho para a tag anterior quando o `migrate` sai diferente de zero, e o que está no ar é a versão nova |
+| Backup antes de trocar | O passo 3 do roteiro tirou o dump com a guarda de piso de sempre. **Não li o tamanho nem a contagem de tabelas**, pela mesma razão |
+
+**O que mudou no procedimento, e por quê.** Esta entrega quase subiu com a guarda
+desligada por acidente de colagem. O roteiro vinha sendo colado a mão no
+PowerShell, e colar bloco de várias linhas no PowerShell 5.1 come caracteres: o
+`if ($LASTEXITCODE -eq 0)` chegou ao prompt como `f ($LASTEXITCODE -eq 0)`, o
+console respondeu que `f` não é um comando, e a guarda que impedia executar no
+servidor depois de um `scp` falho simplesmente não existiu naquela execução. Não
+houve estrago porque o `scp` tinha falhado de verdade, mas o acerto foi sorte.
+O lado estação virou `ops/producao/enviar-e-subir.ps1` (commit `4efc2f4`), chamado
+por uma linha só.
+
+Antes disso, o mesmo `scp` falhava pedindo senha: a chave estava sendo lida do
+cofre em `F:`, que é SMB, e o OpenSSH lê a permissão como aberta, **descarta a
+chave sem erro fatal** e cai para autenticação por senha. O atalho `dmo` do
+`~/.ssh/config` passou a apontar para a cópia local, conferida byte a byte contra
+o cofre por `md5`, com ACL fechada. O cofre segue sendo a fonte.
+
+**Rollback disponível e não usado:** a tag `sha-4b93252` continua no disco do
+servidor, junto de `sha-b343b12`, `sha-b55ce6c` e `sha-e452f11`, e a reversão
+automática do roteiro não disparou.
+
+---
+
 ## 05/10/2026, `sha-4b93252`
 
 | Campo | Valor |
