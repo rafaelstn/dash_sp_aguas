@@ -100,6 +100,20 @@ type Caso = {
   anonimizar: (q: Consulta, id: string) => Promise<{ count: number }>;
   /** Escrever um ip NOVO. Deve ser RECUSADO (a excecao e de mao unica). */
   forjarIp: (q: Consulta, id: string) => Promise<{ count: number }>;
+  /**
+   * Le `ip` e `user_agent` da linha. O `ip` sai SEM mascara, por `host(ip)`.
+   *
+   * Medido no run do CI de 06/10/2026: a coluna e `INET` em `triagem_eventos`,
+   * `ana_revisao_evento` e `postos_evento` (0025, 0029, 0031) e `TEXT` em
+   * `acesso_ficha` (0005). Com `ip::text` o Postgres devolve a representacao do
+   * tipo, `203.0.113.7/32`, e estes seis casos reprovavam por REPRESENTACAO
+   * com a guarda do produto funcionando: a recusa do gatilho passava, e quem
+   * falhava era a assercao seguinte, de que o ip nao mudou.
+   *
+   * `host()` nao cega o defeito que o caso procura: endereco de REDE gravado no
+   * lugar do host (`203.0.113.0/24`) sai como `203.0.113.0` e continua
+   * diferente do semeado.
+   */
   lerPii: (q: Consulta, id: string) => Promise<{ ip: string | null; user_agent: string | null }>;
   contar: (q: Consulta, id: string) => Promise<number>;
 };
@@ -151,6 +165,7 @@ const CASOS: Caso[] = [
       q`UPDATE acesso_ficha SET ip = '198.51.100.9' WHERE id = ${id}::uuid`,
     lerPii: async (q, id) => {
       const [l] = await q<{ ip: string | null; user_agent: string | null }[]>`
+        -- Unica das quatro em que a coluna ip e TEXT (0005), sem host().
         SELECT ip::text AS ip, user_agent FROM acesso_ficha WHERE id = ${id}::uuid`;
       return l!;
     },
@@ -185,7 +200,7 @@ const CASOS: Caso[] = [
       q`UPDATE triagem_eventos SET ip = '198.51.100.9'::inet WHERE id = ${id}::uuid`,
     lerPii: async (q, id) => {
       const [l] = await q<{ ip: string | null; user_agent: string | null }[]>`
-        SELECT ip::text AS ip, user_agent FROM triagem_eventos WHERE id = ${id}::uuid`;
+        SELECT host(ip) AS ip, user_agent FROM triagem_eventos WHERE id = ${id}::uuid`;
       return l!;
     },
     contar: (q, id) => contarPorId(q, 'triagem_eventos', id),
@@ -219,7 +234,7 @@ const CASOS: Caso[] = [
       q`UPDATE ana_revisao_evento SET ip = '198.51.100.9'::inet WHERE id = ${id}::uuid`,
     lerPii: async (q, id) => {
       const [l] = await q<{ ip: string | null; user_agent: string | null }[]>`
-        SELECT ip::text AS ip, user_agent FROM ana_revisao_evento WHERE id = ${id}::uuid`;
+        SELECT host(ip) AS ip, user_agent FROM ana_revisao_evento WHERE id = ${id}::uuid`;
       return l!;
     },
     contar: (q, id) => contarPorId(q, 'ana_revisao_evento', id),
@@ -253,7 +268,7 @@ const CASOS: Caso[] = [
       q`UPDATE postos_evento SET ip = '198.51.100.9'::inet WHERE id = ${id}::uuid`,
     lerPii: async (q, id) => {
       const [l] = await q<{ ip: string | null; user_agent: string | null }[]>`
-        SELECT ip::text AS ip, user_agent FROM postos_evento WHERE id = ${id}::uuid`;
+        SELECT host(ip) AS ip, user_agent FROM postos_evento WHERE id = ${id}::uuid`;
       return l!;
     },
     contar: (q, id) => contarPorId(q, 'postos_evento', id),
