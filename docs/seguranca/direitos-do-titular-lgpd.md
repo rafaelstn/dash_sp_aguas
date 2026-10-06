@@ -28,11 +28,31 @@ Conforme inventário da auditoria de privacidade (`docs/seguranca/`):
   individual, que a janela sem identificação do ADR-0024 não tem. Quando ela
   vier, volta para este inventário com a mesma classificação.
 
-Não há dado pessoal sensível. Os titulares são os próprios servidores e agentes
-no exercício da função pública, com uma ressalva registrada em 05/10/2026: a
-matrícula do solicitante na retirada de material pode ser de pessoa que não é
-servidora do órgão (terceiro contratado, por exemplo), e nessa hipótese o titular
-não é agente público.
+- Dados do observador na ficha de troca de observador (tipo de documento 6,
+  `SCHEMA_TROCA_OBSERVADOR` em `src/domain/fichas/schemas.ts`), gravados no JSONB
+  `fichas_triagem.dados` e copiados sem alteração para `fichas_visita.dados` na
+  aprovação (`src/infrastructure/db/triagem-repository.pg.ts`): `novo_nome`,
+  `novo_rg`, `novo_cpf`, `novo_data_nascimento`, `novo_profissao`,
+  `novo_grau_instrucao`, `novo_end_residencial`, `novo_cidade`,
+  `novo_end_postal`, `novo_telefone`, `novo_celular`, mais os dados bancários da
+  gratificação (`agencia`, `conta`, `conta_conjunta`) e `ex_observador_nome`.
+  Classificação: restrito. Este é o conjunto de dado pessoal mais extenso do
+  sistema, e o titular NÃO é agente público: o observador é colaborador local do
+  posto. Incluído no inventário em 06/10/2026, pelo André (PO de Segurança); até
+  essa data o documento não o listava, embora o ADR-0024 já o citasse, e um
+  inventário que omite a categoria mais extensa não sustenta o registro das
+  operações de tratamento.
+- Texto livre de desconformidade (`nota`, 3 a 500 caracteres): pode conter nome
+  de pessoa por digitação do técnico, conforme o próprio ADR-0024. Não há campo
+  estruturado para isso, então o controle é de finalidade e de acesso, não de
+  esquema.
+
+Não há dado pessoal **sensível** na acepção do art. 5º, II (origem racial,
+convicção religiosa, opinião política, filiação sindical, saúde, vida sexual,
+genética ou biometria). Isso não é o mesmo que "só há dado de agente público":
+dois itens acima têm titular que não é servidor, o observador da ficha tipo 6 e,
+em parte dos casos, a matrícula do solicitante na retirada de material (terceiro
+contratado), ressalva registrada em 05/10/2026 e mantida.
 
 ## 2. Base legal
 
@@ -104,7 +124,79 @@ Pendência de ativação (Rafael/SP Águas): cadastrar o disparo mensal no agend
 (o endpoint já está pronto e testado) e confirmar o prazo de 180 dias com o
 encarregado (DPO) do órgão.
 
-## 6. Roadmap
+## 6. Quem vê a identidade de quem (minimização na leitura, art. 6º III)
+
+Decidido em 06/10/2026, na auditoria do André (PO de Segurança) sobre o módulo de
+Estoque, e registrado aqui porque **conformidade por acidente se documenta**.
+
+O problema não era inventário nem base legal: era PROJEÇÃO. O mesmo nome e
+e-mail de agente público, que em `GET /api/admin/usuarios` só sai atrás de
+`exigirAdmin`, saía para qualquer usuário autenticado em quatro rotas do estoque,
+porque todas resolvem o operador a partir de `auth.users` na leitura. Base legal
+igual (art. 7º, III e art. 23) e finalidade igual não autorizam alcance maior: o
+art. 6º, III pede o mínimo necessário, e "quem está logado" não é critério de
+necessidade.
+
+Os quatro caminhos e o que ficou decidido em cada um:
+
+| Rota | Antes | Depois |
+|---|---|---|
+| `GET /api/estoque/movimentacoes` | qualquer usuário autenticado via a trilha com nome do operador | gestor; para `user` a trilha sai `null` com `historicoVisivel: false` |
+| `GET /api/estoque/export` | planilha com nome ou e-mail do operador para qualquer autenticado | gestor antes de olhar o `tipo`, nas três abas |
+| `GET /api/estoque/unidades/[id]` | histórico com operador junto do cadastro da unidade | cadastro continua aberto, histórico só para gestor |
+| `GET /api/estoque/conferencias/[id]/itens` | autoria da contagem (nome e e-mail) para qualquer autenticado | **a rota continua aberta, só a AUTORIA fecha** |
+
+A tabela é só de LEITURA, e isso é medição, não detalhe de redação: a escrita de
+movimentação (`POST /api/estoque/movimentacoes`) nunca esteve aberta a qualquer
+autenticado. Conferido commit a commit em 06/10/2026 (`65b645d` com
+`exigirAdmin`, `7c8c04a` em diante com `exigirGestorEstoque`), porque a primeira
+versão desta seção juntava os dois verbos numa linha e dizia do `POST` o que só
+valia para o `GET`.
+
+A última linha é a decisão que exigiu escolha, e o motivo fica escrito: a
+conferência é trabalho colaborativo e a tela de leitura dela é legítima para quem
+tem só `user` (as páginas em `src/app/(dashboard)/estoque/conferencias/` abrem
+para qualquer sessão), então fechar a rota inteira tiraria produto sem necessidade
+de proteção. O que não sobrevive à minimização é a identificação de QUEM contou:
+toda ação sobre o item já exige gestor, então a autoria não é insumo de trabalho
+de quem só lê. Os quatro campos de autoria saem `null`, o instante (`contadoEm`,
+`reconciliadoEm`) é preservado por ser dado de processo e não identificação, e a
+resposta carrega `autoriaVisivel: false` para a tela poder dizer "você não vê" em
+vez de "não há" (são estados diferentes, e dizer o errado é defeito de produto,
+não de segurança).
+
+**Alcance real hoje, medido por efeito, e esta ressalva é parte da decisão:**
+enquanto a janela sem identificação do ADR-0024 (§4) estiver ativa, o painel
+inteiro entra como o único usuário institucional, e `podeGerenciarEstoque`
+devolve true para ele ANTES de consultar papel. Logo, nenhuma das quatro guardas
+acima restringe nada no servidor da PRODESP: todas passam a restringir quando a
+autenticação individual do órgão estiver ligada. Medido em 06/10/2026 em
+`tests/unit/api/estoque-conferencia-autoria-rota.test.ts` e em
+`tests/unit/api/estoque-leitura-gestor-rotas.test.ts`, com a janela ligada e
+desligada no mesmo caso. Elas não são decorativas: é a diferença entre ligar a
+identificação individual e já estar correto, e ligar e abrir quatro vazamentos de
+uma vez.
+
+Para a classe não voltar por uma quinta rota, a régua é
+`tests/unit/api/projecao-de-identidade-nas-rotas.test.ts`: ela deriva o inventário
+de rotas por `git ls-files`, reprova por AST qualquer handler que alcance a
+projeção de identidade sem guarda forte ANTES do uso, e tem lista de exceção que
+obriga escopo, motivo e citação neste documento. Exceção futura entra lá e volta
+para esta seção.
+
+Pendência registrada para o encarregado (DPO), fora do módulo de Estoque: a ficha
+de troca de observador (tipo 6, seção 1 deste documento) é o conjunto de dado
+pessoal mais extenso do sistema e tem titular que não é agente público, e sai
+para qualquer usuário autenticado em `GET /api/fichas/[id]` e
+`GET /api/postos/[prefixo]/fichas`, sem evento de auditoria, enquanto a mesma
+ficha em `GET /api/triagem/[id]` só sai para aprovador ou dono (escopo aplicado
+em `obterFichaTriagem`), com 404 anti-oráculo e evento de segurança na tentativa
+negada (`seg.triagem.idor_blocked`). A decisão SEG-4 que abriu a leitura foi tomada
+sobre "visão institucional do posto" e não pesou a ficha tipo 6, que ainda não
+existia no escopo. Não é correção que o time deva aplicar sozinho: muda alcance de
+produto para o órgão.
+
+## 7. Roadmap
 
 Endpoint self-service `/api/lgpd/meus-dados` (confirmação, acesso e portabilidade
 automatizados) previsto para fase posterior ao MVP. Até lá, vale o atendimento

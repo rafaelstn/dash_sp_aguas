@@ -17,22 +17,33 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TrilhaMovimentacoes } from '@/components/features/estoque/TrilhaMovimentacoes';
 import { BotaoExportarExcel } from '@/components/features/estoque/BotaoExportarExcel';
+import { ErroEstoque } from '@/components/features/estoque/erros';
 import type {
   DetalheUnidadeDTO,
+  MaterialDTO,
   MovimentacaoTrilhaDTO,
+  SaldoContextoDTO,
   UnidadeDTO,
 } from '@/components/features/estoque/dtos';
 
 /**
- * So `obterUnidade` e dublado; o resto do modulo de API continua o real, para o
- * `urlExportarMovimentacoes` que o drawer usa nao virar dubla silenciosa.
+ * So as quatro leituras que os drawers fazem sao dubladas; o resto do modulo de
+ * API continua o real, para o `urlExportarMovimentacoes` que eles usam nao virar
+ * dubla silenciosa.
  */
 const obterUnidade = vi.fn();
+const obterMaterial = vi.fn();
+const listarSaldos = vi.fn();
+const listarMovimentacoes = vi.fn();
 vi.mock('@/components/features/estoque/api', async (importarOriginal) => ({
   ...(await importarOriginal<Record<string, unknown>>()),
   obterUnidade: (...args: unknown[]) => obterUnidade(...args),
+  obterMaterial: (...args: unknown[]) => obterMaterial(...args),
+  listarSaldos: (...args: unknown[]) => listarSaldos(...args),
+  listarMovimentacoes: (...args: unknown[]) => listarMovimentacoes(...args),
 }));
 const { UnidadeDetalhe } = await import('@/components/features/estoque/UnidadeDetalhe');
+const { MaterialDetalhe } = await import('@/components/features/estoque/MaterialDetalhe');
 
 const LOCAL_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const nomeLocal = (id: string | null) => (id === LOCAL_A ? 'Almoxarifado Penha' : '—');
@@ -254,5 +265,136 @@ describe('o 403 do export, montado como o servidor responde', () => {
     expect(alerta.textContent).not.toMatch(/HTTP 403/);
 
     vi.unstubAllGlobals();
+  });
+});
+
+const MATERIAL: MaterialDTO = {
+  id: '22222222-2222-2222-2222-222222222222',
+  descricao: 'Luva de raspa cano curto',
+  marca: 'Volk',
+  modelo: null,
+  natureza: 'quantificavel',
+  unidadeMedida: 'par',
+  categoriaId: null,
+  quantidadeMinima: null,
+  ativo: true,
+  criadoEm: '2026-01-01T00:00:00.000Z',
+  atualizadoEm: '2026-01-01T00:00:00.000Z',
+};
+
+const SALDO: SaldoContextoDTO = {
+  id: '44444444-4444-4444-4444-444444444444',
+  materialId: MATERIAL.id,
+  localId: LOCAL_A,
+  quantidade: 37,
+  tamanho: null,
+  atualizadoEm: '2026-10-01T00:00:00.000Z',
+  materialDescricao: MATERIAL.descricao,
+  localRotulo: 'Almoxarifado Penha',
+  unidade: 'PENHA',
+};
+
+/** Corpo que `GET /api/estoque/movimentacoes` devolve a papel `user`. */
+function recusaDaTrilha(): ErroEstoque {
+  return new ErroEstoque(
+    'Seu perfil não tem acesso a esta ação do estoque. Peça o perfil de gestão do estoque a um administrador.',
+    'sem_papel_admin',
+    403,
+  );
+}
+
+/**
+ * O drawer do material quantificavel, onde a trilha NAO vem no mesmo envelope.
+ *
+ * Aqui a listagem da trilha e uma rota propria que responde 403, entao nao
+ * existe `historicoVisivel` vindo do servidor: quem decide a tela e a RESPOSTA
+ * daquela chamada. O `podeGerenciar` continua servindo de otimizacao (nao pedir
+ * o que vai ser recusado), e o caso central e justamente o palpite ERRADO, que
+ * e a situacao que o papel defasado no navegador, ou a mudanca do critario no
+ * backend, produzem sem ninguem mexer na tela.
+ */
+describe('o drawer do material quando o palpite do cliente erra', () => {
+  function montarDrawer(podeGerenciar: boolean) {
+    render(
+      <MaterialDetalhe
+        materialId={MATERIAL.id}
+        versao={0}
+        podeGerenciar={podeGerenciar}
+        nomeCategoria={() => '—'}
+        nomeLocal={nomeLocal}
+        aoFechar={vi.fn()}
+        aoMovimentar={vi.fn()}
+        aoEditar={vi.fn()}
+        aoExcluir={vi.fn()}
+      />,
+    );
+  }
+
+  function dublarLeituras() {
+    for (const d of [obterMaterial, listarSaldos, listarMovimentacoes]) d.mockReset();
+    obterMaterial.mockResolvedValue(MATERIAL);
+    listarSaldos.mockResolvedValue({ itens: [SALDO], total: 1 });
+  }
+
+  it('palpite true com 403 na trilha: o drawer fica de pé e a trilha diz que é restrita', async () => {
+    dublarLeituras();
+    listarMovimentacoes.mockRejectedValue(recusaDaTrilha());
+    montarDrawer(true);
+
+    // O que a pessoa TEM direito de ver continua na tela: catálogo e saldo.
+    expect(await screen.findByText('Luva de raspa cano curto')).toBeInTheDocument();
+    // Duas ocorrências com um único saldo: o total agrupado e a linha do local.
+    expect(screen.getAllByText('37')).toHaveLength(2);
+    expect(screen.getByText('Almoxarifado Penha')).toBeInTheDocument();
+    // E a trilha diz o motivo certo, nem erro nem ausência.
+    expect(screen.getByText('Trilha restrita à gestão do estoque')).toBeInTheDocument();
+    expect(screen.queryByText('Sem movimentação registrada')).toBeNull();
+    expect(screen.queryByText('Erro ao carregar')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Exportar movimentações/i })).toBeNull();
+  });
+
+  it('o catch é estreito: falha que não é de permissão não vira "restrita"', async () => {
+    dublarLeituras();
+    listarMovimentacoes.mockRejectedValue(
+      new ErroEstoque('Falha ao processar a solicitação.', 'http_500', 500),
+    );
+    montarDrawer(true);
+
+    // Âncora de PRESENÇA antes de afirmar ausência, senão a asserção passa no
+    // primeiro tick, com o skeleton ainda na tela, e um `catch` largo (que
+    // engolisse 5xx como recusa) sobreviveria à régua. Medido: foi exatamente
+    // isso que aconteceu na primeira versão deste caso.
+    // Os dois alvos cobrem os dois desenhos possíveis do 5xx (derrubar o
+    // drawer ou isolar a trilha), porque o que a régua defende não é o lugar
+    // da mensagem: é que falha de infraestrutura não seja contada como recusa
+    // de permissão nem como ausência de evento.
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Erro ao carregar') ?? screen.queryByText('Luva de raspa cano curto'),
+      ).not.toBeNull();
+    });
+    expect(screen.queryByText('Trilha restrita à gestão do estoque')).toBeNull();
+    expect(screen.queryByText('Sem movimentação registrada')).toBeNull();
+  });
+
+  it('gestor de verdade lê os eventos e tem o export', async () => {
+    dublarLeituras();
+    listarMovimentacoes.mockResolvedValue({ itens: [SAIDA], total: 1 });
+    montarDrawer(true);
+
+    expect(await screen.findByText('482913')).toBeInTheDocument();
+    expect(screen.queryByText('Trilha restrita à gestão do estoque')).toBeNull();
+    expect(screen.getByRole('button', { name: /Exportar movimentações/i })).toBeInTheDocument();
+  });
+
+  it('leitura simples: a trilha nem é pedida, e a tela diz restrita', async () => {
+    dublarLeituras();
+    listarMovimentacoes.mockResolvedValue({ itens: [SAIDA], total: 1 });
+    montarDrawer(false);
+
+    expect(await screen.findByText('Luva de raspa cano curto')).toBeInTheDocument();
+    expect(screen.getByText('Trilha restrita à gestão do estoque')).toBeInTheDocument();
+    // A otimização é o que evita o 403 inútil: sem papel, a chamada não sai.
+    expect(listarMovimentacoes).not.toHaveBeenCalled();
   });
 });

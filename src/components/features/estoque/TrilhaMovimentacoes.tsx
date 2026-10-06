@@ -15,14 +15,10 @@ interface TrilhaProps {
    * nao distingue os dois. Sem a prop o `tsc` nomeia cada lugar que monta a
    * trilha, em vez de deixar o default decidir calado.
    *
-   * A autorizacao de verdade continua no backend (gate de gestor em
-   * `GET /api/estoque/movimentacoes` e no export). Isto aqui e so a tela
-   * dizendo a verdade a quem olha.
-   *
-   * O nome do helper do backend NAO entra em comentario aqui de proposito: a
-   * regua `tests/unit/infrastructure/auth/permissao-estoque-escopo.test.ts`
-   * varre `src/` por NOME, em texto cru, e citar o identificador reprovaria
-   * como se o componente usasse o helper.
+   * A autorizacao de verdade continua no backend: `podeGerenciarEstoque` no
+   * `GET /api/estoque/movimentacoes`, no export e no detalhe da unidade. Isto
+   * aqui e so a tela dizendo a verdade a quem olha, e quem manda e o
+   * `historicoVisivel` que o servidor devolve, nao o papel no navegador.
    */
   podeVerTrilha: boolean;
 }
