@@ -6,6 +6,7 @@ import {
   usuariosIdentidadeRepository,
 } from '@/infrastructure/repositories';
 import { exigirUsuario, exigirGestorEstoque } from '@/app/api/_helpers/auth';
+import { podeGerenciarEstoque } from '@/infrastructure/auth/permissao-estoque';
 import { respostaDeErro } from '@/app/api/_helpers/erros';
 import { UnidadeComMovimentacao, UnidadeNaoEncontrada } from '@/domain/errors';
 import { logger } from '@/infrastructure/logging/logger';
@@ -31,6 +32,30 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
   try {
     const unidade = await estoqueUnidadesRepository.obterPorId(idParsed.data);
     if (!unidade) throw new UnidadeNaoEncontrada(idParsed.data);
+
+    // O detalhe da unidade é leitura de catálogo e continua aberto a `user`; a
+    // TRILHA que vem com ele, não. Ela carrega nome ou e-mail do operador e, desde
+    // a 0075, a matrícula de quem solicitou a retirada, então segue o mesmo
+    // critério de `GET /api/estoque/movimentacoes` e do export, fechados em
+    // 06/10/2026. Medido naquele dia: este era o TERCEIRO caminho para a mesma
+    // trilha, e ficou aberto porque fechei os dois primeiros sem listar quem mais
+    // consumia a projeção. `historico: null` é diferente de `historico: []`: a
+    // tela precisa dizer "você não vê", e não "não há" (item 10 do padrao-ui).
+    //
+    // Alcance real desta guarda, para ninguém a ler como mais do que é:
+    // `podeGerenciarEstoque` devolve true para o usuário institucional enquanto
+    // a janela sem identidade do ADR-0024 estiver ativa. Nessa janela isto NÃO
+    // restringe nada, porque o painel do órgão inteiro entra como aquele
+    // usuário; a restrição passa a valer quando a autenticação individual
+    // estiver ligada. Medido em 06/10/2026 em
+    // `src/infrastructure/auth/permissao-estoque.ts`.
+    if (!(await podeGerenciarEstoque(auth.id))) {
+      return NextResponse.json(
+        { unidade, historico: null, historicoVisivel: false },
+        { status: 200, headers },
+      );
+    }
+
     const historico = await estoqueMovimentacoesRepository.listar({
       unidadeId: idParsed.data,
       porPagina: 100,
@@ -53,7 +78,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ id: str
       operador: operadores.get(m.usuarioId) ?? m.usuarioId,
     }));
     return NextResponse.json(
-      { unidade, historico: historicoComOperador },
+      { unidade, historico: historicoComOperador, historicoVisivel: true },
       { status: 200, headers },
     );
   } catch (e) {

@@ -1,6 +1,8 @@
 /**
  * As duas LEITURAS da trilha de estoque exigem gestor, e não qualquer logado
- * (decisão do Rafael em 06/10/2026, no mesmo trabalho da migration 0075):
+ * (decisão minha, do Matheus, em 06/10/2026, no mesmo trabalho da migration
+ * 0075; o Rafael liberou o campo do solicitante, não esta mudança de guard, e
+ * foi informado dela depois de feita):
  *   GET /api/estoque/movimentacoes  (trilha paginada)
  *   GET /api/estoque/export         (planilha, aba de movimentações)
  *
