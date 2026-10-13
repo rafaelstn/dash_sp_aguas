@@ -25,7 +25,7 @@
   "dependencies": {
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.2",
-    "@serwist/next": "^9.5.11",
+    "@serwist/next": "^9.5.13",
     "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.9",
     "@types/leaflet": "^1.9.21",
